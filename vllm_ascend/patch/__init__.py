@@ -214,7 +214,7 @@
 #       On 310P, override verify_and_update_config to align mamba_block_size and
 #       attention block size to the 128-token kernel alignment, ensuring the
 #       attention page size is >= mamba page size. This is the 310P counterpart
-#       of patch_mamba_config.py (loaded only when `is_310p()` is True).
+#       of patch_mamba_config.py (selected by the active hardware profile).
 #    Related PR (if no, explain why):
 #       No, 310P-specific kernel alignment requirement.
 #    Future Plan:
@@ -683,11 +683,22 @@
 #       Patch Qwen GDN methods to use Ascend GDN implementations and the 310P
 #       GDN attention backend. RC devices also route upstream GDNAttentionBackend
 #       to the 310P metadata builder.
+#
+#   4. `vllm.model_executor.models.qwen3_vl.Qwen3_VisionTransformer.rot_pos_emb`
+#      (RC only)
+#    Why:
+#       310P images do not install Triton, so upstream ``HAS_TRITON=False``
+#       already selects ``pos_embed_interpolate_native``; no pos-embed rewrite.
+#       RC still needs blocking H2D in `rot_pos_emb` to avoid indexing races.
+#    How:
+#       On RC only, bind `rot_pos_emb_310` from
+#       `vllm_ascend/_310p/ops/qwen3vl_310.py`.
 #    Related PR (if no, explain why):
 #       No, 310P custom operator and backend behavior are vllm-ascend specific.
 #    Future Plan:
 #       Remove this patch when upstream exposes stable hooks for 310P GDN
-#       chunk metadata, spec-decode input layout, and backend selection.
+#       chunk metadata, spec-decode input layout, backend selection, and
+#       vision rot_pos_emb that does not race on 310P RC.
 #
 # ** 8. File: worker/patch_kimi_k25.py**
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -728,7 +739,9 @@
 #       2. preprocess_mamba copy the state of previous step to the last block before kv transfer load
 #    How:
 #       1. patch to remove assert
-#       2. path to only collect copy metadata in preprocess_mamba(and do actual copy after kv transfer load).
+#       2. patch to collect per-layer copy metadata in preprocess_mamba. With
+#          layerwise KV transfer, copy each layer's state only after that
+#          layer finishes loading; otherwise keep the original batched copy.
 #    Future Plan:
 #       Remove this patch when:
 #       vLLM itself supports kv transfer for mamba
@@ -772,72 +785,6 @@
 #    Future Plan:
 #       Remove this patch when upstream supports MiniMax-M2 fp8 loading on NPU.
 #
-# ** 11. File: worker/patch_minimax_m2_linear_attn.py**
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#   1. `vllm.model_executor.layers.mamba.linear_attn.MiniMaxText01RMSNormTP.__init__`
-#      `vllm.model_executor.layers.mamba.linear_attn.MiniMaxText01RMSNormTP.weight_loader`
-#    Why:
-#       MiniMax-M2 linear attention RMSNorm needs weight sharding that can follow
-#       TP layout (and sometimes kv-head replication) on NPU.
-#    How：
-#       Override `__init__` to parameterize weight shard world/rank and install a
-#       sharded `weight_loader` implementation.
-#    Related PR (if no, explain why):
-#       No, upstream API surface differs across versions.
-#    Future Plan:
-#       Remove this patch when upstream exposes stable sharding hooks for this layer.
-#
-#   2. `vllm.model_executor.layers.mamba.linear_attn.MiniMaxText01RMSNormTP.forward_qk`
-#      (or older `_normalize_qk`)
-#    Why:
-#       q/k norm for linear attention is performance-sensitive. On NPU, a fused
-#       rms_norm kernel is faster and TP needs a global rstd correction.
-#    How：
-#       Replace q/k normalization with NPU rms_norm fast path and TP-global rstd
-#       correction; fall back to upstream implementation on non-NPU.
-#    Related PR (if no, explain why):
-#       No, backend-specific optimization.
-#    Future Plan:
-#       Remove this patch when upstream adds a backend dispatch path for q/k norm.
-#
-# ** 12. File: worker/patch_npugraph_ex_triton.py**
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#   1. `npugraph_ex.core._concrete_graph.ValuePack`,
-#      `npugraph_ex.npu_fx_compiler._unpack_meta`,
-#      `npugraph_ex.npu_fx_compiler._NpuGraphConverter._unpack_npu`
-#    Why:
-#       In the Triton scenario, npugraph_ex backend needs to process the value pack of the input parameters.
-#    How：
-#       Supplement the relevant processing logic through patches.
-#    Related PR (if no, explain why):
-#       https://gitcode.com/Ascend/torchair/pull/2575
-#    Future Plan:
-#       Remove this patch when the PTA version used by vllm-ascend has been upgraded.
-#
-# ** 13. File: worker/patch_process_weights_after_loading.py**
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#   1. `vllm.model_executor.model_loader.utils.process_weights_after_loading`
-#      `vllm.model_executor.model_loader.base_loader.process_weights_after_loading`
-#      and imported references in vllm-ascend model loaders
-#    Why:
-#       DSA attention is implemented in vllm-ascend as the plugin layer
-#       `DSAAttention`. Upstream vLLM only runs post-load attention weight
-#       processing for built-in attention classes, so
-#       `DSAAttention.process_weights_after_loading()` is skipped in the
-#       original loader flow. DSV4 DSA-CP o-proj TP initialization must run in
-#       this post-load phase rather than being initialized lazily in forward.
-#    How:
-#       Rebind the upstream `process_weights_after_loading` helper, including
-#       already-imported loader references, so `DSAAttention` participates in
-#       the same post-load traversal while preserving the original quant-method
-#       and torchao reload behavior.
-#    Related PR (if no, explain why):
-#       https://github.com/vllm-project/vllm-ascend/pull/10694
-#       https://github.com/vllm-project/vllm/pull/46828
-#    Future Plan:
-#       Remove this patch once the supported vLLM version includes PR #46828.
-#       Then register `DSAAttention` through vLLM's post-load weight-processing
-#       registry instead of monkey-patching model-loader helpers.
 #
 # ** 14. File: worker/patch_qwen3_5.py**
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -877,12 +824,6 @@
 # ** 17. File: worker/patch_qwen3vl.py**
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #   1. `vllm.model_executor.models.qwen3_vl.Qwen3VLForConditionalGeneration._get_deepstack_input_embeds`
-#    Why:
-#       support flash comm v1 for qwen3vl.
-#    How：
-#       override _get_deepstack_input_embeds method with the flash comm v1 implementation.
-#    Future Plan:
-#       Remove this patch when https://github.com/vllm-project/vllm-ascend/issues/5712 is completed.
 #   2. `vllm.model_executor.models.qwen3_vl_moe.Qwen3MoeLLMForCausalLM.start_layer`,
 #      `vllm.model_executor.models.qwen3_vl_moe.Qwen3MoeLLMForCausalLM.end_layer`
 #    Why:
@@ -1048,17 +989,15 @@
 #
 # ** 25. File: worker/patch_v2/patch_eagle_speculator.py**
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#   1. `vllm.v1.worker.gpu.spec_decode.autoregressive.speculator.PrefillSpeculatorCudaGraphManager`,
-#      `vllm.v1.worker.gpu.spec_decode.autoregressive.speculator.DecodeSpeculatorCudaGraphManager`
+#   1. `vllm.v1.worker.gpu.spec_decode.autoregressive.speculator.SpeculatorCudaGraphManager`
 #    Why:
-#       The v2 Eagle spec-decode path uses upstream CUDA graph managers for
-#       prefill/decode spec decoding, which are not usable on Ascend.
+#       The shared v2 autoregressive speculative-decoding path (Eagle/MTP) uses
+#       an upstream CUDA graph manager, which is not usable on Ascend.
 #    How：
-#       Replace the prefill/decode speculator graph managers on the upstream
-#       module with `PrefillEagleAclGraphManager` / `DecodeEagleAclGraphManager`
+#       Replace the shared upstream manager with `AutoRegressiveAclGraphManager`
 #       (ACL graph).
 #    Related PR (if no, explain why):
-#       No, vllm-ascend v2 spec-decode ACL graph integration.
+#       https://github.com/vllm-project/vllm-ascend/pull/14310
 #    Future Plan:
 #       Remove this patch once upstream exposes a backend-dispatchable spec-decode
 #       graph manager abstraction.
@@ -1084,6 +1023,22 @@
 #       Define AscendModelState and initialize it in init_model_state.
 #    Future Plan:
 #       remove this when vllm-ascend's attention metadata is align with vllm.
+#
+# ** 27a. File: worker/patch_v2/patch_spec_pp.py**
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#   1. PPHandler sampled-token broadcast methods
+#    Why:
+#       Target-driven speculative decoding generates next-step draft tokens
+#       after target sampling. Non-last PP ranks need both results for the same
+#       delayed request-state update.
+#    How:
+#       Defer the target-token broadcast until drafting finishes, then carry
+#       accepted target tokens and next-step draft tokens in the same V2 PP
+#       queue slot.
+#    Related PR (if no, explain why):
+#       No, this enables the Ascend MRV2 implementation.
+#    Future Plan:
+#       Remove when vLLM natively transports draft tokens through PP.
 #
 # ** 28. File: worker/patch_v2/patch_triton.py**
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1146,6 +1101,29 @@
 #    Future Plan:
 #       Remove this patch when NPU support UVA.
 #
+# ** 31. File: worker/patch_v2/patch_dspark.py**
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#   1. `vllm.v1.worker.gpu.spec_decode.dspark.utils.load_dspark_model`,
+#      `vllm.v1.worker.gpu.spec_decode.dspark.speculator.load_dspark_model`
+#    Why:
+#       Same-checkpoint DSpark drafts (e.g. DeepSeek-V4 MTP, weights under
+#       `mtp.*`) reuse the target weights and declare no quantization of their
+#       own, but upstream `load_dspark_model` derives the draft quant config via
+#       `get_draft_quant_config`, which returns None for them. That builds an
+#       unquantized draft, and a W4A8/W8A8 target checkpoint cannot be loaded
+#       into it (the draft linear layers lack the `weight_offset`/
+#       `weight_scale`/`scale_bias` params the checkpoint ships), failing with
+#       a KeyError.
+#    How：
+#       For same-checkpoint drafts (`draft_model_config.model ==
+#       model_config.model`), temporarily redirect `get_draft_quant_config` to
+#       the target quant config during `load_dspark_model`, then restore it.
+#       Self-contained drafts (e.g. Qwen3 DSpark speculators) keep their own
+#       quant config.
+#    Future Plan:
+#       Remove this patch once upstream `load_dspark_model` inherits the target
+#       quant config for same-checkpoint drafts.
+#
 # ** 34. File: platform/patch_vision.py**
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #   1. `vllm.model_executor.models.vision.FusedInputNorm.forward`
@@ -1160,8 +1138,14 @@
 #       Monkey-patch FusedInputNorm.forward to use eps=1e-5 instead of 0.0.
 #       The patch is guarded with contextlib.suppress(ImportError) so it does
 #       not crash on release wheels (v0.26.0) where FusedInputNorm does not exist.
+#       Upstream PR #51734 (dc5101fb1b, Aug 10) rewrote FusedInputNorm.forward to
+#       use a broadcast multiply-add (x * weight + bias) instead of F.batch_norm,
+#       removing running_mean/running_var. That commit is included in the target
+#       16cfe728, so the patch is gated to v0.27.1 only via vllm_version_is;
+#       on newer versions FusedInputNorm.forward is used as-is (multiply-add).
 #    Related PR (if no, explain why):
 #       https://github.com/vllm-project/vllm/pull/50411
+#       https://github.com/vllm-project/vllm/pull/51734
 #    Future Plan:
 #       Remove this patch once vllm-ascend's bundled PyTorch >= 2.13.0
 #       (which, like upstream, allows eps >= 0 for inference).

@@ -38,7 +38,7 @@ from vllm.transformers_utils.configs.deepseek_v4 import DeepseekV4Config
 from vllm.v1.kv_cache_interface import KVCacheSpec
 
 from vllm_ascend.core.kv_cache_interface import AscendSlidingWindowMLASpec
-from vllm_ascend.utils import AscendDeviceType, get_ascend_device_type
+from vllm_ascend.device.hardware_profile import HardwareCapability, get_current_hardware_profile
 
 
 class AscendCompressorStateCache(CompressorStateCache):
@@ -55,9 +55,9 @@ class AscendCompressorStateCache(CompressorStateCache):
         self.block_size = block_size
 
     def get_kv_cache_spec(self, vllm_config: VllmConfig) -> KVCacheSpec:
-        from vllm_ascend.models.layer.attention.layer import DSV4_BLOCK_SIZES
+        from vllm_ascend.models.layer.attention.layer import dsv4_block_sizes
 
-        pads = DSV4_BLOCK_SIZES[vllm_config.cache_config.block_size][1]
+        pads = dsv4_block_sizes(vllm_config)[vllm_config.cache_config.block_size][1]
         page_size_padded = pads[0] if self.state_dim == 2 * 256 and self.compress_ratio == 4 else pads[1]
 
         return AscendSlidingWindowMLASpec(
@@ -73,9 +73,16 @@ class AscendCompressorStateCache(CompressorStateCache):
     def forward(self): ...
 
     def get_attn_backend(self):
-        from vllm_ascend.attention.dsa_v1 import AscendDSABackend
+        # Keep these imports lazy to avoid a model-inspection circular import.
+        if self.compress_ratio == 4:
+            from vllm_ascend.attention.dsa_v1 import AscendDSAC4StateBackend
 
-        return AscendDSABackend
+            return AscendDSAC4StateBackend
+        if self.compress_ratio == 128:
+            from vllm_ascend.attention.dsa_v1 import AscendDSAC128StateBackend
+
+            return AscendDSAC128StateBackend
+        raise ValueError(f"Unsupported DeepSeek V4 state-cache compression ratio: {self.compress_ratio}")
 
 
 @dataclass(frozen=True)
@@ -119,7 +126,9 @@ class Compressor(nn.Module):
             self.dim,
             self.coff * self.head_dim,
             bias=False,
-            quant_config=None if get_ascend_device_type() in {AscendDeviceType.A5} else quant_config,
+            quant_config=None
+            if get_current_hardware_profile().supports(HardwareCapability.DSV4_COMPRESSED_CACHE)
+            else quant_config,
             prefix=f"{prefix}.wkv",
             return_bias=False,
         )
@@ -127,13 +136,17 @@ class Compressor(nn.Module):
             self.dim,
             self.coff * self.head_dim,
             bias=False,
-            quant_config=None if get_ascend_device_type() in {AscendDeviceType.A5} else quant_config,
+            quant_config=None
+            if get_current_hardware_profile().supports(HardwareCapability.DSV4_COMPRESSED_CACHE)
+            else quant_config,
             prefix=f"{prefix}.wgate",
             return_bias=False,
         )
 
         # A5 compressor kernel needs float for norm_weight input
-        norm_dtype = torch.float32 if get_ascend_device_type() == AscendDeviceType.A5 else None
+        norm_dtype = (
+            torch.float32 if get_current_hardware_profile().supports(HardwareCapability.DSV4_COMPRESSED_CACHE) else None
+        )
         self.norm = RMSNorm(self.head_dim, config.rms_norm_eps, dtype=norm_dtype)
 
         state_dtype = torch.float32
@@ -163,13 +176,13 @@ class Compressor(nn.Module):
         self,
         metadata: typing.Any,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        from vllm_ascend.device.device_op import DeviceOperator
+        from vllm_ascend.attention.dsa_attn_kv_plan import get_dsa_attn_kv_plan
 
         assert metadata.full_compress_cos is not None
         assert metadata.full_compress_sin is not None
         assert metadata.num_compressed_tokens is not None
         assert metadata.start_pos is not None
-        assert metadata.num_reqs_actual is not None
+        assert metadata.num_actual_reqs is not None
         full_compress_cos = metadata.full_compress_cos.view(
             metadata.full_compress_cos.shape[0],
             metadata.full_compress_cos.shape[-1],
@@ -184,11 +197,11 @@ class Compressor(nn.Module):
             metadata.query_start_loc,
             metadata.start_pos,
             metadata.block_table,
-            metadata.block_size,
-            DeviceOperator.get_dsa_compressor_slot_mapping_format(),
+            metadata.storage_block_size,
+            get_dsa_attn_kv_plan(self.vllm_config).get_dsa_compressor_slot_mapping_format(),
             self.compress_ratio,
             metadata.num_compressed_tokens,
-            metadata.num_reqs_actual,
+            metadata.num_actual_reqs,
         )
 
     def forward(

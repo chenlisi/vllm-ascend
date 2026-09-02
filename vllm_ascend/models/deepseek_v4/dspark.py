@@ -24,14 +24,19 @@ from vllm.distributed import (
 from vllm.logger import logger
 from vllm.model_executor.layers.fused_moe import fused_moe_make_expert_params_mapping
 from vllm.model_executor.layers.layernorm import RMSNorm
-from vllm.model_executor.layers.linear import ReplicatedLinear
+from vllm.model_executor.layers.linear import ColumnParallelLinear, ReplicatedLinear
 from vllm.model_executor.layers.logits_processor import LogitsProcessor
 from vllm.model_executor.layers.vocab_parallel_embedding import (
     ParallelLMHead,
     VocabParallelEmbedding,
 )
 from vllm.model_executor.model_loader.weight_utils import default_weight_loader
-from vllm.model_executor.models.utils import PPMissingLayer, maybe_prefix
+from vllm.model_executor.models.interfaces import SupportsEagle3
+from vllm.model_executor.models.utils import (
+    PPMissingLayer,
+    maybe_prefix,
+    process_eagle_weight,
+)
 
 from vllm_ascend.models.deepseek_v4.model import (
     DeepseekV2DecoderLayer,
@@ -39,6 +44,7 @@ from vllm_ascend.models.deepseek_v4.model import (
     DeepseekV4MoE,
 )
 from vllm_ascend.ops.rope_dsv4 import get_cos_and_sin_dsa
+from vllm_ascend.utils import enable_dsa_cp
 
 
 def _apply_dsv4_rope(
@@ -67,24 +73,22 @@ def _get_dspark_num_mtp_layers(config: PretrainedConfig) -> int:
 class DSparkMarkovHead(nn.Module):
     def __init__(self, config: PretrainedConfig, prefix: str) -> None:
         super().__init__()
-        self.markov_w1 = VocabParallelEmbedding(
-            config.vocab_size,
+        # Markov decoding runs serially for every draft position. Keep both
+        # low-rank weights replicated so each step remains communication-free.
+        self.markov_w1 = nn.Embedding(config.vocab_size, config.dspark_markov_rank)
+        self.markov_w2 = ReplicatedLinear(
             config.dspark_markov_rank,
-            prefix=f"{prefix}.markov_w1",
-        )
-        self.markov_w2 = ParallelLMHead(
             config.vocab_size,
-            config.dspark_markov_rank,
-            org_num_embeddings=config.vocab_size,
+            bias=False,
+            return_bias=False,
             prefix=f"{prefix}.markov_w2",
         )
-        self.logits_processor = LogitsProcessor(config.vocab_size)
 
     def embed(self, token_ids: torch.Tensor) -> torch.Tensor:
         return self.markov_w1(token_ids)
 
     def bias(self, markov_embed: torch.Tensor) -> torch.Tensor:
-        return self.logits_processor(self.markov_w2, markov_embed)
+        return self.markov_w2(markov_embed)
 
 
 class DSparkConfidenceHead(nn.Module):
@@ -114,6 +118,7 @@ class DeepseekV4DSparkModel(nn.Module):
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
         super().__init__()
         assert vllm_config.speculative_config is not None
+        self.vllm_config = vllm_config
         config = vllm_config.speculative_config.draft_model_config.hf_config
         self.config = config
         self.hc_mult = config.hc_mult
@@ -148,13 +153,14 @@ class DeepseekV4DSparkModel(nn.Module):
             if _model_quant_cfg is not None and _model_quant_cfg.get("quant_method") == "fp8"
             else None
         )
-        self.main_proj = ReplicatedLinear(
+        self.main_proj = ColumnParallelLinear(
             config.hidden_size * len(self.target_layer_ids),
             config.hidden_size,
             bias=False,
             return_bias=False,
             quant_config=_main_proj_qconfig,
             prefix=maybe_prefix(prefix, f"layers.{self.mtp_start_layer_idx}.main_proj"),
+            gather_output=True,
         )
         self.main_norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         first_layer.main_proj = self.main_proj
@@ -225,11 +231,13 @@ class DeepseekV4DSparkModel(nn.Module):
         while isinstance(swa_kv_cache, (list, tuple)) and len(swa_kv_cache) == 1:
             swa_kv_cache = swa_kv_cache[0]
 
-        from vllm_ascend.device.device_op import DeviceOperator
+        from vllm_ascend.attention.dsa_attn_kv_plan import get_dsa_attn_kv_plan
 
         if slot_mapping.ndim == 1:
-            slot_mapping = DeviceOperator.format_dsa_slot_mapping(slot_mapping, swa_cache_layer.block_size)
-        DeviceOperator.dsa_kv_compress_scatter(swa_kv_cache, shared_kv, slot_mapping)
+            slot_mapping = get_dsa_attn_kv_plan(self.vllm_config).format_dsa_slot_mapping(
+                slot_mapping, swa_cache_layer.block_size
+            )
+        get_dsa_attn_kv_plan(self.vllm_config).dsa_kv_compress_scatter(swa_kv_cache, shared_kv, slot_mapping)
 
     def precompute_and_store_context_kv(
         self,
@@ -288,13 +296,6 @@ class DeepseekV4DSparkModel(nn.Module):
     ) -> torch.Tensor:
         return logits_processor(lm_head, self.norm(hidden_states))
 
-    def compute_confidence(
-        self,
-        hidden_states: torch.Tensor,
-        markov_embed: torch.Tensor,
-    ) -> torch.Tensor:
-        return self.confidence_head(hidden_states, markov_embed)
-
     def get_expert_mapping(self) -> list[tuple[str, str, int, str]]:
         return fused_moe_make_expert_params_mapping(
             self,
@@ -307,14 +308,14 @@ class DeepseekV4DSparkModel(nn.Module):
 
 
 @support_torch_compile
-class DSparkDeepseekV4ForCausalLM(nn.Module, DeepseekV2MixtureOfExperts):
+class DSparkDeepseekV4ForCausalLM(nn.Module, DeepseekV2MixtureOfExperts, SupportsEagle3):
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
         super().__init__()
         assert vllm_config.speculative_config is not None
         self.config = vllm_config.speculative_config.draft_model_config.hf_config
 
         # check if quant config exist
-        from vllm_ascend.models.llama_eagle3 import get_rotation_path
+        from vllm_ascend.utils import get_rotation_path
 
         self.rotation_path = get_rotation_path(vllm_config) if vllm_config.quant_config is not None else None
 
@@ -360,6 +361,13 @@ class DSparkDeepseekV4ForCausalLM(nn.Module, DeepseekV2MixtureOfExperts):
             positions=positions,
         )
 
+    def compute_draft_logits(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        # Full-vocab draft: base logits, no d2t scatter.
+        return self.compute_logits(hidden_states)
+
+    def map_draft_to_target(self, draft_ids: torch.Tensor) -> torch.Tensor:
+        return draft_ids  # full-vocab: draft ids are target ids
+
     def compute_logits(
         self,
         hidden_states: torch.Tensor,
@@ -378,8 +386,10 @@ class DSparkDeepseekV4ForCausalLM(nn.Module, DeepseekV2MixtureOfExperts):
     def markov_bias(self, markov_embed: torch.Tensor) -> torch.Tensor:
         return self.model.markov_bias(markov_embed)
 
-    def confidence_logits(self, hidden_states: torch.Tensor, markov_embed: torch.Tensor) -> torch.Tensor:
-        return self.model.confidence_logits(hidden_states, markov_embed)
+    def compute_confidence(self, head_hidden: torch.Tensor, markov_embed: torch.Tensor) -> torch.Tensor:
+        """Per-position acceptance probability for each drafted token."""
+        assert self.model.confidence_head is not None
+        return torch.sigmoid(self.model.confidence_head(head_hidden, markov_embed))
 
     def get_draft_kv_cache_layer_names(self) -> list[str]:
         return self.model.get_draft_kv_cache_layer_names()
@@ -438,6 +448,10 @@ class DSparkDeepseekV4ForCausalLM(nn.Module, DeepseekV2MixtureOfExperts):
                     continue
                 name = mapped_name
 
+            # Detect whether the checkpoint ships its own embed_tokens / lm_head
+            # for the draft model.
+            process_eagle_weight(self, name)
+
             # Expert scale parameters use Ascend's ``weight_scale`` convention.
             if name.endswith(".scale"):
                 name = name.replace(".scale", ".weight_scale")
@@ -475,9 +489,12 @@ class DSparkDeepseekV4ForCausalLM(nn.Module, DeepseekV2MixtureOfExperts):
                 break
             else:
                 if "attn_sink" in name:
-                    narrow = loaded_weight[head_start:head_end]
+                    if enable_dsa_cp():
+                        narrow = loaded_weight
+                    else:
+                        narrow = loaded_weight[head_start:head_end]
                     with torch.no_grad():
-                        params_dict[name][: narrow.shape[0]].copy_(narrow)
+                        params_dict[name].copy_(narrow)
                     loaded_params.add(name)
                     continue
                 param = params_dict[name]

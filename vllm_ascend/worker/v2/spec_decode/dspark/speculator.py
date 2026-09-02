@@ -15,7 +15,6 @@
 # limitations under the License.
 # This file is a part of the vllm-ascend project.
 #
-
 from typing import Any, cast
 
 import torch
@@ -28,7 +27,15 @@ from vllm.v1.worker.gpu.spec_decode.dspark.speculator import (
     DSparkSpeculator,
 )
 
-from vllm_ascend.worker.v2.attn_utils import build_attn_metadata_wrapper
+from vllm_ascend.models.qwen3_dspark import process_weight
+from vllm_ascend.utils import (
+    get_rotation_matrix,
+    get_rotation_path,
+)
+from vllm_ascend.worker.v2.attn_utils import (
+    build_attn_metadata_wrapper,
+    build_draft_attn_metadata_factory,
+)
 
 
 class AscendDSparkSpeculator(DSparkSpeculator):
@@ -37,6 +44,26 @@ class AscendDSparkSpeculator(DSparkSpeculator):
     def __init__(self, vllm_config: VllmConfig, device: torch.device):
         super().__init__(vllm_config, device)
         self.input_batch: InputBatch | None = None
+
+    def load_draft_model(
+        self,
+        target_model: torch.nn.Module,
+        target_attn_layer_names: set[str],
+    ) -> torch.nn.Module:
+        model = super().load_draft_model(target_model, target_attn_layer_names)
+        # Upstream load_dspark_model overrides the drafter's quant_config with
+        # get_draft_quant_config (None for a bf16 drafter), so the drafter's
+        # __init__ derives rotation_path=None and its fc projection is loaded
+        # unrotated. The target is QuaRot-quantized, so the aux hidden states it
+        # feeds the drafter are in rotated space; fc must be rotated (W @ R) to
+        # project them back to model space.
+        rotation_path = get_rotation_path(self.vllm_config)
+        if rotation_path is not None and hasattr(model.model, "fc"):
+            rotation_weight = get_rotation_matrix(rotation_path)
+            fc = model.model.fc
+            with torch.no_grad():
+                fc.weight.data.copy_(process_weight(fc.weight.data.cpu(), rotation_weight))
+        return model
 
     def init_cudagraph_manager(self, cudagraph_mode: CUDAGraphMode) -> None:
         super().init_cudagraph_manager(cudagraph_mode)
@@ -81,7 +108,17 @@ class AscendDSparkSpeculator(DSparkSpeculator):
     def build_draft_attn_metadatas(self, num_reqs_padded, seq_lens_cpu_upper_bound):
         num_tokens_padded = num_reqs_padded * self.num_query_per_req
         assert self.input_batch is not None
-        with build_attn_metadata_wrapper():
+        # The draft attention metadata is built through the generic
+        # (Ascend) build_attn_metadata path; the factory forwards the draft
+        # query positions that the DSA metadata builder needs for RoPE.
+        with (
+            build_attn_metadata_wrapper(),
+            build_draft_attn_metadata_factory(
+                self.input_buffers.positions,
+                num_tokens_padded,
+                torch.from_numpy(self.input_batch.is_prefilling_np),
+            ),
+        ):
             attn_metadata = self._build_draft_attn_metadata(
                 num_reqs=self.input_batch.num_reqs,
                 num_reqs_padded=num_reqs_padded,
@@ -132,7 +169,13 @@ class AscendDSparkSpeculator(DSparkSpeculator):
         is_profile: bool = False,
     ) -> torch.Tensor:
         self.input_batch = input_batch
-        with build_attn_metadata_wrapper():
+        assert self.input_batch is not None
+        with (
+            build_attn_metadata_wrapper(),
+            build_draft_attn_metadata_factory(
+                self.input_buffers.positions, self.max_num_tokens, torch.from_numpy(self.input_batch.is_prefilling_np)
+            ),
+        ):
             return super().propose(
                 input_batch,
                 attn_metadata,
