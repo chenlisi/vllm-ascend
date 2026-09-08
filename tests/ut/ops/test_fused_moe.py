@@ -327,7 +327,7 @@ def test_unquantized_apply_builds_current_fused_experts_input(monkeypatch, moe_c
     result = method.apply(
         layer=layer,
         x=hidden_states,
-        topk_weights=topk_weights.to(hidden_states.dtype),
+        topk_weights=topk_weights,
         topk_ids=topk_ids,
         shared_experts=None,
         shared_experts_input=None,
@@ -336,17 +336,14 @@ def test_unquantized_apply_builds_current_fused_experts_input(monkeypatch, moe_c
     assert result is routed_out
     fused_input = moe_comm_method.fused_experts.call_args.kwargs["fused_experts_input"]
     assert fused_input.hidden_states is hidden_states
-    torch.testing.assert_close(fused_input.topk_weights, topk_weights.to(hidden_states.dtype))
+    assert fused_input.topk_weights is topk_weights
+    assert fused_input.topk_weights.dtype == torch.float32
     assert torch.equal(fused_input.topk_ids, topk_ids)
     assert fused_input.routing.apply_router_weight_on_input
     assert fused_input.activation == "gelu"
     assert fused_input.quant.quant_type == QuantType.NONE
-    if moe_comm_type == MoECommType.FUSED_MC2:
-        assert fused_input.weights.w1[0] is layer.w13_weight
-        assert fused_input.weights.w2[0] is layer.w2_weight
-    else:
-        assert fused_input.weights.w1 is layer.w13_weight
-        assert fused_input.weights.w2 is layer.w2_weight
+    # Weights are carried by the routed-expert layer after the MLP refactor.
+    assert fused_input.layer is layer
 
 
 @pytest.mark.parametrize(
@@ -504,7 +501,7 @@ def test_local_shared_expert_dp_reduces_partial_routed_output(
 
 def test_routed_experts_select_experts_validates_router_logits(monkeypatch):
     routed_experts = AscendRoutedExperts.__new__(AscendRoutedExperts)
-    hidden_states = torch.randn(2, 4)
+    hidden_states = torch.randn(2, 4, dtype=torch.float16)
     router_logits = torch.randn(2, 3)
     input_ids = torch.tensor([11, 22])
     topk_weights = torch.randn(2, 2, dtype=torch.float32)
@@ -525,9 +522,30 @@ def test_routed_experts_select_experts_validates_router_logits(monkeypatch):
         input_ids=input_ids,
     )
 
-    torch.testing.assert_close(result_weights, topk_weights.to(hidden_states.dtype))
+    assert result_weights is topk_weights
+    assert result_weights.dtype == torch.float32
     assert torch.equal(result_ids, topk_ids)
     assert routed_experts.router._select_experts.call_args.kwargs["input_ids"] is input_ids
+
+
+def test_grouped_topk_router_preserves_routing_weight_dtype():
+    router = AscendGroupedTopKRouter(
+        top_k=2,
+        global_num_experts=4,
+        num_expert_group=None,
+        topk_group=None,
+    )
+    hidden_states = torch.randn(2, 4, dtype=torch.float16)
+    router_logits = torch.randn(2, 4, dtype=torch.float32)
+
+    topk_weights, topk_ids = router._compute_routing(
+        hidden_states=hidden_states,
+        router_logits=router_logits,
+        indices_type=None,
+    )
+
+    assert topk_weights.dtype == router_logits.dtype
+    assert topk_ids.dtype == torch.int32
 
 
 def _build_routing_replay_experts(router, log2phy):
@@ -811,7 +829,7 @@ def test_routed_experts_forward_impl_runs_current_flow(monkeypatch, return_with_
     assert quant_method.apply.call_args.kwargs["x"] is prepared_hidden_states
     torch.testing.assert_close(
         quant_method.apply.call_args.kwargs["topk_weights"],
-        topk_weights.to(hidden_states.dtype),
+        topk_weights,
     )
     assert torch.equal(quant_method.apply.call_args.kwargs["topk_ids"], topk_ids)
     routed_experts.router._select_experts.assert_called_once_with(
@@ -841,18 +859,17 @@ class _Gate(nn.Module):
 @pytest.mark.parametrize("with_gate", [False, True])
 def test_shared_experts_part2_applies_optional_gate(with_gate):
     shared_experts_layer = SimpleNamespace(
-        act_fn=nn.Identity(),
         down_proj=_Projection(),
         expert_gate=_Gate() if with_gate else None,
     )
     shared_experts = AscendSharedExperts.__new__(AscendSharedExperts)
     shared_experts.layer = shared_experts_layer
     hidden_states = torch.randn(3, 4)
-    shared_gate_up = torch.randn(3, 4)
+    shared_act = torch.randn(3, 4)
 
-    output = shared_experts.part2(hidden_states, shared_gate_up)
+    output = shared_experts.part2(hidden_states, shared_act)
 
-    expected = shared_gate_up * 2.0 + 1.0
+    expected = shared_act * 2.0 + 1.0
     if with_gate:
         expected = expected * 0.5
     torch.testing.assert_close(output, expected)
@@ -1152,9 +1169,11 @@ def test_sp_multistream_down_projection_and_reduce_scatter_wait_for_routed_final
     shared_experts.parallel_mode = MagicMock(return_value=SharedExpertParallelMode.SEQUENCE_PARALLEL_ONLY)
     hidden_states = torch.randn(4, 4)
     part1_out = torch.randn(4, 8)
+    shared_act = torch.randn(4, 4)
     shared_out = torch.randn(4, 4)
     reduced_out = torch.randn(2, 4)
     shared_experts.part1 = MagicMock(return_value=part1_out)
+    shared_experts.apply_activation = MagicMock(return_value=shared_act)
     shared_experts.part2 = MagicMock(return_value=shared_out)
     shared_experts._gather_sp_input = MagicMock()
     shared_experts._pad_and_reduce_scatter = MagicMock(return_value=reduced_out)
@@ -1164,6 +1183,7 @@ def test_sp_multistream_down_projection_and_reduce_scatter_wait_for_routed_final
     events = FusedMoEEvents(
         before_routed_experts=MagicMock(),
         before_dispatch=MagicMock(),
+        before_gmm2=MagicMock(),
         before_combine=MagicMock(),
         after_routed_finalize=MagicMock(),
     )
@@ -1194,7 +1214,9 @@ def test_sp_multistream_down_projection_and_reduce_scatter_wait_for_routed_final
     assert not any(
         event_wait.args == (events.before_combine,) for event_wait in auxiliary_stream.wait_event.call_args_list
     )
-    shared_experts.part2.assert_called_once_with(hidden_states, part1_out)
+    auxiliary_stream.wait_event.assert_any_call(events.before_gmm2)
+    shared_experts.apply_activation.assert_called_once_with(part1_out)
+    shared_experts.part2.assert_called_once_with(hidden_states, shared_act)
     shared_experts._pad_and_reduce_scatter.assert_called_once_with(shared_out)
     default_stream.wait_stream.assert_called_once_with(auxiliary_stream)
 
@@ -1206,23 +1228,25 @@ def test_sequence_parallel_sedp_forward_skips_token_comms(monkeypatch):
     shared_experts.layer = SimpleNamespace(
         gate_up_proj=SimpleNamespace(),
         down_proj=SimpleNamespace(),
-    )  # no weight_scale -> dense part1/part2 path
+    )  # no weight_scale -> dense split path
     shared_experts.multistream_overlap = False
     shared_experts.quant_type = QuantType.NONE
     shared_experts.lora_context = None
     shared_experts.parallel_mode = MagicMock(return_value=SharedExpertParallelMode.SEQUENCE_PARALLEL_SEDP)
     hidden_states = torch.randn(2, 4)
     part1_out = torch.randn(2, 8)
+    shared_act = torch.randn(2, 4)
     shared_out = torch.randn(2, 4)
     shared_experts.part1 = MagicMock(return_value=part1_out)
+    shared_experts.apply_activation = MagicMock(return_value=shared_act)
     shared_experts.part2 = MagicMock(return_value=shared_out)
     current_stream = MagicMock()
     events = SimpleNamespace(
-        before_routed_experts=None,
+        before_routed_experts=MagicMock(),
         after_routed_experts=None,
-        before_dispatch=None,
-        before_gmm2=None,
-        before_combine=None,
+        before_dispatch=MagicMock(),
+        before_gmm2=MagicMock(),
+        before_combine=MagicMock(),
     )
     all_gather = MagicMock()
     reduce_scatter = MagicMock()
@@ -1238,7 +1262,14 @@ def test_sequence_parallel_sedp_forward_skips_token_comms(monkeypatch):
     all_gather.assert_not_called()
     reduce_scatter.assert_not_called()
     shared_experts.part1.assert_called_once_with(hidden_states)
-    shared_experts.part2.assert_called_once_with(hidden_states, part1_out)
+    shared_experts.apply_activation.assert_called_once_with(part1_out)
+    shared_experts.part2.assert_called_once_with(hidden_states, shared_act)
+    assert [event_wait.args[0] for event_wait in current_stream.wait_event.call_args_list] == [
+        events.before_routed_experts,
+        events.before_dispatch,
+        events.before_gmm2,
+        events.before_combine,
+    ]
 
 
 def test_active_shared_expert_lora_uses_dense_wrappers(monkeypatch):
@@ -1252,8 +1283,10 @@ def test_active_shared_expert_lora_uses_dense_wrappers(monkeypatch):
     shared_experts.parallel_mode = MagicMock(return_value=SharedExpertParallelMode.SEQUENCE_PARALLEL_SEDP)
     hidden_states = torch.randn(2, 4)
     part1_out = torch.randn(2, 8)
+    shared_act = torch.randn(2, 4)
     shared_out = torch.randn(2, 4)
     shared_experts.part1 = MagicMock(return_value=part1_out)
+    shared_experts.apply_activation = MagicMock(return_value=shared_act)
     shared_experts.part2 = MagicMock(return_value=shared_out)
     current_stream = MagicMock()
     lora_context = SimpleNamespace(punica_wrapper=SimpleNamespace(no_lora=False))
@@ -1276,7 +1309,8 @@ def test_active_shared_expert_lora_uses_dense_wrappers(monkeypatch):
     assert output is shared_out
     dynamic_quant.assert_not_called()
     shared_experts.part1.assert_called_once_with(hidden_states)
-    shared_experts.part2.assert_called_once_with(hidden_states, part1_out)
+    shared_experts.apply_activation.assert_called_once_with(part1_out)
+    shared_experts.part2.assert_called_once_with(hidden_states, shared_act)
 
 
 @pytest.mark.parametrize("has_shared_experts", [False, True])

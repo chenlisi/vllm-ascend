@@ -115,7 +115,7 @@ class PoolKey:
     def to_string(self):
         return (
             f"{self.key_metadata.model_name}"
-            f"@pcp{self.key_metadata.pcp_rank}@dcp{self.key_metadata.dcp_rank}"
+            f"@pcp:{self.key_metadata.pcp_rank}@dcp:{self.key_metadata.dcp_rank}"
             f"@head_or_tp_rank:{self.key_metadata.head_or_tp_rank}"
             f"@pp_rank:{self.key_metadata.pp_rank}"
             f"@group:{self.key_metadata.kv_cache_group_id}"
@@ -162,7 +162,7 @@ class LayerPoolKey(PoolKey):
     def to_string(self):
         return (
             f"{self.key_metadata.model_name}"
-            f"@pcp{self.key_metadata.pcp_rank}@dcp{self.key_metadata.dcp_rank}"
+            f"@pcp:{self.key_metadata.pcp_rank}@dcp:{self.key_metadata.dcp_rank}"
             f"@head_or_tp_rank:{self.key_metadata.head_or_tp_rank}"
             f"@group:{self.key_metadata.kv_cache_group_id}"
             f"@cache_role:{self.key_metadata.cache_role}"
@@ -327,7 +327,7 @@ class ChunkedTokenDatabase:
             group_metadata = self.metadata[kv_cache_group_id]
             prefix = (
                 f"{group_metadata.model_name}"
-                f"@pcp{group_metadata.pcp_rank}@dcp{group_metadata.dcp_rank}"
+                f"@pcp:{group_metadata.pcp_rank}@dcp:{group_metadata.dcp_rank}"
                 f"@head_or_tp_rank:{group_metadata.head_or_tp_rank}"
                 f"@pp_rank:{group_metadata.pp_rank}"
                 f"@group:{kv_cache_group_id}"
@@ -1040,6 +1040,12 @@ class ReqMeta:
         skip_save = skip_save or (
             num_tokens_to_save < chunk_boundary and partial_block_index is None and not should_save_partial_block
         )
+        # A ReqMeta must never carry both a save AND a load.
+        # The save would also be wasted work — the bytes are being looked up
+        # in the store right now. Later cached_reqs steps save new tokens
+        # normally.
+        if load_spec is not None and load_spec.can_load and not save_partial_block:
+            skip_save = True
         if skip_save and load_spec is None:
             return None
 

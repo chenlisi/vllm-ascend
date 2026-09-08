@@ -117,12 +117,25 @@ def get_dsv4_compress_ratio(config: Any, layer_idx: int) -> int:
     return compress_ratios[layer_idx]
 
 
+def model_uses_kpool_indexer(model_config: Any | None) -> bool:
+    """Return True for GLM-5.3-Flash style kpool indexer models.
+
+    Those models expose ``index_topk`` like DeepSeek SFA but use a kpool
+    indexer over a hybrid MLA + KDA cache, so they must not be routed through
+    the SFA / DSA layouts.
+    """
+    return any(hasattr(getattr(model_config, attr, None), "index_kpool") for attr in ("hf_text_config", "hf_config"))
+
+
 def model_uses_sfa_sparse(model_config: Any | None) -> bool:
     hf_text_config = getattr(model_config, "hf_text_config", None)
     hf_config = getattr(model_config, "hf_config", None)
+    if hf_text_config is None:
+        return False
+    if model_uses_kpool_indexer(model_config):
+        return False
     return (
-        hf_text_config is not None
-        and hasattr(hf_text_config, "index_topk")
+        hasattr(hf_text_config, "index_topk")
         and not hasattr(hf_text_config, "compress_ratios")
         and not hasattr(hf_config, "compress_ratios")
     )
@@ -140,7 +153,8 @@ def enable_sfa_dcp_replicated_indexer(vllm_config: VllmConfig | None = None) -> 
 
 def clear_enable_sp():
     enable_dsa_cp.cache_clear()
-    enable_dsa_cp_with_o_proj_tp.cache_clear()
+    enable_dsa_cp_full_o_proj.cache_clear()
+    enable_pcp_o_proj_weight_sharding.cache_clear()
     _libc_getenv.cache_clear()
 
 
@@ -584,6 +598,10 @@ def vllm_version_is(target_vllm_version: str):
 
         vllm_version = vllm.__version__
     try:
+        # Strip any PEP 440 local version segment (e.g. "0.27.1+empty" built
+        # with VLLM_TARGET_DEVICE=empty): it is a build artifact and must not
+        # change the version identity for `vllm_version_is` comparisons.
+        vllm_version = vllm_version.split("+")[0]
         return Version(vllm_version) == Version(target_vllm_version)
     except InvalidVersion:
         raise ValueError(
@@ -592,6 +610,17 @@ def vllm_version_is(target_vllm_version: str):
             "to control it by hand. And please make sure the value follows the "
             "format of x.y.z."
         )
+
+
+def get_kv_cache_tensor_layers(kv_cache_tensor) -> list[str]:
+    """Layer names covered by a KVCacheTensor.
+
+    vLLM #51718 renamed the `shared_by` field to `layers` and introduced a
+    required `layer_stride` on vLLM main. This helper keeps both lanes readable.
+    """
+    if vllm_version_is("0.27.1"):
+        return kv_cache_tensor.shared_by
+    return kv_cache_tensor.layers
 
 
 def get_max_hidden_layers(hf_config) -> int:
@@ -798,10 +827,6 @@ def embedding_tp_enable() -> bool:
 
 def oproj_tp_enable() -> bool:
     return get_ascend_config().finegrained_tp_config.oproj_tensor_parallel_size > 0
-
-
-def olora_tp_enable() -> bool:
-    return get_ascend_config().finegrained_tp_config.olora_tensor_parallel_size > 1
 
 
 def mlp_tp_enable() -> bool:
@@ -1327,7 +1352,21 @@ def enable_dsa_cp() -> bool:
 
 
 @lru_cache(maxsize=1)
-def enable_dsa_cp_with_o_proj_tp() -> bool:
+def enable_pcp_o_proj_weight_sharding() -> bool:
+    """Whether SFA-PCP stores O-proj weights as PCP-local resident shards.
+
+    This is a load-time option because it changes the physical parameter shape
+    from a TP-local shard to a TP×PCP-local shard. DSA-CP does not use this
+    user-controlled option.
+    """
+    from vllm_ascend.ascend_config import get_ascend_config
+
+    return get_ascend_config().enable_pcp_o_proj_weight_sharding
+
+
+@lru_cache(maxsize=1)
+def enable_dsa_cp_full_o_proj() -> bool:
+    """Whether this DSA-CP role uses the original full O-proj prefill path."""
     if not enable_dsa_cp():
         return False
     from vllm.config import get_current_vllm_config
@@ -1335,7 +1374,7 @@ def enable_dsa_cp_with_o_proj_tp() -> bool:
     vllm_config = get_current_vllm_config()
     kv_transfer_config = vllm_config.kv_transfer_config
 
-    # Keep the original TP o_proj weight when:
+    # Use the gathered full o_proj weight when:
     # 1) KV pooling is disabled, or
     # 2) KV pooling is enabled on a prefill producer (including kv_both).
     # DSA-CP prefill produces a full-head attention output, so the runtime
@@ -1539,6 +1578,8 @@ def enable_sfa(vllm_config) -> bool:
         return False
     hf_text_config = getattr(model_config, "hf_text_config", None)
     if hf_text_config is None:
+        return False
+    if model_uses_kpool_indexer(model_config):
         return False
     return hasattr(hf_text_config, "index_topk") and not hasattr(hf_text_config, "compress_ratios")
 

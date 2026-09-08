@@ -28,11 +28,10 @@ from vllm.model_executor.layers.fused_moe import FusedMoEConfig, FusedMoEMethodB
 
 from vllm_ascend.ascend_config import get_ascend_config
 from vllm_ascend.ascend_forward_context import _EXTRA_CTX
+from vllm_ascend.device.hardware_profile import HardwareCapability, get_current_hardware_profile
 from vllm_ascend.lora.fused_moe import has_lora
 from vllm_ascend.quantization.quant_type import QuantType
 from vllm_ascend.utils import (
-    AscendDeviceType,
-    get_ascend_device_type,
     npu_stream_switch,
     shared_experts_calculation_stream,
 )
@@ -97,7 +96,7 @@ class AscendSharedExperts:
 
         if self.multistream_overlap:
             # Wrap the quant_method's process_weights_after_loading to validate that
-            # splitting shared expert computation (gate_up projection + activation,
+            # splitting shared expert computation (gate_up projection, activation,
             # then down projection) yields identical results to integrated
             # computation after weight loading.
             original_process_weights = quant_method.process_weights_after_loading
@@ -128,7 +127,8 @@ class AscendSharedExperts:
 
         integrated_out = self.layer(test_input)
         part1_out = self.part1(test_input)
-        split_out = self.part2(test_input, part1_out)
+        shared_act = self.apply_activation(part1_out)
+        split_out = self.part2(test_input, shared_act)
 
         if not torch.allclose(integrated_out, split_out):
             diff = (integrated_out - split_out).abs()
@@ -155,8 +155,10 @@ class AscendSharedExperts:
         shared_gate_up, _ = self.layer.gate_up_proj(hidden_states)  # type: ignore
         return shared_gate_up
 
-    def part2(self, hidden_states: torch.Tensor, shared_gate_up: torch.Tensor):
-        shared_act = self.layer.act_fn(shared_gate_up)  # type: ignore
+    def apply_activation(self, shared_gate_up: torch.Tensor):
+        return self.layer.act_fn(shared_gate_up)  # type: ignore
+
+    def part2(self, hidden_states: torch.Tensor, shared_act: torch.Tensor):
         shared_out, _ = self.layer.down_proj(shared_act)  # type: ignore
 
         # Qwen3-Next specific gating mechanism
@@ -343,7 +345,7 @@ class AscendSharedExperts:
                         clamp_limit=self.swiglu_limit,
                         **(
                             {}
-                            if get_ascend_device_type() == AscendDeviceType.A5
+                            if not get_current_hardware_profile().supports(HardwareCapability.FUSED_SWIGLU_TUNING_ARGS)
                             else {"glu_alpha": self.swiglu_alpha, "glu_bias": self.swiglu_beta}
                         ),
                     )
@@ -391,12 +393,15 @@ class AscendSharedExperts:
             else:
                 # Ensure the shared experts wait for hidden_states to be ready.
                 torch.npu.current_stream().wait_event(fused_moe_evts.before_routed_experts)
-                # Execute the gate projection and activation concurrently with the
-                # dispatch communication.
+                # Execute the gate projection concurrently with dispatch.
                 maybe_wait_event(fused_moe_evts.before_dispatch)
                 part1_out = self.part1(hidden_states)
+                # Execute activation concurrently with routed GMM2.
+                maybe_wait_event(fused_moe_evts.before_gmm2)
+                shared_act = self.apply_activation(part1_out)
+                # Execute the down projection concurrently with combine.
                 maybe_wait_event(down_projection_ready)
-                shared_out = self.part2(hidden_states, part1_out)
+                shared_out = self.part2(hidden_states, shared_act)
 
         if self.multistream_overlap and mode is SharedExpertParallelMode.SEQUENCE_PARALLEL_ONLY:
             # Keep the shared-expert output collective on the auxiliary stream,
