@@ -55,17 +55,22 @@ def test_draft_runtime_config_preserves_target_worker_topology(
 ) -> None:
     draft_parallel_config = SimpleNamespace(
         prefill_context_parallel_size=2,
+        cp_kv_cache_interleave_size=64,
         enable_expert_parallel=False,
         enable_eplb=False,
         rank=0,
     )
     target_parallel_config = SimpleNamespace(
         prefill_context_parallel_size=target_pcp_size,
+        cp_kv_cache_interleave_size=128,
         enable_expert_parallel=True,
         enable_eplb=True,
         rank=7,
         data_parallel_size=2,
         data_parallel_rank=1,
+    )
+    target_cache_config = SimpleNamespace(
+        block_size=128,
     )
     target_config = SimpleNamespace(
         parallel_config=target_parallel_config,
@@ -75,6 +80,7 @@ def test_draft_runtime_config_preserves_target_worker_topology(
         compilation_config=SimpleNamespace(
             cudagraph_mode=SimpleNamespace(decode_mode=lambda: None),
         ),
+        cache_config=target_cache_config,
     )
     draft_model_config = object()
     captured: dict[str, SimpleNamespace] = {}
@@ -120,21 +126,25 @@ def test_draft_runtime_config_preserves_target_worker_topology(
     execution_config = captured["execution_config"]
     execution_parallel_config = execution_config.parallel_config
     assert execution_parallel_config.prefill_context_parallel_size == expected_execution_pcp_size
+    assert execution_parallel_config.cp_kv_cache_interleave_size == 128
     assert execution_parallel_config.enable_expert_parallel
     assert execution_parallel_config.enable_eplb
     assert execution_parallel_config.rank == target_parallel_config.rank
     assert execution_parallel_config.data_parallel_size == 2
     assert execution_parallel_config.data_parallel_rank == 1
     assert target_parallel_config.prefill_context_parallel_size == target_pcp_size
+    assert target_parallel_config.cp_kv_cache_interleave_size == 128
     assert target_parallel_config.enable_expert_parallel
     assert target_parallel_config.enable_eplb
 
     draft_config = speculator.draft_vllm_config
     assert draft_parallel_config.prefill_context_parallel_size == 2
+    assert draft_parallel_config.cp_kv_cache_interleave_size == 64
     assert not draft_parallel_config.enable_expert_parallel
     assert not draft_parallel_config.enable_eplb
     assert draft_config.model_config is draft_model_config
     assert draft_config.parallel_config.prefill_context_parallel_size == expected_execution_pcp_size
+    assert draft_config.parallel_config.cp_kv_cache_interleave_size == 128
     assert draft_config.parallel_config.pipeline_parallel_size == 1
 
 

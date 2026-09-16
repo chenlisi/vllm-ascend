@@ -252,6 +252,7 @@ else:
 from vllm.model_executor.layers.attention import Attention, MLAAttention
 
 from vllm_ascend.core.kv_cache_interface import (
+    AscendIndexerKPoolTailSpec,
     AscendMLAAttentionSpec,
     AscendSFAIndexerCacheSpec,
     AscendSlidingWindowMLASpec,
@@ -1382,7 +1383,7 @@ class NPUModelRunner(GPUModelRunner):
                 self.mrope_positions.cpu,
                 non_blocking=True,
             )
-        elif self.uses_xdrope_dim > 0:
+        elif vllm_version_is("0.28.0") and self.uses_xdrope_dim > 0:
             self._calc_xdrope_positions(scheduler_output)
             # Only relevant for models using XD-RoPE (e.g, HunYuan-VL)
             self.xdrope_positions.gpu[:, :total_num_scheduled_tokens].copy_(
@@ -1540,7 +1541,7 @@ class NPUModelRunner(GPUModelRunner):
             self.positions[:total_num_scheduled_tokens],
         )
 
-        if self.use_async_spec_decode and (self.uses_mrope or self.uses_xdrope_dim > 0):
+        if self.use_async_spec_decode and (self.uses_mrope or (vllm_version_is("0.28.0") and self.uses_xdrope_dim > 0)):
             drift = self.num_computed_tokens[req_indices_gpu].to(
                 torch.int64
             ) - computed_token_tensor_cpu[req_indices_gpu]
@@ -3045,6 +3046,9 @@ class NPUModelRunner(GPUModelRunner):
         assert self.model is not None
         forward_context = get_forward_context()
         assert forward_context is not None
+        if forward_context.cudagraph_runtime_mode == CUDAGraphMode.FULL:
+            if hasattr(self.model, "set_attn_backend"):
+                self.model.set_attn_backend(self.attn_backend)
 
         model_inputs: dict[str, Any] = {
             "input_ids": input_ids,
@@ -3897,7 +3901,7 @@ class NPUModelRunner(GPUModelRunner):
 
             if self.uses_mrope:
                 positions = self.mrope_positions.gpu[:, :num_tokens_padded]
-            elif self.uses_xdrope_dim > 0:
+            elif vllm_version_is("0.28.0") and self.uses_xdrope_dim > 0:
                 positions = self.xdrope_positions.gpu[:, :num_tokens_padded]
             else:
                 positions = self.positions[:num_tokens_padded]
@@ -4166,7 +4170,10 @@ class NPUModelRunner(GPUModelRunner):
             self.update_stream = torch.npu.Stream()
 
             if self.drafter is not None:
-                self.drafter.update_stream = self.update_stream
+                if hasattr(self.drafter, "set_update_stream"):
+                    self.drafter.set_update_stream(self.update_stream)
+                else:
+                    self.drafter.update_stream = self.update_stream
 
         with _torch_cuda_wrapper():
             if (
@@ -4194,6 +4201,7 @@ class NPUModelRunner(GPUModelRunner):
                     runtime_mode=CUDAGraphMode.FULL,
                     use_eagle=self.use_eagle,
                     enable_enpu=self.enable_enpu,
+                    update_stream=self.update_stream,
                 )
 
         if self.compilation_config.cudagraph_mode != CUDAGraphMode.NONE:
@@ -4379,7 +4387,7 @@ class NPUModelRunner(GPUModelRunner):
         """Whether a cache spec requires one block-strided backing tensor."""
         return isinstance(
             kv_cache_spec,
-            (AscendMLAAttentionSpec, AscendSlidingWindowMLASpec),
+            (AscendMLAAttentionSpec, AscendSlidingWindowMLASpec, AscendIndexerKPoolTailSpec),
         ) and (
             self.use_compress
             or getattr(kv_cache_spec, "indexes_kv_by_block_stride", False)
@@ -5731,6 +5739,12 @@ class NPUModelRunner(GPUModelRunner):
                     attn_layer_names.add(layer_name)
 
             elif isinstance(attn_module, DeepseekV32IndexerCache):
+                if not getattr(
+                    getattr(attn_layers.get(layer_name.replace(".indexer.k_cache", ".attn")), "impl", None),
+                    "runtime_has_indexer",
+                    True,
+                ):
+                    continue
                 # TODO: This mirrors upstream's separated KV/indexer specs for
                 # SFA, but keeps Ascend-specific shape/block-size accounting.
                 # Remove this special case once the generic vLLM spec/backend
