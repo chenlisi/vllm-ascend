@@ -2,13 +2,9 @@
 
 > 适用范围：一个新模型（含厂商自带 `modeling_*.py`）需要在 Ascend NPU 上跑起来时，如何系统性地判断"哪些 module 需要适配、怎么适配、EngineCore 侧要动什么"。
 >
-> 版本基线：vllm-ascend `528276dc`（2026-08-05）/ vLLM `d0ce3dad`（2026-08-04）
->
 > ⚠️ **行号防腐声明**：全文 `文件:行号` 引用基于上述基线版本。随 vllm-ascend 版本更新，行号会漂移——**函数名/类名是锚点，行号是辅助**。行号失效时按函数名 grep 即可重新定位。
 >
 > ⚠️ **单一事实源声明**：每个事实只在一处详述，他处用引用。速查表只写判定结论，详述见对应 E 项或类型节；反之亦然。改事实时只改一处。
->
-> 本文整合自两份初稿：`docs/design/new_model_npu_adaptation.md`（方法论）与《新模型NPU适配设计方案.md》（成本分诊 + 速查表），经多轮评审修订。配套实现模板见 `新模型NPU适配实现模板.md`。
 
 ---
 
@@ -92,11 +88,11 @@ grep -rn "PluggableLayer.register\|CustomOp.register" <该分支引用的层>
 **规模分诊**（第二部分逐 module 判定完成后，按 P2 的个数决定落地形态）：
 
 > **前置规则**：**Q0 命中（上游分派不含 NPU）→ P2 至少为 1**（覆盖注册本身
-> 是 P2 工作量），再叠加下表的 module 级 P2 计数决定总规模。判 P2 ≠ 全量重写——
+> 是 P2 工作量），再叠加下表的类型 5 module 计数决定总规模（§1.3：类型 5 即原 P2 路径）。判 P2 ≠ 全量重写——
 > 若选定的基线分支大部分可经注册表复用，`models/<model>/` 可以只是一个**薄覆盖层**。
 > Q0 未命中时表中数值即为总规模。
 
-| module 级 P2 数量 | 落地形态 |
+| 类型 5 module 数量 | 落地形态 |
 |---|---|
 | 0 个 | 纯补丁：`patch/worker/patch_<model>.py` |
 | 1-2 个 | 补丁 + 局部新增：patch + 若干 `ops/<op>.py` |
@@ -246,11 +242,11 @@ grep -rn "@CustomOp.register\|@PluggableLayer.register" $VLLM/vllm/model_executo
 grep -n "\"<RegisterName>\"" $VLLM_ASCEND/vllm_ascend/utils.py
 ```
 
-注册表在 `vllm_ascend/utils.py:705`（`REGISTERED_ASCEND_OPS`）。注意 **key 是类名**（`"RMSNorm"`），不是上游的注册名（`"rms_norm"`）——因为 `__new__` 里用的是 `cls.__name__`。
+注册表在 `vllm_ascend/utils.py:813`（`REGISTERED_ASCEND_OPS`）。注意 **key 是类名**（`"RMSNorm"`），不是上游的注册名（`"rms_norm"`）——因为 `__new__` 里用的是 `cls.__name__`。
 
 ### 2.3 逐 module 判定表模板
 
-对新模型做适配评估时，产出一张判定表，列定义：**Module（厂商代码）| 上游等价层 | 机制 | Ascend 现状 | 判定（类型 0-5 + P0/P1/P2）| 工作量**。
+对新模型做适配评估时，产出一张判定表，列定义：**Module（厂商代码）| 上游等价层 | 机制 | Ascend 现状 | 判定（类型 0-5）| 工作量**。P 级只用于模型级路径判定（§1.2 与 workflow Phase 0），不进 module 判定表——module 行的机制信息已由类型 0-5 经 §1.3 映射承载。
 
 > ⚠️ **「上游等价层」以 §1.1.1 Q0-② 选定的基线分支为准**。不同厂商分支的同一 module 可能落在不同类型——基线选错，整张判定表跟着错。典型：某分支用带 `@PluggableLayer.register` 的**共享层**（→ 类型 2，注册替换），另一分支用**私有类**（→ 类型 3，monkey patch）。填表前先在表头注明基线分支名。
 
@@ -315,6 +311,14 @@ grep -n "\"<RegisterName>\"" $VLLM_ASCEND/vllm_ascend/utils.py
 **工厂函数替换**：必须改**两处 binding**（包 `__init__` 和 layer 模块），否则部分模型拿到未 patch 版本。代码骨架（含 FusedMoE 示例）见 `新模型NPU适配实现模板.md` 模板 C。
 
 > ⚠️ AGENTS.md 要求：新增 patch 必须经架构评审，且有上游回贡计划。patch 是技术债，注册表才是目的地。
+
+#### patch 决策树（强制走查，顺序不可颠倒）
+
+1. 模型数学/权重问题 → 改上游模型文件或在 `vllm_ascend/models/` 注册新架构；模型主体适配代码禁止以 patch 形式进入 vllm-ascend（RFC #7539）。
+2. 能用既有机制（CustomOp 分派、继承、fusion pass、composition）就不用 patch。
+3. 动代码前先走 fallback ladder 定位（复现 → `--enforce-eager` → `TORCHDYNAMO_DISABLE=1` → 关多模态）。
+4. 仅当框架行为在 NPU 上错误且无插件钩子时，允许框架级最小 patch（只覆盖不兼容路径），并强制四段式登记（Why / How / Related PR / Future Plan + 移除条件），写入 `vllm_ascend/patch/__init__.py`；防御性写法：对上游函数做签名级校验，变更即 RuntimeError。
+5. 「不打 patch 模型就不能跑」→ 停止并提 issue 分析根因，而不是加 patch。
 
 ### 类型 4：扩展现有 Ascend 实现
 
@@ -408,7 +412,7 @@ EOF
 
 **判定规则**：把「厂商权重名集合」与「vLLM 层参数名集合」的 **missing / unexpected 两组**列进设计文档的判定表，作为每个 module 的一行。**不允许出现"名字看起来对、没实际验证"**——用 §2.0 速查表的 `❌/⚠️/✅` 语义标记。
 
-**自检命令（加载期）**：`vllm serve <model> --load-format safetensors 2>&1 | grep -E "Missing|Unexpected|size mismatch"` —— 出现任一项都是阻断项，回 Developer 修复 loader 再放行。
+**自检命令（加载期）**：`vllm serve <model> --load-format safetensors 2>&1 | grep -E "not initialized|size mismatch|shape mismatch"` —— 出现任一项都是阻断项，回 Developer 修复 loader 再放行。匹配文案随 vLLM 版本变化（当前版本实测缺失输出为 "Following weights were not initialized from"），**以当前安装版本实测校准**；`Unexpected extra config keys` 属配置项校验，与权重缺失无关，不作阻断项。
 
 ---
 
@@ -466,6 +470,16 @@ attn_single_token_k_page_size * attn_block_size == ssm_block_page_size
 
 **部署前必算**：用目标 EP size 代入公式，确认落在哪个分支。注意 A2/A3/A5 的 MC2 路径还需满足 `num_tokens <= mc2_tokens_capacity`（token 量超出容量时 A2 掉回 ALLGATHER、A3 掉回 ALLTOALL）。
 
+### 4.3 调度层适配清单（KVCacheSpec 是首要适配物）
+
+KVCacheSpec 必须先于一切性能工作定稿：block size、分组、prefix 命中语义全部由其导出，事后更改会级联推翻调度与图模式配置。
+
+1. **cache 形态枚举**：逐层确认注意力形态（GQA/Full / MLA / SFA / DSA / GDN/KDA 线性注意力），是否出现 indexer 独立缓存、recurrent state、多 cache group。
+2. **KVCacheSpec 选型**：优先复用既有 spec 子类（`FullAttentionSpec` / `AscendMLAAttentionSpec` / `AscendSFAIndexerCacheSpec` / `MambaSpec` 等）；确需新增时经 `KVCacheSpecRegistry.register()` 注册。选型错误有显存量级代价（V3.2 曾按 2 倍 MLA page size 分配，浪费 38.8%）。
+3. **跨 cache group page size 一致性**：统一内存池强制各组 page size 相同；警惕 mamba padding 把 attention block size 撑大（实测有 784 token 案例）——评估对短请求与 prefix 命中率的副作用。
+4. **投机解码调度**：`num_lookahead_tokens` 生效确认；draft 层 KV group 归属（non-causal draft 须单独分组）；rejected 回滚路径（paged KV 覆写即可，SSM/GDN state 需快照方案）。
+5. **prefix cache / PD 兼容**：线性注意力组须 `mamba_cache_mode=align`（state 仅在 block 边界物化）并查与 MTP 的互斥项；PD 分离 connector 须实现 `SupportsHMA`（null block 跳过、命中位置 LCM 对齐、传输期间 block pin 住）。
+
 ---
 
 ## 第五部分：标准工作流
@@ -484,8 +498,8 @@ Phase 0  情报收集
 
 Phase 1  逐 module 判定
 ├─ 先走 2.0 速查表快通道；未全命中的 module 走 2.1 决策树
-├─ 产出判定表（类型 0-5 + P0/P1/P2 + 工作量）
-├─ 按 1.2 的「规模分诊」表，依 P2 个数决定落地形态
+├─ 产出判定表（类型 0-5 + 工作量）
+├─ 按 1.2 的「规模分诊」表，依类型 5 个数决定落地形态
 └─ 标记阻塞项 vs 非阻塞项
 
 Phase 2  EngineCore 清单核对
@@ -517,31 +531,71 @@ Phase 4  验证（贯穿）
 3. **先小规模后并行**：单卡跑通再上 TP/EP/DP
 4. **静默错误要变成显式失败**：所有兜底 `else` 分支加 `raise NotImplementedError`
 
+### 与 Day0 workflow 的映射
+
+本文档的 Phase 0-4 是判定与实现方法论；流程编排层（`.claude/skills/day0-inference`，四 Stage 渐进叠加：golden → 并行量化 → 特性叠加 → 验收）的 **Stage 1**（`flows/golden_flow.md`）将其映射为以下执行阶段与门禁（Stage 2-4 的映射随各 flow 实现后补充）：
+
+| 本文档 | workflow 阶段 | 门禁 |
+|---|---|---|
+| （新增）依赖就绪扫描 | Phase 0 | G0 路径门禁（P0/P1/P2 + 排期模板） |
+| 第一~四部分（判定） | Phase A Designer | 设计完整性检查 |
+| 第三、五部分（实现） | Phase B Developer | G1 实现门禁（UT + OOT 自检 + patch 台账） |
+| §4.0 加载期 + Phase 4 | Phase C1/C2 Tester | G2 冒烟（含捕获计数）/ G3 精度 |
+| 附录 F | Phase C3 Tester | G4 图模式/性能 |
+| 附录 E + patch 台账 | Phase D Reviewer | G5 发布 |
+
+依赖阻塞（上游未合入 / CANN 算子缺口）不是实现缺陷，不进修复回路：启动并行预案（外挂算子包 / 上游 pre-release 分支 / Triton 过渡），无回退路径则停止并提 issue。
+
+---
+
+## 第六部分：服务层适配清单
+
+服务层错配多为静默失败——HTTP 200 ≠ 部署正确。2026 代模型的关键变化是程序化 prompt 编码取代 Jinja 模板，`--tokenizer-mode` 从「tokenizer 实现选择」升级为「会话协议实现选择」。
+
+### 6.1 parser 三件套同名同代对齐
+
+- `--tokenizer-mode` / `--tool-call-parser` / `--reasoning-parser` 必须同名同代成套配置；错代次 parser 名（如对 K3 用 `kimi_k2`）可能合法但输出全错（思考文本落入 content、tool_calls 解析失败）。
+- chat template 两形态：自带 Jinja（GLM/Qwen）vs 程序化编码（DSV4 的 encoding/、K3 的 Python renderer）——后者要求内置 tokenizer-mode，输入 encoding 与输出 parsing 缺一不可。
+
+### 6.2 reasoning_effort 与 checkpoint 代次
+
+- effort 档位命名各厂商分裂（low/high/max 与 low/medium/xhigh 并存），需网关归一化。
+- **checkpoint 代次是显式配置维度**：effort 映射等前端行为须按 checkpoint 特征字段分支；对齐新代次时不得回归旧代次（DSV4 的 0731 effort 补丁曾回归 Preview checkpoint）。
+- 强制思考类模型（GLM-5.3）：`thinking.disabled` 直接 400，迁移时必须改写请求。
+
+### 6.3 服务矩阵验证（验收用）
+
+1. **render 验证**：`/v1/chat/completions/render` 端点比对渲染 token_ids，验证模板与 effort 前缀生效（不同档位应渲染不同长度前缀）。
+2. **tool_choice 组合**：tool_choice ∈ {auto, required, named, none} × {流式, 非流式} × {有无 reasoning_effort}，校验 `finish_reason` 与 arguments JSON 可解析性。
+3. **多轮 reasoning 回归**：重点第 3 轮（think 泄漏进 content 是已知失败模式）；enable_thinking=False 时 reasoning parser 应 identity 回落。
+4. **长上下文泄漏回归**：长上下文省略特殊 token 导致原文泄漏为先例，须覆盖。
+
 ---
 
 ## 附录 A：现有 CustomOp 覆盖清单
 
-`REGISTERED_ASCEND_OPS`（`vllm_ascend/utils.py:705`）当前 26 项 + 条件项。**新模型用到这些结构时零适配**。（下表按组归纳，含条件项与说明项；基础注册表为 26 项，不要数表格行数。）
+`REGISTERED_ASCEND_OPS`（`vllm_ascend/utils.py:813`）当前 30 项基础注册 + 条件项。**新模型用到这些结构时零适配**。（下表按组归纳，含条件项与说明项；基础注册表为 30 项，不要数表格行数；行号会漂移，以 `grep -n "REGISTERED_ASCEND_OPS = {" vllm_ascend/utils.py` 实测为准。）
 
 | 组 | 注册名 | 机制 |
 |---|---|---|
-| 归一化 | `RMSNorm` `GemmaRMSNorm` `RMSNormGated` | CustomOp → `forward_oot` |
+| 归一化 | `RMSNorm` `GemmaRMSNorm` `RMSNormGated` `FusedRMSNormGated` | CustomOp → `forward_oot` |
 | 激活 | `SiluAndMul` `SiluAndMulClamp` `QuickGELU` | CustomOp → `forward_oot` |
 | 位置编码 | `RotaryEmbedding` `MRotaryEmbedding` `YaRNScalingRotaryEmbedding` `DeepseekScalingRotaryEmbedding` `ApplyRotaryEmb` | CustomOp → `forward_oot` |
-| 线性层 | `ColumnParallelLinear` `RowParallelLinear` `MergedColumnParallelLinear` `QKVParallelLinear` `ReplicatedLinear` | PluggableLayer → `forward` |
+| 线性层 | `ColumnParallelLinear` `RowParallelLinear` `MergedColumnParallelLinear` `QKVParallelLinear` `ReplicatedLinear` `GateLinear` | PluggableLayer → `forward` |
 | 词表/输出 | `VocabParallelEmbedding` `ParallelLMHead` `LogitsProcessor` | PluggableLayer → `forward` |
 | 注意力 | `MultiHeadLatentAttentionWrapper` `RelPosAttention` | PluggableLayer → `forward` |
 | 注意力 | `MMEncoderAttention` | CustomOp → `forward_oot` |
 | 线性注意力 | `GatedDeltaNetAttention` `BailingMoELinearAttention` | PluggableLayer → `forward` |
+| MoE | `MoERunner` `RoutedExperts` | 注册表替换（与 `patch_fused_moe` 工厂重定向并存） |
 | 其他 | `CustomQwen2Decoder` | PluggableLayer → `forward` |
 | 其他 | `Conv3dLayer`（基类 `ConvLayerBase`） | CustomOp → `forward_oot` |
-| 条件项 | `GateLinear`（`is_deepseek_mla` 时） | PluggableLayer |
+| 条件项 | `KimiK3MultiHeadLatentAttentionWrapper`（vLLM ≠ 0.28.0 时注册） | PluggableLayer |
 | 310P 覆盖 | 11 项 `*310` 变体 | — |
 
 > ⚠️ **310P 差异不止这 11 项**：310P 不设 `custom_ops = ["all"]`，算子退回 `forward_native`（机制见类型 0），需单独验证执行路径。
 
 **不在表里的重要结构**：
-- `FusedMoE` —— 走 `patch/platform/patch_fused_moe.py`（工厂函数，无法注册）
+- `FusedMoE` —— 走 `patch/platform/patch_fused_moe.py`（工厂函数重定向）；注意 **MoE 已是双机制并存**：工厂入口仍靠 patch 重定向，而 `MoERunner`/`RoutedExperts` 已进注册表、可经注册表替换——判定 MoE 类 module 时先查注册表再考虑 patch
 - Attention 主体 —— 走 `get_attn_backend_cls()` 分发
 - 线性注意力 state cache —— 走上游 `MambaSpec` + `patch_mamba_*`（Ascend 无对应 spec）
 
@@ -627,13 +681,48 @@ grep -n "def load_weights\|stacked_params\|_load_" $VLLM/vllm/model_executor/mod
 
 ---
 
+## 附录 E：组合矩阵回归清单（长尾高发区）
+
+历史已知问题几乎全部位于叠加组合而非基线。Day0 验收须按 Designer 产出的清单覆盖以下笛卡尔积的相关子集：
+
+- **量化**：BF16 / W8A8 / W8A8C8 / W4A8MXFP / MXFP4 等该模型实际发布的权重族；
+- **图模式**：eager / PIECEWISE / FULL_DECODE_ONLY（稀疏与线性注意力只承诺 UNIFORM_BATCH）；
+- **投机解码**：无 / MTP / eagle / DSpark，verify 步 1+k 与 capture size 对齐；
+- **CP/PD**：DCP / PCP / PD 分离（含 connector 形态）。
+
+每个启用组合至少一条 E2E 用例，配置落在 `tests/e2e/models/configs/<Model>.yaml`。已知交叉项事故示例：MTP × prefix cache 静默输出损坏、DSpark × 混合 KV 分组 padding 膨胀、量化 draft × BF16 target page-size 统一失败。
+
+---
+
+## 附录 F：ACLGraph 兼容清单
+
+### 六类不可入图操作（新模型 forward 路径静态扫描清单）
+
+1. stream 同步及隐含同步 memcpy（回放上下文同步 rtMemcpy 崩溃，错误码 107030）；
+2. event 状态查询；
+3. aclop 算子（捕获时申请显存）；
+4. host 侧 tiling 依赖算子（attention 即属此类，是 piecewise 把 attention 排除出图的根本原因）；
+5. 控制流分支；
+6. full-graph 区域内任何 Python 副作用（含 logger.debug——曾致全部 TP worker 崩溃）。
+
+另：新自定义算子必须注册 meta 实现才可被捕获。
+
+### 逐级开图门禁
+
+顺序强制 eager → PIECEWISE → FULL_DECODE_ONLY，每级独立验证，`--enforce-eager` 作为定界手段。feature-first：EP + ACLGraph + FlashComm + MTP 默认全开，失败项保留证据而非默认关闭。
+
+> **交叉引用（G2 冒烟门禁证据，在 C1 阶段采集，此处仅备查）**：ACLGraph 捕获计数期望，对齐真实断言 `tests/e2e/pull_request/two_card/aclgraph/test_aclgraph_capture_replay.py`——
+> `warmup_runs = 1 + 2 × 捕获 batch size 个数`（A3 且 DeepSeek 系额外 +1，MC2 warmup）；`padding_runs = ⌈total_steps/32⌉×32 − total_steps`（32 步全局对齐空跑）；`expected = (warmup_runs + padding_runs) × dp_size`。三项易漏：DP 倍乘、对齐 padding、A3+DeepSeek 额外 warmup。
+
+---
+
 ## 参考
 
 > 以下路径中，`vllm_ascend/` 与 `AGENTS.md` 位于 **vllm-ascend 仓**，`vllm/` 位于 **vLLM 仓**。
 
 **vllm-ascend 仓**
 - `AGENTS.md`（仓根目录）—— 贡献规范、patch 评审要求、NPU 特有注意事项
-- `vllm_ascend/utils.py:660` `register_ascend_customop()` —— 算子注册入口，`:705` 为 `REGISTERED_ASCEND_OPS`
+- `vllm_ascend/utils.py:765` `register_ascend_customop()` —— 算子注册入口，`:813` 为 `REGISTERED_ASCEND_OPS`
 - `vllm_ascend/platform.py:408` `check_and_update_config()` —— EngineCore 配置中枢
 - `vllm_ascend/core/kv_cache_interface.py:213` `register_ascend_kv_cache_specs()` —— KV cache spec 注册
 - `vllm_ascend/device/mxfp_compat.py:60` —— MXFP4 的符号门禁（`ensure_mxfp4_*` 系列，按 `torch_npu` 符号而非 SoC）；`:25` 为 RMSNorm+MX 融合算子的 A5 独占检查

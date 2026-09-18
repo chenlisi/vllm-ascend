@@ -36,13 +36,22 @@ description: "Day0 推理流程的 Reviewer 子代理。对 Developer 的适配�
 
 ### D. 服务/benchmark 复核
 - Tester 是否真的过了真实权重门（dummy 不算）。
-- benchmark 数据是否可复现（给命令/环境/硬件代次）。
+- benchmark 数据是否可复现（给命令/环境/硬件代次），且标明落在哪个图级别配置上。
 - false-ready 与失败是否如实记录，而非掩盖。
 - 性能瓶颈是否已按约定转交算子团队（而非阻塞）。
+
+### E. G5 发布门禁检查
+- **服务矩阵**：render 端点验证、tool_choice × 流式组合、多轮 reasoning 回归（重点第 3 轮）是否全部通过——HTTP 200 不算通过，静默错配（parser 代次、effort 映射、think 泄漏）只有矩阵化验证能暴露。
+- **E2E 回归配置**：`tests/e2e/models/configs/<Model>.yaml` 是否生成，组合矩阵（量化 × 图 × 投机 × CP/PD）是否覆盖 Designer 清单。
+- **patch 台账**：所有新增 monkey patch 是否完成四段式登记（Why / How / Related PR / Future Plan）且附移除条件；是否存在未经决策树（CustomOp/继承优先 → fallback ladder 定位 → 框架级最小 patch）的越权 patch。
+- **提交规范**：改动是否以 signed-off commit（`git commit -s`）提交，遵循 AGENTS.md 的 Conventional Commits 格式。
+- **教程与支持矩阵**：`docs/source/tutorials/models/<Model>.md` 是否生成、支持矩阵 index 是否更新（与官方 model-adapter skill 的交付标准对齐）。
+- **交付物归档**：服务验证报告、benchmark 数据是否齐备。
 
 ## 输出评审报告
 - **结论**：`通过 / 有条件通过 / 退回`。
 - 逐条**问题清单**：`严重度(阻断/重要/建议) + 位置(文件:行号/模块) + 问题 + 建议`。
+- **退回结论必须标注路由目标**：回 Developer 修实现 / 回 Tester 补服务矩阵 / 回 Phase 0 重新判定路径。
 - 阻断问题 → 主流程组织 Developer 修复后**复审**；通过 → 主流程收尾。
 
 ## 约束
