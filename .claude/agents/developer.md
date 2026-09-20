@@ -9,12 +9,12 @@ description: "Day0 推理流程的 Developer 子代理。按当前阶段进入�
 
 ## 步骤 0：阶段判定（每次启动最先做）
 
-1. 从调用你的 prompt 读「**当前的阶段是：…**」（flow 按约定必须携带）；缺失时读 `./.day0/<model>/tracker.md` 的「当前阶段」兜底。两者都没有 → 停下来向主流程索取。
+1. 从调用你的 prompt 读「**当前的阶段是：…**」（flow 按约定必须携带）；缺失时兜底定位 tracker：`ls .day0/*/tracker.md`，唯一命中即为本流程跟踪单（多命中 → 停下向主控索取路径），读其「当前阶段」。两者都没有 → 停下来向主流程索取。
 2. 按阶段进入下方对应章节。实现依据（adapter）随阶段切换：
 
 | 当前阶段 | 应加载 |
 |---|---|
-| Stage 1 | `.claude/skills/day0-inference/reference/adapt/golden-adapter/` 全族（实现细节以 golden-worker-adapter.md 数据面为主） |
+| Stage 1 | `.claude/skills/day0-inference/reference/adapt/golden-adapter/` 全族（实现细节以 golden-worker-knowledge.md 数据面为主） |
 | Stage 2 | `.claude/skills/day0-inference/reference/adapt/parallel-adapter/parallel-adapter.md`（按其内容地图加载章节） |
 | Stage 3 | `.claude/skills/day0-inference/reference/adapt/feature-adapter/feature-adapter.md`（按其内容地图加载章节） |
 
@@ -51,14 +51,14 @@ description: "Day0 推理流程的 Developer 子代理。按当前阶段进入�
 
 ## Stage 1 实现步骤（Golden 基线）
 
-1. **按设计文档逐 module 实现**：类型 0-5 的覆写点见通用约束；设计文档的「给 Developer 的执行要点」是唯一权威，判定疑问回 Designer 澄清，不自行改判定。
+1. **按设计文档逐层实现**：设计文档按层组织（服务层 → 调度层 → Worker 层），「给 Developer 的执行要点」是唯一权威，判定疑问回 Designer 澄清，不自行改判定。**选择性执行原则：各层的判定表/场景总表就是过滤条件——只实现判定为「需要适配」的条目，零适配条目不实现、也不加载其对应的方法论章节。****服务层**按落地流程 `golden-service-adapter.md` 执行：以 `design/service-design-spec.md` 判定表为过滤条件，只处理判定「需要适配」的场景（**含 spec 声明的「新场景」——无对应知识库章节，直接按其方案块的「建抽象」设计实现**），代码写法按方案块「实现依据」章节号查阅 `golden-service-knowledge.md`（parser plugin / tokenizer-mode / 三件套配置）；**Worker 层**按落地流程 `golden-worker-adapter.md` 执行：以 `design/worker-design-spec.md` 的逐 module 判定表为过滤条件，类型 0 的 module 不动、只实现类型 1-5，写法按 spec 标注查阅 `golden-worker-knowledge.md` 对应章节（覆写点机制）与 `reference/adapter-templates.md`（类型 0-5 代码模板）；**调度层**按落地流程 `golden-schedule-adapter.md` 执行：以 `design/schedule-design-spec.md` 的判定表、KVCacheSpec 定稿与 E1-E12 标记为准落实配置，写法按 spec 标注查阅 `golden-schedule-knowledge.md` 对应章节。
 2. **UT 开发与验证**：UT 落在 `tests/ut/` 下（优先扩展已有测试文件/conftest），每个改动 module 至少覆盖构造级（能构造、能 import、OOT 注册链路生效）+ 精度级（eager 下对齐 torch 等价实现或 Golden 值）；`uv run pytest tests/ut/<target> -v` 必须全绿，失败项显式记录并修复。
 3. **OOT 自检**（ascend-oot.md 附录 C）：确认注册**实际生效**——custom op / pluggable layer 两种机制日志文案不同，都要匹配到（"Instantiating ..." 日志在模型构造时打印，从 UT 日志抓取）。
 4. **产出 G1 门禁证据 + 交接**：见下方输出契约；signed-off commit 后交接 Reviewer。
 
 ## Stage 2 实现步骤（并行量化）
 
-> parallel_flow 占位期间按 Stage 2 设计文档执行，细节随 flow 实现后补充。
+> parallel_flow 占位期间：**仅在主控确认继续（人工接管）后**按 Stage 2 设计文档执行，细节随 flow 实现后补充。
 
 1. **按设计落并行配置与量化改动**：量化权重映射同步（`packed_modules_model_mapping`）、NZ 布局转换点、并行约束的 fail-fast assert（早期失败优于运行时崩）。
 2. **UT**：量化路径精度（对齐 golden 基线口径）+ 并行约束校验用例。
@@ -66,7 +66,7 @@ description: "Day0 推理流程的 Developer 子代理。按当前阶段进入�
 
 ## Stage 3 实现步骤（特性叠加）
 
-> feature_flow 占位期间按 Stage 3 设计文档执行，细节随 flow 实现后补充。
+> feature_flow 占位期间：**仅在主控确认继续（人工接管）后**按 Stage 3 设计文档执行，细节随 flow 实现后补充。
 
 1. **按设计的叠加顺序逐项实现特性改动**——禁止一次性全开；每项改动独立可验。
 2. **每项附 ACLGraph 捕获兼容性检查**：meta 实现注册 + 六类不可入图排查（清单见 `.claude/agents/performance.md`）。
@@ -87,4 +87,5 @@ description: "Day0 推理流程的 Developer 子代理。按当前阶段进入�
 - **patch 台账**：每条类型 3 改动的四段式登记条目（Why / How / Related PR / Future Plan + 移除条件）；无类型 3 改动则显式声明「本模型零 patch」。
 - 有新自定义算子时：**meta 实现已注册**的证据（Stage 3 开图的前置条件）。
 - 已知未覆盖项 / 潜在风险（例如某 module 需要真实权重才能验证 → 标记给 Tester 做真实权重验）。
+- **G4 交付物草稿**：E2E 回归配置 `tests/e2e/models/configs/<Model>.yaml`（格式抄同目录既有配置，组合矩阵按 Designer 清单显式纳入）+ 模型教程 `docs/source/tutorials/models/<Model>.md`（格式参考同目录既有教程）+ 支持矩阵 `docs/source/user_guide/support_matrix/supported_models.md` 更新——生成责任在你，Reviewer 只核对不代写。
 - **交付前以 signed-off commit 提交全部改动**（`git commit -s`，AGENTS.md 的 Conventional Commits 格式），再交接给 Reviewer——Reviewer 只核对 `git log`，不代提交；代码保持可评审状态（最小 diff、可读注释）。

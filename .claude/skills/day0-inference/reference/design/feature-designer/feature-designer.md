@@ -13,8 +13,8 @@
 
 `.claude/skills/day0-inference/reference/adapt/feature-adapter/feature-adapter.md` 的内容地图是本阶段的加载清单：
 
-- `golden-adapter/golden-worker-adapter.md` §2.5 ACLGraph 图模式 + `.claude/agents/performance.md` 验收素材（逐级开图 / 捕获计数 / 六类不可入图）
-- `golden-adapter/golden-schedule-adapter.md` §二.6-8 运行时调度语义（prefix cache / 投机解码 / PD 分离）
+- `../../golden-worker-knowledge.md` §2.5 ACLGraph 图模式 + `.claude/agents/performance.md` 验收素材（逐级开图 / 捕获计数 / 六类不可入图）
+- `../../golden-schedule-knowledge.md` §二.6-8 运行时调度语义（prefix cache / 投机解码 / PD 分离）
 - `golden-adapter/golden-adapter.md` §5 组合矩阵回归清单（历史事故高发区）
 
 ## 设计产出（设计文档必须包含）

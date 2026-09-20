@@ -10,11 +10,11 @@ Stage 2 在 Golden 基线（Stage 1 出口：eager+bf16 精度基线）上叠加
 
 | 主题 | 文档与章节 | Stage 2 关注点 |
 |---|---|---|
-| 并行策略约束 | `../golden-adapter/golden-worker-adapter.md` §1.4 | DCP/PCP 整除与互斥公式、PCP 仅 MRV2、EPLB 注册与量化白名单 |
-| 权重加载与 NZ 布局 | `../golden-adapter/golden-worker-adapter.md` §1.5 | 量化模型的 `packed_modules_model_mapping` 同步、FRACTAL_NZ / A5 MX 量化强制转换 |
-| KV 方案与 page 一致性 | `../golden-adapter/golden-schedule-adapter.md` §一.1-3 | KVCacheSpec 选型复核（并行形态改变 page/分片假设）、跨组 page size 一致性 |
+| 并行策略约束 | `../../golden-worker-knowledge.md` §1.4 | DCP/PCP 整除与互斥公式、PCP 仅 MRV2、EPLB 注册与量化白名单 |
+| 权重加载与 NZ 布局 | `../../golden-worker-knowledge.md` §1.5 | 量化模型的 `packed_modules_model_mapping` 同步、FRACTAL_NZ / A5 MX 量化强制转换 |
+| KV 方案与 page 一致性 | `../../golden-schedule-knowledge.md` §一.1-3 | KVCacheSpec 选型复核（并行形态改变 page/分片假设）、跨组 page size 一致性 |
 | 量化方法识别 | `../../ascend-oot.md` §6 | 量化自动检测、`supported_quantization` 白名单、MXFP4 两道门 |
-| MoE 通信方式 | `../golden-adapter/golden-worker-adapter.md` §2.4 | EP 规模与 `select_moe_comm_method` 分发（部署前代入公式验算） |
+| MoE 通信方式 | `../../golden-worker-knowledge.md` §2.4 | EP 规模与 `select_moe_comm_method` 分发（部署前代入公式验算） |
 
 ## 与流程的衔接
 

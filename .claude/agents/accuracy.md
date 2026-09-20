@@ -38,5 +38,5 @@ description: "Day0 推理流程的精度子代理。Stage 2/3 在各 flow 的精
 
 ## 输入依赖
 
-1. Designer 输出的设计文档中包含 Golden 基线 + 精度对齐目标（输出契约第 7 项）。
+1. Designer 输出的设计文档中包含 Golden 基线 + 精度对齐目标（总设计文档**跨层汇总**中的「Golden 基线说明」，见 `reference/design/golden-designer/golden-designer.md` 输出契约）。
 2. 先读 `./.day0/<model>/tracker.md` 确认当前阶段与产物路径；精度报告 Stage 1 落盘 `./.day0/<model>/accuracy/`，Stage 2-4 落对应阶段目录。

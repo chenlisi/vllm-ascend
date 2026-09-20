@@ -9,18 +9,18 @@ description: "Day0 推理流程的 Tester 子代理。两段式验证：Phase 3 
 
 ## 输入
 
-- **先读 `./.day0/<model>/tracker.md`**：确认当前阶段与本阶段产物目录（smoke / accuracy 等）。
+- **先读 tracker.md**：`ls .day0/*/tracker.md`，唯一命中即为本流程跟踪单（多命中 → 停下向主控索取路径）；确认当前阶段与本阶段产物目录（smoke / accuracy 等）。
 - Developer 的改动清单、UT 结果、以及「需真实权重验证 todo」标注。
-- 目标模型路径、served-model-name、TP 大小、硬件代次（来自 Designer 设计文档的模型全景）。
+- 目标模型路径、served-model-name、TP 大小、硬件代次——**一律读 tracker.md「环境信息」块**（占位符唯一来源，不从设计文档推测）。
 - Designer 的 **Golden 基线说明**（Phase 4 精度对齐的依据）。
 - Phase 0 的服务层初判（parser 三件套候选、checkpoint 代次）。
 
 ## 执行流程
 
-### 0) 环境与卫生（每次先做）
+### 0) 环境与卫生（每次先做；**本节命令假定为 Linux NPU 主机**）
 ```bash
-# 停止残留服务，确认端口空闲
-pkill -f "vllm serve|api_server|EngineCore" || true
+# 停止本流程残留服务（pkill 模式按本流程 served-name 收窄，避免误杀同机其他任务）
+pkill -f "vllm serve.*<served-name>" || true
 netstat -ltnp 2>/dev/null | rg ':8000' || true
 # 确认 import 指向安装好的源（<venv> 读 tracker「环境信息」块）
 <venv>/bin/python -c "import vllm; print(vllm.__file__)"
@@ -28,7 +28,7 @@ netstat -ltnp 2>/dev/null | rg ':8000' || true
 
 **占位符取值**：`<work-dir>` / `<venv>` / `<MODEL_PATH>` / `<served-name>` / `<TP>` 一律读 tracker.md「环境信息」块（立项时主控填充，不在其中自行猜测）；`<max-model-len>` = min(`config.json` 的 `max_position_embeddings`, 显存预算)，不确定时先用 8192 冒烟再放大。
 
-服务拉起基线命令（默认端口 8000；**Stage 1 golden 基线固定 eager**；后台拉起 + 日志落盘 `serve.log`——后续门禁 grep 此文件）：
+服务拉起基线命令（默认端口 8000；**Stage 1 golden 基线固定 eager**；后台拉起 + 日志**直接落产物目录**——dummy 阶段写 `smoke/serve-dummy.log`、真实权重阶段写 `accuracy/serve-real.log`，门禁 grep 对应文件，不做归档搬运）：
 ```bash
 cd <work-dir>
 HCCL_OP_EXPANSION_MODE=AIV VLLM_ASCEND_ENABLE_FLASHCOMM1=0 \
@@ -37,7 +37,7 @@ nohup <venv>/bin/vllm serve <MODEL_PATH> \
   --enforce-eager \
   --max-model-len <max-model-len> --tensor-parallel-size <TP> \
   --max-num-seqs 16 --port 8000 \
-  > <work-dir>/serve.log 2>&1 &
+  > <输出根目录>/smoke/serve-dummy.log 2>&1 &
 ```
 
 ### Phase 3 冒烟（G2 门禁，dummy 快通道）
@@ -62,8 +62,8 @@ curl -s http://127.0.0.1:8000/v1/chat/completions \
 
 ### Phase 4 真实权重（G3 精度门禁）
 
-1. 去掉 `--load-format dummy` 重新拉起（旧 `serve.log` 先归档到 `smoke/` 再覆盖）。
-2. **加载期检查（配合 Designer 判定表的加载期差异列）**：`serve.log` 里 grep `not initialized|size mismatch|shape mismatch`——出现任一项都是阻断项，回 Developer 修 loader 再放行，不能带着 missing key 继续。匹配文案随 vLLM 版本变化（当前版本实测缺失输出为 "Following weights were not initialized from"），**以当前安装版本实测校准**；`Unexpected extra config keys` 属配置项校验，与权重缺失无关，不作阻断项。
+1. 去掉 `--load-format dummy` 重新拉起（日志改写 `accuracy/serve-real.log`）。
+2. **加载期检查（配合 Designer 判定表的加载期差异列）**：`accuracy/serve-real.log` 里 grep `not initialized|size mismatch|shape mismatch`——出现任一项都是阻断项，回 Developer 修 loader 再放行，不能带着 missing key 继续。匹配文案随 vLLM 版本变化——**校准动作**：先 `grep -rn "not initialized" $VLLM/vllm/model_executor/models/` 确认当前安装版的实际提示字符串（当前版本实测为 "Following weights were not initialized from"）；`Unexpected extra config keys` 属配置项校验，与权重缺失无关，不作阻断项。
 3. **G3 准出条件**（完整定义见 `.claude/agents/accuracy.md`，Stage 1 由你代为执行）：
    - 权重加载干净（上述 grep 无命中，证据归档）；
    - HTTP 200 且输出非空；
@@ -73,8 +73,8 @@ curl -s http://127.0.0.1:8000/v1/chat/completions \
 
 ### 产出 & 交接
 
-- **Phase 3**：dummy 阶段 `serve.log` 归档 + 冒烟结果（HTTP 码、输出片段）。
-- **Phase 4**：真实权重阶段 `serve.log` 归档（无 fatal 错误、无权重缺失/尺寸不匹配命中）+ 精度基线对比证据。
+- **Phase 3**：`smoke/serve-dummy.log` + 冒烟结果（HTTP 码、输出片段）。
+- **Phase 4**：`accuracy/serve-real.log`（无 fatal 错误、无权重缺失/尺寸不匹配命中）+ 精度基线对比证据。
 - **false-ready / 失败**记录：错误签名 + 已走的 fallback 阶梯，未解决的交给 Reviewer 或回退 Developer。
 
 ## 交付物

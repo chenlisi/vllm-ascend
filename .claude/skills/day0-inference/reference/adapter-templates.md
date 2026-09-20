@@ -1,6 +1,6 @@
 # 新模型 NPU 适配实现模板（类型 0-5 代码骨架）
 
-> 配套 `.claude/skills/day0-inference/reference/ascend-oot.md`（六类适配类型）与 `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-worker-adapter.md`（逐 module 判定）使用。每个模板给出最小可用骨架 + 仓内真实参考实现路径。骨架中的 `<占位>` 必须按设计文档的逐 module 判定表替换；参考实现是判型后的第一阅读材料，**不要凭骨架空想实现细节**。
+> 配套 `.claude/skills/day0-inference/reference/ascend-oot.md`（六类适配类型）与 `.claude/skills/day0-inference/reference/golden-worker-knowledge.md`（逐 module 判定机制）使用。每个模板给出最小可用骨架 + 仓内真实参考实现路径。骨架中的 `<占位>` 必须按设计文档的逐 module 判定表替换；参考实现是判型后的第一阅读材料，**不要凭骨架空想实现细节**。
 >
 > 通用纪律（所有模板适用）：
 > - 先 `forward_native` / torch 等价实现跑通精度，再换融合算子（先正确后性能）；
@@ -187,7 +187,7 @@ return <native_torch_equivalent>(x)  # 无 triton 时的正确性保底
 
 ## 模板 F：类型 5 — 新 KV cache spec
 
-适用：新 cache 形态（indexer 独立缓存 / recurrent state / 压缩 latent 等），既有 spec 子类无法描述。**spec 必须先于一切性能工作定稿**（`.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-schedule-adapter.md`）。
+适用：新 cache 形态（indexer 独立缓存 / recurrent state / 压缩 latent 等），既有 spec 子类无法描述。**spec 必须先于一切性能工作定稿**（`.claude/skills/day0-inference/reference/golden-schedule-knowledge.md`）。
 
 参考实现：`vllm_ascend/core/kv_cache_interface.py`（`AscendSFAIndexerCacheSpec` 的 `page_size_bytes`/`merge()` 写法与 `register_ascend_kv_cache_specs()` 注册点）。
 

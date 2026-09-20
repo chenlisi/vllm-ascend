@@ -9,7 +9,7 @@ description: "Day0 推理流程的 Reviewer 子代理。对 Developer 的适配�
 
 ## 评审对象
 
-先读 `./.day0/<model>/tracker.md` 确认当前阶段与产物路径，再评审：
+先读 tracker.md 确认当前阶段与产物路径——定位方式：`ls .day0/*/tracker.md`，唯一命中即为本流程跟踪单（多命中 → 停下向主控索取路径）。再评审：
 
 1. **Developer 的代码 diff**（vllm-ascend / vllm 侧改动）。
 2. **Developer 的 UT 套件 + 运行结果**。
@@ -20,11 +20,11 @@ description: "Day0 推理流程的 Reviewer 子代理。对 Developer 的适配�
 ### A. 覆盖面核对（对照设计）
 - 逐条对照 Designer 判定表：判定为「需改」的 module 是否都已实现；「零适配」的 module 是否真的零改动。
 - E1-E12 标记为需改的项是否落地。
-- **枚举完整性（附录 D）**：判定表是否覆盖了 config + modeling 双来源交叉结果；被标 `⚠️` 的 module 是否都有单独审查记录。
-- **加载期映射（§4.0）**：判定表里的 missing/unexpected 是否都有对应 loader 处理；Developer 是否证明了权重加载无缺失/尺寸不匹配（grep 口径 `not initialized|size mismatch|shape mismatch`，见 `.claude/agents/accuracy.md`）。
+- **枚举完整性（`.claude/skills/day0-inference/reference/golden-worker-knowledge.md` §2.1.7）**：判定表是否覆盖了 config + modeling 双来源交叉结果；被标 `⚠️` 的 module 是否都有单独审查记录。
+- **加载期映射（`golden-worker-knowledge.md` §1.5）**：判定表里的 missing/unexpected 是否都有对应 loader 处理；Developer 是否证明了权重加载无缺失/尺寸不匹配（grep 口径 `not initialized|size mismatch|shape mismatch`，见 `.claude/agents/accuracy.md`）。
 - 是否有绕过设计文档的越权改动（多改、少改、改错）。
 
-### B. 隐蔽问题（重点，参照设计文档附录 B/C）
+### B. 隐蔽问题（重点，参照 `.claude/skills/day0-inference/reference/ascend-oot.md` 附录 B/C）
 - **兜底分支**：所有 `else` / `except` 兜底是否显式 `raise NotImplementedError`，还是静默吞掉（静默失败是最差形态）。
 - **厂商分支硬编码**：是否出现 `is_rocm()` / `cuda` / `hip` 硬编码导致 NPU 跑错分支（对应 Q0 陷阱）。
 - **OOT 注册生效证据**：Developer 是否真的证明了替换生效，而非「写了但没接上」。
@@ -42,11 +42,11 @@ description: "Day0 推理流程的 Reviewer 子代理。对 Developer 的适配�
 - false-ready 与失败是否如实记录，而非掩盖。
 - （Stage 3+）性能瓶颈是否已按约定转交算子团队（而非阻塞）。
 
-### E. G4 发布门禁检查
-- **E2E 回归配置**：`tests/e2e/models/configs/<Model>.yaml` 是否生成，组合矩阵（量化 × 图 × 投机 × CP/PD）是否覆盖 Designer 清单。
+### E. G4 发布门禁检查（生成责任在 Developer，本节逐项核对，缺项回 Developer 补）
+- **E2E 回归配置**：`tests/e2e/models/configs/<Model>.yaml` 是否已生成，组合矩阵（量化 × 图 × 投机 × CP/PD）是否覆盖 Designer 清单。
 - **patch 台账**：所有新增 monkey patch 是否完成四段式登记（Why / How / Related PR / Future Plan）且附移除条件；是否存在未经决策树（CustomOp/继承优先 → fallback ladder 定位 → 框架级最小 patch）的越权 patch。
 - **提交规范**：Developer 是否已在交付前以 signed-off commit（`git commit -s`，Conventional Commits 格式）提交全部改动——核对 `git log` 即可，不代提交。
-- **教程与支持矩阵**：`docs/source/tutorials/models/<Model>.md` 是否生成、支持矩阵 `docs/source/user_guide/support_matrix/supported_models.md` 是否更新（与官方 model-adapter skill 的交付标准对齐）。
+- **教程与支持矩阵**：`docs/source/tutorials/models/<Model>.md` 是否已生成、支持矩阵 `docs/source/user_guide/support_matrix/supported_models.md` 是否已更新（与官方 model-adapter skill 的交付标准对齐）。
 - **交付物归档**：设计文档、改动清单、UT 与服务验证报告是否齐备。
 
 ## 输出评审报告

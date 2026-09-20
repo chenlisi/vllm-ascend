@@ -1,29 +1,24 @@
-# Golden 阶段分层适配总纲（Designer 方法论入口）
+# Golden 阶段分层适配总纲
 
 > 本文件是 `.claude/skills/day0-inference/flows/golden_flow.md` 的方法论配套文档，服务 **Phase 1（Designer 设计）** 与 **Phase 2（Developer 实现）**。它是文档族的索引与总纲：每层细节一律在子文档详述，本文只给框架、判据与指向。
 >
 > 同族文档：
 > - `.claude/skills/day0-inference/reference/ascend-oot.md` —— OOT 机制与六类适配类型（判定树与模板索引）
-> - 适配三篇（`.claude/skills/day0-inference/reference/adapt/golden-adapter/` 下）：`golden-service-adapter.md`（服务层）/ `golden-schedule-adapter.md`（调度层，含 EngineCore E1-E12 配置清单）/ `golden-worker-adapter.md`（Worker 层控制面 + 数据面逐 module 落地）
 > - `.claude/skills/day0-inference/reference/adapter-templates.md` —— 类型 0-5 代码模板 A-F
+> - 每层「知识库 + 落地流程 + designer 规范」三件套：
+>   - 服务层：`.claude/skills/day0-inference/reference/golden-service-knowledge.md` + `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-service-adapter.md` + `.claude/skills/day0-inference/reference/design/golden-designer/golden-service-designer.md`
+>   - 调度层：`.claude/skills/day0-inference/reference/golden-schedule-knowledge.md` + `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-schedule-adapter.md` + `.claude/skills/day0-inference/reference/design/golden-designer/golden-schedule-designer.md`
+>   - Worker 层：`.claude/skills/day0-inference/reference/golden-worker-knowledge.md` + `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-worker-adapter.md` + `.claude/skills/day0-inference/reference/design/golden-designer/golden-worker-designer.md`
 >
 > ⚠️ **行号防腐**：全文 `文件:行号` 引用以函数名/类名为锚点，行号随版本漂移，失效时按函数名 grep 重新定位。
 
-## 1. 文档定位与 Designer 交付物清单
+## 1. 文档定位与主流程
 
-Designer 产出的设计文档是 Phase 1 的唯一交接物，必须覆盖以下章节（与 golden_flow Phase 1 核对清单逐条对齐，缺项打回）：
+- **设计（Phase 1）**：以 `.claude/skills/day0-inference/reference/design/golden-designer/golden-designer.md` 为唯一权威——它依次调用三个 designer 子文件产出三份 design spec（`design/service-design-spec.md` / `schedule-design-spec.md` / `worker-design-spec.md`）+ 跨层汇总，交付物契约与打回条件不在本文重复。
+- **开发（Phase 2）**：按 §3 的落地三步执行——**三个步骤就是用三个 adapter 子文件完成开发**，各 adapter 以对应 design spec 为输入、以对应知识库为写法参考，产出统一汇入 `./.day0/<model>/impl/` 的 G1 门禁证据。
+- **本文的自有内容**：分层框架（§2）、落地三步（§3）、Q0 模型级前置检查（§4）、组合矩阵回归清单（§5）、术语纪律与实现顺序铁律（§7）——这些是跨层公共物，不属任何单一子文件。
 
-1. **模型全景**：厂商 config.json + modeling 文件的结构枚举；
-2. **Q0 结论**：平台分派覆盖检查（见本文 §4）；
-3. **module 枚举完整性结论**：config 与 modeling 双来源交叉验证（防"漏列没进判定表"）；
-4. **逐 module 判定表**：判定一律用**类型 0-5**，**不含 P 级标注**（P0/P1/P2 只属于模型级路径判定，是 golden_flow Phase 0 的产出，不进 module 行）；
-5. **E1-E12 标记**：EngineCore 配置清单逐项过（清单详述见 `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-schedule-adapter.md`）；
-6. **实现顺序**：按本文 §7 铁律排列；
-7. **服务层设计**：parser 三件套 + effort 映射（见 `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-service-adapter.md`）；
-8. **调度层设计**：KVCacheSpec 选型，定稿前禁止进入性能工作（同 golden-schedule-adapter.md）；
-9. **组合矩阵回归清单**（见本文 §5）；
-10. **魔法数字审计结论**；
-11. **给 Developer 的执行要点**。
+> 依赖阻塞（上游未合入 / CANN 算子缺口）不是实现缺陷，不进修复回路——处置规则（并行预案 / 停止提 issue）见 golden_flow Phase 0 门禁。
 
 ## 2. 分层框架：两套视角的融合
 
@@ -42,13 +37,15 @@ Designer 产出的设计文档是 Phase 1 的唯一交接物，必须覆盖以�
 3. **Worker 层实例化**——管线、并行约束、权重加载；
 4. **算子层收口**——性能与正确性长尾。
 
-## 3. 每层职责速览
+## 3. 落地三步（Phase 2 开发主流程）
 
-| 层 | 管理面职责 | 数据面职责 | 主要交接物 | 详述文档 |
+按 §2 的顺序，依次执行三个 adapter 子文件完成开发。三者输入均为对应 design spec（判定表是执行过滤条件：只落地「需要适配」的条目），写法参考均为对应知识库，产出统一汇入 G1 门禁证据：
+
+| 步骤 | 执行文件（落地流程） | 输入 spec | 写法参考（知识库） | 落地物 |
 |---|---|---|---|---|
-| 服务层 | parser 注册与三件套（`--tokenizer-mode` / `--tool-call-parser` / `--reasoning-parser`）配置、checkpoint 代次管理 | 请求处理链与服务矩阵验证 | 三件套配置 + 服务层设计 | `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-service-adapter.md` |
-| 调度层 | KVCacheSpec 定义注册、调度器装配、配置校验（E1-E12） | prefix 命中、投机调度、PD 传输运行时语义 | KVCacheSpec 选型 + 调度配置 | `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-schedule-adapter.md` |
-| Worker 层 | 管线 / 并行约束 / 权重加载（控制面） | attention backend 与算子逐 module 落地（数据面） | 逐 module 判定表 + 实现 | `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-worker-adapter.md` |
+| ① 服务层 | `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-service-adapter.md` | `design/service-design-spec.md` | `.claude/skills/day0-inference/reference/golden-service-knowledge.md` | parser plugin / tokenizer-mode / 三件套与多模态配置 + 成套性自检 |
+| ② 调度层 | `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-schedule-adapter.md` | `design/schedule-design-spec.md` | `.claude/skills/day0-inference/reference/golden-schedule-knowledge.md` | KVCacheSpec 注册与选型落实 + E1-E12 配置改动 |
+| ③ Worker 层 | `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-worker-adapter.md` | `design/worker-design-spec.md` | `.claude/skills/day0-inference/reference/golden-worker-knowledge.md`（代码模板：`reference/adapter-templates.md`） | 逐 module 类型 0-5 实现 + 权重映射 loader + UT/OOT 自检 |
 
 ## 4. Q0：模型级平台分派前置检查
 
@@ -79,30 +76,18 @@ grep -rn "PluggableLayer.register\|CustomOp.register" <该分支引用的层>
 
 > 实践中曾出现 nvidia 分支不可用而 amd 分支干净的情况，务必逐个查。判定表表头须注明选定的基线分支名——基线选错，整张判定表跟着错。
 
-通过 Q0 后，才进入逐 module 判定（决策树与类型 0-5 定义见 `.claude/skills/day0-inference/reference/ascend-oot.md`，逐 module 落地见 `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-worker-adapter.md`）。
+通过 Q0 后，才进入逐 module 判定（决策树与类型 0-5 定义见 `.claude/skills/day0-inference/reference/ascend-oot.md`，逐 module 落地机制见 `.claude/skills/day0-inference/reference/golden-worker-knowledge.md`）。
 
 ## 5. 跨层公共物：组合矩阵回归清单
 
-历史已知问题几乎全部位于**叠加组合**而非基线。Day0 验收须按 Designer 产出的清单覆盖以下笛卡尔积的相关子集，**每个启用组合至少一条 E2E 用例，配置落在 `tests/e2e/models/configs/<Model>.yaml`**：
+历史已知问题几乎全部位于**叠加组合**而非基线。Day0 验收须按 Designer 产出的清单覆盖以下笛卡尔积的相关子集，**每个启用组合至少一条 E2E 用例，配置落在 `tests/e2e/models/configs/<Model>.yaml`（汇入 G4 发布门禁）**：
 
 - **量化**：BF16 / W8A8 / W8A8C8 / W4A8MXFP / MXFP4 等该模型实际发布的权重族；
 - **图模式**：eager / PIECEWISE / FULL_DECODE_ONLY（稀疏与线性注意力只承诺 UNIFORM_BATCH）；
 - **投机解码**：无 / MTP / eagle / DSpark，verify 步 1+k 与 capture size 对齐；
 - **CP/PD**：DCP / PCP / PD 分离（含 connector 形态）。
 
-**三条历史交叉项事故先例**（新读者理解"为什么必须覆盖组合"的依据）：MTP × prefix cache 静默输出损坏；DSpark × 混合 KV 分组 padding 膨胀；量化 draft × BF16 target page-size 统一失败。组合维度的机制细节分别见 golden-schedule-adapter.md 与 golden-worker-adapter.md（路径同上 adapter 目录）。
-
-## 6. 与 Day0 workflow 的映射
-
-| 文档 | golden_flow 落点 |
-|---|---|
-| 本文档（分层方法论 + Q0 + 组合矩阵 + 铁律） | Phase 1 设计完整性检查的核对依据；组合矩阵清单汇入 G4 发布门禁 |
-| `.claude/skills/day0-inference/reference/ascend-oot.md` | Phase 2 实现依据（类型 0-5 模板）+ G1 实现门禁的 OOT 自检 |
-| `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-service-adapter.md` | Phase 0 服务层初判；服务矩阵验证属 Stage 4 验收 |
-| `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-schedule-adapter.md` | Phase 1 调度层设计（**KVCacheSpec 定稿前禁止性能工作**）+ E1-E12 清单核对 |
-| `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-worker-adapter.md` | Phase 1 逐 module 判定表 / Phase 2 实现 / Phase 4 权重加载自检；图模式（§2.5）属 Stage 3 |
-
-> 依赖阻塞（上游未合入 / CANN 算子缺口）不是实现缺陷，不进修复回路——处置规则（并行预案 / 停止提 issue）见 golden_flow Phase 0 门禁。
+**三条历史交叉项事故先例**（新读者理解"为什么必须覆盖组合"的依据）：MTP × prefix cache 静默输出损坏；DSpark × 混合 KV 分组 padding 膨胀；量化 draft × BF16 target page-size 统一失败。组合维度的机制细节分别见 golden-schedule-knowledge.md 与 golden-worker-knowledge.md（路径同在 `.claude/skills/day0-inference/reference/` 下）。
 
 ## 7. 术语纪律与实现顺序铁律
 

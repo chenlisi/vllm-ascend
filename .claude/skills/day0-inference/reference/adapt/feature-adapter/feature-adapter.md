@@ -10,10 +10,10 @@ Stage 3 在并行量化版本（Stage 2 出口）上**系统性集成 5+ 性能�
 
 | 主题 | 文档与章节 | Stage 3 关注点 |
 |---|---|---|
-| ACLGraph 图模式 | `../golden-adapter/golden-worker-adapter.md` §2.5 + `.claude/agents/performance.md`（验收素材：逐级开图 / 捕获计数 / 六类不可入图） | 逐级开图顺序、meta 实现复核、UNIFORM_BATCH 预期管理 |
-| 投机解码调度 | `../golden-adapter/golden-schedule-adapter.md` §二.7 | lookahead/draft 分组/回滚路径、verify 步 1+k 与 capture size 对齐 |
-| prefix cache | `../golden-adapter/golden-schedule-adapter.md` §二.6 | `mamba_cache_mode=align`、chunked prefill mamba 边界、投毒先例 |
-| PD 分离 | `../golden-adapter/golden-schedule-adapter.md` §二.8 | connector `SupportsHMA`、layerwise KV Pool 混合 group 限制 |
+| ACLGraph 图模式 | `../../golden-worker-knowledge.md` §2.5 + `.claude/agents/performance.md`（验收素材：逐级开图 / 捕获计数 / 六类不可入图） | 逐级开图顺序、meta 实现复核、UNIFORM_BATCH 预期管理 |
+| 投机解码调度 | `../../golden-schedule-knowledge.md` §二.7 | lookahead/draft 分组/回滚路径、verify 步 1+k 与 capture size 对齐 |
+| prefix cache | `../../golden-schedule-knowledge.md` §二.6 | `mamba_cache_mode=align`、chunked prefill mamba 边界、投毒先例 |
+| PD 分离 | `../../golden-schedule-knowledge.md` §二.8 | connector `SupportsHMA`、layerwise KV Pool 混合 group 限制 |
 | 组合矩阵回归 | `../golden-adapter/golden-adapter.md` §5 | 量化 × 图 × 投机 × CP/PD 组合项（历史事故高发区）逐项覆盖 |
 
 ## 与流程的衔接

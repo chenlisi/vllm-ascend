@@ -10,6 +10,14 @@
 
 - 模型路径：<path>
 - 创建时间：<date>
+- **环境信息**（立项时主控填充——**所有子代理命令占位符与环境变量的唯一取值来源**，不在各文档中另行猜测）：
+  - work-dir（serve 工作目录）：<path>
+  - venv（虚拟环境根路径，含 `bin/`）：<path>
+  - served-model-name：<name>
+  - TP 大小：<TP>；硬件代次：<A2/A3/A5/310P>
+  - max-model-len：<min(config.json 的 max_position_embeddings, 显存预算)>
+  - $VLLM（上游 vLLM 源码路径，preflight §1 采集）：<path>
+  - $VLLM_ASCEND（vllm-ascend 仓根）：<path>
 - **当前阶段**：Stage 1
 - **当前步骤**：S1.1
 
@@ -19,8 +27,8 @@
 
 | 步骤 | 执行 agent | 产出 | 门禁 | 状态 | 产物路径 | 备注 |
 |---|---|---|---|---|---|---|
-| S1.1 依赖就绪与路径判定（Phase 0） | 主控（不调子代理） | raw_evidence.md + 依赖结论表 / 五维扫描报告 / 路径判定与排期 | G0 | 进行中 | `preflight/` | — |
-| S1.2 适配设计（Phase 1） | designer | 设计文档（12 项输出契约） | 设计完整性检查 | 未开始 | `design/` | — |
+| S1.1 依赖就绪与路径判定（Phase 0） | 主控（不调子代理） | raw_evidence.md + 依赖结论表 / 五维扫描报告 / 服务层初判 / 路径判定与排期 | G0 | 进行中 | `preflight/` | — |
+| S1.2 适配设计（Phase 1） | designer | 设计文档（按层组织：服务/调度/Worker/跨层，每层含适配点判定表） | 设计完整性检查 | 未开始 | `design/` | — |
 | S1.3 代码适配 + UT（Phase 2） | developer | 改动清单 + UT 结果 + OOT 自检证据 | G1 | 未开始 | `impl/` | — |
 | S1.4 冒烟验证（Phase 3） | tester | dummy 冒烟证据 | G2 | 未开始 | `smoke/` | — |
 | S1.5 真实权重精度（Phase 4） | tester（按 `accuracy.md` 的 G3 定义执行） | 权重加载证据 + 精度基线对比 | G3 | 未开始 | `accuracy/` | — |

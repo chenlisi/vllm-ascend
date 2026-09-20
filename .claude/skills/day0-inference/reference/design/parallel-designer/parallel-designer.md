@@ -13,11 +13,11 @@
 
 `.claude/skills/day0-inference/reference/adapt/parallel-adapter/parallel-adapter.md` 的内容地图是本阶段的加载清单：
 
-- `golden-adapter/golden-worker-adapter.md` §1.4 并行策略约束（DCP/PCP 整除与互斥公式、EPLB 注册与量化白名单）
-- `golden-adapter/golden-worker-adapter.md` §1.5 权重加载与 NZ 布局（量化模型的 `packed_modules_model_mapping` 同步、FRACTAL_NZ / A5 MX 强制转换）
-- `golden-adapter/golden-schedule-adapter.md` §一.1-3 KV 方案与 page 一致性（并行形态改变分片假设时复核）
+- `../../golden-worker-knowledge.md` §1.4 并行策略约束（DCP/PCP 整除与互斥公式、EPLB 注册与量化白名单）
+- `../../golden-worker-knowledge.md` §1.5 权重加载与 NZ 布局（量化模型的 `packed_modules_model_mapping` 同步、FRACTAL_NZ / A5 MX 强制转换）
+- `../../golden-schedule-knowledge.md` §一.1-3 KV 方案与 page 一致性（并行形态改变分片假设时复核）
 - `ascend-oot.md` §6 量化方法识别（自动检测命中性、白名单、MXFP4 两道门）
-- `golden-adapter/golden-worker-adapter.md` §2.4 MoE 通信方式（EP 规模代入 `select_moe_comm_method` 验算）
+- `../../golden-worker-knowledge.md` §2.4 MoE 通信方式（EP 规模代入 `select_moe_comm_method` 验算）
 
 ## 设计产出（设计文档必须包含）
 

@@ -5,7 +5,7 @@ description: "Day0 推理流程的性能子代理。Stage 4（验收）被调用
 
 # 性能 Agent（Stage 4 验收 + Stage 3 图模式验收素材）
 
-> 本 Agent 在 **Stage 4（验收）**被调用（见 `./.day0/<model>/tracker.md` 当前阶段的步骤表）；Stage 4 的 flow（`flows/performance_flow.md`）当前为占位，接入前按其出口判据草案执行。**Stage 1 不做图模式验证**（全程 eager）——图模式归 Stage 3 特性叠加，以下验收素材在 `flows/feature_flow.md` 实现时接入。启动时先读 tracker.md 确认当前阶段。
+> 本 Agent 在 **Stage 4（验收）**被调用（见 `./.day0/<model>/tracker.md` 当前阶段的步骤表）；Stage 4 的 flow（`flows/performance_flow.md`）当前为占位——**仅在主控确认继续（人工接管）后**按其出口判据草案执行。**Stage 1 不做图模式验证**（全程 eager）——图模式归 Stage 3 特性叠加，以下验收素材在 `flows/feature_flow.md` 实现时接入。启动时先读 tracker.md 确认当前阶段（定位：`ls .day0/*/tracker.md`，唯一命中即为本流程跟踪单，多命中向主控索取）。
 
 ## 图模式验收素材（Stage 3 特性叠加使用）
 

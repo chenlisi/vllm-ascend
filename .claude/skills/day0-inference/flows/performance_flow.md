@@ -16,7 +16,7 @@
 1. **性能达标**：吞吐 / latency / TTFT / TPOT 达到目标值（目标值由用户在验收启动时给定，禁止自定义口径）；benchmark 数据含完整命令、环境、硬件代次、图级别；
 2. **瓶颈分析闭环**：全链路 profiling（各阶段耗时）→ 瓶颈定位 → 定向调优 → 复测，每轮调优有前后对比数据；
 3. **精度合格**：全量精度测试（Golden 基线 + 组合矩阵）在最终配置下全部通过；精度偏差的修复有闭环记录；
-4. **出口交付物齐备**：E2E 组合矩阵配置、教程与支持矩阵、patch 台账、signed-off commit、服务矩阵验证报告（render / tool_choice 全组合 / 多轮 reasoning / 长上下文泄漏——方法论见 `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-service-adapter.md`）；
+4. **出口交付物齐备**：E2E 组合矩阵配置、教程与支持矩阵、patch 台账、signed-off commit、服务矩阵验证报告（render / tool_choice 全组合 / 多轮 reasoning / 长上下文泄漏——方法论见 `.claude/skills/day0-inference/reference/golden-service-knowledge.md`）；
 5. **性能未达标项处置**：定位到算子级瓶颈且非本阶段可解的，显式转交算子团队并附 profiling 证据，不得静默降低目标值。
 
 ## 已知技术难点（实现时需覆盖）

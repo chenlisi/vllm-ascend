@@ -47,22 +47,68 @@ def load_json(path):
         return None
 
 
+def _repo_root() -> str:
+    """vllm-ascend 仓根：从本脚本位置向上查找仓根标记。
+
+    不能依赖 os.getcwd()——调用方可能从任意目录启动，导致仓内相对路径
+    （.github/vllm-main-verified.commit、vllm_ascend/utils.py）全部读不到，
+    且失败是静默的（§3/§9 退化为空结果，看起来像「真的什么都没有」）。
+    也不按固定层数上溯——脚本被移动或仓路径变化都会失准；改为向上找标记。
+    """
+    d = os.path.dirname(os.path.abspath(__file__))
+    while True:
+        if os.path.isdir(os.path.join(d, "vllm_ascend")) and os.path.exists(
+            os.path.join(d, ".git")
+        ):
+            return d
+        parent = os.path.dirname(d)
+        if parent == d:  # 到文件系统根仍未找到
+            raise RuntimeError(
+                "无法定位 vllm-ascend 仓根（向上未找到同时含 .git 与 vllm_ascend/ 的目录）。"
+                "请确认本脚本位于 vllm-ascend 仓内。"
+            )
+        d = parent
+
+
 def main():
-    model_path = sys.argv[1]
-    out_path = sys.argv[2]
-    repo = os.getcwd()  # 约定从 vllm-ascend 仓根运行
+    if len(sys.argv) != 3:
+        sys.exit(__doc__)
+    model_path = os.path.abspath(sys.argv[1])
+    out_path = os.path.abspath(sys.argv[2])
+    repo = _repo_root()
+    os.chdir(repo)  # 后续所有仓内相对路径以仓根为准
     cfg = load_json(os.path.join(model_path, "config.json")) or {}
+    # 多模态 config 的关键字段嵌在 text_config 里（如 GLM-5.3-Flash），展平后
+    # 再取信号，否则 §2 只会输出 3 条基础信号、五维判定拿不到注意力/cache 字段。
+    if isinstance(cfg.get("text_config"), dict):
+        cfg = {**cfg, **cfg["text_config"]}
     L = []  # 输出行
     w = L.append
+
+    # 环境自检：探不到 vllm 源码时 §3/§6/§8 会全部退化为空。这必须显式阻断——
+    # 「空结果」与「真的什么都没有」在下游判定里含义完全相反（前者是环境问题，
+    # 后者是「该架构上游未合入」），静默产出会让 G0 路径门禁判错。
+    vllm_dir_probe = run([sys.executable, "-c", "import vllm, os; print(os.path.dirname(vllm.__file__))"])
+    vllm_missing = not vllm_dir_probe.startswith("/")
+    if vllm_missing:
+        print(
+            "ERROR: 无法定位 vllm 源码（import vllm 失败），§3/§6/§8 将不可用。\n"
+            "  §3 上游支持状态是 G0 路径门禁的唯一输入，缺失会导致路径判定错误。\n"
+            "  请先确保 vllm 已安装（或 PYTHONPATH 指向 vllm 源码树），再重跑本脚本。\n"
+            f"  探测结果：{vllm_dir_probe}",
+            file=sys.stderr,
+        )
+        return 2
 
     w(f"# Phase 0 原始证据 — {model_path}")
     w(f"\n> 生成时间 {datetime.now().isoformat(timespec='seconds')}；本文件只产信号不做判定，判定见 golden_flow.md Phase 0。\n")
 
     # §1 环境定位
     w("## §1 环境定位\n")
-    vllm_dir = run([sys.executable, "-c", "import vllm, os; print(os.path.dirname(vllm.__file__))"])
+    vllm_dir = vllm_dir_probe  # 复用启动自检的探测结果
     vllm_ver = run([sys.executable, "-c", "import vllm; print(vllm.__version__)"])
     w(f"- vllm 源码路径：`{vllm_dir}`（版本 {vllm_ver}）")
+    w(f"- vllm-ascend 仓根（本脚本推定）：`{repo}`")
     w(f"- 上游对齐基线：`{run(['cat', '.github/vllm-main-verified.commit'])}`")
     w(f"- npu-smi info（前 5 行）：```\n{chr(10).join(run(['npu-smi', 'info']).splitlines()[:5]) or '不可得'}\n```")
     w(f"- torch_npu 版本：`{run([sys.executable, '-c', 'import torch_npu; print(torch_npu.__version__)'])}`\n")
@@ -106,15 +152,20 @@ def main():
 
     # §5 权重名
     w("## §5 权重名前缀（safetensors index）\n")
-    idx = load_json(os.path.join(model_path, "model.safetensors.index.json"))
+    idx_path = os.path.join(model_path, "model.safetensors.index.json")
+    idx = load_json(idx_path)
     if idx and "weight_map" in idx:
         prefixes = sorted({k.rsplit(".", 1)[0] for k in idx["weight_map"]})
         w(f"- 权重条目 {len(idx['weight_map'])} 个，去重前缀 {len(prefixes)} 个（样本 60 条）：\n```")
         w("\n".join(prefixes[:60]))
         w("```\n")
+    elif os.path.exists(idx_path):
+        w("- `model.safetensors.index.json` 存在但无法解析为 JSON——若为 Git LFS 指针"
+          "（文件头 `version https://git-lfs`），说明权重未实际拉取，权重名前缀证据不可得，"
+          "标「待环境实测」（需拉取真实权重后重跑或改读 safetensors 文件头）\n")
     else:
         n = len(glob.glob(os.path.join(model_path, "*.safetensors")))
-        w(f"- 无 index 文件（单文件权重 {n} 个 safetensors），需直接读文件头\n")
+        w(f"- 无 index 文件（共 {n} 个 safetensors 分片），需直接读文件头\n")
 
     # §6 modeling 结构
     w("## §6 modeling 文件结构\n")
@@ -198,4 +249,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

@@ -4,7 +4,7 @@
 >
 > ⚠️ **行号防腐声明**：文中 `文件:行号` 引用基于撰写时的基线版本（vllm-ascend main，约 v0.26.0rc1）。随版本更新行号会漂移——**函数名/类名是锚点，行号是辅助**。行号失效时按函数名 grep 即可重新定位；不确定的行号一律不写。
 >
-> ⚠️ **术语纪律**：P0/P1/P2 只用于**模型级路径判定**（见 `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-adapter.md` 与 `golden-worker-adapter.md`）；本文档第 7 节的「类型 0-5」是 **module 级**适配类型，两者回答不同问题，不混用、不同表。
+> ⚠️ **术语纪律**：P0/P1/P2 只用于**模型级路径判定**（见 `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-adapter.md` 与 `golden-worker-knowledge.md`（同目录））；本文档第 7 节的「类型 0-5」是 **module 级**适配类型，两者回答不同问题，不混用、不同表。
 
 ## 1. 文档定位与阅读地图
 
@@ -15,9 +15,9 @@
 | 本文档（`.claude/skills/day0-inference/reference/ascend-oot.md`） | 适配代码挂在哪里、怎么挂：注册机制、替换机制、patch 治理、配置中枢、类型 0-5 目录 |
 | `.claude/skills/day0-inference/flows/golden_flow.md` | 流程编排：Stage 1 的阶段划分与 G0–G4 门禁 |
 | `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-adapter.md` | 分层适配总纲（索引）：服务层 / 调度层 / Worker 层的职责切分 |
-| `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-service-adapter.md` | 服务层适配（parser 三件套、chat template、服务矩阵验证） |
-| `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-schedule-adapter.md` | 调度层适配（KVCacheSpec、投机解码、EngineCore E1–E12 配置清单） |
-| `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-worker-adapter.md` | Worker 层适配：逐 module 判定树、速查表、控制面 + 数据面落地 |
+| `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-service-adapter.md` | 服务层落地流程（机制知识库见 `.claude/skills/day0-inference/reference/golden-service-knowledge.md`：parser 三件套、chat template、服务矩阵验证） |
+| `.claude/skills/day0-inference/reference/golden-schedule-knowledge.md` | 调度层机制知识库（KVCacheSpec、投机解码、EngineCore E1–E12 配置清单；落地流程 `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-schedule-adapter.md`） |
+| `.claude/skills/day0-inference/reference/golden-worker-knowledge.md` | Worker 层机制知识库：逐 module 判定树、速查表、控制面 + 数据面（落地流程 `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-worker-adapter.md`） |
 | `.claude/skills/day0-inference/reference/adapter-templates.md` | 类型 0-5 的代码骨架（模板 A–F） |
 
 一条机制主线贯穿全文：**新模型 Day0 适配 = 架构注册（ModelRegistry）+ OOT 分派（CustomOp/PluggableLayer）+ 后端查表（attention backend），monkey patch 作为末位兜底**。第 2–3 章讲插件如何被 vLLM 发现并接管平台职责，第 4 章讲三大替换机制，第 5 章讲 patch 兜底及其治理，第 6 章讲配置中枢，第 7 章把上述机制组织成 module 级的六类适配类型目录，附录给出注册清单、陷阱表与自检命令。
@@ -69,7 +69,7 @@ vllm-ascend 与上游 vLLM 实行严格的版本号 1:1 对齐：
 | 注册期 | `pre_register_and_update(parser)` | 依次做 4 件事：`adapt_patch(is_global_patch=True)` 应用全部 platform patch；注册 DeepSeek-V4 vision config 转换器；向 CLI `--quantization` choices 追加 `"ascend"`；按硬件 profile 导入量化配置类完成注册 |
 | 配置期 | `apply_config_platform_defaults(vllm_config)` | 注入平台默认值，如按 `max_num_seqs * decode_query_len`（上限 512）推导 `max_cudagraph_capture_size`，有意去掉上游面向 CUDA 的尾部 `*2` |
 | 配置期 | `check_and_update_config(vllm_config)` | 平台层最重的钩子，10 步可归为五组（见 §3.1） |
-| 配置期 | `register_custom_kv_cache_specs(vllm_config)` | 注册 Ascend 自定义 KVCacheSpec（如 `AscendMLAAttentionSpec`），详见 `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-schedule-adapter.md` |
+| 配置期 | `register_custom_kv_cache_specs(vllm_config)` | 注册 Ascend 自定义 KVCacheSpec（如 `AscendMLAAttentionSpec`），详见 `.claude/skills/day0-inference/reference/golden-schedule-knowledge.md` |
 | 后端选择 | `get_attn_backend_cls(...)` | 按 `(use_mla, use_sparse, use_compress)` 三元组查表分派（见 §3.2） |
 | 后端选择 | `get_device_communicator_cls` / `get_compile_backend` / `get_static_graph_wrapper_cls` 等 | 分别返回 `NPUCommunicator`（HCCL）、`AscendCompiler`、`ACLGraphWrapper`（CUDA Graph 的 Ascend 对应实现）；`import_kernels()` 刻意惰性初始化算子环境，避免提前初始化 CANN RTS 致 `ASCEND_RT_VISIBLE_DEVICES` 失效 |
 | 能力声明 | `get_device_capability()` 与布尔能力族 | `get_device_capability()` 返回 `None`（NPU 无 CUDA 式 major/minor），这使上游 `has_device_capability` 对 NPU 一律为 False、个别上游代码走错分支需 patch 兜底；布尔声明族（`is_sleep_mode_available`、`use_custom_op_collectives` 等）被上游用作特性门控 |
@@ -87,9 +87,9 @@ vllm-ascend 与上游 vLLM 实行严格的版本号 1:1 对齐：
 
 ### 3.2 `get_attn_backend_cls`：特征键查表而非按模型名分派
 
-按 `(use_mla, use_sparse, use_compress)` 三元组查表，分派到 AscendAttention / MLA / SFA / DSA 四种后端；另有 RL 训推一致的 FA3 分支、310P 的 COMPATIBILITY 分支与 PCP（MRV2）独立映射，不支持的组合直接 `NotImplementedError`。逐后端的适用模型、图支持级别与新增形态扩展方法见 `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-worker-adapter.md`。
+按 `(use_mla, use_sparse, use_compress)` 三元组查表，分派到 AscendAttention / MLA / SFA / DSA 四种后端；另有 RL 训推一致的 FA3 分支、310P 的 COMPATIBILITY 分支与 PCP（MRV2）独立映射，不支持的组合直接 `NotImplementedError`。逐后端的适用模型、图支持级别与新增形态扩展方法见 `.claude/skills/day0-inference/reference/golden-worker-knowledge.md`。
 
-机制要点：**特征键由上游 attention selector 从模型 config 推导**（如 hf_config 含 `index_topk` 即 `use_sparse=True`），因此一个 MLA + 稀疏索引的新模型会自动落到 SFA 后端，平台层零改动——这正是 GLM-5 零代码适配的机制基础，也是模型级同构度判定的理论依据（判定方法见 `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-worker-adapter.md`）。
+机制要点：**特征键由上游 attention selector 从模型 config 推导**（如 hf_config 含 `index_topk` 即 `use_sparse=True`），因此一个 MLA + 稀疏索引的新模型会自动落到 SFA 后端，平台层零改动——这正是 GLM-5 零代码适配的机制基础，也是模型级同构度判定的理论依据（判定方法见 `.claude/skills/day0-inference/reference/golden-worker-knowledge.md`）。
 
 ## 4. 三大替换机制
 
@@ -157,7 +157,7 @@ grep -rn "PluggableLayer.register\|CustomOp.register" <该分支引用的层>
 | 用**私有类**（无注册装饰器） | 只能走 monkey patch（类型 3），成本更高 |
 | 行数更少 | 通常意味着厂商特化更少 |
 
-> 实践中曾出现 nvidia 分支不可用而 amd 分支干净的情况，务必逐个查。Q0 之后的逐 module 判定树见 `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-worker-adapter.md`。
+> 实践中曾出现 nvidia 分支不可用而 amd 分支干净的情况，务必逐个查。Q0 之后的逐 module 判定树见 `.claude/skills/day0-inference/reference/golden-worker-knowledge.md`。
 
 ### 4.3 工厂函数重定向
 
@@ -242,11 +242,11 @@ vLLM 提供的自由字典 `additional_config` 被 vllm-ascend 用来承载全�
 - **文档滞后**：官方 quantization guide 仍要求 ModelSlim 量化模型显式指定 `--quantization ascend`，但 main 源码自 PR #6645 起已支持自动检测——以源码为准，显式指定仍兼容。
 - **白名单校验**：检测得到的量化方法必须在 `NPUPlatform.supported_quantization` 白名单内，否则上游 `verify_quantization` 报错。
 
-新量化格式与新 ignore 规则的落地位置（`quantization/utils.py`、`AscendCompressedTensorsConfig._detect_quant_type`、MXFP4 的两道门）见 `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-schedule-adapter.md` 的 EngineCore 清单。
+新量化格式与新 ignore 规则的落地位置（`quantization/utils.py`、`AscendCompressedTensorsConfig._detect_quant_type`、MXFP4 的两道门）见 `.claude/skills/day0-inference/reference/golden-schedule-knowledge.md` 的 EngineCore 清单。
 
 ## 7. 六类适配类型目录（类型 0-5）
 
-本节是 module 级适配类型的机制目录：每种类型给出判定依据、动作要点与代码模板索引。**类型与模型级路径（P0/P1/P2）的映射、逐 module 判定树（Q1/Q1'/Q2-Q4）、标准 module 速查表与规模分诊，均属 `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-worker-adapter.md`，此处不重复。**
+本节是 module 级适配类型的机制目录：每种类型给出判定依据、动作要点与代码模板索引。**类型与模型级路径（P0/P1/P2）的映射、逐 module 判定树（Q1/Q1'/Q2-Q4）、标准 module 速查表与规模分诊，均属 `.claude/skills/day0-inference/reference/golden-worker-knowledge.md`，此处不重复。**
 
 | 类型 | 一句话定义 | 覆写/动作 | 代码模板 |
 |---|---|---|---|
@@ -354,10 +354,10 @@ grep -n "get_cos_and_sin\|rope_single\|apply_rotary" $VLLM_ASCEND/attention/mla_
 
 - 新 attention backend：`vllm_ascend/attention/sfa_v1.py`（继承 `MLACommonMetadataBuilder`，复用 MLA 骨架）或 `dsa_v1.py`（完全独立体系）→ 模板 D；
 - 新 Triton kernel：`vllm_ascend/ops/triton/` → 模板 E；
-- 新 KV cache spec：`vllm_ascend/core/kv_cache_interface.py:213` `register_ascend_kv_cache_specs()` → 模板 F（调度层视角见 `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-schedule-adapter.md`）；
+- 新 KV cache spec：`vllm_ascend/core/kv_cache_interface.py:213` `register_ascend_kv_cache_specs()` → 模板 F（调度层视角见 `.claude/skills/day0-inference/reference/golden-schedule-knowledge.md`）；
 - standalone 重写：`vllm_ascend/models/deepseek_v4.py`（复用平台中立基类 + ascend 自有 kernel）。
 
-**Q1' standalone 重写变体**：决策树 Q1' 判定「上游层所在模块在 NPU 上不可 import」时，虽上游有对应层但无法继承——行为等价于类型 5，按类型 5 的模板处理，但可参考上游的平台中立基类设计（而非从零设计）。后续步骤（KV cache spec → attention backend → 模型层组装）的依赖关系与实施顺序见 `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-worker-adapter.md`。
+**Q1' standalone 重写变体**：决策树 Q1' 判定「上游层所在模块在 NPU 上不可 import」时，虽上游有对应层但无法继承——行为等价于类型 5，按类型 5 的模板处理，但可参考上游的平台中立基类设计（而非从零设计）。后续步骤（KV cache spec → attention backend → 模型层组装）的依赖关系与实施顺序见 `.claude/skills/day0-inference/reference/golden-worker-knowledge.md`。
 
 **特殊分支「层间数据流」**：不是单个 module，而是 decoder layer 间传递 `hidden_states` 以外的张量（block residual / 跨层状态累积 / 前缀和传递）。默认按类型 5 处理：**跨层状态直接阻塞 ACL Graph 全图捕获**，需将状态传递点加入 `splitting_ops` 走 piecewise，且影响 PP 切分；若跨层状态仅是简单的标量门控（如 1 个 Linear + sigmoid），可按类型 3 处理。参考：某些混合模型的块级残差机制（如 `attn_res_block_size`）。
 
@@ -389,7 +389,7 @@ grep -n "get_cos_and_sin\|rope_single\|apply_rotary" $VLLM_ASCEND/attention/mla_
 
 - **`FusedMoE`** —— 走 `patch/platform/patch_fused_moe.py`（工厂函数重定向，见 §4.3）；注意 MoE 已是双机制并存：工厂入口仍靠 patch 重定向，而 `MoERunner`/`RoutedExperts` 已进注册表——判定 MoE 类 module 时先查注册表再考虑 patch；
 - **Attention 主体** —— 走 `get_attn_backend_cls()` 分发（见 §3.2），不在 CustomOp 注册表；
-- **线性注意力 state cache** —— 走上游 `MambaSpec` + `patch_mamba_*`（Ascend 无对应 spec，详见 `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-schedule-adapter.md`）。
+- **线性注意力 state cache** —— 走上游 `MambaSpec` + `patch_mamba_*`（Ascend 无对应 spec，详见 `.claude/skills/day0-inference/reference/golden-schedule-knowledge.md`）。
 
 ### 附录 B：常见陷阱 12 条
 
@@ -401,8 +401,8 @@ grep -n "get_cos_and_sin\|rope_single\|apply_rotary" $VLLM_ASCEND/attention/mla_
 | 4 | patch 时序晚于模型 import | patch 不生效 | worker patch 放 `NPUWorker.__init__` 第一步（§5.1） |
 | 5 | 工厂函数只改一处 binding | 部分模型拿到未 patch 版本 | 包 `__init__` 和 layer 模块都要改（§4.3） |
 | 6 | Ascend 实现丢弃上游 optional 参数 | 功能静默缺失 | 对比 `__init__` 参数列表（§7.5） |
-| 7 | 混合模型 page size 不对齐 | 启动断言失败 | 先算 state 形状与 page 大小（详见 `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-schedule-adapter.md`） |
-| 8 | 大专家数 MoE 未算 EP 门槛 | 掉回慢通信路径 | 部署前代入 `select_moe_comm_method` 公式（详见 golden-worker-adapter.md） |
+| 7 | 混合模型 page size 不对齐 | 启动断言失败 | 先算 state 形状与 page 大小（详见 `.claude/skills/day0-inference/reference/golden-schedule-knowledge.md`） |
+| 8 | 大专家数 MoE 未算 EP 门槛 | 掉回慢通信路径 | 部署前代入 `select_moe_comm_method` 公式（详见 golden-worker-knowledge.md） |
 | 9 | `tensor.item()` 在热路径 | 性能骤降（NPU 同步） | 见仓根 `AGENTS.md` NPU-Specific Considerations |
 | 10 | 精度敏感算子未用 fp32 中间计算 | 精度不达标 | 激活/路由/norm 的中间量用 fp32（§7.2 检查清单） |
 | 11 | **上游分派只按 `is_rocm()` 二分，NPU 静默落入 nvidia 分支** | import CUDA 专属代码（如 CUTLASS DSL）直接崩 | §4.2 前置检查 Q0；注册覆盖实现且确保 ascend 分支不 import 上游 nvidia 模块 |
