@@ -7,23 +7,48 @@ description: "Day0 推理四阶段流程控制：Stage 1 Golden 基线（跑起�
 
 你是 **Day0 四阶段流程控制者**。Day0 开发**不是一步到位，而是逐步叠加**：每个阶段在前一阶段的出口证据上叠加一层能力，阶段间有明确的入口条件与出口判据。你的职责是：判定当前应处于哪个阶段、检查阶段入口条件、调用对应 flow 执行、裁决阶段出口（签收或打回）、管理跨阶段的产物交接。
 
-## 四阶段总览（对齐 AscendBot 工程化落地定义）
+## 执行步骤
 
-| 阶段 | 目标 | 出口判据（签收条件） | flow 文件 | 状态 |
-|---|---|---|---|---|
-| **Stage 1 Golden 基线**（跑起来） | 逐 module 完成 vllm-ascend 代码适配，构建具备完整推理能力的**精度基线版本** | G0-G5 六道门禁全过（定义见 flow） | `flows/golden_flow.md` | ✅ 已实现 |
-| **Stage 2 并行量化**（跑得稳） | 按量化策略与 KV 缓存方案设计并行策略（TP/EP/DCP/PCP），完成部署运行，精度正确——**资源使用合理的版本** | 并行约束校验通过 + 量化精度对齐 golden 基线（判据草案见 flow） | `flows/parallel_flow.md` | ⬜ 占位 |
-| **Stage 3 特性叠加**（跑得快） | 系统性集成 5+ 性能特性（Prefix Caching / 投机解码 / ACLGraph / FlashComm / EP 等），叠加后精度无劣化——**高性能版本** | 逐项叠加逐项回归 + 组合矩阵覆盖（判据草案见 flow） | `flows/feature_flow.md` | ⬜ 占位 |
-| **Stage 4 精度/性能验收**（出口） | 瓶颈分析定向调优 + 精度闭环修复，性能达标、精度合格——**出口达标版本** | 性能达目标值 + 全量精度通过 + 出口交付物齐备（判据草案见 flow） | `flows/performance_flow.md` | ⬜ 占位 |
+共 5 步：步骤 1 初始化，步骤 2-5 依次执行四个 Stage。**逐阶段执行，禁止跨阶段叠加**：Stage N 的入口条件 = Stage N-1 的出口证据齐全；发现上游阶段证据缺失时，合法动作是回到对应阶段补齐，而不是带着缺口往下走。
 
-**Stage 1 与 Stage 3 的边界**：Stage 1 的 Phase C3 只做图模式与基础特性的**正确性验证**（能开、结果对、benchmark 落账）；系统性的特性组合叠加（5+ 特性逐项回归）与 FULL 图追求属于 Stage 3，性能达标属于 Stage 4——Stage 1 不重复做，Stage 3 以 Stage 1 的正确性证据为起点而非重新验证。
+### 步骤 1：初始化（立项）
 
-## 阶段推进规则
+1. **建目录并导出环境变量**：运行 `export ASCENDBOT_FILE_PATH=$(.claude/skills/day0-inference/scripts/init_day0_dir.sh <模型输入路径>)`——脚本创建本次 Day0 的输出根目录并打印路径，export 后全流程以 `$ASCENDBOT_FILE_PATH` 引用该目录。脚本读取模型 `config.json` 的 `architectures` 首项作为目录名前缀，按 `<arch>_<yyyymmdd>_<num>` 命名（`num` 从 1 开始，同日同模型已有目录时取最大 num+1）。
+2. **建跟踪单**：把 `.claude/skills/day0-inference/reference/tracker_template.md` 实例化为 `$ASCENDBOT_FILE_PATH/tracker.md`，「当前阶段」置为 Stage 1。跟踪单把每个阶段拆成**逐 agent 的步骤行**（步骤 / 执行 agent / 产出 / 门禁 / 状态 / 产物路径），是四阶段流程的**单一状态源**。
+3. **产物约束（全局）**：全部产物统一存放 `$ASCENDBOT_FILE_PATH` 下——跟踪单、阶段签收单、各 Phase/Stage 产物子目录（`preflight/` `design/` `impl/` `smoke/` `accuracy/` `review/`，及 Stage 2-4 的 `parallel/` `feature/` `acceptance/`）。各文档中 `./.day0/<model>/` 的 `<model>` 占位即指 `$ASCENDBOT_FILE_PATH`。
 
-1. **逐阶段执行，禁止跨阶段叠加**：Stage N 的入口条件 = Stage N-1 的出口证据齐全。golden 未签收不得起并行量化；并行量化未签收不得叠加特性；特性叠加未签收不得做验收。发现上游阶段证据缺失时，合法动作是回到对应阶段补齐，而不是带着缺口往下走。
-2. **阶段调用方式**：进入某阶段时，读取 `flows/` 下对应 flow 文件并**严格按其定义的流程与门禁执行**。Stage 1 的完整流程、子代理分工（Designer/Developer/Tester/Reviewer）、G0-G5 门禁与管理纪律全部定义在 `flows/golden_flow.md` 中，本文件不重复。
-3. **占位阶段的处置**：Stage 2/3/4 的 flow 当前为占位（仅有阶段目标、入口条件与出口判据草案）。推进到这些阶段时，你须**显式提示【该阶段 flow 尚未接入】**，输出对应 flow 文件中的框架定义，由用户决定人工接管还是暂缓；**不得自行编造执行步骤冒充 flow 已实现**。
-4. **阶段签收单**：每阶段结束时输出阶段签收单——阶段目标、出口判据逐项核对结果（通过/失败+证据路径）、遗留项、对下一阶段的交接清单，以及 **state manifest**（当前阶段、已过门禁清单、产物路径、下一阶段入口条件核对结果）——manifest 是长程任务中断后的状态恢复依据。落盘约定：Stage 1 的签收单即 golden_flow「收尾」节产出的交付摘要，落 `./.day0/<model>/signoff.md`；Stage 2-4 落 `./.day0/<model>/<stage>/signoff.md`。
+**每个 Stage 的执行动作（固定四步）**：
+
+1. **入口检查**：确认 tracker.md 中上一阶段状态为「已完成」且签收单落盘；缺失则回对应阶段补齐。
+2. **调 flow 执行**：读取该 Stage 的 flow 文件并**严格按其定义的流程与门禁执行**。**主控只调 flow，不直接指派 agent**——每个 Stage 具体调用哪些子代理由对应 flow 裁定；tracker.md 的步骤行是 flow 执行计划的状态镜像。若 flow 为占位：**显式提示【该阶段 flow 尚未接入】**，输出 flow 文件中的框架定义，由用户决定人工接管还是暂缓；**不得自行编造执行步骤冒充 flow 已实现**。
+3. **步骤状态推进**：所有子代理启动时先读 tracker.md——确认当前阶段、自己是否在本阶段步骤表中被调用、产物目录；**子代理完成负责的步骤后（无论成败）立即回写 tracker.md**：成功置「待签收」、失败置「打回」，备注列填结果摘要 + 产物/证据路径，进度日志追加一行；**「待签收」翻转为「已完成」只能由你在对应门禁通过后执行**——门禁裁决权不下放。
+4. **出口签收**：出口判据逐项核对（通过/失败+证据路径），产出阶段签收单（阶段目标、判据核对结果、遗留项、对下一阶段的交接清单 + **state manifest**——长程任务中断后的状态恢复依据）。落盘约定：Stage 1 落 `./.day0/<model>/signoff.md`，Stage 2-4 落 `./.day0/<model>/<stage>/signoff.md`。签收单落盘后**同步更新 tracker.md**：该阶段状态置「已完成」、「当前阶段」指针前移、进度日志追加一行。
+
+### 步骤 2：Stage 1 Golden 基线（跑起来）
+
+- **目标**：逐 module 完成 vllm-ascend 代码适配，构建具备完整推理能力的**精度基线版本**。
+- **flow**：`flows/golden_flow.md`（✅ 已实现——完整流程、子代理分工、G0-G4 门禁与管理纪律全部定义在其中，本文件不重复）。
+- **出口判据**：G0-G4 五道门禁全过（定义见 flow）。
+
+### 步骤 3：Stage 2 并行量化（跑得稳）
+
+- **目标**：按量化策略与 KV 缓存方案设计并行策略（TP/EP/DCP/PCP），完成部署运行，精度正确——**资源使用合理的版本**。
+- **flow**：`flows/parallel_flow.md`（⬜ 占位，按固定四步中的占位处置执行）。
+- **出口判据**：并行约束校验通过 + 量化精度对齐 golden 基线（判据草案见 flow）。
+
+### 步骤 4：Stage 3 特性叠加（跑得快）
+
+- **目标**：系统性集成 5+ 性能特性（Prefix Caching / 投机解码 / ACLGraph / FlashComm / EP 等），叠加后精度无劣化——**高性能版本**。
+- **flow**：`flows/feature_flow.md`（⬜ 占位，按固定四步中的占位处置执行）。
+- **出口判据**：逐项叠加逐项回归 + 组合矩阵覆盖（判据草案见 flow）。
+
+**Stage 1 与 Stage 3 的边界**：Stage 1 **全程 eager**，只做正确性基线（能跑、结果对）——**不做 benchmark、不做服务矩阵、不做任何图模式（ACLGraph/piecewise）验证**；图模式与系统性的特性组合叠加（5+ 特性逐项回归）属于 Stage 3；服务矩阵、benchmark 与性能达标属于 Stage 4——Stage 3 以 Stage 1 的 eager 正确性证据为起点，在其上叠加图模式与特性。
+
+### 步骤 5：Stage 4 精度/性能验收（出口）
+
+- **目标**：瓶颈分析定向调优 + 精度闭环修复，性能达标、精度合格——**出口达标版本**。
+- **flow**：`flows/performance_flow.md`（⬜ 占位，按固定四步中的占位处置执行）。
+- **出口判据**：性能达目标值 + 全量精度通过 + 服务矩阵全通过 + 出口交付物齐备（判据草案见 flow）。
 
 ## 跨阶段产物基线链
 

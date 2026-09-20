@@ -1,6 +1,6 @@
 # 新模型 NPU 适配实现模板（类型 0-5 代码骨架）
 
-> 配套《新模型NPU适配设计方案-整合版.md》第三部分使用。每个模板给出最小可用骨架 + 仓内真实参考实现路径。骨架中的 `<占位>` 必须按设计文档的逐 module 判定表替换；参考实现是判型后的第一阅读材料，**不要凭骨架空想实现细节**。
+> 配套 `.claude/skills/day0-inference/reference/ascend-oot.md`（六类适配类型）与 `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-worker-adapter.md`（逐 module 判定）使用。每个模板给出最小可用骨架 + 仓内真实参考实现路径。骨架中的 `<占位>` 必须按设计文档的逐 module 判定表替换；参考实现是判型后的第一阅读材料，**不要凭骨架空想实现细节**。
 >
 > 通用纪律（所有模板适用）：
 > - 先 `forward_native` / torch 等价实现跑通精度，再换融合算子（先正确后性能）；
@@ -77,7 +77,7 @@ class Ascend<UpstreamAttention>(<UpstreamAttention>):
 
 ## 模板 C：类型 3 — monkey patch（工厂函数两处 binding）
 
-适用：上游无注册装饰器，或目标是工厂函数。先过 patch 决策树（整合版第三部分类型 3），通过后才用本模板，并同步在 `vllm_ascend/patch/__init__.py` 完成四段式登记。
+适用：上游无注册装饰器，或目标是工厂函数。先过 patch 决策树（`.claude/skills/day0-inference/reference/ascend-oot.md` §5），通过后才用本模板，并同步在 `vllm_ascend/patch/__init__.py` 完成四段式登记。
 
 参考实现：`vllm_ascend/patch/platform/patch_fused_moe.py`（MoE 工厂重定向，含版本巷道口防御）。
 
@@ -187,7 +187,7 @@ return <native_torch_equivalent>(x)  # 无 triton 时的正确性保底
 
 ## 模板 F：类型 5 — 新 KV cache spec
 
-适用：新 cache 形态（indexer 独立缓存 / recurrent state / 压缩 latent 等），既有 spec 子类无法描述。**spec 必须先于一切性能工作定稿**（整合版 §4.3）。
+适用：新 cache 形态（indexer 独立缓存 / recurrent state / 压缩 latent 等），既有 spec 子类无法描述。**spec 必须先于一切性能工作定稿**（`.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-schedule-adapter.md`）。
 
 参考实现：`vllm_ascend/core/kv_cache_interface.py`（`AscendSFAIndexerCacheSpec` 的 `page_size_bytes`/`merge()` 写法与 `register_ascend_kv_cache_specs()` 注册点）。
 

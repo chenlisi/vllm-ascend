@@ -17,7 +17,8 @@
 2. **叠加精度无劣化**：每叠加一项特性，精度回归对齐上一配置（不是只对齐 golden 基线）；劣化项按 Delta Debugging 思路裁剪无关路径，定位到最小算子/特性子集；
 3. **组合矩阵覆盖**：量化 × 图 × 投机 × CP/PD 的相关组合项全部有验证记录（对接 Designer 组合矩阵回归清单）；
 4. **feature-first 证据**：失败项保留错误签名与复现命令，默认关闭必须附根因分析；
-5. **图级别声明**：最终配置落在哪个图级别（eager / PIECEWISE / FULL_DECODE_ONLY / FULL_AND_PIECEWISE）有明确记录。
+5. **图级别声明**：最终配置落在哪个图级别（eager / PIECEWISE / FULL_DECODE_ONLY / FULL_AND_PIECEWISE）有明确记录；
+6. **图模式验收**：ACLGraph 逐级开图、六类不可入图排查与捕获计数的验收素材沉淀在 `.claude/agents/performance.md`，实现本 flow 时接入。
 
 ## 已知技术难点（实现时需覆盖）
 

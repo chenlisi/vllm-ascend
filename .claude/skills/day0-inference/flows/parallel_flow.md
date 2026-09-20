@@ -8,13 +8,13 @@
 
 ## 入口条件（Stage 1 出口证据）
 
-- Golden 阶段 G0-G5 全过：`./.day0/<model>/` 下 preflight/design/impl/smoke/accuracy/graph/review 产物齐全；
+- Golden 阶段 G0-G4 全过：`./.day0/<model>/` 下 preflight/design/impl/smoke/accuracy/review 产物齐全；
 - eager + bf16 精度基线（G3 证据）归档——本阶段的精度对比基准。
 
 ## 规划出口判据（草案，实现时细化）
 
 1. **并行策略合法性**：TP/EP/DCP/PCP 整除与互斥约束算术校验通过（MLA 模型 `TP % DCP == 0`；GQA `num_q_per_kv % DCP == 0`；PCP/DCP 互斥且 PCP 仅 MRV2）；
-2. **量化路径正确**：量化格式自动检测命中、反量化路径无 Missing/Unexpected，EPLB 量化白名单校验（如需 EPLB）；
+2. **量化路径正确**：量化格式自动检测命中、反量化路径无权重缺失/尺寸不匹配（grep 口径见 `.claude/agents/accuracy.md`），EPLB 量化白名单校验（如需 EPLB）；
 3. **服务部署运行**：目标并行配置下真实权重拉起成功，HTTP 200 且输出非空；
 4. **精度对齐**：并行 + 量化配置下精度对齐 Golden eager 基线，量化损失在约定阈值内（阈值随模型量化格式在实现时定义）；
 5. **组合回归**：量化 × 并行组合纳入 E2E 配置（`tests/e2e/models/configs/<Model>.yaml`）。
