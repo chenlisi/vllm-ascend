@@ -17,14 +17,17 @@ description: "Day0 推理四阶段流程控制：Stage 1 Golden 基线（跑起�
    - **模型本地路径**：指到含 `config.json` 的目录；用户只给 HF repo id 时，先确认是否下载、下载到哪；
    - **served-model-name**（缺省 = 路径末段）、**TP 大小**（缺省 = 1）、**硬件代次**、**checkpoint 代次**（同模型不同代次的 chat template / effort 映射可能不同）；
    - **推理环境 python 解释器路径**：装好 vllm / torch_npu 的 venv——解释器选错会使 preflight 采集全量「不可得」，下游判定全部失真。
-1. **建目录并记录输出根目录**：从 vllm-ascend 仓根运行 `.claude/skills/day0-inference/scripts/init_day0_dir.sh <模型输入路径>`——脚本创建输出根目录并打印路径（脚本读模型 `config.json` 的 `architectures` 首项作目录名前缀，按 `<arch>_<yyyymmdd>_<num>` 命名，`num` 递增）。**确认输出非空且以 `.day0/` 开头，并转为绝对路径记录**。**后续所有 shell 命令与 Task prompt 一律使用该字面绝对路径**——export 不跨 Bash 调用持久，本文与各文档中的 `$ASCENDBOT_FILE_PATH` 均为该字面路径的记号。
-2. **建跟踪单并填充环境信息块**：把 `.claude/skills/day0-inference/reference/tracker_template.md` 实例化为 `$ASCENDBOT_FILE_PATH/tracker.md`，「当前阶段」置为 Stage 1。**实例化时填充「环境信息」块的已知项**（work-dir / venv 解释器路径 / served-model-name / TP / 硬件代次 / max-model-len）；`$VLLM` / `$VLLM_ASCEND` 待 Phase 0 §1 采集后由 golden_flow 回填。跟踪单把每个阶段拆成**逐 agent 的步骤行**（步骤 / 执行 agent / 产出 / 门禁 / 状态 / 产物路径），是四阶段流程的**单一状态源**。
+1. **建目录并记录输出根目录**：从 vllm-ascend 仓根运行 `.claude/skills/day0-inference/scripts/init_day0_dir.sh <模型输入路径>`——脚本创建输出根目录并打印**绝对路径**（脚本读模型 `config.json` 的 `architectures` 首项作目录名前缀，按 `<arch>_<yyyymmdd>_<num>` 命名，`num` 递增），同时把该路径写入 `.day0/.current`。**确认输出非空且为绝对路径，并记录**。该路径此后有三个载体，缺一不可：
+   - **stdout → 主控记录**：本文与各文档中的 `$ASCENDBOT_FILE_PATH` 均为该字面路径的记号；**主控的 shell 命令与所有 Task prompt 一律使用字面值**（子代理靠 prompt 传参，不继承环境变量）；
+   - **`.day0/.current` → 环境变量注入**：SessionStart hook（`.claude/hooks/day0-env.sh`）从该文件定位本次目录，把 `ASCENDBOT_FILE_PATH` / `VLLM_ASCEND` / `VLLM` 注入后续每条 Bash 命令。**hook 只在会话启动时运行**——本步骤发生在会话中途，故**当次会话内这三个变量仍为空，须用字面路径**；`/clear` 或新开会话后自动生效；
+   - **tracker 环境信息块 → 持久真值**：可跨会话恢复的唯一记录（见下一步）。
+2. **建跟踪单并填充环境信息块**：把 `.claude/skills/day0-inference/reference/tracker_template.md` 实例化为 `$ASCENDBOT_FILE_PATH/tracker.md`，「当前阶段」置为 Stage 1。**实例化时必须填充「输出根目录」行 + 「环境信息」块的已知项**（输出根目录 / work-dir / venv 解释器路径 / served-model-name / TP / 硬件代次 / max-model-len）——「输出根目录」是该变量的持久真值，缺它则会话中断后无从恢复；`$VLLM` / `$VLLM_ASCEND` 待 Phase 0 §1 采集后由 golden_flow 回填。跟踪单把每个阶段拆成**逐 agent 的步骤行**（步骤 / 执行 agent / 产出 / 门禁 / 状态 / 产物路径），是四阶段流程的**单一状态源**。
 3. **产物约束（全局）**：全部产物统一存放 `$ASCENDBOT_FILE_PATH` 下——跟踪单、阶段签收单、各 Phase/Stage 产物子目录（`preflight/` `design/` `impl/` `smoke/` `accuracy/` `review/`，及 Stage 2-4 的 `parallel/` `feature/` `acceptance/`）。各文档中 `./.day0/<model>/` 的 `<model>` 占位即指 `$ASCENDBOT_FILE_PATH`。
 
 **每个 Stage 的执行动作（固定四步）**：
 
 1. **入口检查**：确认 tracker.md 中上一阶段状态为「已完成」且签收单落盘；缺失则回对应阶段补齐。
-2. **调 flow 执行**：读取该 Stage 的 flow 文件并**严格按其定义的流程与门禁执行**。**主控只调 flow，不直接指派 agent**——每个 Stage 具体调用哪些子代理由对应 flow 裁定；tracker.md 的步骤行是 flow 执行计划的状态镜像。若 flow 为占位：**显式提示【该阶段 flow 尚未接入】**，输出 flow 文件中的框架定义，由用户决定人工接管还是暂缓；**不得自行编造执行步骤冒充 flow 已实现**。**人工接管** = 按 tracker 草案步骤表 + agent 文件的 Stage N 草案章节执行（子代理仅在主控确认继续后才按草案行动），签收单照常产出并标注「flow 未接入，人工接管产物」；**暂缓** = 当前阶段指针停留原位、任务挂起，本轮结束。
+2. **调 flow 执行**：读取该 Stage 的 flow 文件并**严格按其定义的流程与门禁执行**。**主控只调 flow，不直接指派 agent**——每个 Stage 具体调用哪些子代理由对应 flow 裁定；tracker.md 的步骤行是 flow 执行计划的状态镜像。若 flow 为占位：**显式提示【该阶段 flow 尚未接入】**，输出 flow 文件中的框架定义，由用户决定人工接管还是暂缓；**不得自行编造执行步骤冒充 flow 已实现**。**人工接管** = 按 tracker 草案步骤表 + agent 文件的 Stage N 草案章节执行（子代理仅在主控确认继续后才按草案行动），签收单照常产出并标注「flow 未接入，人工接管产物」；**暂缓** = 当前阶段指针停留原位、任务挂起，本轮结束。**调用子代理时不得使用目录隔离**（worktree / 副本克隆，见「关键管理纪律」第一条）。
 3. **步骤状态推进**：所有子代理启动时先读 tracker.md——确认当前阶段、自己是否在本阶段步骤表中被调用、产物目录；**子代理完成负责的步骤后（无论成败）立即回写 tracker.md**：成功置「待签收」、失败置「打回」，备注列填结果摘要 + 产物/证据路径，进度日志追加一行；**「待签收」翻转为「已完成」只能由你在对应门禁通过后执行**——门禁裁决权不下放。你派发某步骤时将该行置「进行中」并同步「当前步骤」字段。
 4. **出口签收**：出口判据逐项核对（通过/失败+证据路径），产出阶段签收单（阶段目标、判据核对结果、遗留项、对下一阶段的交接清单 + **state manifest**——长程任务中断后的状态恢复依据）。落盘约定：Stage 1 落 `./.day0/<model>/signoff.md`，Stage 2-4 落 `./.day0/<model>/<stage>/signoff.md`。签收单落盘后**同步更新 tracker.md**：该阶段状态置「已完成」、「当前阶段」指针前移、进度日志追加一行。
 
@@ -77,6 +80,7 @@ Stage 1 出口：eager+bf16 精度基线（golden 基线）
 
 ## 关键管理纪律
 
+- **子代理一律在共享工作树内执行，禁止任何形式的目录隔离**：调用任何子代理（designer / developer / tester / reviewer）时不得使用 worktree / 副本克隆 / 独立目录隔离（在共享树内新建分支可以，隔离副本不行）——代码与产物必须落在 `$VLLM_ASCEND` 工作树与 `$ASCENDBOT_FILE_PATH` 内。**理由**：下游阶段全部跨子代理复用同一棵树的物理状态——Tester 的 `vllm serve` 起在 `$VLLM_ASCEND`，UT/E2E collect 基于该树文件，Reviewer 核对该树的 `git log`；隔离副本会让改动落在下游不可见的路径上，且**失败不自报**——Developer 自述「完成、UT 全绿」，Phase 3 拿到的却是零改动的树。**反面告警**：子代理完成报告或产物路径中出现「worktree / 隔离副本 / 独立克隆」时，门禁一律不签收，先核对代码是否落在共享工作树；已在隔离副本中产出的改动，合法动作是先落地到 `$VLLM_ASCEND` 工作树并验证，再执行门禁。
 - **入口证据优先于推进意愿**：用户要求"直接上特性叠加"时，仍须先核对 Stage 1/2 出口证据；证据缺失则先补前置阶段（或显式向用户确认接受降级风险）。
 - **回退按阶段路由**：Stage N 暴露的问题若根因在 Stage N-1 的产物（如并行量化阶段发现 golden 的算子精度缺陷），回退到对应阶段修复后**重走其后的所有阶段出口判据**——叠加层级的变更会使下游全部证据失效。
 - **升级机制**：同一阶段出口判据连续失败 2 轮，显式向用户上报卡点类型（实现缺陷 / 依赖阻塞 / 设计误判）。

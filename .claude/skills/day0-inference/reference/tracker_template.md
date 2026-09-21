@@ -11,6 +11,7 @@
 - 模型路径：<path>
 - 创建时间：<date>
 - **环境信息**（立项时主控填充——**所有子代理命令占位符与环境变量的唯一取值来源**，不在各文档中另行猜测）：
+  - **输出根目录（`$ASCENDBOT_FILE_PATH` 的真值，立项时填）：<path>**
   - work-dir（serve 工作目录）：<path>
   - venv（虚拟环境根路径，含 `bin/`）：<path>
   - served-model-name：<name>

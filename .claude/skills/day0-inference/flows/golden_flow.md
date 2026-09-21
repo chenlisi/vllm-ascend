@@ -20,7 +20,7 @@
 - **流程跟踪单**：`./.day0/<model>/tracker.md`（主控立项时按 `.claude/skills/day0-inference/reference/tracker_template.md` 实例化并填充「环境信息」块；本 flow 启动前确认「当前阶段 = Stage 1」，各子代理启动时先读它）
 - **模型路径**（指到含 `config.json` 的目录）、**served-model-name**、目标 TP 大小、硬件代次、**checkpoint 代次**、**venv 解释器路径**——立项时（SKILL.md 步骤 1）已确认并写入 tracker「环境信息」块
 - **输出目录**：遵循 SKILL.md「执行步骤」步骤 1 的全局约束——根目录由立项脚本创建（`./.day0/<arch>_<yyyymmdd>_<num>/`），各 Phase 产物存于其下的 `<phase>/` 子目录
-- **路径替换规则（主控全程遵守）**：`$ASCENDBOT_FILE_PATH` 在本文与各文档中仅为**记号**——export 不跨 Bash 调用持久，**主控自己的 shell 命令与所有 Task prompt 一律使用立项时记录的字面绝对路径**；prompt 中的 `<模型路径>` 等占位符一并替换为实际值。子代理侧兜底定位：`ls .day0/*/tracker.md`，唯一命中即为本流程目录（**多命中 → 停下向主控索取路径，不得自行挑选**）；子代理读 tracker.md「环境信息」块获取全部命令占位符取值
+- **路径替换规则（主控全程遵守）**：`$ASCENDBOT_FILE_PATH` / `$VLLM` / `$VLLM_ASCEND` 在本文与各文档中均为**记号**——**主控自己的 shell 命令与所有 Task prompt 一律使用立项时记录的字面绝对路径**；prompt 中的 `<模型路径>` 等占位符一并替换为实际值。**环境变量由 SessionStart hook（`.claude/hooks/day0-env.sh`，读 tracker 环境信息块）注入每条 Bash 命令**，但它只在会话启动时运行：立项与 Phase 0 回填都发生在会话中途，**当次会话内这三个变量为空，仍须用字面路径**；`/clear` 或新开会话后才可用 `$VLLM_ASCEND` 等简写。子代理侧兜底定位：优先读 tracker 环境信息块的「输出根目录」行，缺失时 `ls .day0/*/tracker.md` 反查（唯一命中即为本流程目录；**多命中 → 停下向主控索取路径，不得自行挑选**）；子代理读 tracker.md「环境信息」块获取全部命令占位符取值
 
 ## 子代理清单
 
@@ -51,7 +51,7 @@ Day0 的阻塞点历史上全部在外部依赖（上游合入状态、CANN/torc
    mkdir -p <输出根目录字面路径>/preflight
    <venv-python> .claude/skills/day0-inference/scripts/preflight_scan.py <模型路径> <输出根目录字面路径>/preflight/raw_evidence.md
    ```
-   `<venv-python>` = tracker.md「环境信息」块的 venv 解释器路径（立项时确认，**必须指向装好 vllm/torch_npu 的推理环境**——解释器选错会使 §1/§10 采集全量「不可得」，下游判定全部失真；无 venv 时先停下向用户确认，不得用裸系统 python 跑采集）。脚本从 vllm-ascend 仓根运行，采集（**只产信号、不做判定**）：§1 环境定位（vLLM 源码路径 / 上游基线 commit / npu-smi / torch_npu 版本）、§2 config.json 关键信号与全量、§3 上游注册表 grep 原始结果、§4 量化格式、§5 权重名前缀、§6 modeling 类清单、§7 chat template 形态、§8 上游 parser 注册表可用项、§9 OOT 注册表粗比对、§10 torch_npu 符号探测、§11 魔法数字粗扫。**采集完成后回填 tracker 环境信息块** `$VLLM`（§1 的 vLLM 源码路径）与 `$VLLM_ASCEND`（仓根路径）。**以下步骤全部基于 raw_evidence.md 做判定**；证据缺失项显式标「待环境实测」，禁止编造。本 Phase 所有产物落盘 `$ASCENDBOT_FILE_PATH/preflight/`，与 `raw_evidence.md` 同目录；**每条结论须引用证据章节号，可追溯**。
+   `<venv-python>` = tracker.md「环境信息」块的 venv 解释器路径（立项时确认，**必须指向装好 vllm/torch_npu 的推理环境**——解释器选错会使 §1/§10 采集全量「不可得」，下游判定全部失真；无 venv 时先停下向用户确认，不得用裸系统 python 跑采集）。脚本从 vllm-ascend 仓根运行，采集（**只产信号、不做判定**）：§1 环境定位（vLLM 源码路径 / 上游基线 commit / npu-smi / torch_npu 版本）、§2 config.json 关键信号与全量、§3 上游注册表 grep 原始结果、§4 量化格式、§5 权重名前缀、§6 modeling 类清单、§7 chat template 形态、§8 上游 parser 注册表可用项、§9 OOT 注册表粗比对、§10 torch_npu 符号探测、§11 魔法数字粗扫。**采集完成后回填 tracker 环境信息块** `$VLLM`（§1 的 vLLM 源码路径）与 `$VLLM_ASCEND`（仓根路径）——**回填只是写入记录，环境变量要到下次会话启动才由 SessionStart hook 注入，本次会话仍须用字面路径**。**以下步骤全部基于 raw_evidence.md 做判定**；证据缺失项显式标「待环境实测」，禁止编造。本 Phase 所有产物落盘 `$ASCENDBOT_FILE_PATH/preflight/`，与 `raw_evidence.md` 同目录；**每条结论须引用证据章节号，可追溯**。
 1. **依赖结论表**（读证据文件做判定）：
    - 上游支持状态三态（证据 §3，`<arch>` = config.json architectures 首项）：registry grep 命中 → 「已合入」；未命中 → 用 `gh search prs --repo vllm-project/vllm <arch>` 或 WebSearch 查上游 PR/分支状态，按口径判定：**merged PR 存在 → 「已合入」**（附 PR 号，核对本地基线 commit 是否已包含）；**open 且近 3 个月有活动、非 draft → 「pre-release 分支」**（附 PR 号）；**其余（draft / 久未更新 / 全无）→ 「需自持」**。中间态的成熟度判断是你的裁决，但须按此口径给出理由，不是脚本结论。
    - 算子就绪度扫描（三档，精度递减，禁止越档编造）：
@@ -100,11 +100,14 @@ Day0 的阻塞点历史上全部在外部依赖（上游合入状态、CANN/torc
    请按设计产物完成代码适配与 UT。设计产物路径：$ASCENDBOT_FILE_PATH/design/
    （总设计文档 + 分层 spec：service-design-spec.md / schedule-design-spec.md / worker-design-spec.md——
    各层 spec 的判定表/场景总表是你的执行过滤条件：只实现判定为「需要适配」的条目）
+   方法论按层按需加载：只读需适配层对应的 adapter/知识库章节（以方案块「实现依据」为索引），零适配层不加载。
    """)
    ```
+   **执行位置约束**：调用 developer **不得使用目录隔离**（worktree / 副本克隆）——代码必须落在 `$VLLM_ASCEND` 共享工作树内并提交（树内新分支可以）。Tester（Phase 3/4）的 `vllm serve` 与 Reviewer（Phase 5）核对的 `git log` 读的都是该工作树的物理状态；改动落在隔离副本中会使本阶段「完成」而下游拿到零改动，且此失败不自报。
 2. 子代理产出：改动清单 + UT 运行结果 + OOT 注册自检证据 + 待真实权重验证 todo + **G4 交付物草稿**（E2E 回归配置 `tests/e2e/models/configs/<Model>.yaml` + 教程 `docs/source/tutorials/models/<Model>.md` + 支持矩阵更新——格式抄同目录既有文件，组合矩阵按 Designer 清单显式纳入）。
 3. 收集到 `./.day0/<model>/impl/`。
 4. **G1 实现门禁**（Phase 2 是唯一产出代码的阶段，其放行物直接进 Tester，准出证据必须齐全）。**P0 零代码路径例外**：Phase 0 判定为 P0 时无代码可测，G1 以「Designer 判定表确认全部 module 为类型 0 + Developer 显式声明零改动」替代下列全部证据，直接放行进 Phase 3：
+   - **落地位置证据**（最先核对，机器可验）：`git -C $VLLM_ASCEND log` 中含 Developer 的 signed-off commit，且 `git -C $VLLM_ASCEND status` 无未提交的相关改动——证明代码在**共享工作树**而非隔离副本；子代理自报的产物/代码路径若不在 `$VLLM_ASCEND` 或 `$ASCENDBOT_FILE_PATH` 之下，视为未落地，G1 不通过；
    - **OOT 注册自检的实际日志输出**（custom op 与 pluggable layer 两种机制文案不同，须同时匹配到）——「写了但没接上」不得放行；
    - **未实现 module 显式清单**：遗留项逐条列出并标注「待真实权重验证」；无遗留须显式声明「无遗留 module」；
    - **patch 台账**：每条类型 3 改动的四段式登记条目，或「本模型零 patch」声明；
@@ -154,6 +157,7 @@ Day0 的阻塞点历史上全部在外部依赖（上游合入状态、CANN/torc
 - **精度口径**：G3 由 Tester 按 `accuracy.md` 定义代为执行（accuracy Agent 自 Stage 2 起独立接入）。你需**显式提示**【benchmark、服务矩阵与图模式验证不在 Stage 1 范围——图模式与特性叠加属 Stage 3，服务矩阵与性能验收属 Stage 4】；若验证中定位到算子瓶颈，提示**转交算子团队**优化。
 
 ## 关键管理纪律
+- **子代理在共享工作树内执行，禁止目录隔离**：调用任何子代理不得使用 worktree / 副本克隆（树内新分支可以）。Phase 3/4 的 `vllm serve` 起在 `$VLLM_ASCEND` 工作树，Phase 5 核对该树的 `git log`——改动落在隔离副本 = 下游验证的是零改动的树，且此失败不自报（Developer 的「完成」报告在隔离副本内同样成立）。发现子代理已在隔离副本中产出时，先把改动落地到 `$VLLM_ASCEND` 工作树并验证，再走门禁。
 - **交接必须完整**：每阶段给下一阶段的输入文件要齐全、路径明确；缺失就停下来要，不要带着不完整上下文硬往下走。
 - **子代理完成即回写 tracker**：每个子代理执行结束（无论成败），立即把 `$ASCENDBOT_FILE_PATH/tracker.md` 中自己步骤行的状态更新为「待签收」（成功）或「打回」（失败），备注列填结果摘要 + 产物/证据路径，进度日志追加一行——主控随后按门禁裁决翻转「已完成」。
 - **反馈回路按门禁路由**：

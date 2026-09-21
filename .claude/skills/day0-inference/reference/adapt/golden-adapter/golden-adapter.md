@@ -47,6 +47,8 @@
 | ② 调度层 | `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-schedule-adapter.md` | `design/schedule-design-spec.md` | `.claude/skills/day0-inference/reference/golden-schedule-knowledge.md` | KVCacheSpec 注册与选型落实 + E1-E12 配置改动 |
 | ③ Worker 层 | `.claude/skills/day0-inference/reference/adapt/golden-adapter/golden-worker-adapter.md` | `design/worker-design-spec.md` | `.claude/skills/day0-inference/reference/golden-worker-knowledge.md`（代码模板：`reference/adapter-templates.md`） | 逐 module 类型 0-5 实现 + 权重映射 loader + UT/OOT 自检 |
 
+**整层跳过规则**：任一层 spec 的判定全为零适配时，该层整层跳过——不加载对应 adapter 与知识库，直接进入下一步；三步全跳过即 P0 零代码路径，按 golden_flow Phase 2 的 P0 例外交接。
+
 ## 4. Q0：模型级平台分派前置检查
 
 进入逐 module 判定**之前**，先做这个**模型级**检查——同一模型只问一次，不是 per-module 的。

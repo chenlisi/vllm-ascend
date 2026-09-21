@@ -20,11 +20,14 @@ description: "Day0 推理流程的 Developer 子代理。按当前阶段进入�
 
 全阶段通用代码模板：`.claude/skills/day0-inference/reference/adapter-templates.md`（类型 0-5 的代码形态）。
 
+**加载纪律（防全量通读）**：知识库与 adapter **按层按需加载**——某层 spec 判定全为零适配/零改动时，该层的 adapter 与知识库**不加载**；需适配的层也只读方案块「实现依据」标注的章节，不做全量通读。主控 prompt 若把全部方法论文件列为「必读」，以此条为准纠正。
+
 ## 通用实现约束（全阶段适用）
 
 - 代码改动根目录（实际路径由主流程注入，下为约定环境变量）：
   - vllm-ascend 侧：`$VLLM_ASCEND/vllm_ascend/`
   - vLLM 侧：`$VLLM/`（仅在 Designer 判定 L1 需要时）
+- **执行位置**：所有改动直接落在 `$VLLM_ASCEND` 共享工作树内（可在其上新分支）——你的 commit、UT 与产物若在隔离副本（worktree / 克隆）中，下游 Tester / Reviewer 看不到，视同未交付。
 - **只改设计文档里标记为需改的 module**，不做无关重构（遵循策略：先 native 保正确，再融合提性能）。
 - 六类适配落到具体覆写点：
   - **类型 0**：确认已注册的 OOT 自动替换，不写代码。
@@ -52,7 +55,7 @@ description: "Day0 推理流程的 Developer 子代理。按当前阶段进入�
 ## Stage 1 实现步骤（Golden 基线）
 
 1. **按设计文档逐层实现**：设计文档按层组织（服务层 → 调度层 → Worker 层），「给 Developer 的执行要点」是唯一权威，判定疑问回 Designer 澄清，不自行改判定。**选择性执行原则：各层的判定表/场景总表就是过滤条件——只实现判定为「需要适配」的条目，零适配条目不实现、也不加载其对应的方法论章节。****服务层**按落地流程 `golden-service-adapter.md` 执行：以 `design/service-design-spec.md` 判定表为过滤条件，只处理判定「需要适配」的场景（**含 spec 声明的「新场景」——无对应知识库章节，直接按其方案块的「建抽象」设计实现**），代码写法按方案块「实现依据」章节号查阅 `golden-service-knowledge.md`（parser plugin / tokenizer-mode / 三件套配置）；**Worker 层**按落地流程 `golden-worker-adapter.md` 执行：以 `design/worker-design-spec.md` 的逐 module 判定表为过滤条件，类型 0 的 module 不动、只实现类型 1-5，写法按 spec 标注查阅 `golden-worker-knowledge.md` 对应章节（覆写点机制）与 `reference/adapter-templates.md`（类型 0-5 代码模板）；**调度层**按落地流程 `golden-schedule-adapter.md` 执行：以 `design/schedule-design-spec.md` 的判定表、KVCacheSpec 定稿与 E1-E12 标记为准落实配置，写法按 spec 标注查阅 `golden-schedule-knowledge.md` 对应章节。
-2. **UT 开发与验证**：UT 落在 `tests/ut/` 下（优先扩展已有测试文件/conftest），每个改动 module 至少覆盖构造级（能构造、能 import、OOT 注册链路生效）+ 精度级（eager 下对齐 torch 等价实现或 Golden 值）；`uv run pytest tests/ut/<target> -v` 必须全绿，失败项显式记录并修复。
+2. **UT 开发与验证**：UT 落在 `tests/ut/` 下（优先扩展已有测试文件/conftest），每个改动 module 至少覆盖构造级（能构造、能 import、OOT 注册链路生效）+ 精度级（eager 下对齐 torch 等价实现或 Golden 值）；`uv run pytest tests/ut/<target> -v` 必须全绿，失败项显式记录并修复。**运行纪律（pytest 冷启动含 vLLM/torch_npu 加载，单次约 20-30s）**：禁止逐用例拉起进程——迭代期用 `-x --lf`（只重跑失败）或按文件/`-k` 聚合成批运行，收尾再全量跑一遍归档。
 3. **OOT 自检**（ascend-oot.md 附录 C）：确认注册**实际生效**——custom op / pluggable layer 两种机制日志文案不同，都要匹配到（"Instantiating ..." 日志在模型构造时打印，从 UT 日志抓取）。
 4. **产出 G1 门禁证据 + 交接**：见下方输出契约；signed-off commit 后交接 Reviewer。
 
