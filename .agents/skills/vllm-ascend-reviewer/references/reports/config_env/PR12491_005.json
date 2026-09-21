@@ -1,0 +1,58 @@
+{
+  "report_id": "PR12491_005",
+  "pr_number": 12491,
+  "pr_title": "[Doc] add deepseek-v4-flash-dspark cookbook",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "docs/source/tutorials/models/DeepSeek-V4-Flash.md:91"
+  ],
+  "landing_sha": "0e887b6",
+  "source_quote": "This is a private image. Is there any reason to use it? In short, we don't want to make it available for use.\nhi, yes, i check and tested, offical image can start successful, i fix this with offical images url",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan: docs/source/tutorials/models/DeepSeek-V4-Flash.md:91(2026-07-21 13:44:30)",
+      "patch_snippet": "评后sha 0e887b6 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "0e887b6",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "官方教程文档中提供的 Docker 镜像地址必须是官方仓库维护的镜像，不能使用个人或第三方私有镜像，以保证镜像的可获得性、安全性和持续维护。",
+    "context": "",
+    "checkpoints": [
+      "检查文档中引用的 Docker 镜像地址是否来自官方仓库（如 `quay.io/ascend/`）",
+      "确认不使用个人命名空间或第三方云服务的私有镜像",
+      "若功能暂时未进入官方镜像，应在 PR 中说明并尽快迁移到官方镜像",
+      "优先使用 `nightly-main` 等官方每日构建的镜像"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/DeepSeek-V4-Flash.md",
+      "line": 0,
+      "code": "## Docker Image Configuration\n\n```bash\n    # deepseek-v4-flash uses the following image\n    export IMAGE=quay.io/ascend/vllm-ascend:{{ vllm_ascend_version }}\n\n    # deepseek-v4-flash-dspark uses the following image\n    export IMAGE=swr.cn-north-4.myhuaweicloud.com/desaysv/vllm-ascend-dspark:910b4\n    # ↑ 使用了非官方的私有/个人镜像（华为云 SWR 个人命名空间）\n```\n\n### Docker Run\n\n```bash\n    docker run --rm \\\n        --device /dev/davinci0 \\\n        -v /mnt/share/models:/root/.cache/modelscope/hub/models \\\n        $IMAGE \\\n    vllm serve ...",
+      "context": "修改前代码 (markdown)"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/DeepSeek-V4-Flash.md",
+      "line": 0,
+      "code": "## Docker Image Configuration\n\n```bash\n    # deepseek-v4-flash uses the following image\n    export IMAGE=quay.io/ascend/vllm-ascend:{{ vllm_ascend_version }}\n\n    # deepseek-v4-flash-dspark uses the following image\n    export IMAGE=quay.io/ascend/vllm-ascend:nightly-main\n    # ↑ 改用官方维护的 nightly-main 镜像\n```\n\n### Docker Run\n\n```bash\n    docker run --rm \\\n        --device /dev/davinci0 \\\n        -v /mnt/share/models:/root/.cache/modelscope/hub/models \\\n        $IMAGE \\\n    vllm serve ...",
+      "context": "修改后代码 (markdown)"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/DeepSeek-V4-Flash.md\n+++ b/docs/source/tutorials/models/DeepSeek-V4-Flash.md\n@@ -5,8 +5,8 @@\n     export IMAGE=quay.io/ascend/vllm-ascend:{{ vllm_ascend_version }}\n \n     # deepseek-v4-flash-dspark uses the following image\n-    export IMAGE=swr.cn-north-4.myhuaweicloud.com/desaysv/vllm-ascend-dspark:910b4\n-    # ↑ 使用了非官方的私有/个人镜像（华为云 SWR 个人命名空间）\n+    export IMAGE=quay.io/ascend/vllm-ascend:nightly-main\n+    # ↑ 改用官方维护的 nightly-main 镜像\n ```\n \n ### Docker Run",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "修改代码逻辑"
+      ]
+    },
+    "language": "bash",
+    "_status": "pending_llm_extract"
+  }
+}

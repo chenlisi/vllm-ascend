@@ -1,0 +1,60 @@
+{
+  "report_id": "PR9731_001",
+  "pr_number": 9731,
+  "pr_title": "[Feature]Add Mooncake SSD offload with embedded client",
+  "pr_status": "merged",
+  "merged_at": "2026-06-05T09:46:06Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/mooncake_backend.py:237"
+  ],
+  "landing_sha": "783e44d",
+  "source_quote": "This is an incorrect way of raising error, which will print like `ssd_offload_path does not exist: %s. Create it before starting (e.g. mkdir -p %s).\" %, '/path', '/path'`\nraise ValueError(\n\"ssd_offload_path does not exist: %s. Create it before starting (e.g. mkdir -p %s).\" % (self.ssd_offload_path, self.ssd_offload_path)",
+  "correspondence": [
+    {
+      "review_quote": "realliujiaxu: vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/mooncake_backend.py:237",
+      "patch_snippet": "评后sha 783e44d 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "783e44d",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "使用 `%` 格式化字符串时，多个参数必须用元组包裹，否则会导致语法错误或输出原始格式化字符串。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/mooncake_backend.py",
+      "line": 225,
+      "code": "# % 运算符参数未用元组包裹，导致语法错误\n# realliujiaxu 评论: \"This is an incorrect way of raising error, which will print like\n# `ssd_offload_path does not exist: %s. Create it before starting (e.g. mkdir -p %s).\" %, '/path', '/path'`\"\n\nclass MooncakeBackend:\n    def __init__(self, config: MooncakeStoreConfig):\n        self.ssd_offload_path = config.ssd_offload_path\n        self.enable_ssd_offload = config.enable_ssd_offload\n        # ... 其他初始化逻辑 ...\n\n    def _setup_ssd_offload(self) -> None:\n        \"\"\"Setup SSD offload directory and validate configuration.\"\"\"\n        if not self.enable_ssd_offload:\n            return\n\n        if not os.path.exists(self.ssd_offload_path):\n            raise ValueError(\n                \"ssd_offload_path does not exist: %s. Create it before starting (e.g. mkdir -p %s).\"\n                %, self.ssd_offload_path, self.ssd_offload_path\n            )\n        # ... 后续初始化逻辑 ...",
+      "context": "This is an incorrect way of raising error, which will print like `ssd_offload_path does not exist: %s. Create it before starting (e.g. mkdir -p %s).\" %, '/path', '/path'`\nraise ValueError(\n\"ssd_offloa"
+    },
+    "pattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/mooncake_backend.py",
+      "line": 225,
+      "code": "# 修复: % 运算符参数用元组包裹\n# realliujiaxu 提供 suggestion\n\nclass MooncakeBackend:\n    def __init__(self, config: MooncakeStoreConfig):\n        self.ssd_offload_path = config.ssd_offload_path\n        self.enable_ssd_offload = config.enable_ssd_offload\n        # ... 其他初始化逻辑 ...\n\n    def _setup_ssd_offload(self) -> None:\n        \"\"\"Setup SSD offload directory and validate configuration.\"\"\"\n        if not self.enable_ssd_offload:\n            return\n\n        if not os.path.exists(self.ssd_offload_path):\n            raise ValueError(\n                \"ssd_offload_path does not exist: %s. Create it before starting (e.g. mkdir -p %s).\"\n                % (self.ssd_offload_path, self.ssd_offload_path)\n            )\n        # ... 后续初始化逻辑 ...",
+      "context": "This is an incorrect way of raising error, which will print like `ssd_offload_path does not exist: %s. Create it before starting (e.g. mkdir -p %s).\" %, '/path', '/path'`\nraise ValueError(\n\"ssd_offloa"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/mooncake_backend.py\n+++ b/vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/mooncake_backend.py\n@@ -1,6 +1,5 @@\n-# % 运算符参数未用元组包裹，导致语法错误\n-# realliujiaxu 评论: \"This is an incorrect way of raising error, which will print like\n-# `ssd_offload_path does not exist: %s. Create it before starting (e.g. mkdir -p %s).\" %, '/path', '/path'`\"\n+# 修复: % 运算符参数用元组包裹\n+# realliujiaxu 提供 suggestion\n \n class MooncakeBackend:\n     def __init__(self, config: MooncakeStoreConfig):\n@@ -16,6 +15,6 @@\n         if not os.path.exists(self.ssd_offload_path):\n             raise ValueError(\n                 \"ssd_offload_path does not exist: %s. Create it before starting (e.g. mkdir -p %s).\"\n-                %, self.ssd_offload_path, self.ssd_offload_path\n+                % (self.ssd_offload_path, self.ssd_offload_path)\n             )\n         # ... 后续初始化逻辑 ...\n",
+      "stats": "1 file changed, +3 lines, -4 lines",
+      "key_changes": [
+        "-# % 运算符参数未用元组包裹，导致语法错误",
+        "-# realliujiaxu 评论: \"This is an incorrect way of raising error, which will print like",
+        "-# `ssd_offload_path does not exist: %s. Create it before starting (e.g. mkdir -p %s).\" %, '/path', '/path'`\"",
+        "+# 修复: % 运算符参数用元组包裹",
+        "+# realliujiaxu 提供 suggestion",
+        "-                %, self.ssd_offload_path, self.ssd_offload_path",
+        "+                % (self.ssd_offload_path, self.ssd_offload_path)"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

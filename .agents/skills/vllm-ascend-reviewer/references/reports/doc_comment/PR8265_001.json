@@ -1,0 +1,62 @@
+{
+  "report_id": "PR8265_001",
+  "pr_number": 8265,
+  "pr_title": "[Ascend950][quant][Feature] Add W4A8 MXFP4 quantization support for Ascend950",
+  "pr_status": "merged",
+  "merged_at": "2026-06-01T14:12:04Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/fused_moe/prepare_finalize.py:374",
+    "vllm_ascend/quantization/quant_type.py:34"
+  ],
+  "landing_sha": "c78c651",
+  "source_quote": "Let's merge these branches into one, and make comment clearly.",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao: vllm_ascend/ops/fused_moe/prepare_finalize.py:374",
+      "patch_snippet": "评后sha c78c651 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/quantization/quant_type.py:34",
+      "patch_snippet": "评后sha c78c651 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "c78c651",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "Let's merge these branches into one, and make comment clearly.",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/ops/fused_moe/prepare_finalize.py",
+      "line": 374,
+      "code": "# vllm_ascend/quantization/quant_type.py:34\n# 原始代码（根据评审意见推断）",
+      "context": "Let's merge these branches into one, and make comment clearly."
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/fused_moe/prepare_finalize.py",
+      "line": 374,
+      "code": "W4A4MXFP4 = 5",
+      "context": "Let's merge these branches into one, and make comment clearly."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/fused_moe/prepare_finalize.py\n+++ b/vllm_ascend/ops/fused_moe/prepare_finalize.py\n@@ -1,2 +1 @@\n-# vllm_ascend/quantization/quant_type.py:34\n-# 原始代码（根据评审意见推断）\n+W4A4MXFP4 = 5\n",
+      "stats": "1 file changed, +1 lines, -2 lines",
+      "key_changes": [
+        "-# vllm_ascend/quantization/quant_type.py:34",
+        "-# 原始代码（根据评审意见推断）",
+        "+W4A4MXFP4 = 5"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

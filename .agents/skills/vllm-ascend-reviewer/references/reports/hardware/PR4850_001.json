@@ -1,0 +1,59 @@
+{
+  "report_id": "PR4850_001",
+  "pr_number": 4850,
+  "pr_title": "[Bugfix] Fix the bug in sfa-cp under multi-DP scenarios.",
+  "pr_status": "merged",
+  "merged_at": "2025-12-11T08:44:15Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/sfa_v1.py:1"
+  ],
+  "landing_sha": "4011513",
+  "source_quote": "It is better to fit https://github.com/vllm-project/vllm-ascend/pull/4706/files#diff-25852c8a8080fdc116cafb15740823105e6f3cb9aa3f5a6b6b6535349d9a90b5",
+  "correspondence": [
+    {
+      "review_quote": "clrs97 建议适配 PR #4706 中的修改方式。作者通过 commit `4011513` 修复了多 DP 场景下 sfa-cp 的 token 计数和 tensor 切片逻辑，1/1 建议已处理。",
+      "patch_snippet": "commit `4011513`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "4011513",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在序列并行（sfa-cp）模式下，token 计数应使用 `num_input_tokens` 而非 `num_actual_tokens`，tensor 切片需条件性处理以保留必要的 padding，避免分布式场景下的 shape 不匹配。",
+    "context": "",
+    "checkpoints": [
+      "序列并行模式下是否使用 `num_input_tokens` 而非 `num_actual_tokens` 进行 padding 计算",
+      "`hidden_states` 和 `output` 的切片是否在 sfa-cp 模式下条件性处理",
+      "是否考虑了来自 graph capture 等其他来源的已有 padding",
+      "相关修改是否与上游 PR 保持一致"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/sfa_v1.py",
+      "line": 195,
+      "code": "class SfaImpl:\n    def forward(self, query, key, value, attn_metadata, ...):\n        \"\"\"Sequence-Parallel Attention forward.\"\"\"\n        num_actual_tokens = attn_metadata.num_actual_tokens\n        padding_size = (num_actual_tokens + cp_size - 1) // cp_size * cp_size\n        padding = padding_size - num_actual_tokens",
+      "context": "clrs97: It is better to fit https://github.com/vllm-project/vllm-ascend/pull/4706/files#diff-25852c8a8080fdc116cafb15740823105e6f3cb9aa3f5a6b6b6535349d9a90b5"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/sfa_v1.py",
+      "line": 195,
+      "code": "class SfaImpl:\n    def forward(self, query, key, value, attn_metadata, ...):\n        \"\"\"Sequence-Parallel Attention forward.\"\"\"\n        num_input_tokens = common_attn_metadata.num_input_tokens\n        padding_size = (num_input_tokens + cp_size - 1) // cp_size * cp_size\n        padding = padding_size - num_input_tokens",
+      "context": "clrs97: It is better to fit https://github.com/vllm-project/vllm-ascend/pull/4706/files#diff-25852c8a8080fdc116cafb15740823105e6f3cb9aa3f5a6b6b6535349d9a90b5"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/sfa_v1.py\n+++ b/vllm_ascend/attention/sfa_v1.py\n@@ -195,6 +195,6 @@\n class SfaImpl:\n     def forward(self, query, key, value, attn_metadata, ...):\n         \"\"\"Sequence-Parallel Attention forward.\"\"\"\n-        num_actual_tokens = attn_metadata.num_actual_tokens\n-        padding_size = (num_actual_tokens + cp_size - 1) // cp_size * cp_size\n-        padding = padding_size - num_actual_tokens\n+        num_input_tokens = common_attn_metadata.num_input_tokens\n+        padding_size = (num_input_tokens + cp_size - 1) // cp_size * cp_size\n+        padding = padding_size - num_input_tokens",
+      "stats": "1 file changed, +3 lines, -3 lines",
+      "key_changes": [
+        "修改了第 4-6 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

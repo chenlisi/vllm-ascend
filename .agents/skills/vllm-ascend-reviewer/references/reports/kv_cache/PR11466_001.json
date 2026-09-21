@@ -1,0 +1,63 @@
+{
+  "report_id": "PR11466_001",
+  "pr_number": 11466,
+  "pr_title": "[BugFix] Resolve block table overflow",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/worker/model_runner_v1.py:4712",
+    "vllm_ascend/worker/model_runner_v1.py:4715"
+  ],
+  "landing_sha": "f54e87e",
+  "source_quote": "delete the whitespace here\nI suggest that we state in PR description that this fix, though in `model_runner_v1`, only affects `MambaSpec` +`speculative decoding` situation and is a proper fix since `mamba_cache_mode=align` is our default.",
+  "correspondence": [
+    {
+      "review_quote": "Pz1116: vllm_ascend/worker/model_runner_v1.py:4712",
+      "patch_snippet": "评后sha f54e87e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Pz1116: vllm_ascend/worker/model_runner_v1.py:4715",
+      "patch_snippet": "评后sha f54e87e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f54e87e",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "在计算 Mamba KV cache group 的 block table 大小时，speculative blocks 应在 max() 比较之后添加，而非之前。否则在长上下文模型中，content blocks 远大于 speculative blocks，导致 speculative blocks 在 max 比较中被丢弃，运行时出现溢出。",
+    "context": "",
+    "checkpoints": [
+      "speculative blocks 是否在 max() 比较之后添加",
+      "block table 大小是否覆盖了 content blocks + speculative blocks",
+      "PR 描述是否说明了修复的影响范围"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 4695,
+      "code": "    def may_reinitialize_input_batch(self, ...):\n        \"\"\"Reinitialize input batch if necessary.\n\n        This method handles block table sizing for different KV cache specs,\n        including Mamba models with speculative decoding support.\n        \"\"\"\n        ...\n        for kv_cache_group in kv_cache_groups:\n            kv_cache_spec = kv_cache_group.kv_cache_spec\n            if isinstance(kv_cache_spec, MambaSpec):\n                # Calculate block table size for Mamba KV cache group\n                # BUG: speculative blocks added before max() comparison\n                # causes them to be silently dropped for long-context models\n                mamba_blocks_per_req = (\n                    max_num_blocks_per_req\n                    if self.cache_config.enable_prefix_caching\n                    else 1\n                ) + kv_cache_group.kv_cache_spec.num_speculative_blocks\n                max_num_blocks_per_req = max(\n                    max_num_blocks_per_req, mamba_blocks_per_req\n                )\n            else:\n                max_num_blocks_per_req = cdiv(\n                    self.model_config.max_model_len,\n                    self.cache_config.block_size,\n                )\n        ...",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 4695,
+      "code": "    def may_reinitialize_input_batch(self, ...):\n        \"\"\"Reinitialize input batch if necessary.\n\n        This method handles block table sizing for different KV cache specs,\n        including Mamba models with speculative decoding support.\n        Note: This fix only affects MambaSpec + speculative decoding\n        situation and is a proper fix since mamba_cache_mode=align is\n        our default.\n        \"\"\"\n        ...\n        for kv_cache_group in kv_cache_groups:\n            kv_cache_spec = kv_cache_group.kv_cache_spec\n            if isinstance(kv_cache_spec, MambaSpec):\n                # Calculate block table size for Mamba KV cache group\n                # FIX: speculative blocks added AFTER max() comparison\n                # ensures they are always reserved on top of content blocks\n                mamba_blocks_per_req = (\n                    max_num_blocks_per_req\n                    if self.cache_config.enable_prefix_caching\n                    else 1\n                )\n                max_num_blocks_per_req = max(\n                    max_num_blocks_per_req, mamba_blocks_per_req\n                )\n                max_num_blocks_per_req += (\n                    kv_cache_group.kv_cache_spec.num_speculative_blocks\n                )\n            else:\n                max_num_blocks_per_req = cdiv(\n                    self.model_config.max_model_len,\n                    self.cache_config.block_size,\n                )\n        ...",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/model_runner_v1.py\n+++ b/vllm_ascend/worker/model_runner_v1.py\n@@ -3,21 +3,27 @@\n \n         This method handles block table sizing for different KV cache specs,\n         including Mamba models with speculative decoding support.\n+        Note: This fix only affects MambaSpec + speculative decoding\n+        situation and is a proper fix since mamba_cache_mode=align is\n+        our default.\n         \"\"\"\n         ...\n         for kv_cache_group in kv_cache_groups:\n             kv_cache_spec = kv_cache_group.kv_cache_spec\n             if isinstance(kv_cache_spec, MambaSpec):\n                 # Calculate block table size for Mamba KV cache group\n-                # BUG: speculative blocks added before max() comparison\n-                # causes them to be silently dropped for long-context models\n+                # FIX: speculative blocks added AFTER max() comparison\n+                # ensures they are always reserved on top of content blocks\n                 mamba_blocks_per_req = (\n                     max_num_blocks_per_req\n                     if self.cache_config.enable_prefix_caching\n                     else 1\n-                ) + kv_cache_group.kv_cache_spec.num_speculative_blocks\n+                )\n                 max_num_blocks_per_req = max(\n                     max_num_blocks_per_req, mamba_blocks_per_req\n+                )\n+                max_num_blocks_per_req += (\n+                    kv_cache_group.kv_cache_spec.num_speculative_blocks\n                 )\n             else:\n                 max_num_blocks_per_req = cdiv(",
+      "stats": "1 file changed, +9 lines, -3 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

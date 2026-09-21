@@ -1,0 +1,57 @@
+{
+  "report_id": "PR4411_001",
+  "pr_number": 4411,
+  "pr_title": "[Core][Worker] Add UCMConnector for KV Cache Offloading",
+  "pr_status": "merged",
+  "merged_at": "2025-12-16T02:53:31Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/distributed/ucm_connector.py:5",
+    "vllm_ascend/distributed/ucm_connector.py:29",
+    "docs/source/user_guide/feature_guide/ucm_deployment.md:12",
+    "docs/source/user_guide/feature_guide/ucm_deployment.md:47"
+  ],
+  "landing_sha": "65ddf9a",
+  "source_quote": "how to install ucm",
+  "correspondence": [
+    {
+      "review_quote": "1. wangxiyuan 询问 UCM 安装方式 → 作者提供了安装文档链接，后续在代码中补充说明\n2. wangxiyuan 要求接口参数与上游 vllm 保持一致 → 作者修改 `ucm_connector.py:29` 的接口签名以对齐上游\n3. ygwpz 指出文档中分支信息不一致 → 统一分支引用\n4. ygwpz 指出不需要暴露 commit API → 从文档中移除",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "65ddf9a",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "**检查点**: 对上游 vllm 接口（如 KV Connector base class）的封装类，其 `__init__` 方法参数必须与上游保持一致",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "KVConnectorFactory.register_connector(\n    \"UCMConnector\",\n    \"vllm_ascend.distributed.ucm_connector\",\n    \"UCMConnector\")  # 实际类名是 UCMConnectorV1，不是 UCMConnector\n\n\nclass UCMConnectorV1:\n    def __init__(self, ...):\n        ...",
+      "context": "how to install ucm"
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "KVConnectorFactory.register_connector(\n    \"UCMConnector\",\n    \"vllm_ascend.distributed.ucm_connector\",\n    \"UCMConnectorV1\")  # 修正为实际类名\n\n\nclass UCMConnectorV1:\n    def __init__(self, ...):\n        ...",
+      "context": "how to install ucm"
+    },
+    "diff": {
+      "unified": "--- a/a/file\n+++ b/b/file\n@@ -1,9 +1,9 @@\n KVConnectorFactory.register_connector(\n     \"UCMConnector\",\n     \"vllm_ascend.distributed.ucm_connector\",\n-    \"UCMConnector\")  # 实际类名是 UCMConnectorV1，不是 UCMConnector\n+    \"UCMConnectorV1\")  # 修正为实际类名\n \n \n class UCMConnectorV1:",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "修改了第 4-4 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

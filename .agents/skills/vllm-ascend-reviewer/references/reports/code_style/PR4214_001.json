@@ -1,0 +1,60 @@
+{
+  "report_id": "PR4214_001",
+  "pr_number": 4214,
+  "pr_title": "[Feat] Multi-stream for eplb heat collection and aggregation",
+  "pr_status": "merged",
+  "merged_at": "2025-12-04T03:11:50Z",
+  "dimension": [
+    "correctness",
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/eplb/eplb_updator.py:158",
+    "vllm_ascend/utils.py:327"
+  ],
+  "landing_sha": "59c9b0e",
+  "source_quote": "maybe better to set moe_load_async_stream as class attribute of EplbUpdator",
+  "correspondence": [
+    {
+      "review_quote": "realliujiaxu 建议将 moe_load_async_stream 设为 EplbUpdator 的类属性。wangxiyuan 建议将流创建函数移至 eplb 模块。作者通过 commit `d5b59ad` 将函数移至 `vllm_ascend/eplb/utils.py`，并确认其他文件也需要调用该流，2/2 建议全部落地。",
+      "patch_snippet": "commit `d5b59ad`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "d5b59ad",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "工具函数应放在与其功能最紧密相关的模块中，而非通用的 utils.py。如果多个文件需要调用某个功能，应将其放在对应功能模块的 utils 中。",
+    "context": "",
+    "checkpoints": [
+      "功能特定的工具函数不应放在全局 utils.py 中",
+      "如果多个文件需要调用某个功能，考虑放在该功能模块的 utils 中",
+      "异步流等资源应作为类属性初始化，避免每次调用时重复创建"
+    ],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "def create_moe_load_async_stream():\n    \"\"\"创建 moe load 异步流\"\"\"\n    return torch.npu.Stream()\n\nclass EplbUpdator:\n    def update(self):\n        stream = create_moe_load_async_stream()  # 每次调用时创建流",
+      "context": "maybe better to set moe_load_async_stream as class attribute of EplbUpdator"
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "def create_moe_load_async_stream():\n    \"\"\"创建 moe load 异步流\"\"\"\n    return torch.npu.Stream()\n\nclass EplbUpdator:\n    def __init__(self):\n        self.moe_load_async_stream = create_moe_load_async_stream()  # ✅ 作为类属性",
+      "context": "maybe better to set moe_load_async_stream as class attribute of EplbUpdator"
+    },
+    "diff": {
+      "unified": "--- a/a/file\n+++ b/b/file\n@@ -1,7 +1,7 @@\n     return torch.npu.Stream()\n \n class EplbUpdator:\n-    def update(self):\n-        stream = create_moe_load_async_stream()  # 每次调用时创建流\n+    def __init__(self):\n+        self.moe_load_async_stream = create_moe_load_async_stream()  # ✅ 作为类属性",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "修改了第 6-7 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

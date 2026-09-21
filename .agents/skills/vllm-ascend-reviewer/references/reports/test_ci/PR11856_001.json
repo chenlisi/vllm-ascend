@@ -1,0 +1,62 @@
+{
+  "report_id": "PR11856_001",
+  "pr_number": 11856,
+  "pr_title": "[CI] Add Gemma4 graph and eager nightly coverage",
+  "pr_status": "merged",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "tests/e2e/nightly/single_node/models/configs/Gemma4-31B-Dense.yaml:5",
+    "tests/e2e/nightly/single_node/models/configs/Gemma4-31B-Dense.yaml:50"
+  ],
+  "landing_sha": "c8ab636",
+  "source_quote": "The new model should be added to https://github.com/vllm-project/vllm-ascend/blob/main/.github/workflows/misc/model_dataset_list.json\nThe threshold fluctuation is a bit large.",
+  "correspondence": [
+    {
+      "review_quote": "zhangxinyuehfad: tests/e2e/nightly/single_node/models/configs/Gemma4-31B-Dense.yaml:5",
+      "patch_snippet": "评后sha c8ab636 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "weiguihua2: tests/e2e/nightly/single_node/models/configs/Gemma4-31B-Dense.yaml:50",
+      "patch_snippet": "评后sha c8ab636 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "c8ab636",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "添加新的 nightly 测试模型配置时，必须同步将模型添加到 `.github/workflows/misc/model_dataset_list.json` 中，确保 CI 流水线能正确识别和调度新模型。",
+    "context": "",
+    "checkpoints": [
+      "新增模型配置文件时，检查是否已更新 `model_dataset_list.json`",
+      "确认 accuracy threshold 设置合理，波动不应过大"
+    ],
+    "antipattern": {
+      "file": ".github/workflows/misc/model_dataset_list.json",
+      "line": 1,
+      "code": "{\n  \"models\": [\n    {\n      \"name\": \"Qwen3-32B\",\n      \"config_path\": \"tests/e2e/nightly/single_node/models/configs/Qwen3-32B.yaml\",\n      \"node_count\": 1\n    },\n    {\n      \"name\": \"DeepSeek-V2-Lite\",\n      \"config_path\": \"tests/e2e/nightly/single_node/models/configs/DeepSeek-V2-Lite.yaml\",\n      \"node_count\": 1\n    }\n    // Gemma4-31B-Dense 和 Gemma4-26B-MoE 未添加\n  ]\n}",
+      "context": "修改前代码 (json)"
+    },
+    "pattern": {
+      "file": ".github/workflows/misc/model_dataset_list.json",
+      "line": 1,
+      "code": "{\n  \"models\": [\n    {\n      \"name\": \"Qwen3-32B\",\n      \"config_path\": \"tests/e2e/nightly/single_node/models/configs/Qwen3-32B.yaml\",\n      \"node_count\": 1\n    },\n    {\n      \"name\": \"DeepSeek-V2-Lite\",\n      \"config_path\": \"tests/e2e/nightly/single_node/models/configs/DeepSeek-V2-Lite.yaml\",\n      \"node_count\": 1\n    },\n    {\n      \"name\": \"Gemma4-31B-Dense\",\n      \"config_path\": \"tests/e2e/nightly/single_node/models/configs/Gemma4-31B-Dense.yaml\",\n      \"node_count\": 1\n    },\n    {\n      \"name\": \"Gemma4-26B-MoE\",\n      \"config_path\": \"tests/e2e/nightly/single_node/models/configs/Gemma4-26B-MoE.yaml\",\n      \"node_count\": 1\n    }\n  ]\n}",
+      "context": "修改后代码 (json)"
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/misc/model_dataset_list.json\n+++ b/.github/workflows/misc/model_dataset_list.json\n@@ -9,7 +9,16 @@\n       \"name\": \"DeepSeek-V2-Lite\",\n       \"config_path\": \"tests/e2e/nightly/single_node/models/configs/DeepSeek-V2-Lite.yaml\",\n       \"node_count\": 1\n+    },\n+    {\n+      \"name\": \"Gemma4-31B-Dense\",\n+      \"config_path\": \"tests/e2e/nightly/single_node/models/configs/Gemma4-31B-Dense.yaml\",\n+      \"node_count\": 1\n+    },\n+    {\n+      \"name\": \"Gemma4-26B-MoE\",\n+      \"config_path\": \"tests/e2e/nightly/single_node/models/configs/Gemma4-26B-MoE.yaml\",\n+      \"node_count\": 1\n     }\n-    // Gemma4-31B-Dense 和 Gemma4-26B-MoE 未添加\n   ]\n }",
+      "stats": "1 file changed, +10 lines, -1 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "json",
+    "_status": "pending_llm_extract"
+  }
+}

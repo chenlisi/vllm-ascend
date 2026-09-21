@@ -1,0 +1,55 @@
+{
+  "report_id": "PR4595_001",
+  "pr_number": 4595,
+  "pr_title": "[Kernel] add l2norm triton kernel",
+  "pr_status": "merged",
+  "merged_at": "2025-12-24T22:06:19Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/triton/fla/l2norm.py:17"
+  ],
+  "landing_sha": "cb42ed0",
+  "source_quote": "add op test.",
+  "correspondence": [
+    {
+      "review_quote": "momo609 指出 add op test.。作者通过 commit `cb42ed0` 进行了修改，1/13 条建议落地。",
+      "patch_snippet": "commit `cb42ed0`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "cb42ed0",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "add op test.",
+    "context": "",
+    "checkpoints": [
+      "检查 `vllm_ascend/ops/triton/fla/l2norm.py:17` 相关代码是否符合评审意见",
+      "确认修改已覆盖评审人提出的所有问题"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/triton/fla/l2norm.py",
+      "line": 17,
+      "code": "",
+      "context": "add op test."
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/triton/fla/l2norm.py",
+      "line": 17,
+      "code": "",
+      "context": "add op test."
+    },
+    "diff": {
+      "unified": "",
+      "stats": "1 file changed, +0 lines, -0 lines",
+      "key_changes": []
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

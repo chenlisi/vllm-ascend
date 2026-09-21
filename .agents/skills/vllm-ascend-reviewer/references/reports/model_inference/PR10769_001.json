@@ -1,0 +1,69 @@
+{
+  "report_id": "PR10769_001",
+  "pr_number": 10769,
+  "pr_title": "[BugFix] Pad seq_lens/block_table to fix FIA error 561002 with flashcomm1",
+  "pr_status": "merged",
+  "merged_at": "2026-06-25T12:09:01Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/attention_v1.py:314"
+  ],
+  "landing_sha": "8c8f39f",
+  "source_quote": "当 flashcomm1/SP 或 cudagraph 插入 dummy padding request 导致 `query_start_loc` 多一项时，需要同步 pad `seq_lens` 和 `block_table`，否则 FIA error 561002。\n\npadding `seq_lens_list` 中使用 `[1] * padding_len`，即 dummy request 的 KV length 被设为 1。请确认 FIA 在 dummy request 的 KV length=1 时不会产生副作用（例如影响 softmax 归一化），以及 block 0 是否在所有场景下都包含有效数据。如果 dummy request 的输出会被丢弃，建议在注释中明确说明这一点。",
+  "correspondence": [
+    {
+      "review_quote": "winson-00178005 确认修复思路正确，但质疑 dummy request KV length=1 是否影响 softmax 以及 block 0 是否安全。作者通过 NPU 实测验证 GPQA 得分无回退，并详细解释了 FIA 独立计算机制和 padding 裁剪逻辑，通过 commit `8c8f39f` 补充了注释说明，1/1 建议全部落地。",
+      "patch_snippet": "commit `8c8f39f`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "8c8f39f",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当通过 padding dummy request 修复 FIA 错误时，应验证 padding 不影响模型精度（通过 benchmark 测试），并在代码注释中明确说明 dummy request 的输出会被丢弃、KV cache 不会被污染。",
+    "context": "",
+    "checkpoints": [
+      "padding 的 dummy request 是否会影响 softmax 归一化",
+      "dummy request 的输出是否被正确裁剪丢弃",
+      "block 0 在读侧和写侧是否安全",
+      "是否通过 benchmark 验证了精度无回退",
+      "代码注释是否说明了 padding 机制"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 300,
+      "code": "# （根据评审意见推断）flashcomm1/SP 或 cudagraph 插入 dummy padding request 时\n# seq_lens 和 block_table 未同步填充，导致 FIA error 561002\n# build() 中仅处理了 query_start_loc 的 padding，\n# 但 seq_lens_list、seq_lens tensor 和 block_table 未做对应扩展\n\n    def build(self, seq_lens_list, seq_lens, block_table,\n              query_start_loc, num_reqs_fia):\n        \"\"\"Build attention metadata for FIA.\n\n        When flashcomm1/SP or cudagraph inserts dummy padding requests,\n        query_start_loc has one extra entry. We need to pad seq_lens\n        and block_table accordingly.\n        \"\"\"\n        # 仅处理了 query_start_loc 的 padding\n        if len(query_start_loc) > num_reqs_fia + 1:\n            query_start_loc = query_start_loc[:num_reqs_fia + 1]\n\n        # ❌ seq_lens_list 未 pad，导致 FIA error 561002\n        # ❌ seq_lens tensor 未 pad\n        # ❌ block_table 未 pad\n\n        attn_metadata = AscendAttentionMetadata(\n            seq_lens_list=seq_lens_list,\n            seq_lens=seq_lens,\n            block_table=block_table,\n            query_start_loc=query_start_loc,\n        )\n        return attn_metadata",
+      "context": "修复思路正确：当 flashcomm1/SP 或 cudagraph 插入 dummy padding request 导致 `query_start_loc` 多一项时，需要同步 pad `seq_lens` 和 `block_table`，否则 FIA error 561002。"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 300,
+      "code": "# 在 build() 中同步 pad seq_lens_list、seq_lens tensor 和 block_table\n\n    def build(self, seq_lens_list, seq_lens, block_table,\n              query_start_loc, num_reqs_fia):\n        \"\"\"Build attention metadata for FIA.\n\n        When flashcomm1/SP or cudagraph inserts dummy padding requests,\n        query_start_loc has one extra entry. We need to pad seq_lens\n        and block_table accordingly.\n        \"\"\"\n        if len(query_start_loc) > num_reqs_fia + 1:\n            query_start_loc = query_start_loc[:num_reqs_fia + 1]\n\n        # ✅ 同步 pad seq_lens_list、seq_lens tensor 和 block_table\n        if len(seq_lens_list) < num_reqs_fia:\n            padding_len = num_reqs_fia - len(seq_lens_list)\n            # Dummy request KV length=1, FIA computes attention independently\n            # per request. Output falls in padding area, trimmed downstream:\n            #   pad_size = get_forward_context().pad_size\n            #   if pad_size > 0:\n            #       hidden_states = hidden_states[:-pad_size, :]\n            seq_lens_list = seq_lens_list + [1] * padding_len\n            seq_lens = torch.cat([seq_lens, seq_lens.new_ones(padding_len)])\n            # block_table padding: block 0 read-side safe (output discarded),\n            # write-side safe (KV write truncated by num_actual_tokens):\n            #   torch_npu.npu_scatter_pa_kv_cache(\n            #       key=key[:attn_metadata.num_actual_tokens],\n            #       value=value[:attn_metadata.num_actual_tokens],\n            #       slot_mapping=slots[:attn_metadata.num_actual_tokens],\n            #   )\n            block_table = torch.cat([\n                block_table,\n                block_table.new_zeros(padding_len, block_table.shape[-1]),\n            ])\n\n        attn_metadata = AscendAttentionMetadata(\n            seq_lens_list=seq_lens_list,\n            seq_lens=seq_lens,\n            block_table=block_table,\n            query_start_loc=query_start_loc,\n        )\n        return attn_metadata",
+      "context": "修复思路正确：当 flashcomm1/SP 或 cudagraph 插入 dummy padding request 导致 `query_start_loc` 多一项时，需要同步 pad `seq_lens` 和 `block_table`，否则 FIA error 561002。"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/attention_v1.py\n+++ b/vllm_ascend/attention/attention_v1.py\n@@ -1,7 +1,4 @@\n-# （根据评审意见推断）flashcomm1/SP 或 cudagraph 插入 dummy padding request 时\n-# seq_lens 和 block_table 未同步填充，导致 FIA error 561002\n-# build() 中仅处理了 query_start_loc 的 padding，\n-# 但 seq_lens_list、seq_lens tensor 和 block_table 未做对应扩展\n+# 在 build() 中同步 pad seq_lens_list、seq_lens tensor 和 block_table\n \n     def build(self, seq_lens_list, seq_lens, block_table,\n               query_start_loc, num_reqs_fia):\n@@ -11,13 +8,30 @@\n         query_start_loc has one extra entry. We need to pad seq_lens\n         and block_table accordingly.\n         \"\"\"\n-        # 仅处理了 query_start_loc 的 padding\n         if len(query_start_loc) > num_reqs_fia + 1:\n             query_start_loc = query_start_loc[:num_reqs_fia + 1]\n \n-        # ❌ seq_lens_list 未 pad，导致 FIA error 561002\n-        # ❌ seq_lens tensor 未 pad\n-        # ❌ block_table 未 pad\n+        # ✅ 同步 pad seq_lens_list、seq_lens tensor 和 block_table\n+        if len(seq_lens_list) < num_reqs_fia:\n+            padding_len = num_reqs_fia - len(seq_lens_list)\n+            # Dummy request KV length=1, FIA computes attention independently\n+            # per request. Output falls in padding area, trimmed downstream:\n+            #   pad_size = get_forward_context().pad_size\n+            #   if pad_size > 0:\n+            #       hidden_states = hidden_states[:-pad_size, :]\n+            seq_lens_list = seq_lens_list + [1] * padding_len\n+            seq_lens = torch.cat([seq_lens, seq_lens.new_ones(padding_len)])\n+            # block_table padding: block 0 read-side safe (output discarded),\n+            # write-side safe (KV write truncated by num_actual_tokens):\n+            #   torch_npu.npu_scatter_pa_kv_cache(\n+            #       key=key[:attn_metadata.num_actual_tokens],\n+            #       value=value[:attn_metadata.num_actual_tokens],\n+            #       slot_mapping=slots[:attn_metadata.num_actual_tokens],\n+            #   )\n+            block_table = torch.cat([\n+                block_table,\n+                block_table.new_zeros(padding_len, block_table.shape[-1]),\n+            ])\n \n         attn_metadata = AscendAttentionMetadata(\n             seq_lens_list=seq_lens_list,",
+      "stats": "1 file changed, +22 lines, -8 lines",
+      "key_changes": [
+        "移除: # （根据评审意见推断）flashcomm1/SP 或 cudagraph 插入 dummy padding request 时",
+        "移除: # seq_lens 和 block_table 未同步填充，导致 FIA error 561002",
+        "移除: # build() 中仅处理了 query_start_loc 的 padding，",
+        "移除: # 但 seq_lens_list、seq_lens tensor 和 block_table 未做对应扩展",
+        "新增: # 在 build() 中同步 pad seq_lens_list、seq_lens tensor 和 block_table",
+        "移除: # 仅处理了 query_start_loc 的 padding",
+        "移除: # ❌ seq_lens_list 未 pad，导致 FIA error 561002",
+        "移除: # ❌ seq_lens tensor 未 pad",
+        "移除: # ❌ block_table 未 pad",
+        "新增: # ✅ 同步 pad seq_lens_list、seq_lens tensor 和 block_table"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

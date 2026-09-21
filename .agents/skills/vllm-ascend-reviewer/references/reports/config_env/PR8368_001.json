@@ -1,0 +1,100 @@
+{
+  "report_id": "PR8368_001",
+  "pr_number": 8368,
+  "pr_title": "[Doc][Test]Add testable docs codegen framework",
+  "pr_status": "merged",
+  "merged_at": "2026-05-30T09:30:56Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/developer_guide/contribution/doc_writing.md:62",
+    "tools/docs_codegen/cli.py:92",
+    "docs/source/developer_guide/contribution/doc_writing.md:236",
+    "docs/source/developer_guide/contribution/multi_node_test.md:37",
+    "tests/e2e/nightly/multi_node/internal_dp/scripts/multi_node_config.py:293",
+    "tests/e2e/models/configs/Minitron-8B-Base.yaml:13"
+  ],
+  "landing_sha": "61fbd66",
+  "source_quote": "是由于单节点会又在一个yaml中包含多个测试用例的场景，所以才有case_index，多节点没有这种场景，所以多节点不需要case_index吗“”\n可以考虑添加一个本工具的测试用例来守护这个工具能够正常运行。\n这一步完成后，添加一个步骤：在本地运行，否则上了nighly才报错就太晚了。单节点是不是本地就直接执行这个生成的脚本就可以了。\n这里应该是：env_common: &env_common\nPR中多节点的yaml中的deployment并没有node_idx，所以这里校验应该无法通过吧？这样多节点的nighly会不会全部失败？\n这个直接删除了，测试用例执行怎么处理？不会报错吗？\n确认后只有单节点有多个test case\n经确认这段代码之前即为无效代码，这里进行删除\n经确认这里访问的时yaml中deployment的子项，非deplolyment关键字，所以，idx是解析出来的必有字段。",
+  "correspondence": [
+    {
+      "review_quote": "leo-pony: docs/source/developer_guide/contribution/doc_writing.md:62",
+      "patch_snippet": "评后sha 61fbd66 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "leo-pony: tools/docs_codegen/cli.py:92",
+      "patch_snippet": "评后sha 61fbd66 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "leo-pony: docs/source/developer_guide/contribution/doc_writing.md:236",
+      "patch_snippet": "评后sha 61fbd66 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "leo-pony: docs/source/developer_guide/contribution/multi_node_test.md:37",
+      "patch_snippet": "评后sha 61fbd66 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "leo-pony: tests/e2e/nightly/multi_node/internal_dp/scripts/multi_node_config.py:293",
+      "patch_snippet": "评后sha 61fbd66 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "leo-pony: tests/e2e/models/configs/Minitron-8B-Base.yaml:13",
+      "patch_snippet": "评后sha 61fbd66 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "leo-pony: docs/source/developer_guide/contribution/doc_writing.md:62",
+      "patch_snippet": "评后sha 61fbd66 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "leo-pony: tests/e2e/models/configs/Minitron-8B-Base.yaml:13",
+      "patch_snippet": "评后sha 61fbd66 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "leo-pony: tests/e2e/nightly/multi_node/internal_dp/scripts/multi_node_config.py:293",
+      "patch_snippet": "评后sha 61fbd66 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "61fbd66",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "是由于单节点会又在一个yaml中包含多个测试用例的场景，所以才有case_index，多节点没有这种场景，所以多节点不需要case_index吗“”",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "docs/source/developer_guide/contribution/doc_writing.md",
+      "line": 62,
+      "code": "# docs/source/developer_guide/contribution/doc_writing.md:62",
+      "context": "是由于单节点会又在一个yaml中包含多个测试用例的场景，所以才有case_index，多节点没有这种场景，所以多节点不需要case_index吗“”\n可以考虑添加一个本工具的测试用例来守护这个工具能够正常运行。\n这一步完成后，添加一个步骤：在本地运行，否则上了nighly才报错就太晚了。单节点是不是本地就直接执行这个生成的脚本就可以了。\n这里应该是：env_common: &env_common\n"
+    },
+    "pattern": {
+      "file": "docs/source/developer_guide/contribution/doc_writing.md",
+      "line": 62,
+      "code": "# 根据评审意见修改后的代码",
+      "context": "是由于单节点会又在一个yaml中包含多个测试用例的场景，所以才有case_index，多节点没有这种场景，所以多节点不需要case_index吗“”\n可以考虑添加一个本工具的测试用例来守护这个工具能够正常运行。\n这一步完成后，添加一个步骤：在本地运行，否则上了nighly才报错就太晚了。单节点是不是本地就直接执行这个生成的脚本就可以了。\n这里应该是：env_common: &env_common\n"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/developer_guide/contribution/doc_writing.md\n+++ b/docs/source/developer_guide/contribution/doc_writing.md\n@@ -1 +1 @@\n-# docs/source/developer_guide/contribution/doc_writing.md:62\n+# 根据评审意见修改后的代码\n",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "-# docs/source/developer_guide/contribution/doc_writing.md:62",
+        "+# 根据评审意见修改后的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

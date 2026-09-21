@@ -1,0 +1,62 @@
+{
+  "report_id": "PR8143_001",
+  "pr_number": 8143,
+  "pr_title": "[BugFix] Restrict Layer Sharding to PD-disaggregated mode's P node",
+  "pr_status": "merged",
+  "merged_at": "2026-04-15T06:58:41Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/user_guide/feature_guide/layer_sharding.md:41"
+  ],
+  "landing_sha": "87b2aa7",
+  "source_quote": "It's better to change the description here to Layer Sharding can only be enabled in PD-disaggregated's P node. And the same goes for `additional_config.md`, `DeepSeek-V3.2.md` and `GLM5.md`.",
+  "correspondence": [
+    {
+      "review_quote": "zzzzwwjj: docs/source/user_guide/feature_guide/layer_sharding.md:41",
+      "patch_snippet": "评后sha 87b2aa7 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "87b2aa7",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当某个功能仅在特定部署模式或特定节点类型下可用时，必须在所有相关文档中明确说明限制条件，并在代码中添加相应的验证逻辑。多个文档涉及同一功能时需保持一致性。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "docs/source/user_guide/feature_guide/layer_sharding.md",
+      "line": 35,
+      "code": "<!-- 评审人 zzzzwwjj: \"It's better to change the description here to Layer Sharding -->\n<!-- can only be enabled in PD-disaggregated's P node. And the same goes for -->\n<!-- `additional_config.md`, `DeepSeek-V3.2.md` and `GLM5.md`.\" -->\n\n## Layer Sharding\n\nLayer Sharding is a feature that distributes model layers across multiple\nnodes to reduce per-device memory usage. It is particularly useful for\nlarge models like DeepSeek-V3.2 that exceed single-device memory capacity.\n\n### Usage\n\nLayer Sharding 支持将模型层分布到多个节点。\nTo enable layer sharding, set the following in your configuration:",
+      "context": "It's better to change the description here to Layer Sharding can only be enabled in PD-disaggregated's P node. And the same goes for `additional_config.md`, `DeepSeek-V3.2.md` and `GLM5.md`."
+    },
+    "pattern": {
+      "file": "docs/source/user_guide/feature_guide/layer_sharding.md",
+      "line": 35,
+      "code": "<!-- commit 87b2aa7 \"Validate `layer_sharding` only support on -->\n<!-- P node in PD-disaggregated deployment\" (+6/-1 docs, +30 tests, +16 platform) -->\n<!-- 作者 chenchuw886 回复: \"Done, constraints have been narrowed to only PD's P node.\" -->\n<!-- 同步更新了 additional_config.md, DeepSeek-V3.2.md, GLM5.md -->\n\n## Layer Sharding\n\nLayer Sharding is a feature that distributes model layers across multiple\nnodes to reduce per-device memory usage. It is particularly useful for\nlarge models like DeepSeek-V3.2 that exceed single-device memory capacity.\n\n### Usage\n\nLayer Sharding can only be enabled in PD-disaggregated's P node.\nTo enable layer sharding, set the following in your configuration:",
+      "context": "It's better to change the description here to Layer Sharding can only be enabled in PD-disaggregated's P node. And the same goes for `additional_config.md`, `DeepSeek-V3.2.md` and `GLM5.md`."
+    },
+    "diff": {
+      "unified": "--- a/docs/source/user_guide/feature_guide/layer_sharding.md\n+++ b/docs/source/user_guide/feature_guide/layer_sharding.md\n@@ -1,6 +1,7 @@\n-<!-- 评审人 zzzzwwjj: \"It's better to change the description here to Layer Sharding -->\n-<!-- can only be enabled in PD-disaggregated's P node. And the same goes for -->\n-<!-- `additional_config.md`, `DeepSeek-V3.2.md` and `GLM5.md`.\" -->\n+<!-- commit 87b2aa7 \"Validate `layer_sharding` only support on -->\n+<!-- P node in PD-disaggregated deployment\" (+6/-1 docs, +30 tests, +16 platform) -->\n+<!-- 作者 chenchuw886 回复: \"Done, constraints have been narrowed to only PD's P node.\" -->\n+<!-- 同步更新了 additional_config.md, DeepSeek-V3.2.md, GLM5.md -->\n \n ## Layer Sharding\n \n@@ -10,5 +11,5 @@\n \n ### Usage\n \n-Layer Sharding 支持将模型层分布到多个节点。\n+Layer Sharding can only be enabled in PD-disaggregated's P node.\n To enable layer sharding, set the following in your configuration:\n",
+      "stats": "1 file changed, +5 lines, -4 lines",
+      "key_changes": [
+        "-<!-- 评审人 zzzzwwjj: \"It's better to change the description here to Layer Sharding -->",
+        "-<!-- can only be enabled in PD-disaggregated's P node. And the same goes for -->",
+        "-<!-- `additional_config.md`, `DeepSeek-V3.2.md` and `GLM5.md`.\" -->",
+        "+<!-- commit 87b2aa7 \"Validate `layer_sharding` only support on -->",
+        "+<!-- P node in PD-disaggregated deployment\" (+6/-1 docs, +30 tests, +16 platform) -->",
+        "+<!-- 作者 chenchuw886 回复: \"Done, constraints have been narrowed to only PD's P node.\" -->",
+        "+<!-- 同步更新了 additional_config.md, DeepSeek-V3.2.md, GLM5.md -->",
+        "-Layer Sharding 支持将模型层分布到多个节点。",
+        "+Layer Sharding can only be enabled in PD-disaggregated's P node."
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

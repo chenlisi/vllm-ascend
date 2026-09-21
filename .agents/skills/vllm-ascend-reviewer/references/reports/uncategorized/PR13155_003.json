@@ -1,0 +1,58 @@
+{
+  "report_id": "PR13155_003",
+  "pr_number": 13155,
+  "pr_title": "[Feature][MRV2] Support DSA in ModelRunner V2",
+  "pr_status": "merged",
+  "dimension": [
+    "design"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/v2/attn_utils.py:416"
+  ],
+  "landing_sha": "3be758e",
+  "source_quote": "There is no need to pass `example_layer_name` to the `enable_fa_quant` function here.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/worker/v2/attn_utils.py:416",
+      "patch_snippet": "评后sha 3be758e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "3be758e",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "调用函数时只传入该函数实际使用的参数，不应传递函数体内部并不使用的冗余参数；冗余参数会让调用点产生\"该参数会影响函数行为\"的错觉，增加误读风险。",
+    "context": "",
+    "checkpoints": [
+      "检查被调用函数的函数体是否真的使用了传入的参数",
+      "检查是否存在历史遗留参数（重构后已不再需要但调用点仍在传递）",
+      "检查同名参数在多处调用时是否都存在同样的冗余传递"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/v2/attn_utils.py",
+      "line": 410,
+      "code": "def _allocate_kv_cache(\n    self,\n    kv_cache_config: KVCacheConfig,\n    vllm_config: VllmConfig,\n) -> None:\n    ...\n    for kv_cache_group in kv_cache_config.kv_cache_groups:\n        example_layer_name = kv_cache_group.layer_names[0]\n        layer_kv_cache_spec = kv_cache_group.kv_cache_specs\n        example_spec = layer_kv_cache_spec[example_layer_name]\n        assert isinstance(example_spec, AttentionSpec)\n        k_dim, v_dim = _get_attention_kv_cache_dims(example_layer_name, example_spec)\n        # ❌ example_layer_name 是冗余参数，enable_fa_quant 函数体不使用它\n        if enable_fa_quant(vllm_config, example_layer_name):\n            k_factor, v_factor = vllm_config.quant_config.get_kv_quant_split_factor(\n                example_layer_name, [k_dim, v_dim]\n            )",
+      "context": "❌ example_layer_name 是冗余参数，enable_fa_quant 函数体不使用它"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/v2/attn_utils.py",
+      "line": 410,
+      "code": "def _allocate_kv_cache(\n    self,\n    kv_cache_config: KVCacheConfig,\n    vllm_config: VllmConfig,\n) -> None:\n    ...\n    for kv_cache_group in kv_cache_config.kv_cache_groups:\n        example_layer_name = kv_cache_group.layer_names[0]\n        layer_kv_cache_spec = kv_cache_group.kv_cache_specs\n        example_spec = layer_kv_cache_spec[example_layer_name]\n        assert isinstance(example_spec, AttentionSpec)\n        k_dim, v_dim = _get_attention_kv_cache_dims(example_layer_name, example_spec)\n        # ✅ 移除冗余参数\n        if enable_fa_quant(vllm_config):\n            k_factor, v_factor = vllm_config.quant_config.get_kv_quant_split_factor(\n                example_layer_name, [k_dim, v_dim]\n            )",
+      "context": "✅ 移除冗余参数"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/v2/attn_utils.py\n+++ b/vllm_ascend/worker/v2/attn_utils.py\n@@ -10,8 +10,8 @@\n         example_spec = layer_kv_cache_spec[example_layer_name]\n         assert isinstance(example_spec, AttentionSpec)\n         k_dim, v_dim = _get_attention_kv_cache_dims(example_layer_name, example_spec)\n-        # ❌ example_layer_name 是冗余参数，enable_fa_quant 函数体不使用它\n-        if enable_fa_quant(vllm_config, example_layer_name):\n+        # ✅ 移除冗余参数\n+        if enable_fa_quant(vllm_config):\n             k_factor, v_factor = vllm_config.quant_config.get_kv_quant_split_factor(\n                 example_layer_name, [k_dim, v_dim]\n             )\n",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "移除: if enable_fa_quant(vllm_config, example_layer_name):",
+        "新增: if enable_fa_quant(vllm_config):"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

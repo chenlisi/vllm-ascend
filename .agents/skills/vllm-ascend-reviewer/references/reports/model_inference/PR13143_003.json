@@ -1,0 +1,60 @@
+{
+  "report_id": "PR13143_003",
+  "pr_number": 13143,
+  "pr_title": "[Doc][Misc] Update Kimi-K3 deployment configurations",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/models/Kimi-K3.md:308"
+  ],
+  "landing_sha": "8786964",
+  "source_quote": "Eight-node (1M context)",
+  "correspondence": [
+    {
+      "review_quote": "docs/source/tutorials/models/Kimi-K3.md:308",
+      "patch_snippet": "评后sha 8786964 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "8786964",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当表格某一列表示\"特定条件下的值\"时，列名本身要把最关键的前置条件（节点数、量化方式、硬件型号等）写进去，避免只写参数后缀，导致读者跳读或打印后信息丢失。",
+    "context": "",
+    "checkpoints": [
+      "对比表中条件性列名是否完整",
+      "列名能否脱离 note/上下文段落独立被理解",
+      "命名风格参考已有列：如 \"Four-node default\" 并列列应保持 \"`X`-node (`补充`)\" 格式"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/Kimi-K3.md",
+      "line": 300,
+      "code": "> Serving a 1M-token context requires at least eight Atlas 800 A3 nodes.\n\n| Parameter | Four-node default | 1M context |\n| --- | --- | --- |\n| `--data-parallel-size` | `4` | `8` |\n| `--max-model-len` | `131027` | `1048576` |\n| `--max-num-batched-tokens` | `24576` | `8192` |\n| `--tensor-parallel-size` | `16` | `16` |\n| `--limit-mm-per-prompt` | `{\"vision_chunk\": 2}` | `{\"vision_chunk\": 2}` |",
+      "context": "Eight-node (1M context)"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/Kimi-K3.md",
+      "line": 300,
+      "code": "> Serving a 1M-token context requires at least eight Atlas 800 A3 nodes.\n\n| Parameter | Four-node default | Eight-node (1M context) |\n| --- | --- | --- |\n| `--data-parallel-size` | `4` | `8` |\n| `--max-model-len` | `131072` | `1048576` |\n| `--max-num-batched-tokens` | `24576` | `8192` |\n| `--tensor-parallel-size` | `16` | `16` |\n| `--limit-mm-per-prompt` | `{\"vision_chunk\": 2}` | `{\"vision_chunk\": 2}` |",
+      "context": "Eight-node (1M context)"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/Kimi-K3.md\n+++ b/docs/source/tutorials/models/Kimi-K3.md\n@@ -1,9 +1,9 @@\n > Serving a 1M-token context requires at least eight Atlas 800 A3 nodes.\n \n-| Parameter | Four-node default | 1M context |\n+| Parameter | Four-node default | Eight-node (1M context) |\n | --- | --- | --- |\n | `--data-parallel-size` | `4` | `8` |\n-| `--max-model-len` | `131027` | `1048576` |\n+| `--max-model-len` | `131072` | `1048576` |\n | `--max-num-batched-tokens` | `24576` | `8192` |\n | `--tensor-parallel-size` | `16` | `16` |\n | `--limit-mm-per-prompt` | `{\"vision_chunk\": 2}` | `{\"vision_chunk\": 2}` |\n",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "移除: | `--max-model-len` | `131027` | `1048576` |",
+        "移除: | Parameter | Four-node default | 1M context |",
+        "新增: | Parameter | Four-node default | Eight-node (1M context) |",
+        "新增: | `--max-model-len` | `131072` | `1048576` |"
+      ]
+    },
+    "language": "markdown",
+    "_status": "processed"
+  }
+}

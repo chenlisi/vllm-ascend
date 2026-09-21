@@ -1,0 +1,57 @@
+{
+  "report_id": "PR3238_001",
+  "pr_number": 3238,
+  "pr_title": "[bugfix] Fix warning bug: model config is None.",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/utils.py:596"
+  ],
+  "landing_sha": "97e8ab0",
+  "source_quote": "Let's only import when vllm_config is None\nif vllm_config is None:\nfrom vllm.config import get_current_vllm_config\nvllm_config = get_current_vllm_config()",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao: vllm_ascend/utils.py:596(2025-09-28 10:56:33)",
+      "patch_snippet": "评后sha 97e8ab0 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "97e8ab0",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在工具函数中，当参数可能为 None 时，应仅在需要时才执行 import 操作，既减少不必要的导入开销，又提高函数的健壮性。",
+    "context": "",
+    "checkpoints": [
+      "函数参数为 None 时是否有防御性检查",
+      "import 语句是否仅在必要时执行",
+      "是否考虑了 config 仍为 None 的边界情况"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/utils.py",
+      "line": 590,
+      "code": "# 评审人: gemini-code-assist[bot] 🔴 high, MengqingCao 👤\n# Commit: 97e8ab0 (fix warning bug: model config is None)\n# 总是执行 import，且不支持传入 vllm_config 参数\n\nimport vllm_ascend.envs as envs_ascend\n\n# ... 其他工具函数 ...\n\ndef enable_sp() -> bool:\n    \"\"\"Check if sequence parallelism is enabled.\"\"\"\n    # 总是执行 import，不支持传入已有 config\n    from vllm.config import get_current_vllm_config\n    vllm_config = get_current_vllm_config()\n    return (\n        vllm_config.compilation_config.pass_config.enable_sequence_parallelism\n        or envs_ascend.VLLM_ASCEND_ENABLE_FLASHCOMM)\n\n# ... 其他工具函数 ...",
+      "context": "评审人: gemini-code-assist[bot] 🔴 high, MengqingCao 👤 Commit: 97e8ab0 (fix warning bug: model config is None) 总是执行 import，且不支持传入 vllm_config 参数"
+    },
+    "pattern": {
+      "file": "vllm_ascend/utils.py",
+      "line": 590,
+      "code": "# 仅在 vllm_config 为 None 时才 import，减少不必要的导入开销\n# 支持传入已有的 vllm_config 参数\n\nimport vllm_ascend.envs as envs_ascend\n\n# ... 其他工具函数 ...\n\ndef enable_sp(vllm_config: Optional[\"VllmConfig\"] = None) -> bool:\n    \"\"\"Check if sequence parallelism is enabled.\"\"\"\n    # 仅在 vllm_config 为 None 时才 import\n    if vllm_config is None:\n        from vllm.config import get_current_vllm_config\n        vllm_config = get_current_vllm_config()\n\n    return (\n        vllm_config.compilation_config.pass_config.enable_sequence_parallelism\n        or envs_ascend.VLLM_ASCEND_ENABLE_FLASHCOMM)\n\n# ... 其他工具函数 ...",
+      "context": "仅在 vllm_config 为 None 时才 import，减少不必要的导入开销 支持传入已有的 vllm_config 参数 ... 其他工具函数 ..."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/utils.py\n+++ b/vllm_ascend/utils.py\n@@ -1,16 +1,17 @@\n-# 评审人: gemini-code-assist[bot] 🔴 high, MengqingCao 👤\n-# Commit: 97e8ab0 (fix warning bug: model config is None)\n-# 总是执行 import，且不支持传入 vllm_config 参数\n+# 仅在 vllm_config 为 None 时才 import，减少不必要的导入开销\n+# 支持传入已有的 vllm_config 参数\n \n import vllm_ascend.envs as envs_ascend\n \n # ... 其他工具函数 ...\n \n-def enable_sp() -> bool:\n+def enable_sp(vllm_config: Optional[\"VllmConfig\"] = None) -> bool:\n     \"\"\"Check if sequence parallelism is enabled.\"\"\"\n-    # 总是执行 import，不支持传入已有 config\n-    from vllm.config import get_current_vllm_config\n-    vllm_config = get_current_vllm_config()\n+    # 仅在 vllm_config 为 None 时才 import\n+    if vllm_config is None:\n+        from vllm.config import get_current_vllm_config\n+        vllm_config = get_current_vllm_config()\n+\n     return (\n         vllm_config.compilation_config.pass_config.enable_sequence_parallelism\n         or envs_ascend.VLLM_ASCEND_ENABLE_FLASHCOMM)\n",
+      "stats": "1 file changed, +8 lines, -7 lines",
+      "key_changes": [
+        "移除: def enable_sp() -> bool:"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

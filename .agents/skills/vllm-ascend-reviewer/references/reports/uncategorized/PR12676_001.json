@@ -1,0 +1,59 @@
+{
+  "report_id": "PR12676_001",
+  "pr_number": 12676,
+  "pr_title": "[Doc][Misc] Refactor and simplify DeepSeek-V3.2 deployment documentation",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "docs/source/tutorials/models/DeepSeek-V3.2.md:695",
+    "docs/source/tutorials/models/DeepSeek-V3.2.md:708"
+  ],
+  "landing_sha": "1bb47fb",
+  "source_quote": "The actual rendering sequence number is incorrect. Check if it's an indentation issue.\nThe actual rendering sequence number is incorrect. Check if it's an indentation issue.",
+  "correspondence": [
+    {
+      "review_quote": "herizhen: docs/source/tutorials/models/DeepSeek-V3.2.md:695",
+      "patch_snippet": "评后sha 1bb47fb 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "herizhen: docs/source/tutorials/models/DeepSeek-V3.2.md:708",
+      "patch_snippet": "评后sha 1bb47fb 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "1bb47fb",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/DeepSeek-V3.2.md",
+      "line": 0,
+      "code": " 1. Prepare the environment and start the server:\n\n    === \"Node 1\"\n\n        ```bash\n        # Start the server with recompute scheduler\n        vllm serve deepseek-ai/DeepSeek-V3.2 \\\n            --additional-config '{\"recompute_scheduler_enable\" : true}'\n        ```\n\n## Parameter descriptions:\n        --additional-config '{\"recompute_scheduler_enable\" : true}'\n    ```\n\nOnce the preparation is done, you can start the server with the following command on each node:\nRefer to [Distributed DP Server With Large-Scale Expert Parallelism](https://docs.vllm.ai/projects/ascend/en/latest/user_guide/feature_guide/large_scale_ep.html) to get the detailed boot method.\n\n 2. run server for each node:",
+      "context": "修改前代码 (markdown)"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/DeepSeek-V3.2.md",
+      "line": 0,
+      "code": " 1. Prepare the environment and start the server:\n\n    === \"Node 1\"\n\n        ```bash\n        # Start the server with recompute scheduler\n        vllm serve deepseek-ai/DeepSeek-V3.2 \\\n            --additional-config '{\"recompute_scheduler_enable\" : true}'\n        ```\n\n## Parameter descriptions:\n        --additional-config '{\"recompute_scheduler_enable\" : true}'\n    ```\n\n    Once the preparation is done, you can start the server with the following command on each node:\n    Refer to [Distributed DP Server With Large-Scale Expert Parallelism](https://docs.vllm.ai/projects/ascend/en/latest/user_guide/feature_guide/large_scale_ep.html) to get the detailed boot method.\n\n 2. run server for each node:",
+      "context": "修改后代码 (markdown)"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/DeepSeek-V3.2.md\n+++ b/docs/source/tutorials/models/DeepSeek-V3.2.md\n@@ -12,7 +12,7 @@\n         --additional-config '{\"recompute_scheduler_enable\" : true}'\n     ```\n \n-Once the preparation is done, you can start the server with the following command on each node:\n-Refer to [Distributed DP Server With Large-Scale Expert Parallelism](https://docs.vllm.ai/projects/ascend/en/latest/user_guide/feature_guide/large_scale_ep.html) to get the detailed boot method.\n+    Once the preparation is done, you can start the server with the following command on each node:\n+    Refer to [Distributed DP Server With Large-Scale Expert Parallelism](https://docs.vllm.ai/projects/ascend/en/latest/user_guide/feature_guide/large_scale_ep.html) to get the detailed boot method.\n \n  2. run server for each node:",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

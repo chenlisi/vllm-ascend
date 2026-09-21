@@ -1,0 +1,68 @@
+{
+  "report_id": "PR9310_001",
+  "pr_number": 9310,
+  "pr_title": "[Performance] Reuse prebuilt chunk host metadata for Ascend chunk ops and earse synconize for qwen3.5 model",
+  "pr_status": "merged",
+  "merged_at": "2026-06-16T02:34:21Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/patch/__init__.py:468",
+    "vllm_ascend/spec_decode/eagle_proposer.py:627",
+    "vllm_ascend/patch/worker/patch_qwen3_5.py:153"
+  ],
+  "landing_sha": "a761107",
+  "source_quote": "rebase to main and remove this section directly\n@HF-001 please review this change. Thanks\n@zzzzwwjj please notice that we should remove GDN patch totally, using GDN plugin instead",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan: vllm_ascend/patch/__init__.py:468",
+      "patch_snippet": "评后sha a761107 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wangxiyuan: vllm_ascend/spec_decode/eagle_proposer.py:627",
+      "patch_snippet": "评后sha a761107 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wangxiyuan: vllm_ascend/patch/worker/patch_qwen3_5.py:153",
+      "patch_snippet": "评后sha a761107 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "a761107",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "rebase to main and remove this section directly",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/ops/gdn_attn_builder.py",
+      "line": 468,
+      "code": "        batch_size = m.num_actual_tokens",
+      "context": "rebase to main and remove this section directly\n@HF-001 please review this change. Thanks\n@zzzzwwjj please notice that we should remove GDN patch totally, using GDN plugin instead"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/gdn_attn_builder.py",
+      "line": 468,
+      "code": "# gemini-code-assist suggestion:\n        batch_size = m.num_reqs",
+      "context": "rebase to main and remove this section directly\n@HF-001 please review this change. Thanks\n@zzzzwwjj please notice that we should remove GDN patch totally, using GDN plugin instead"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/gdn_attn_builder.py\n+++ b/vllm_ascend/ops/gdn_attn_builder.py\n@@ -1 +1,2 @@\n-        batch_size = m.num_actual_tokens\n+# gemini-code-assist suggestion:\n+        batch_size = m.num_reqs\n",
+      "stats": "1 file changed, +2 lines, -1 lines",
+      "key_changes": [
+        "-        batch_size = m.num_actual_tokens",
+        "+# gemini-code-assist suggestion:",
+        "+        batch_size = m.num_reqs"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

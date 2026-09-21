@@ -1,0 +1,57 @@
+{
+  "report_id": "PR11713_001",
+  "pr_number": 11713,
+  "pr_title": "[Attention][Misc] Replace PA KV cache operators",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/device/device_op.py:49"
+  ],
+  "landing_sha": "4afbb80",
+  "source_quote": "plz remove this function in device_op.",
+  "correspondence": [
+    {
+      "review_quote": "weijinqian0: vllm_ascend/device/device_op.py:49",
+      "patch_snippet": "评后sha 4afbb80 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "4afbb80",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在替换 PA KV cache 操作符时，应统一使用新的 `torch_npu.npu_scatter_pa_kv_cache` 和 `torch_npu.npu_gather_pa_kv_cache` API。不同设备（A3/Base 和 A5）应共享同一个 `reshape_and_cache` 实现，避免在 `device_op.py` 中保留设备特有的覆写函数。",
+    "context": "",
+    "checkpoints": [
+      "检查 `device_op.py` 中是否存在设备特有的 `reshape_and_cache` 覆写",
+      "确认所有设备是否统一使用 `torch_npu.npu_scatter_pa_kv_cache` 后端",
+      "移除已废弃的 `_npu_reshape_and_cache` 和 `torch_npu.atb.npu_paged_cache_load` 引用"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/device/device_op.py",
+      "line": 40,
+      "code": "class AscendA5Adaptor(AscendBaseAdaptor):\n    \"\"\"Adaptor for Ascend A5 (310P) devices.\"\"\"\n\n    def reshape_and_cache(\n        self,\n        key: torch.Tensor,\n        value: torch.Tensor,\n        k_cache: torch.Tensor,\n        v_cache: torch.Tensor,\n        slot_mapping: torch.Tensor,\n        block_len_tensor: torch.Tensor | None = None,\n    ) -> None:\n        \"\"\"A5-specific reshape_and_cache using legacy A5 APIs.\"\"\"\n        # A5 特有实现：使用旧的 _npu_reshape_and_cache API\n        torch.ops._C._npu_reshape_and_cache(\n            key=key,\n            value=value,\n            k_cache=k_cache,\n            v_cache=v_cache,\n            slot_indices=slot_mapping,\n        )\n\n    def gather_kv_cache(\n        self,\n        k_cache: torch.Tensor,\n        v_cache: torch.Tensor,\n        block_table: torch.Tensor,\n        block_len: torch.Tensor,\n        seq_offset: torch.Tensor,\n    ) -> tuple[torch.Tensor, torch.Tensor]:\n        \"\"\"Gather KV cache using A5-specific API.\"\"\"\n        return torch_npu.atb.npu_paged_cache_load(\n            k_cache, v_cache, block_table, block_len,\n            seq_offset=seq_offset,\n        )",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/device/device_op.py",
+      "line": 49,
+      "code": "class AscendA5Adaptor(AscendBaseAdaptor):\n    \"\"\"Adaptor for Ascend A5 (310P) devices.\"\"\"\n\n    # Removed A5-specific reshape_and_cache override.\n    # A3/Base and A5 now share the same\n    # BaseDeviceAdaptor.reshape_and_cache implementation\n    # backed by torch_npu.npu_scatter_pa_kv_cache.\n\n    def gather_kv_cache(\n        self,\n        k_cache: torch.Tensor,\n        v_cache: torch.Tensor,\n        block_table: torch.Tensor,\n        block_len: torch.Tensor,\n        seq_offset: torch.Tensor,\n    ) -> tuple[torch.Tensor, torch.Tensor]:\n        \"\"\"Gather KV cache using new unified API.\"\"\"\n        return torch_npu.npu_gather_pa_kv_cache(\n            k_cache, v_cache, block_table,\n            block_len.contiguous(),\n            seq_offset=seq_offset.contiguous(),\n            key=None, value=None,\n        )",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/device/device_op.py\n+++ b/vllm_ascend/device/device_op.py\n@@ -1,24 +1,10 @@\n class AscendA5Adaptor(AscendBaseAdaptor):\n     \"\"\"Adaptor for Ascend A5 (310P) devices.\"\"\"\n \n-    def reshape_and_cache(\n-        self,\n-        key: torch.Tensor,\n-        value: torch.Tensor,\n-        k_cache: torch.Tensor,\n-        v_cache: torch.Tensor,\n-        slot_mapping: torch.Tensor,\n-        block_len_tensor: torch.Tensor | None = None,\n-    ) -> None:\n-        \"\"\"A5-specific reshape_and_cache using legacy A5 APIs.\"\"\"\n-        # A5 特有实现：使用旧的 _npu_reshape_and_cache API\n-        torch.ops._C._npu_reshape_and_cache(\n-            key=key,\n-            value=value,\n-            k_cache=k_cache,\n-            v_cache=v_cache,\n-            slot_indices=slot_mapping,\n-        )\n+    # Removed A5-specific reshape_and_cache override.\n+    # A3/Base and A5 now share the same\n+    # BaseDeviceAdaptor.reshape_and_cache implementation\n+    # backed by torch_npu.npu_scatter_pa_kv_cache.\n \n     def gather_kv_cache(\n         self,\n@@ -28,8 +14,10 @@\n         block_len: torch.Tensor,\n         seq_offset: torch.Tensor,\n     ) -> tuple[torch.Tensor, torch.Tensor]:\n-        \"\"\"Gather KV cache using A5-specific API.\"\"\"\n-        return torch_npu.atb.npu_paged_cache_load(\n-            k_cache, v_cache, block_table, block_len,\n-            seq_offset=seq_offset,\n+        \"\"\"Gather KV cache using new unified API.\"\"\"\n+        return torch_npu.npu_gather_pa_kv_cache(\n+            k_cache, v_cache, block_table,\n+            block_len.contiguous(),\n+            seq_offset=seq_offset.contiguous(),\n+            key=None, value=None,\n         )",
+      "stats": "1 file changed, +10 lines, -22 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

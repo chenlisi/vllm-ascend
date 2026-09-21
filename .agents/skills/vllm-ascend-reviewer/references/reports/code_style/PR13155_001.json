@@ -1,0 +1,61 @@
+{
+  "report_id": "PR13155_001",
+  "pr_number": 13155,
+  "pr_title": "[Feature][MRV2] Support DSA in ModelRunner V2",
+  "pr_status": "merged",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/dsa_v1.py:674"
+  ],
+  "landing_sha": "92cf1db",
+  "source_quote": "![high]\n> In ModelRunner V2, `prefill_ratio_to_sas_metadata`, `decode_ratio_to_sas_metadata`, and `common_ratio_to_sas_metadata` are not passed in `kwargs`. Reinitializing them to empty dictionaries `{}` on every `build()` call prevents metadata sharing across different attention groups/layers within the same step. For DeepSeek-V4, this results in redundant executions of expensive metadata operators (like `metadata_op`) for every single layer on every step, causing a significant performance regression. We can resolve this by caching these dictionaries in the step-local `_EXTRA_CTX` (which is automatically cleared at the end of each step), restoring the V1 sharing behavior.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/attention/dsa_v1.py:674",
+      "patch_snippet": "评后sha 92cf1db 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "92cf1db",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当多个 attention metadata builder 在同一模型执行步骤内被构造时，若它们共享一组 SAS metadata 字典，不能在每次 `build()` 中将字典重新初始化为空 `{}`，否则会丢失前序 builder 的计算结果，导致每个 layer 每步都重复执行昂贵的 metadata 算子（如 `metadata_op`）。共享字典应在调用方作用域创建一次，传给所有 builder 复用。",
+    "context": "",
+    "checkpoints": [
+      "检查 `metadata_builder.build()` 内部是否每次将缓存字典重置为 `{}`",
+      "检查同一步骤内是否有多个 group/layer 调用同一 builder 的 `build()`",
+      "检查昂贵的 metadata 算子（如 `metadata_op`）是否被重复执行而非复用前序结果",
+      "检查共享字典是否在 builder 内部被替换了引用（调用方需要 build 后回取新引用）"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/dsa_v1.py",
+      "line": 670,
+      "code": "class AscendDSAMetadataBuilder:\n    \"\"\"Metadata builder for DSA attention.\"\"\"\n\n    def build(self, common_attn_metadata, **kwargs):\n        # ❌ 每次 build() 都重新初始化为空字典，无法跨 builder 共享\n        # 每个 layer 都会重新执行昂贵的 metadata_op\n        self.prefill_ratio_to_sas_metadata = {}\n        self.decode_ratio_to_sas_metadata = {}\n        self.common_ratio_to_sas_metadata = {}\n        self.block_size = kwargs.get(\"block_size\", self.kv_cache_spec.block_size)\n\n        for ratio in self.ratios:\n            if ratio not in self.prefill_ratio_to_sas_metadata:\n                # 昂贵的 metadata_op 每个 layer 每步都重复执行\n                self.prefill_ratio_to_sas_metadata[ratio] = self.metadata_op(ratio)\n        ...",
+      "context": "❌ 每次 build() 都重新初始化为空字典，无法跨 builder 共享 每个 layer 都会重新执行昂贵的 metadata_op 昂贵的 metadata_op 每个 layer 每步都重复执行"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/v2/attn_utils.py",
+      "line": 674,
+      "code": "def build_attn_metadata(...):\n    attn_metadata: dict[str, Any] = {}\n    # ✅ 在 batch-builder 作用域创建共享字典，\n    # 同一步骤内多个 DSA builder 复用同一组 metadata\n    prefill_ratio_to_sas_metadata: dict[Any, Any] = {}\n    decode_ratio_to_sas_metadata: dict[Any, Any] = {}\n    common_ratio_to_sas_metadata: dict[Any, Any] = {}\n    kv_cache_groups = kv_cache_config.kv_cache_groups\n    for i, kv_cache_spec in enumerate(kv_cache_groups):\n        ...\n        if isinstance(attn_metadata_builder, AscendDSAMetadataBuilder):\n            attn_metadata_extra_kwargs.update(\n                num_reqs_actual=num_reqs,\n                prefill_ratio_to_sas_metadata=prefill_ratio_to_sas_metadata,\n                decode_ratio_to_sas_metadata=decode_ratio_to_sas_metadata,\n                common_ratio_to_sas_metadata=common_ratio_to_sas_metadata,\n                block_size=attn_group.kv_cache_spec.block_size,\n            )\n        metadata = attn_metadata_builder.build(\n            common_prefix_len=0,\n            common_attn_metadata=common_attn_metadata,\n            **attn_metadata_extra_kwargs,\n        )\n        if isinstance(attn_metadata_builder, AscendDSAMetadataBuilder):\n            # 保留共享，即使 builder 在构建时替换了字典引用\n            prefill_ratio_to_sas_metadata = attn_metadata_builder.prefill_ratio_to_sas_metadata\n            decode_ratio_to_sas_metadata = attn_metadata_builder.decode_ratio_to_sas_metadata\n            common_ratio_to_sas_metadata = attn_metadata_builder.common_ratio_to_sas_metadata",
+      "context": "✅ 在 batch-builder 作用域创建共享字典， 同一步骤内多个 DSA builder 复用同一组 metadata 保留共享，即使 builder 在构建时替换了字典引用"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/dsa_v1.py\n+++ b/vllm_ascend/attention/dsa_v1.py\n@@ -1,16 +1,28 @@\n-class AscendDSAMetadataBuilder:\n-    \"\"\"Metadata builder for DSA attention.\"\"\"\n-\n-    def build(self, common_attn_metadata, **kwargs):\n-        # ❌ 每次 build() 都重新初始化为空字典，无法跨 builder 共享\n-        # 每个 layer 都会重新执行昂贵的 metadata_op\n-        self.prefill_ratio_to_sas_metadata = {}\n-        self.decode_ratio_to_sas_metadata = {}\n-        self.common_ratio_to_sas_metadata = {}\n-        self.block_size = kwargs.get(\"block_size\", self.kv_cache_spec.block_size)\n-\n-        for ratio in self.ratios:\n-            if ratio not in self.prefill_ratio_to_sas_metadata:\n-                # 昂贵的 metadata_op 每个 layer 每步都重复执行\n-                self.prefill_ratio_to_sas_metadata[ratio] = self.metadata_op(ratio)\n+def build_attn_metadata(...):\n+    attn_metadata: dict[str, Any] = {}\n+    # ✅ 在 batch-builder 作用域创建共享字典，\n+    # 同一步骤内多个 DSA builder 复用同一组 metadata\n+    prefill_ratio_to_sas_metadata: dict[Any, Any] = {}\n+    decode_ratio_to_sas_metadata: dict[Any, Any] = {}\n+    common_ratio_to_sas_metadata: dict[Any, Any] = {}\n+    kv_cache_groups = kv_cache_config.kv_cache_groups\n+    for i, kv_cache_spec in enumerate(kv_cache_groups):\n         ...\n+        if isinstance(attn_metadata_builder, AscendDSAMetadataBuilder):\n+            attn_metadata_extra_kwargs.update(\n+                num_reqs_actual=num_reqs,\n+                prefill_ratio_to_sas_metadata=prefill_ratio_to_sas_metadata,\n+                decode_ratio_to_sas_metadata=decode_ratio_to_sas_metadata,\n+                common_ratio_to_sas_metadata=common_ratio_to_sas_metadata,\n+                block_size=attn_group.kv_cache_spec.block_size,\n+            )\n+        metadata = attn_metadata_builder.build(\n+            common_prefix_len=0,\n+            common_attn_metadata=common_attn_metadata,\n+            **attn_metadata_extra_kwargs,\n+        )\n+        if isinstance(attn_metadata_builder, AscendDSAMetadataBuilder):\n+            # 保留共享，即使 builder 在构建时替换了字典引用\n+            prefill_ratio_to_sas_metadata = attn_metadata_builder.prefill_ratio_to_sas_metadata\n+            decode_ratio_to_sas_metadata = attn_metadata_builder.decode_ratio_to_sas_metadata\n+            common_ratio_to_sas_metadata = attn_metadata_builder.common_ratio_to_sas_metadata\n",
+      "stats": "1 file changed, +27 lines, -15 lines",
+      "key_changes": [
+        "移除: self.block_size = kwargs.get(\"block_size\", self.kv_cache_spec.block_size)",
+        "移除: self.prefill_ratio_to_sas_metadata[ratio] = self.metadata_op(ratio)",
+        "新增: for i, kv_cache_spec in enumerate(kv_cache_groups):",
+        "新增: attn_metadata_extra_kwargs.update("
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

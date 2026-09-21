@@ -1,0 +1,45 @@
+{
+  "report_id": "PR11529_001",
+  "pr_number": 0,
+  "pr_title": "",
+  "pr_status": "unknown",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "",
+  "source_quote": "",
+  "correspondence": [],
+  "verification": {
+    "merged": false,
+    "modified_commit": "",
+    "approvals": 0
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/attention/sfa_v1.py",
+      "line": 770,
+      "code": "class AscendSFAImpl:\n    \"\"\"Ascend SFA implementation for sparse attention.\"\"\"\n\n    def __init__(self, ...):\n        ...\n        # 意见①锚点：path变量语义模糊，字符串硬编码三态\n        path = (\"prolog_v3\" if self._is_prolog_v3()\n                else (\"mlapo\" if self._is_mlapo() else \"native\"))\n        self._path = path\n        # 后续大量 if path == \"mlapo\": 字符串比较分支\n        if self._path == \"mlapo\":\n            self._init_mlapo_weights()\n        elif self._path == \"prolog_v3\":\n            self._init_prolog_v3_weights()\n        ...",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/sfa_v1.py",
+      "line": 770,
+      "code": "import enum\n\nclass PreprocessType(enum.Enum):\n    \"\"\"Preprocessing type for SFA weight processing.\"\"\"\n    NATIVE = \"native\"\n    PROLOG_V3 = \"prolog_v3\"\n    MLAPO = \"mlapo\"\n\n\nclass AscendSFAImpl:\n    \"\"\"Ascend SFA implementation for sparse attention.\"\"\"\n\n    def __init__(self, ...):\n        ...\n        # 意见①落地：变量重命名为_preprocess_type，类型为枚举成员\n        self._preprocess_type = self._resolve_preprocess_type(act_dtype)\n        # 使用枚举成员比较，IDE补全+类型安全\n        if self._preprocess_type is PreprocessType.MLAPO:\n            self._init_mlapo_weights()\n        elif self._preprocess_type is PreprocessType.PROLOG_V3:\n            self._init_prolog_v3_weights()\n        ...",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/sfa_v1.py\n+++ b/vllm_ascend/attention/sfa_v1.py\n@@ -1,15 +1,22 @@\n+import enum\n+\n+class PreprocessType(enum.Enum):\n+    \"\"\"Preprocessing type for SFA weight processing.\"\"\"\n+    NATIVE = \"native\"\n+    PROLOG_V3 = \"prolog_v3\"\n+    MLAPO = \"mlapo\"\n+\n+\n class AscendSFAImpl:\n     \"\"\"Ascend SFA implementation for sparse attention.\"\"\"\n \n     def __init__(self, ...):\n         ...\n-        # 意见①锚点：path变量语义模糊，字符串硬编码三态\n-        path = (\"prolog_v3\" if self._is_prolog_v3()\n-                else (\"mlapo\" if self._is_mlapo() else \"native\"))\n-        self._path = path\n-        # 后续大量 if path == \"mlapo\": 字符串比较分支\n-        if self._path == \"mlapo\":\n+        # 意见①落地：变量重命名为_preprocess_type，类型为枚举成员\n+        self._preprocess_type = self._resolve_preprocess_type(act_dtype)\n+        # 使用枚举成员比较，IDE补全+类型安全\n+        if self._preprocess_type is PreprocessType.MLAPO:\n             self._init_mlapo_weights()\n-        elif self._path == \"prolog_v3\":\n+        elif self._preprocess_type is PreprocessType.PROLOG_V3:\n             self._init_prolog_v3_weights()\n         ...",
+      "stats": "1 file changed, +14 lines, -7 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

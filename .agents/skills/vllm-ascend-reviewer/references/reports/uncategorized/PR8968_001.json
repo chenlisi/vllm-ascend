@@ -1,0 +1,55 @@
+{
+  "report_id": "PR8968_001",
+  "pr_number": 8968,
+  "pr_title": "[Doc][Feature] Add issue-workflow-guidelines.md",
+  "pr_status": "merged",
+  "merged_at": "2026-05-21T09:09:54Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/community/issue-workflow-guidelines.md:18"
+  ],
+  "landing_sha": "54b8b8e",
+  "source_quote": "Missing explanation for `invalid`, `wontfix` label in here, which are part of the workflow.",
+  "correspondence": [
+    {
+      "review_quote": "zeshengzong: docs/source/community/issue-workflow-guidelines.md:18",
+      "patch_snippet": "评后sha 54b8b8e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "54b8b8e",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "Missing explanation for `invalid`, `wontfix` label in here, which are part of the workflow.",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "docs/source/community/issue-workflow-guidelines.md",
+      "line": 18,
+      "code": "# docs/source/community/issue-workflow-guidelines.md:18",
+      "context": "Missing explanation for `invalid`, `wontfix` label in here, which are part of the workflow."
+    },
+    "pattern": {
+      "file": "docs/source/community/issue-workflow-guidelines.md",
+      "line": 18,
+      "code": "# 根据评审意见修改后的代码",
+      "context": "Missing explanation for `invalid`, `wontfix` label in here, which are part of the workflow."
+    },
+    "diff": {
+      "unified": "--- a/docs/source/community/issue-workflow-guidelines.md\n+++ b/docs/source/community/issue-workflow-guidelines.md\n@@ -1 +1 @@\n-# docs/source/community/issue-workflow-guidelines.md:18\n+# 根据评审意见修改后的代码\n",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "-# docs/source/community/issue-workflow-guidelines.md:18",
+        "+# 根据评审意见修改后的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "report_id": "PR10485_001",
+  "pr_number": 10485,
+  "pr_title": "[CI] Solve the nightly test bug",
+  "pr_status": "merged",
+  "merged_at": "2026-06-15T13:10:55Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/e2e/nightly/single_node/models/configs/Qwen3-30B-QuaRot-eagle3.yaml:21"
+  ],
+  "landing_sha": "20bd073",
+  "source_quote": "Change 4096->8192 here",
+  "correspondence": [
+    {
+      "review_quote": "linfeng-yuan 指出 yaml 配置文件第 21 行的 max_model_len 应从 4096 改为 8192。作者通过 commit `20bd073` 直接修改了该配置值，解决了 nightly 测试中因模型长度限制导致的测试失败问题。linfeng-yuan 确认手动触发的 nightly 用例已通过。",
+      "patch_snippet": "commit `20bd073`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "20bd073",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "模型测试配置中的 `max_model_len` 参数需要根据模型实际支持的序列长度设置，过小的值会导致 nightly 测试用例失败。",
+    "context": "",
+    "checkpoints": [
+      "检查 nightly 测试配置中 `max_model_len` 是否与模型支持的最大序列长度匹配",
+      "确认量化模型（如 QuaRot）和 eagle 模型的序列长度需求",
+      "验证 HCCL_BUFFSIZE 等环境变量是否正确配置"
+    ],
+    "antipattern": {
+      "file": "tests/e2e/nightly/single_node/models/configs/Qwen3-30B-QuaRot-eagle3.yaml",
+      "line": 1,
+      "code": "# linfeng-yuan 评审: \"Change 4096->8192 here\" (第21行)\n# max_model_len 设置为 4096 导致 nightly 测试因序列长度不足而失败\n\nmodel_name: Qwen3-30B-QuaRot-eagle3\nchat_template: \"\"\ntensor_parallel_size: 4\ndata_parallel_size: 1\nenable_expert_parallel: true\nmax_num_seqs: 256\nmax_num_batched_tokens: 4096\ngpu_memory_utilization: 0.9\n\nenv:\n  HCCL_BUFFSIZE: 512\n\nrun_info:\n  max_model_len: 4096\n  num_prompts: 1\n  output_len: 512\n  trust_remote_code: true\n  quantization: gptq\n  dtype: float16",
+      "context": "Change 4096->8192 here"
+    },
+    "pattern": {
+      "file": "tests/e2e/nightly/single_node/models/configs/Qwen3-30B-QuaRot-eagle3.yaml",
+      "line": 1,
+      "code": "# 将 max_model_len 从 4096 增大到 8192，满足 Qwen3-30B-QuaRot-eagle3 模型的序列长度需求\n# linfeng-yuan 确认: \"Manually triggered nightly cases pass.\"\n\nmodel_name: Qwen3-30B-QuaRot-eagle3\nchat_template: \"\"\ntensor_parallel_size: 4\ndata_parallel_size: 1\nenable_expert_parallel: true\nmax_num_seqs: 256\nmax_num_batched_tokens: 4096\ngpu_memory_utilization: 0.9\n\nenv:\n  HCCL_BUFFSIZE: 512\n\nrun_info:\n  max_model_len: 8192\n  num_prompts: 1\n  output_len: 512\n  trust_remote_code: true\n  quantization: gptq\n  dtype: float16",
+      "context": "Change 4096->8192 here"
+    },
+    "diff": {
+      "unified": "--- a/tests/e2e/nightly/single_node/models/configs/Qwen3-30B-QuaRot-eagle3.yaml\n+++ b/tests/e2e/nightly/single_node/models/configs/Qwen3-30B-QuaRot-eagle3.yaml\n@@ -1,5 +1,5 @@\n-# linfeng-yuan 评审: \"Change 4096->8192 here\" (第21行)\n-# max_model_len 设置为 4096 导致 nightly 测试因序列长度不足而失败\n+# 将 max_model_len 从 4096 增大到 8192，满足 Qwen3-30B-QuaRot-eagle3 模型的序列长度需求\n+# linfeng-yuan 确认: \"Manually triggered nightly cases pass.\"\n \n model_name: Qwen3-30B-QuaRot-eagle3\n chat_template: \"\"\n@@ -14,7 +14,7 @@\n   HCCL_BUFFSIZE: 512\n \n run_info:\n-  max_model_len: 4096\n+  max_model_len: 8192\n   num_prompts: 1\n   output_len: 512\n   trust_remote_code: true",
+      "stats": "1 file changed, +3 lines, -3 lines",
+      "key_changes": [
+        "移除: # linfeng-yuan 评审: \"Change 4096->8192 here\" (第21行)",
+        "移除: # max_model_len 设置为 4096 导致 nightly 测试因序列长度不足而失败",
+        "新增: # 将 max_model_len 从 4096 增大到 8192，满足 Qwen3-30B-QuaRot-eagle3 模型的序列长度需求",
+        "新增: # linfeng-yuan 确认: \"Manually triggered nightly cases pass.\"",
+        "移除: max_model_len: 4096",
+        "新增: max_model_len: 8192"
+      ]
+    },
+    "language": "yaml",
+    "_status": "extracted"
+  }
+}

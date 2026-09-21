@@ -1,0 +1,66 @@
+{
+  "report_id": "PR8387_001",
+  "pr_number": 8387,
+  "pr_title": "[Attention][BugFix] Fix the atten_mask in the npu_fused_infer_attention_score_v2",
+  "pr_status": "merged",
+  "merged_at": "2026-04-27T02:49:46Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/attention_v1.py:831"
+  ],
+  "landing_sha": "5c38d7c",
+  "source_quote": "remove swa_mask from vllm-ascend totally.",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan: vllm_ascend/attention/attention_v1.py:831",
+      "patch_snippet": "评后sha 5c38d7c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "5c38d7c",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当底层算子（如 `npu_fused_infer_attention_score_v2`）已经内部处理了某些逻辑（如 sliding window attention），外部代码不应再预处理相关参数（如 `swa_mask`），否则会导致双重处理或结果错误。应直接使用算子期望的输入参数。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 820,
+      "code": "# `swa_mask` and `attn_mask` based on the sliding window configuration\"\n\n    def _forward_prefill(self, query, key, value, attn_metadata, layer):\n        \"\"\"Forward pass for prefill attention.\"\"\"\n        # 根据 sliding window 配置在 swa_mask 和 attn_mask 之间选择\n        if self.sliding_window is not None:\n            # 使用预处理的 swa_mask - 但算子内部也会处理 SW，导致双重 masking\n            mask = self._build_swa_mask(attn_metadata)\n        else:\n            mask = attn_metadata.attn_mask\n\n        output = npu_fused_infer_attention_score_v2(\n            query, key, value,\n            atten_mask=mask,\n            num_heads=self.num_heads,\n            num_kv_heads=self.num_kv_heads,\n            scale=self.scale,\n            sparse_mode=4,\n            pre_tokens=self.sliding_window,\n        )\n        return output",
+      "context": "remove swa_mask from vllm-ascend totally."
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 820,
+      "code": "# commit 5c38d7c \"Fix the input parameter error of atten_mask\"\n# 作者 liuhy1213-cell 回复: \"done\"\n# 统一使用 attn_metadata.attn_mask，算子内部处理 sliding window 逻辑\n\n    def _forward_prefill(self, query, key, value, attn_metadata, layer):\n        \"\"\"Forward pass for prefill attention.\"\"\"\n        # 统一使用基础 attn_mask，算子内部通过 sparse_mode=4 + pre_tokens\n        # 处理 sliding window 逻辑，避免双重 masking\n        mask = attn_metadata.attn_mask\n\n        output = npu_fused_infer_attention_score_v2(\n            query, key, value,\n            atten_mask=mask,\n            num_heads=self.num_heads,\n            num_kv_heads=self.num_kv_heads,\n            scale=self.scale,\n            sparse_mode=4,\n            pre_tokens=self.sliding_window,\n        )\n        return output",
+      "context": "remove swa_mask from vllm-ascend totally."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/attention_v1.py\n+++ b/vllm_ascend/attention/attention_v1.py\n@@ -1,13 +1,12 @@\n-# `swa_mask` and `attn_mask` based on the sliding window configuration\"\n+# commit 5c38d7c \"Fix the input parameter error of atten_mask\"\n+# 作者 liuhy1213-cell 回复: \"done\"\n+# 统一使用 attn_metadata.attn_mask，算子内部处理 sliding window 逻辑\n \n     def _forward_prefill(self, query, key, value, attn_metadata, layer):\n         \"\"\"Forward pass for prefill attention.\"\"\"\n-        # 根据 sliding window 配置在 swa_mask 和 attn_mask 之间选择\n-        if self.sliding_window is not None:\n-            # 使用预处理的 swa_mask - 但算子内部也会处理 SW，导致双重 masking\n-            mask = self._build_swa_mask(attn_metadata)\n-        else:\n-            mask = attn_metadata.attn_mask\n+        # 统一使用基础 attn_mask，算子内部通过 sparse_mode=4 + pre_tokens\n+        # 处理 sliding window 逻辑，避免双重 masking\n+        mask = attn_metadata.attn_mask\n \n         output = npu_fused_infer_attention_score_v2(\n             query, key, value,\n",
+      "stats": "1 file changed, +6 lines, -7 lines",
+      "key_changes": [
+        "-# `swa_mask` and `attn_mask` based on the sliding window configuration\"",
+        "+# commit 5c38d7c \"Fix the input parameter error of atten_mask\"",
+        "+# 作者 liuhy1213-cell 回复: \"done\"",
+        "+# 统一使用 attn_metadata.attn_mask，算子内部处理 sliding window 逻辑",
+        "-        # 根据 sliding window 配置在 swa_mask 和 attn_mask 之间选择",
+        "-        if self.sliding_window is not None:",
+        "-            # 使用预处理的 swa_mask - 但算子内部也会处理 SW，导致双重 masking",
+        "-            mask = self._build_swa_mask(attn_metadata)",
+        "-        else:",
+        "-            mask = attn_metadata.attn_mask",
+        "+        # 统一使用基础 attn_mask，算子内部通过 sparse_mode=4 + pre_tokens",
+        "+        # 处理 sliding window 逻辑，避免双重 masking",
+        "+        mask = attn_metadata.attn_mask"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

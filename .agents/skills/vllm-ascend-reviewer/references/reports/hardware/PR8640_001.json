@@ -1,0 +1,73 @@
+{
+  "report_id": "PR8640_001",
+  "pr_number": 8640,
+  "pr_title": "[Doc][310p] Add the 310p guide",
+  "pr_status": "merged",
+  "merged_at": "2026-05-21T07:39:58Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "docs/source/tutorials/hardwares/310p.md:13",
+    "docs/source/tutorials/hardwares/310p.md:147",
+    "docs/source/tutorials/hardwares/310p.md:112",
+    "docs/source/tutorials/hardwares/310p.md:53"
+  ],
+  "landing_sha": "226b071",
+  "source_quote": "This should be changed in:\nhttps://github.com/vllm-project/vllm-ascend/blob/main/Dockerfile.310p#L56\nWhy we don't use the tab?\nsame\nWhy don't use the var?",
+  "correspondence": [
+    {
+      "review_quote": "Yikun: docs/source/tutorials/hardwares/310p.md:13",
+      "patch_snippet": "评后sha 226b071 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Yikun: docs/source/tutorials/hardwares/310p.md:147",
+      "patch_snippet": "评后sha 226b071 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Yikun: docs/source/tutorials/hardwares/310p.md:112",
+      "patch_snippet": "评后sha 226b071 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Yikun: docs/source/tutorials/hardwares/310p.md:53",
+      "patch_snippet": "评后sha 226b071 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "226b071",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "This should be changed in:  https://github.com/vllm-project/vllm-ascend/blob/main/Dockerfile.310p#L56",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "docs/source/tutorials/hardwares/310p.md",
+      "line": 13,
+      "code": "# docs/source/tutorials/hardwares/310p.md:13",
+      "context": "This should be changed in:\nhttps://github.com/vllm-project/vllm-ascend/blob/main/Dockerfile.310p#L56\nWhy we don't use the tab?\nsame\nWhy don't use the var?"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/hardwares/310p.md",
+      "line": 13,
+      "code": "# 根据评审意见修改后的代码",
+      "context": "This should be changed in:\nhttps://github.com/vllm-project/vllm-ascend/blob/main/Dockerfile.310p#L56\nWhy we don't use the tab?\nsame\nWhy don't use the var?"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/hardwares/310p.md\n+++ b/docs/source/tutorials/hardwares/310p.md\n@@ -1 +1 @@\n-# docs/source/tutorials/hardwares/310p.md:13\n+# 根据评审意见修改后的代码\n",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "-# docs/source/tutorials/hardwares/310p.md:13",
+        "+# 根据评审意见修改后的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

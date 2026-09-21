@@ -1,0 +1,58 @@
+{
+  "report_id": "PR13477_006",
+  "pr_number": 13477,
+  "pr_title": "[CI]Main2Main 0807",
+  "pr_status": "merged",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/patch/platform/patch_vision.py:32"
+  ],
+  "landing_sha": "927f691",
+  "source_quote": "Please add patch descriptions to `vllm_ascend/patch/__init__.py`",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/patch/platform/patch_vision.py:32",
+      "patch_snippet": "评后sha 927f691 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "927f691",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "vllm-ascend 中通过 monkey-patch 修改上游行为的每个 patch，都应在 `vllm_ascend/patch/__init__.py` 的对应描述块中维护 Why（为何打补丁，含上游与本地环境差异）、How（如何打补丁）、Related PR、Future Plan（何时移除）等说明；当 patch 涉及的环境前提（如打包的 PyTorch 版本）变化时，应同步更新该描述。",
+    "context": "",
+    "checkpoints": [
+      "检查新增 patch 是否在 `patch/__init__.py` 有对应的描述块",
+      "检查描述是否说明上游行为与 vllm-ascend 环境差异（如 PyTorch 版本差异导致的 eps 行为不同）",
+      "检查描述是否包含 Future Plan（何时可移除该 patch）",
+      "当打包依赖版本变化时，检查是否同步更新了描述中的前提"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/patch/__init__.py",
+      "line": 1,
+      "code": "# vllm-ascend monkey-patches\n#\n# This file documents all monkey-patches applied by vllm-ascend.\n# Each patch should have a Why/How/Future Plan description.\n#\n#   1. `vllm.model_executor.models.vision.FusedInputNorm.forward`\n#    Why:\n#       Upstream vllm-project/vllm#50411 added FusedInputNorm with F.batch_norm\n#       eps=0.0. CUDA PyTorch >= 2.7 accepts eps=0.0, but Ascend torch_npu still\n#       validates eps > 0 and raises \"batch_norm eps must be positive\".\n#    Future Plan:\n#       Remove this patch once Ascend torch_npu accepts eps=0.0 in eval-mode\n#       F.batch_norm (matching CUDA PyTorch >= 2.7 behavior).\n#\n#   2. `vllm.model_executor.models.vision.OtherPatch.forward`\n#    ...\n\nfrom vllm_ascend.patch.platform.patch_vision import *  # noqa: F401, F403",
+      "context": "vllm-ascend monkey-patches This file documents all monkey-patches applied by vllm-ascend. Each patch should have a Why/How/Future Plan description."
+    },
+    "pattern": {
+      "file": "vllm_ascend/patch/__init__.py",
+      "line": 1,
+      "code": "# vllm-ascend monkey-patches\n#\n# This file documents all monkey-patches applied by vllm-ascend.\n# Each patch should have a Why/How/Future Plan description.\n#\n#   1. `vllm.model_executor.models.vision.FusedInputNorm.forward`\n#    Why:\n#       Upstream vLLM uses PyTorch 2.13.0, which requires eps > 0 for training\n#       but allows eps >= 0 for inference. vllm-ascend bundles PyTorch 2.10.0,\n#       which does not distinguish scenarios and requires eps > 0 in all cases.\n#       So when upstream FusedInputNorm passes eps=0.0 to F.batch_norm it works\n#       fine upstream, but fails on vllm-ascend with \"batch_norm eps must be\n#       positive\".\n#    How:\n#       Monkey-patch to use eps=1e-5 instead of 0.0.\n#    Future Plan:\n#       Remove this patch once vllm-ascend's bundled PyTorch >= 2.13.0\n#       (which, like upstream, allows eps >= 0 for inference).\n#\n#   2. `vllm.model_executor.models.vision.OtherPatch.forward`\n#    ...\n\nfrom vllm_ascend.patch.platform.patch_vision import *  # noqa: F401, F403",
+      "context": "vllm-ascend monkey-patches This file documents all monkey-patches applied by vllm-ascend. Each patch should have a Why/How/Future Plan description."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/patch/__init__.py\n+++ b/vllm_ascend/patch/__init__.py\n@@ -5,12 +5,17 @@\n #\n #   1. `vllm.model_executor.models.vision.FusedInputNorm.forward`\n #    Why:\n-#       Upstream vllm-project/vllm#50411 added FusedInputNorm with F.batch_norm\n-#       eps=0.0. CUDA PyTorch >= 2.7 accepts eps=0.0, but Ascend torch_npu still\n-#       validates eps > 0 and raises \"batch_norm eps must be positive\".\n+#       Upstream vLLM uses PyTorch 2.13.0, which requires eps > 0 for training\n+#       but allows eps >= 0 for inference. vllm-ascend bundles PyTorch 2.10.0,\n+#       which does not distinguish scenarios and requires eps > 0 in all cases.\n+#       So when upstream FusedInputNorm passes eps=0.0 to F.batch_norm it works\n+#       fine upstream, but fails on vllm-ascend with \"batch_norm eps must be\n+#       positive\".\n+#    How:\n+#       Monkey-patch to use eps=1e-5 instead of 0.0.\n #    Future Plan:\n-#       Remove this patch once Ascend torch_npu accepts eps=0.0 in eval-mode\n-#       F.batch_norm (matching CUDA PyTorch >= 2.7 behavior).\n+#       Remove this patch once vllm-ascend's bundled PyTorch >= 2.13.0\n+#       (which, like upstream, allows eps >= 0 for inference).\n #\n #   2. `vllm.model_executor.models.vision.OtherPatch.forward`\n #    ...\n",
+      "stats": "1 file changed, +10 lines, -5 lines",
+      "key_changes": [
+        "代码结构或逻辑调整"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "report_id": "PR10178_001",
+  "pr_number": 10178,
+  "pr_title": "[Feature]Add pcp+dp validation interception",
+  "pr_status": "merged",
+  "merged_at": "2026-06-16T01:16:25Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/platform.py:353"
+  ],
+  "landing_sha": "111fea8",
+  "source_quote": "Suggest add unit tests for _validate_parallel_config in tests/ut/test_platform.py (same pattern as test_validate_layer_sharding_config_*)",
+  "correspondence": [
+    {
+      "review_quote": "hwhaokun 建议为新增的 `_validate_parallel_config` 方法添加单元测试，参考已有的 `test_validate_layer_sharding_config_*` 测试模式。作者接受了建议并在后续 commit 中添加了相应的单元测试。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "111fea8",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "新增的配置验证方法（如 `_validate_parallel_config`）必须在 `tests/ut/` 目录下添加对应的单元测试，参考已有的同类测试模式（如 `test_validate_layer_sharding_config_*`）。",
+    "context": "",
+    "checkpoints": [
+      "检查新增的验证方法是否有对应的单元测试",
+      "确认测试是否覆盖了正常路径和异常路径（如 PCP+DP 同时启用时应抛出 ValueError）",
+      "验证测试模式是否与已有的同类测试保持一致"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/platform.py",
+      "line": 353,
+      "code": "# vllm_ascend/platform.py\n# AscendPlatform 类中新增的 PCP+DP 验证方法\n\n@classmethod\ndef check_and_update_config(cls, vllm_config: VllmConfig) -> None:\n    # ... 其他配置检查 ...\n    cls._validate_parallel_config(vllm_config)\n    cls._validate_layer_sharding_config(vllm_config)\n\n@classmethod\ndef _validate_parallel_config(cls, vllm_config: VllmConfig) -> None:\n    \"\"\"Validate parallel config for Ascend platform.\"\"\"\n    # gemini-code-assist[bot] high：parallel_config 可能为 None\n    # 在某些配置或单元测试中会导致 AttributeError\n    parallel_config = vllm_config.parallel_config\n    if (parallel_config.data_parallel_size > 1 and\n            parallel_config.prefill_context_parallel_size > 1):\n        raise ValueError(\"PCP + DP is not supported in vLLM Ascend.\")",
+      "context": "Suggest add unit tests for _validate_parallel_config in tests/ut/test_platform.py (same pattern as test_validate_layer_sharding_config_*)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/platform.py",
+      "line": 353,
+      "code": "# vllm_ascend/platform.py\n# AscendPlatform 类中的 PCP+DP 验证方法\n\n@classmethod\ndef check_and_update_config(cls, vllm_config: VllmConfig) -> None:\n    # ... 其他配置检查 ...\n    cls._validate_parallel_config(vllm_config)\n    cls._validate_layer_sharding_config(vllm_config)\n\n@classmethod\ndef _validate_parallel_config(cls, vllm_config: VllmConfig) -> None:\n    \"\"\"Validate parallel config for Ascend platform.\"\"\"\n    parallel_config = vllm_config.parallel_config\n    # gemini-code-assist[bot] suggestion：添加防御性 None 检查（+2 行）\n    if parallel_config is None:\n        return\n    if (parallel_config.data_parallel_size > 1 and\n            parallel_config.prefill_context_parallel_size > 1):\n        raise ValueError(\"PCP + DP is not supported in vLLM Ascend.\")",
+      "context": "Suggest add unit tests for _validate_parallel_config in tests/ut/test_platform.py (same pattern as test_validate_layer_sharding_config_*)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/platform.py\n+++ b/vllm_ascend/platform.py\n@@ -1,5 +1,5 @@\n # vllm_ascend/platform.py\n-# AscendPlatform 类中新增的 PCP+DP 验证方法\n+# AscendPlatform 类中的 PCP+DP 验证方法\n \n @classmethod\n def check_and_update_config(cls, vllm_config: VllmConfig) -> None:\n@@ -10,9 +10,10 @@\n @classmethod\n def _validate_parallel_config(cls, vllm_config: VllmConfig) -> None:\n     \"\"\"Validate parallel config for Ascend platform.\"\"\"\n-    # gemini-code-assist[bot] high：parallel_config 可能为 None\n-    # 在某些配置或单元测试中会导致 AttributeError\n     parallel_config = vllm_config.parallel_config\n+    # gemini-code-assist[bot] suggestion：添加防御性 None 检查（+2 行）\n+    if parallel_config is None:\n+        return\n     if (parallel_config.data_parallel_size > 1 and\n             parallel_config.prefill_context_parallel_size > 1):\n         raise ValueError(\"PCP + DP is not supported in vLLM Ascend.\")",
+      "stats": "1 file changed, +4 lines, -3 lines",
+      "key_changes": [
+        "移除: # AscendPlatform 类中新增的 PCP+DP 验证方法",
+        "新增: # AscendPlatform 类中的 PCP+DP 验证方法",
+        "移除: # gemini-code-assist[bot] high：parallel_config 可能为 None",
+        "移除: # 在某些配置或单元测试中会导致 AttributeError",
+        "新增: # gemini-code-assist[bot] suggestion：添加防御性 None 检查（+2 行）",
+        "新增: if parallel_config is None:",
+        "新增: return"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

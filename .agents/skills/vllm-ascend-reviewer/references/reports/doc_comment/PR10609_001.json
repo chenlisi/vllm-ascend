@@ -1,0 +1,66 @@
+{
+  "report_id": "PR10609_001",
+  "pr_number": 10609,
+  "pr_title": "[BugFix] Fix w4a8 per channel bug for compressed tensor",
+  "pr_status": "merged",
+  "merged_at": "2026-06-22T00:56:52Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/quantization/methods/w4a8.py:712"
+  ],
+  "landing_sha": "b2cadfc",
+  "source_quote": "Please add comments to explain why we need to handle it this way.",
+  "correspondence": [
+    {
+      "review_quote": "kunpengW-code 要求在 `w4a8.py:712` 处添加注释，解释为什么需要以这种方式处理 scale（即通过位重解释将 float32 转换为 uint64，而非使用 numpy 的 CPU 路径）。作者通过 commit `b2cadfc` 在该处添加了注释说明 compressed tensor 量化权重解码的位操作逻辑。",
+      "patch_snippet": "commit `b2cadfc`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "b2cadfc",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在量化方法实现中，涉及位重解释（bit reinterpretation）、类型转换等非直觉操作时，必须添加注释说明为什么需要这样处理，以便后续维护者理解。",
+    "context": "",
+    "checkpoints": [
+      "检查 `view()`、`reinterpret_cast` 等位操作是否有注释说明目的",
+      "检查跨类型转换（如 float32 → int32 → int64）是否解释了转换原因",
+      "检查 compressed tensor 的特殊处理路径是否有文档说明"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/quantization/methods/w4a8.py",
+      "line": 680,
+      "code": "class W4A8QuantMethod(QuantMethodBase):\n    \"\"\"W4A8 quantization method for Ascend NPU.\"\"\"\n\n    def __init__(self, ...):\n        # ... 初始化逻辑\n        self.is_per_channel_weight = ...\n\n    def process_scale_compressed_tensors(\n        self,\n        scale: torch.Tensor,\n        squeeze: bool = True,\n    ):\n        \"\"\"Process scale for compressed tensors.\n\n        Performs bit-reinterpretation of float32 scale to uint64\n        for compressed tensor weight decoding.\n        \"\"\"\n        scale = scale.transpose(1, 2).to(torch.float32).contiguous()\n        # 原先使用 CPU 路径:\n        # scale_cpu = scale.cpu().numpy()\n        # scale_reinterpreted = scale_cpu.view(np.uint64)\n        # scale_uint64_tensor = torch.from_numpy(scale_reinterpreted).npu()\n        # 存在 CPU-NPU 数据拷贝开销\n\n        scale_uint64_tensor = (\n            scale.view(torch.int32).to(torch.int64) & 0xFFFFFFFF\n        )\n        if self.is_per_channel_weight and squeeze:\n            return self.maybe_squeeze_per_channel_weight_scale(\n                scale_uint64_tensor\n            )\n        return scale_uint64_tensor\n\n    def apply(self, ...):\n        # ... 后续量化推理逻辑",
+      "context": "Please add comments to explain why we need to handle it this way."
+    },
+    "pattern": {
+      "file": "vllm_ascend/quantization/methods/w4a8.py",
+      "line": 680,
+      "code": "class W4A8QuantMethod(QuantMethodBase):\n    \"\"\"W4A8 quantization method for Ascend NPU.\"\"\"\n\n    def __init__(self, ...):\n        # ... 初始化逻辑\n        self.is_per_channel_weight = ...\n\n    def process_scale_compressed_tensors(\n        self,\n        scale: torch.Tensor,\n        squeeze: bool = True,\n    ):\n        \"\"\"Process scale for compressed tensors.\n\n        Performs bit-reinterpretation of float32 scale to uint64\n        for compressed tensor weight decoding.\n        \"\"\"\n        scale = scale.transpose(1, 2).to(torch.float32).contiguous()\n        # 将 float32 scale 重新解释为 uint64 整数，\n        # 用于 compressed tensor 的量化权重解码\n        # 必须在 NPU 上完成位重解释，\n        # 避免 CPU-NPU 数据拷贝带来的同步开销\n        scale_uint64_tensor = (\n            scale.view(torch.int32).to(torch.int64) & 0xFFFFFFFF\n        )\n        if self.is_per_channel_weight and squeeze:\n            return self.maybe_squeeze_per_channel_weight_scale(\n                scale_uint64_tensor\n            )\n        return scale_uint64_tensor\n\n    def apply(self, ...):\n        # ... 后续量化推理逻辑",
+      "context": "Please add comments to explain why we need to handle it this way."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/quantization/methods/w4a8.py\n+++ b/vllm_ascend/quantization/methods/w4a8.py\n@@ -16,12 +16,10 @@\n         for compressed tensor weight decoding.\n         \"\"\"\n         scale = scale.transpose(1, 2).to(torch.float32).contiguous()\n-        # 原先使用 CPU 路径:\n-        # scale_cpu = scale.cpu().numpy()\n-        # scale_reinterpreted = scale_cpu.view(np.uint64)\n-        # scale_uint64_tensor = torch.from_numpy(scale_reinterpreted).npu()\n-        # 存在 CPU-NPU 数据拷贝开销\n-\n+        # 将 float32 scale 重新解释为 uint64 整数，\n+        # 用于 compressed tensor 的量化权重解码\n+        # 必须在 NPU 上完成位重解释，\n+        # 避免 CPU-NPU 数据拷贝带来的同步开销\n         scale_uint64_tensor = (\n             scale.view(torch.int32).to(torch.int64) & 0xFFFFFFFF\n         )",
+      "stats": "1 file changed, +4 lines, -6 lines",
+      "key_changes": [
+        "移除: # 原先使用 CPU 路径:",
+        "移除: # scale_cpu = scale.cpu().numpy()",
+        "移除: # scale_reinterpreted = scale_cpu.view(np.uint64)",
+        "移除: # scale_uint64_tensor = torch.from_numpy(scale_reinterpreted).npu()",
+        "移除: # 存在 CPU-NPU 数据拷贝开销",
+        "新增: # 将 float32 scale 重新解释为 uint64 整数，",
+        "新增: # 用于 compressed tensor 的量化权重解码",
+        "新增: # 必须在 NPU 上完成位重解释，",
+        "新增: # 避免 CPU-NPU 数据拷贝带来的同步开销"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

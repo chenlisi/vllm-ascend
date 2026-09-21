@@ -1,0 +1,58 @@
+{
+  "report_id": "PR12982_001",
+  "pr_number": 12982,
+  "pr_title": "[Refactor][DSA] Move TP weight switching into quantization methods",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/attention/sfa_v1.py:979"
+  ],
+  "landing_sha": "fc60d2b",
+  "source_quote": "**P1 Add TP-switch support before rejecting W4A8**\n> When SFA DSA-CP enables o-proj TP switching with the registered `W4A8_DYNAMIC` linear scheme, `AscendW4A8DynamicLinearMethod` inherits `supports_tp_weight_switch = False`, so model initialization now raises this `RuntimeError`. The previous SFA implementation handled this layout by gathering the row-parallel weight and its input-sharded parameters, so existing W4A8 deployments using this configuration regress; add the appropriate W4A8 gather specifications instead of rejecting the method, with coverage for every newly supported quantization path.",
+  "correspondence": [
+    {
+      "review_quote": "chatgpt-codex-connector[bot]: vllm_ascend/attention/sfa_v1.py:979",
+      "patch_snippet": "评后sha fc60d2b 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "fc60d2b",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当引入统一的 TP weight switch 机制并以其 `supports_tp_weight_switch` 标志位作为准入条件时，所有此前已支持 o-proj TP 切换的量化方法（如 W4A8_DYNAMIC）必须显式声明该标志为 `True` 并补齐对应的 gather specifications，否则会因继承默认值 `False` 而在模型初始化阶段抛 `RuntimeError`，造成既有量化部署回归。",
+    "context": "",
+    "checkpoints": [
+      "引入新的 TP switch 能力标志位（如 `supports_tp_weight_switch`）后，逐一核对所有既有量化方法是否需要显式声明该标志",
+      "检查每个量化方法的 `tp_weight_gather_specs` / `tp_weight_output_gather_specs` 是否覆盖其 row-parallel weight 及 input-sharded 参数（如 `weight`、`weight_scale_second`）",
+      "验证判断条件从\"类型检查\"收紧为\"类型检查 + 能力标志\"时，是否同步更新所有调用点的错误信息",
+      "确认重构 TP 相关逻辑后，原支持的量化配置（W4A8、W8A8 等）仍能正常初始化，无回归"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/quantization/methods/w4a8.py",
+      "line": 25,
+      "code": "from vllm_ascend.quantization.tp_weight_switch import (\n    AscendLinearScheme,\n    TPWeightGatherSpec,\n    TPWeightSwitchMixin,\n)\n\n\nclass AscendW4A8DynamicLinearMethod(AscendLinearScheme):\n    \"\"\"W4A8 dynamic quantization linear method for Ascend.\"\"\"\n\n    # 输入侧 gather specs（row-parallel weight 的输入分片参数）\n    tp_weight_gather_specs = (\n        TPWeightGatherSpec(\"weight\"),\n        TPWeightGatherSpec(\"weight_scale_second\"),\n    )\n    supports_dsa_cp_o_proj = True\n    # ❌ 缺少 tp_weight_output_gather_specs 声明\n    # ❌ 缺少 supports_tp_weight_switch 声明，继承 TPWeightSwitchMixin 默认值 False\n    # → SFA DSA-CP 启用 o-proj TP switching 时，isinstance 通过但能力检查失败\n    # → 模型初始化抛 RuntimeError，W4A8 部署回归",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/quantization/methods/w4a8.py",
+      "line": 25,
+      "code": "from vllm_ascend.quantization.tp_weight_switch import (\n    AscendLinearScheme,\n    TPWeightGatherSpec,\n    TPWeightSwitchMixin,\n)\n\n\nclass AscendW4A8DynamicLinearMethod(AscendLinearScheme):\n    \"\"\"W4A8 dynamic quantization linear method for Ascend.\"\"\"\n\n    # 输入侧 gather specs（row-parallel weight 的输入分片参数）\n    tp_weight_gather_specs = (\n        TPWeightGatherSpec(\"weight\"),\n        TPWeightGatherSpec(\"weight_scale_second\"),\n    )\n    # ✅ 新增输出侧 gather specs（output-parallel weight 按 gather_dim=1 收集）\n    tp_weight_output_gather_specs = (\n        TPWeightGatherSpec(\"weight\", gather_dim=1),\n        TPWeightGatherSpec(\"weight_scale_second\", gather_dim=1),\n    )\n    supports_dsa_cp_o_proj = True\n    # ✅ 显式声明支持 TP weight switch\n    supports_tp_weight_switch = True",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/quantization/methods/w4a8.py\n+++ b/vllm_ascend/quantization/methods/w4a8.py\n@@ -13,8 +13,11 @@\n         TPWeightGatherSpec(\"weight\"),\n         TPWeightGatherSpec(\"weight_scale_second\"),\n     )\n+    # ✅ 新增输出侧 gather specs（output-parallel weight 按 gather_dim=1 收集）\n+    tp_weight_output_gather_specs = (\n+        TPWeightGatherSpec(\"weight\", gather_dim=1),\n+        TPWeightGatherSpec(\"weight_scale_second\", gather_dim=1),\n+    )\n     supports_dsa_cp_o_proj = True\n-    # ❌ 缺少 tp_weight_output_gather_specs 声明\n-    # ❌ 缺少 supports_tp_weight_switch 声明，继承 TPWeightSwitchMixin 默认值 False\n-    # → SFA DSA-CP 启用 o-proj TP switching 时，isinstance 通过但能力检查失败\n-    # → 模型初始化抛 RuntimeError，W4A8 部署回归\n+    # ✅ 显式声明支持 TP weight switch\n+    supports_tp_weight_switch = True",
+      "stats": "1 file changed, +7 lines, -4 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

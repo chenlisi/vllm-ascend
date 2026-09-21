@@ -1,0 +1,80 @@
+{
+  "report_id": "PR3990_001",
+  "pr_number": 3990,
+  "pr_title": "[OPS] add bmm_transpose ops",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/mla_v1.py:899",
+    "CMakeLists.txt:78",
+    "csrc/kernels/math_utils.h:5",
+    "vllm_ascend/attention/mla_v1.py:719",
+    "csrc/batch_matmul_transpose/op_host/tiling/tiling_data.h:36"
+  ],
+  "landing_sha": "41b903e",
+  "source_quote": "Maybe we can only change the usage of bmm in the `else` branch since this kernel is not fully validated with `tp_size` >1\nWhat is this for?\nwhy add new namespace here? I think it's fine to just put this function into utils.h\n这个empty为什么不不放在init里面申请好？\nplz use english comment",
+  "correspondence": [
+    {
+      "review_quote": "linfeng-yuan: vllm_ascend/attention/mla_v1.py:899(2025-11-05 06:55:14)",
+      "patch_snippet": "评后sha 41b903e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "whx-sjtu: CMakeLists.txt:78(2025-11-05 08:04:33)",
+      "patch_snippet": "评后sha 41b903e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "whx-sjtu: csrc/kernels/math_utils.h:5(2025-11-05 08:07:20)",
+      "patch_snippet": "评后sha 41b903e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "ningjingbengxiaohai: vllm_ascend/attention/mla_v1.py:719(2025-11-10 11:06:26)",
+      "patch_snippet": "评后sha 41b903e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: csrc/batch_matmul_transpose/op_host/tiling/tiling_data.h:36(2025-11-13 08:17:24)",
+      "patch_snippet": "评后sha 41b903e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "41b903e",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [
+      "新引入的融合算子（如 bmm_transpose）在未经充分验证的场景（如 tp_size > 1）中不应直接使用。",
+      "应通过条件分支限制新算子的使用范围，仅在已验证的路径上启用。"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/mla_v1.py",
+      "line": 890,
+      "code": "# linfeng-yuan 评审: \"Maybe we can only change the usage of bmm\n# in the `else` branch since this kernel is not fully validated\n# with `tp_size` >1\"\n\nclass AscendMLAImpl:\n    def _v_up_proj(self, ...):\n        # ... existing code ...\n        if tp_size > 1:\n            # 原始 bmm 实现（tp_size > 1 路径保持不变）\n            output = torch.bmm(input, weight)\n        else:\n            # 原始 bmm 实现\n            output = torch.bmm(input, weight)",
+      "context": "linfeng-yuan 评审: \"Maybe we can only change the usage of bmm in the `else` branch since this kernel is not fully validated with `tp_size` >1\""
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/mla_v1.py",
+      "line": 890,
+      "code": "# 仅在 else 分支（tp_size == 1）使用 bmm_transpose 算子\n# 作者回复: \"Applied this ops in else branch only,\n# in order to use this ops in tp_size=1\"\n\nclass AscendMLAImpl:\n    def _v_up_proj(self, ...):\n        # ... existing code ...\n        if tp_size > 1:\n            # tp_size > 1 路径保持原始 bmm（kernel 未充分验证）\n            output = torch.bmm(input, weight)\n        else:\n            # tp_size == 1 路径使用新的 bmm_transpose 融合算子\n            output = torch.ops._C.bmm_transpose(input, weight)",
+      "context": "仅在 else 分支（tp_size == 1）使用 bmm_transpose 算子 作者回复: \"Applied this ops in else branch only, in order to use this ops in tp_size=1\""
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/mla_v1.py\n+++ b/vllm_ascend/attention/mla_v1.py\n@@ -1,13 +1,13 @@\n-# linfeng-yuan 评审: \"Maybe we can only change the usage of bmm\n-# in the `else` branch since this kernel is not fully validated\n-# with `tp_size` >1\"\n+# 仅在 else 分支（tp_size == 1）使用 bmm_transpose 算子\n+# 作者回复: \"Applied this ops in else branch only,\n+# in order to use this ops in tp_size=1\"\n \n class AscendMLAImpl:\n     def _v_up_proj(self, ...):\n         # ... existing code ...\n         if tp_size > 1:\n-            # 原始 bmm 实现（tp_size > 1 路径保持不变）\n+            # tp_size > 1 路径保持原始 bmm（kernel 未充分验证）\n             output = torch.bmm(input, weight)\n         else:\n-            # 原始 bmm 实现\n-            output = torch.bmm(input, weight)\n+            # tp_size == 1 路径使用新的 bmm_transpose 融合算子\n+            output = torch.ops._C.bmm_transpose(input, weight)\n",
+      "stats": "1 file changed, +6 lines, -6 lines",
+      "key_changes": [
+        "代码结构或逻辑调整"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

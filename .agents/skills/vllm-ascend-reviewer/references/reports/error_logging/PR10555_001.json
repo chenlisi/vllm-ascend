@@ -1,0 +1,67 @@
+{
+  "report_id": "PR10555_001",
+  "pr_number": 10555,
+  "pr_title": "[BugFix] Improve ACL graph stream resource error guidance",
+  "pr_status": "merged",
+  "merged_at": "2026-07-07T01:40:32Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/compilation/acl_graph.py:35"
+  ],
+  "landing_sha": "7c58f77",
+  "source_quote": "Remove \"upgrading to a newer HDK/CANN stack, \" in `STREAM_RESOURCE_GUIDANCE` as this is mentioned in `_raise_old_hdk_capture_error`.",
+  "correspondence": [
+    {
+      "review_quote": "yiz-liu 指出 `STREAM_RESOURCE_GUIDANCE` 中的 \"upgrading to a newer HDK/CANN stack\" 提示与 `_raise_old_hdk_capture_error` 函数中的提示重复，应移除以避免冗余。作者已在 commit `7c58f77` 中移除重复文本。",
+      "patch_snippet": "commit `7c58f77`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "7c58f77",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当多个错误处理路径提供相关的用户指导时，应确保提示信息不在不同函数/常量之间重复。每个错误处理函数应负责特定的提示内容，避免用户看到重复的建议。",
+    "context": "",
+    "checkpoints": [
+      "检查错误消息常量（如 `STREAM_RESOURCE_GUIDANCE`）中的信息是否与其他错误处理函数（如 `_raise_old_hdk_capture_error`）重复",
+      "确保每条用户指导信息只出现在一个位置",
+      "修改错误消息时，检查是否有其他地方已包含相同建议"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/compilation/acl_graph.py",
+      "line": 35,
+      "code": "# （根据评审意见推断）\nimport re\n\n# ACL graph capture 失败时的流资源耗尽提示信息\n# 包含 HDK 升级建议（与 _raise_old_hdk_capture_error 重复）\nSTREAM_RESOURCE_GUIDANCE = (\n    \"ACL graph capture failed due to stream resource exhaustion. \"\n    \"Try upgrading to a newer HDK/CANN stack, \"  # 重复信息：_raise_old_hdk_capture_error 已包含此提示\n    \"or increasing the stream resource limit.\"\n)\n\n# 检测旧版 HDK/CANN 的 \"alloc sq cq fail\" 错误特征\n_OLD_HDK_ERROR_PATTERN = re.compile(r\"alloc sq cq fail\")\n\ndef _raise_old_hdk_capture_error(error_msg: str) -> None:\n    \"\"\"检测到旧版 HDK 导致的 ACL graph capture 失败时，抛出明确的升级提示。\"\"\"\n    if _OLD_HDK_ERROR_PATTERN.search(error_msg):\n        raise RuntimeError(\n            \"ACL graph capture failed. Please upgrade to a newer HDK/CANN stack...\"\n        )  # HDK 升级提示已在此函数中",
+      "context": "Remove \"upgrading to a newer HDK/CANN stack, \" in `STREAM_RESOURCE_GUIDANCE` as this is mentioned in `_raise_old_hdk_capture_error`."
+    },
+    "pattern": {
+      "file": "vllm_ascend/compilation/acl_graph.py",
+      "line": 35,
+      "code": "# （根据评审意见推断）\nimport re\n\n# ACL graph capture 失败时的流资源耗尽提示信息\n# 已移除 HDK 升级建议，因为 _raise_old_hdk_capture_error 中已包含\nSTREAM_RESOURCE_GUIDANCE = (\n    \"ACL graph capture failed due to stream resource exhaustion. \"\n    \"Try increasing the stream resource limit.\"\n    # 已移除 \"upgrading to a newer HDK/CANN stack, \"\n    # 因为 _raise_old_hdk_capture_error 中已经包含了升级 HDK 的提示，避免重复\n)\n\n# 检测旧版 HDK/CANN 的 \"alloc sq cq fail\" 错误特征\n_OLD_HDK_ERROR_PATTERN = re.compile(r\"alloc sq cq fail\")\n\ndef _raise_old_hdk_capture_error(error_msg: str) -> None:\n    \"\"\"检测到旧版 HDK 导致的 ACL graph capture 失败时，抛出明确的升级提示。\"\"\"\n    if _OLD_HDK_ERROR_PATTERN.search(error_msg):\n        raise RuntimeError(\n            \"ACL graph capture failed. Please upgrade to Ascend HDK 25.5.1 or later.\"\n        )  # HDK 升级提示仅保留在此处",
+      "context": "Remove \"upgrading to a newer HDK/CANN stack, \" in `STREAM_RESOURCE_GUIDANCE` as this is mentioned in `_raise_old_hdk_capture_error`."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/compilation/acl_graph.py\n+++ b/vllm_ascend/compilation/acl_graph.py\n@@ -2,11 +2,12 @@\n import re\n \n # ACL graph capture 失败时的流资源耗尽提示信息\n-# 包含 HDK 升级建议（与 _raise_old_hdk_capture_error 重复）\n+# 已移除 HDK 升级建议，因为 _raise_old_hdk_capture_error 中已包含\n STREAM_RESOURCE_GUIDANCE = (\n     \"ACL graph capture failed due to stream resource exhaustion. \"\n-    \"Try upgrading to a newer HDK/CANN stack, \"  # 重复信息：_raise_old_hdk_capture_error 已包含此提示\n-    \"or increasing the stream resource limit.\"\n+    \"Try increasing the stream resource limit.\"\n+    # 已移除 \"upgrading to a newer HDK/CANN stack, \"\n+    # 因为 _raise_old_hdk_capture_error 中已经包含了升级 HDK 的提示，避免重复\n )\n \n # 检测旧版 HDK/CANN 的 \"alloc sq cq fail\" 错误特征\n@@ -16,5 +17,5 @@\n     \"\"\"检测到旧版 HDK 导致的 ACL graph capture 失败时，抛出明确的升级提示。\"\"\"\n     if _OLD_HDK_ERROR_PATTERN.search(error_msg):\n         raise RuntimeError(\n-            \"ACL graph capture failed. Please upgrade to a newer HDK/CANN stack...\"\n-        )  # HDK 升级提示已在此函数中\n+            \"ACL graph capture failed. Please upgrade to Ascend HDK 25.5.1 or later.\"\n+        )  # HDK 升级提示仅保留在此处",
+      "stats": "1 file changed, +6 lines, -5 lines",
+      "key_changes": [
+        "移除: # 包含 HDK 升级建议（与 _raise_old_hdk_capture_error 重复）",
+        "新增: # 已移除 HDK 升级建议，因为 _raise_old_hdk_capture_error 中已包含",
+        "移除: \"Try upgrading to a newer HDK/CANN stack, \"  # 重复信息：_raise_old_hdk_capture_error",
+        "移除: \"or increasing the stream resource limit.\"",
+        "新增: \"Try increasing the stream resource limit.\"",
+        "新增: # 已移除 \"upgrading to a newer HDK/CANN stack, \"",
+        "新增: # 因为 _raise_old_hdk_capture_error 中已经包含了升级 HDK 的提示，避免重复",
+        "移除: \"ACL graph capture failed. Please upgrade to a newer HDK/CANN stack...\"",
+        "移除: )  # HDK 升级提示已在此函数中",
+        "新增: \"ACL graph capture failed. Please upgrade to Ascend HDK 25.5.1 or later.\""
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

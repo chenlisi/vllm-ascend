@@ -1,0 +1,58 @@
+{
+  "report_id": "PR4975_001",
+  "pr_number": 4975,
+  "pr_title": "[Feat] Refactor rejection sampler",
+  "pr_status": "merged",
+  "merged_at": "2025-12-16T03:32:26Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/model_runner_v1.py:1839",
+    "vllm_ascend/patch/worker/__init__.py:33"
+  ],
+  "landing_sha": "0b9ad8b",
+  "source_quote": "can some attrs like discard_requests_mask be deleted in prepare_inputs?",
+  "correspondence": [
+    {
+      "review_quote": "zhenwenqi2024 指出 prepare_inputs 中 discard_requests_mask 等属性是否可以删除。wangxiyuan 指出需要同步更新 patch/__init__.py 文件。作者通过 commit `0b9ad8b` 修复 bookkeeping 逻辑，commit `ee2ea15` 添加注释和 e2e UT，2/2 建议全部落地。",
+      "patch_snippet": "commit `0b9ad8b`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "0b9ad8b",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当修改 patch 子目录下的文件时，必须同步更新 patch/__init__.py 中的导出和引用，确保模块一致性。",
+    "context": "",
+    "checkpoints": [
+      "修改 patch 目录下任何文件时，检查 patch/__init__.py 是否需要同步更新",
+      "重构时检查是否有可以删除的冗余属性（如 discard_requests_mask）"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/patch/__init__.py",
+      "line": 0,
+      "code": "from vllm_ascend.patch.platform import *  # noqa: F401, F403\nfrom vllm_ascend.patch.worker import *  # noqa: F401, F403\n\n\nfrom vllm_ascend.patch.platform import *  # noqa: F401, F403",
+      "context": "can some attrs like discard_requests_mask be deleted in prepare_inputs?"
+    },
+    "pattern": {
+      "file": "vllm_ascend/patch/__init__.py",
+      "line": 0,
+      "code": "from vllm_ascend.patch.platform import *  # noqa: F401, F403\nfrom vllm_ascend.patch.worker import *  # noqa: F401, F403",
+      "context": "can some attrs like discard_requests_mask be deleted in prepare_inputs?"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/patch/__init__.py\n+++ b/vllm_ascend/patch/__init__.py\n@@ -1,5 +1,2 @@\n from vllm_ascend.patch.platform import *  # noqa: F401, F403\n from vllm_ascend.patch.worker import *  # noqa: F401, F403\n-\n-\n-from vllm_ascend.patch.platform import *  # noqa: F401, F403",
+      "stats": "1 file changed, +0 lines, -3 lines",
+      "key_changes": [
+        "删除了第 3-5 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

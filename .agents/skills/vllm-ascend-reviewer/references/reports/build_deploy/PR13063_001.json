@@ -1,0 +1,60 @@
+{
+  "report_id": "PR13063_001",
+  "pr_number": 13063,
+  "pr_title": "[CI] support daily image and A5 build",
+  "pr_status": "merged",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "Dockerfile:114"
+  ],
+  "landing_sha": "c6e124b",
+  "source_quote": "To prevent transient network failures from failing the build immediately or hanging indefinitely, it is recommended to add `--tries=3` and `--connect-timeout=10` to the `wget` command. Additionally, adding `-q` or `--no-verbose` keeps the build logs clean.",
+  "correspondence": [
+    {
+      "review_quote": "Dockerfile:114",
+      "patch_snippet": "评后sha c6e124b 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "c6e124b",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "Dockerfile 中使用 `wget`/`curl` 下载构建依赖时，须配置重试次数（`--tries`）、连接超时（`--timeout`/`--connect-timeout`）、重试等待（`--waitretry`）及连接拒绝重试（`--retry-connrefused`），避免瞬时网络故障导致构建立即失败或 CI 无限挂起。",
+    "context": "",
+    "checkpoints": [
+      "检查 Dockerfile 中 `wget`/`curl` 是否缺少 `--tries` 与超时参数",
+      "大体积依赖下载建议抽离为共享 shell 脚本统一维护"
+    ],
+    "antipattern": {
+      "file": "Dockerfile",
+      "line": 114,
+      "code": "FROM ${CANN_QUAY_URL}/${CANN_VERSION}-${BASE_OS} AS daily-builder\n\nARG TORCH_NPU_VERSION\nARG TORCH_NPU_DATE\n\nRUN if [ \"$BUILD_TYPE\" = \"daily\" ]; then \\\n        mkdir -p /tmp/torch_npu && \\\n        wget -O /tmp/torch_npu/torch_npu.tar.gz \\\n            \"https://pytorch-package.obs.cn-north-4.myhuaweicloud.com/pta/Daily/v2.10.0-${TORCH_NPU_VERSION}/${TORCH_NPU_DATE}/pytorch_v2.10.0-${TORCH_NPU_VERSION}_py312.tar.gz\" && \\\n        tar -xzf /tmp/torch_npu/torch_npu.tar.gz -C /tmp/torch_npu && \\\n        python3 -m pip install /tmp/torch_npu/*.whl --force-reinstall --no-deps && \\\n        rm -rf /tmp/torch_npu; \\\n    fi",
+      "context": "Dockerfile L110-125（其余 7 个 Dockerfile 结构相同）"
+    },
+    "pattern": {
+      "file": "Dockerfile",
+      "line": 114,
+      "code": "#!/bin/bash\n# .github/workflows/scripts/install_daily_deps.sh\nset -euo pipefail\n\nif [ \"$BUILD_TYPE\" != \"daily\" ]; then exit 0; fi\n\nmkdir -p /tmp/torch_npu\nwget --retry-connrefused --tries=5 --timeout=30 --waitretry=10 \\\n    -O /tmp/torch_npu/torch_npu.tar.gz \\\n    \"https://pytorch-package.obs.cn-north-4.myhuaweicloud.com/pta/Daily/v2.10.0-${TORCH_NPU_VERSION}/${TORCH_NPU_DATE}/pytorch_v2.10.0-${TORCH_NPU_VERSION}_py312.tar.gz\"\ntar -xzf /tmp/torch_npu/torch_npu.tar.gz -C /tmp/torch_npu\npython3 -m pip install /tmp/torch_npu/*.whl --force-reinstall --no-deps\nrm -rf /tmp/torch_npu",
+      "context": "!/bin/bash .github/workflows/scripts/install_daily_deps.sh"
+    },
+    "diff": {
+      "unified": "--- a/Dockerfile\n+++ b/Dockerfile\n@@ -1,13 +1,13 @@\n-FROM ${CANN_QUAY_URL}/${CANN_VERSION}-${BASE_OS} AS daily-builder\n+#!/bin/bash\n+# .github/workflows/scripts/install_daily_deps.sh\n+set -euo pipefail\n \n-ARG TORCH_NPU_VERSION\n-ARG TORCH_NPU_DATE\n+if [ \"$BUILD_TYPE\" != \"daily\" ]; then exit 0; fi\n \n-RUN if [ \"$BUILD_TYPE\" = \"daily\" ]; then \\\n-        mkdir -p /tmp/torch_npu && \\\n-        wget -O /tmp/torch_npu/torch_npu.tar.gz \\\n-            \"https://pytorch-package.obs.cn-north-4.myhuaweicloud.com/pta/Daily/v2.10.0-${TORCH_NPU_VERSION}/${TORCH_NPU_DATE}/pytorch_v2.10.0-${TORCH_NPU_VERSION}_py312.tar.gz\" && \\\n-        tar -xzf /tmp/torch_npu/torch_npu.tar.gz -C /tmp/torch_npu && \\\n-        python3 -m pip install /tmp/torch_npu/*.whl --force-reinstall --no-deps && \\\n-        rm -rf /tmp/torch_npu; \\\n-    fi\n+mkdir -p /tmp/torch_npu\n+wget --retry-connrefused --tries=5 --timeout=30 --waitretry=10 \\\n+    -O /tmp/torch_npu/torch_npu.tar.gz \\\n+    \"https://pytorch-package.obs.cn-north-4.myhuaweicloud.com/pta/Daily/v2.10.0-${TORCH_NPU_VERSION}/${TORCH_NPU_DATE}/pytorch_v2.10.0-${TORCH_NPU_VERSION}_py312.tar.gz\"\n+tar -xzf /tmp/torch_npu/torch_npu.tar.gz -C /tmp/torch_npu\n+python3 -m pip install /tmp/torch_npu/*.whl --force-reinstall --no-deps\n+rm -rf /tmp/torch_npu\n",
+      "stats": "1 file changed, +11 lines, -11 lines",
+      "key_changes": [
+        "移除: tar -xzf /tmp/torch_npu/torch_npu.tar.gz -C /tmp/torch_npu && \\",
+        "移除: FROM ${CANN_QUAY_URL}/${CANN_VERSION}-${BASE_OS} AS daily-builder",
+        "移除: ARG TORCH_NPU_DATE",
+        "新增: if [ \"$BUILD_TYPE\" != \"daily\" ]; then exit 0; fi",
+        "新增: tar -xzf /tmp/torch_npu/torch_npu.tar.gz -C /tmp/torch_npu"
+      ]
+    },
+    "language": "dockerfile",
+    "_status": "processed"
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "report_id": "PR13470_001",
+  "pr_number": 13470,
+  "pr_title": "[Bugfix][MRV2] Support probabilistic rejection sampling for spec decoding",
+  "pr_status": "merged",
+  "dimension": [
+    "design"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/v2/spec_decode/dflash/speculator.py:37"
+  ],
+  "landing_sha": "1724ef9",
+  "source_quote": "Keep the style consistent with `AutoRegressiveSpeculator`.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/worker/v2/spec_decode/dflash/speculator.py:37",
+      "patch_snippet": "评后sha 1724ef9 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "1724ef9",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "当一个 Speculator 子类（如 `AscendDFlashSpeculator`）通过方法注释声明\"mirroring\"另一个 Speculator（如 Eagle 的 `AutoRegressiveSpeculator`）的对应方法时，其方法命名（公有/私有前缀）、返回值约定（返回对象/原地更新）、调用方式（依赖返回值/直接用本地变量）必须与被 mirror 的方法保持一致，避免出现\"注释说 mirror 但实际风格不符\"的矛盾。",
+    "context": "",
+    "checkpoints": [
+      "检查方法注释中是否声明 \"mirroring\"/\"consistent with\" 另一个类的方法",
+      "若声明 mirror，检查方法名前缀（`_` 私有 vs 公有）是否与被 mirror 的方法一致",
+      "检查返回值约定：被 mirror 方法是原地更新（无 return）还是返回新对象，覆写方法应保持一致",
+      "检查调用处是否与方法的返回值约定匹配（若方法已改为原地更新，调用处不应再依赖返回值）",
+      "检查类内空行/缩进等格式是否与同族 Speculator 一致"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/v2/spec_decode/dflash/speculator.py",
+      "line": 20,
+      "code": "from vllm.spec_decode.dflash.speculator import DFlashSpeculator\n\n\nclass AscendDFlashSpeculator(DFlashSpeculator):\n    \"\"\"Ascend NPU implementation of DFlash speculator.\"\"\"\n\n    def __init__(self, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        self.num_query_per_req = kwargs.get(\"num_query_per_req\", 1)\n\n    def build_draft_attn_metadatas(self, num_reqs_padded, seq_lens_cpu_upper_bound):\n        num_tokens_padded = num_reqs_padded * self.num_query_per_req\n        with build_attn_metadata_wrapper():\n            attn_metadata = self._build_attn_metadata(\n                num_reqs_padded, seq_lens_cpu_upper_bound\n            )\n        # 调用公有方法 + 用返回值构造列表\n        return [self.update_draft_attn_metadata(attn_metadata, num_reqs_padded)]\n\n    # 公有方法（无下划线前缀），返回修改后的对象\n    def update_draft_attn_metadata(self, attn_metadata, num_reqs_padded):\n        \"\"\"Rebuild ``actual_seq_lengths_q`` from the padded request count,\n        mirroring Eagle's ``_update_decode_attn_metadata``.\"\"\"\n        query_lens_list = [\n            (i + 1) * self.num_query_per_req for i in range(num_reqs_padded)\n        ]\n        for metadata in attn_metadata.values():\n            metadata.actual_seq_lengths_q = query_lens_list\n        return attn_metadata   # 返回对象",
+      "context": "调用公有方法 + 用返回值构造列表 公有方法（无下划线前缀），返回修改后的对象"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/v2/spec_decode/dflash/speculator.py",
+      "line": 20,
+      "code": "from vllm.spec_decode.dflash.speculator import DFlashSpeculator\n\n\nclass AscendDFlashSpeculator(DFlashSpeculator):\n    \"\"\"Ascend NPU implementation of DFlash speculator.\"\"\"\n\n    def __init__(self, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        self.num_query_per_req = kwargs.get(\"num_query_per_req\", 1)\n\n    def build_draft_attn_metadatas(self, num_reqs_padded, seq_lens_cpu_upper_bound):\n        num_tokens_padded = num_reqs_padded * self.num_query_per_req\n        with build_attn_metadata_wrapper():\n            attn_metadata = self._build_attn_metadata(\n                num_reqs_padded, seq_lens_cpu_upper_bound\n            )\n        # 调用私有方法 + 原地更新，直接用本地变量构造列表\n        self._update_draft_attn_metadata(attn_metadata, num_reqs_padded)\n        return [attn_metadata]\n\n    # 私有方法（下划线前缀），原地更新，不返回\n    def _update_draft_attn_metadata(self, attn_metadata, num_reqs_padded):\n        \"\"\"Rebuild ``actual_seq_lengths_q`` from the padded request count,\n        mirroring Eagle's ``_update_decode_attn_metadata``.\"\"\"\n        query_lens_list = [\n            (i + 1) * self.num_query_per_req for i in range(num_reqs_padded)\n        ]\n        for metadata in attn_metadata.values():\n            metadata.actual_seq_lengths_q = query_lens_list\n        # 不再 return，与 Eagle 原地更新语义一致",
+      "context": "调用私有方法 + 原地更新，直接用本地变量构造列表 私有方法（下划线前缀），原地更新，不返回 不再 return，与 Eagle 原地更新语义一致"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/v2/spec_decode/dflash/speculator.py\n+++ b/vllm_ascend/worker/v2/spec_decode/dflash/speculator.py\n@@ -14,11 +14,12 @@\n             attn_metadata = self._build_attn_metadata(\n                 num_reqs_padded, seq_lens_cpu_upper_bound\n             )\n-        # 调用公有方法 + 用返回值构造列表\n-        return [self.update_draft_attn_metadata(attn_metadata, num_reqs_padded)]\n+        # 调用私有方法 + 原地更新，直接用本地变量构造列表\n+        self._update_draft_attn_metadata(attn_metadata, num_reqs_padded)\n+        return [attn_metadata]\n \n-    # 公有方法（无下划线前缀），返回修改后的对象\n-    def update_draft_attn_metadata(self, attn_metadata, num_reqs_padded):\n+    # 私有方法（下划线前缀），原地更新，不返回\n+    def _update_draft_attn_metadata(self, attn_metadata, num_reqs_padded):\n         \"\"\"Rebuild ``actual_seq_lengths_q`` from the padded request count,\n         mirroring Eagle's ``_update_decode_attn_metadata``.\"\"\"\n         query_lens_list = [\n@@ -26,4 +27,4 @@\n         ]\n         for metadata in attn_metadata.values():\n             metadata.actual_seq_lengths_q = query_lens_list\n-        return attn_metadata   # 返回对象\n+        # 不再 return，与 Eagle 原地更新语义一致\n",
+      "stats": "1 file changed, +6 lines, -5 lines",
+      "key_changes": [
+        "移除: return [self.update_draft_attn_metadata(attn_metadata, num_reqs_padded)]",
+        "新增: return [attn_metadata]"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

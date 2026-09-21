@@ -1,0 +1,65 @@
+{
+  "report_id": "PR4182_001",
+  "pr_number": 4182,
+  "pr_title": "[P/D] Add readme for PD separation",
+  "pr_status": "merged",
+  "merged_at": "2025-11-28T07:17:59Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/multi_node_pd_disaggregation_mooncake.md:193",
+    "docs/source/tutorials/multi_node_pd_disaggregation_mooncake.md:721",
+    "docs/source/tutorials/multi_node_pd_disaggregation_mooncake.md:224",
+    "docs/source/tutorials/multi_node_pd_disaggregation_mooncake.md:488",
+    "docs/source/tutorials/multi_node_pd_disaggregation_mooncake.md:496",
+    "docs/source/tutorials/multi_node_pd_disaggregation_mooncake.md:201",
+    "docs/source/tutorials/multi_node_pd_disaggregation_mooncake.md:152",
+    "docs/source/tutorials/multi_node_pd_disaggregation_mooncake.md:7"
+  ],
+  "landing_sha": "7eefaec",
+  "source_quote": "refer to the script in example, don't just put all the codes in doc.",
+  "correspondence": [
+    {
+      "review_quote": "四位评审人从文档质量角度提出了 11 条意见：whx-sjtu 建议引用 example 脚本而非内联代码；MengqingCao 和 liziyu179 要求说明 layerwise proxy 与非 layerwise proxy 的区别；nwpu-zxr 提出了 8 条改进建议，包括添加 CANN 传输模式说明、PCP/DCP 示例、异步调度选项、环境变量配置章节、标注 mooncake commit id 以及添加推荐并行配置表。作者通过多个 commit 逐步完善了文档。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "7eefaec",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "教程文档中应引用 `examples/` 目录中的脚本，而非将所有代码直接内联到文档中，以避免代码重复和维护不一致。",
+    "context": "",
+    "checkpoints": [
+      "检查文档中是否有大段内联代码",
+      "确认是否有对应的 example 脚本可引用",
+      "验证文档与 example 脚本是否保持一致"
+    ],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "<!-- docs/source/tutorials/multi_node_pd_disaggregation_mooncake.md, L188-L198 -->\n<!-- （根据评审意见推断）文档中直接内联了大量启动脚本代码 -->",
+      "context": "refer to the script in example, don't just put all the codes in doc."
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "<!-- docs/source/tutorials/multi_node_pd_disaggregation_mooncake.md, L188-L198 -->\n\n请参考 `examples/disaggregated_prefill_v1/` 目录中的启动脚本。",
+      "context": "refer to the script in example, don't just put all the codes in doc."
+    },
+    "diff": {
+      "unified": "--- a/a/file\n+++ b/b/file\n@@ -1,2 +1,3 @@\n <!-- docs/source/tutorials/multi_node_pd_disaggregation_mooncake.md, L188-L198 -->\n-<!-- （根据评审意见推断）文档中直接内联了大量启动脚本代码 -->\n+\n+请参考 `examples/disaggregated_prefill_v1/` 目录中的启动脚本。",
+      "stats": "1 file changed, +2 lines, -1 lines",
+      "key_changes": [
+        "修改了第 2-2 行的代码"
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

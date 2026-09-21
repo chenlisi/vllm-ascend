@@ -1,0 +1,82 @@
+{
+  "report_id": "PR11686_001",
+  "pr_number": 11686,
+  "pr_title": "[Doc][Misc] Update DeepSeek-V3.2 tutorial with prerequisites and FAQ",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "docs/source/tutorials/models/DeepSeek-V3.2.md:122",
+    "docs/source/tutorials/models/DeepSeek-V3.2.md:170",
+    "docs/source/tutorials/models/DeepSeek-V3.2.md:267",
+    "docs/source/tutorials/models/DeepSeek-V3.2.md:869",
+    "docs/source/tutorials/models/DeepSeek-V3.2.md:468"
+  ],
+  "landing_sha": "5990f88",
+  "source_quote": "The subsection number 5.1 is missing.\nIt is recommended to present the content for Node 0 and Node 1 in separate tabs using the tab-set syntax, as suggested by the template.\nIt is recommended to present the content for Node 0 and Node 1 in separate tabs using the tab-set syntax, as suggested by the template.\nPlease revise the Performance Tuning section according to the template's writing requirements, if necessary.\nI remember we'll sunset the layerwise connector, plz change to use the `MooncakeConnectorV1` instead. @nwpu-zxr plz take a double check on this.",
+  "correspondence": [
+    {
+      "review_quote": "herizhen: docs/source/tutorials/models/DeepSeek-V3.2.md:122",
+      "patch_snippet": "评后sha 5990f88 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: docs/source/tutorials/models/DeepSeek-V3.2.md:170",
+      "patch_snippet": "评后sha 5990f88 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "herizhen: docs/source/tutorials/models/DeepSeek-V3.2.md:267",
+      "patch_snippet": "评后sha 5990f88 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "herizhen: docs/source/tutorials/models/DeepSeek-V3.2.md:869",
+      "patch_snippet": "评后sha 5990f88 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "herizhen: docs/source/tutorials/models/DeepSeek-V3.2.md:468",
+      "patch_snippet": "评后sha 5990f88 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "5990f88",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "模型部署教程中，多节点（Node 0 / Node 1）的配置应使用 tab-set 语法分开展示，避免混淆。文档章节编号应连续完整，性能调优部分应按模板规范编写。此外，已废弃的连接器（如 layerwise connector）应及时替换为新版本（如 `MooncakeConnectorV1`）。",
+    "context": "",
+    "checkpoints": [
+      "检查多节点配置是否使用了 tab-set 语法",
+      "确认文档章节编号是否连续完整",
+      "确认是否使用了已废弃的连接器或配置项",
+      "Performance Tuning 部分是否按模板规范编写"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/DeepSeek-V3.2.md",
+      "line": 115,
+      "code": "## 5 部署指南\n\n本章节介绍 DeepSeek-V3.2 模型的部署方法。\n\n### 单卡部署",
+      "context": "修改前代码 (markdown)"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/DeepSeek-V3.2.md",
+      "line": 122,
+      "code": "## 5 部署指南\n\n本章节介绍 DeepSeek-V3.2 模型的部署方法。\n\n### 5.1 单卡部署",
+      "context": "修改后代码 (markdown)"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/DeepSeek-V3.2.md\n+++ b/docs/source/tutorials/models/DeepSeek-V3.2.md\n@@ -2,4 +2,4 @@\n \n 本章节介绍 DeepSeek-V3.2 模型的部署方法。\n \n-### 单卡部署\n+### 5.1 单卡部署",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "添加注释说明"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

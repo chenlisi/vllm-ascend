@@ -1,0 +1,92 @@
+{
+  "report_id": "PR6902_001",
+  "pr_number": 6902,
+  "pr_title": "[feat] parameterize hardcoded MLA dimensions to support GLM5-W8A8",
+  "pr_status": "merged",
+  "merged_at": "2026-03-25T13:02:42Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "csrc/mla_preprocess/op_host/mla_preprocess.h:405"
+  ],
+  "landing_sha": "b5e87ca",
+  "source_quote": "As far as I know, rms_norm is performed to `q_c(q_lora_rank)` and `kv_c(kv_lora_rank)`, why add `opParam.qkRopeHeadDim` here?",
+  "correspondence": [
+    {
+      "review_quote": "whx-sjtu 指出在 rms_norm 的计算中，`q_c(q_lora_rank)` 和 `kv_c(kv_lora_rank)` 已经进行了 rms_norm 操作，质疑为何还要额外添加 `opParam.qkRopeHeadDim`。作者通过 commit `b5e87ca` 修复了 RopeConcat DataCopy 中 srcStride 的硬编码 qkNopeHeadDim 问题，将硬编码维度替换为参数化值以支持 GLM5-W8A8 模型。",
+      "patch_snippet": "commit `b5e87ca`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "b5e87ca",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 MLA（Multi-head Latent Attention）内核代码中，所有维度参数（如 qkNopeHeadDim、kvLoraRank、qkRopeHeadDim 等）必须从输入 tensor shape 动态推导，不得硬编码特定模型的值，以支持多种模型（如 DeepSeek V3、GLM5 等）。",
+    "context": "",
+    "checkpoints": [
+      "检查 kernel 代码中是否存在硬编码的维度常量",
+      "确认维度参数是否从 tensor shape 动态推导",
+      "验证 rms_norm 操作中使用的维度是否与实际操作对象一致",
+      "确认 DataCopy 的 srcStride 是否使用了正确的动态维度"
+    ],
+    "antipattern": {
+      "file": "csrc/mla_preprocess/op_host/mla_preprocess.h",
+      "line": 405,
+      "code": "// csrc/mla_preprocess/op_host/mla_preprocess.h:690\n// ❌ 直接使用硬编码维度，未检查 tensor 维度，仅适用于 DeepSeek V3\nvoid Init(const torch::Tensor& wuk, const torch::Tensor& gamma1,\n          const torch::Tensor& kv_cache_rope, ...) {\n    // 硬编码 DeepSeek V3 的 MLA 维度\n    const uint32_t qkNopeHeadDim = 512;\n    const uint32_t kvLoraRank = 512;\n    const uint32_t qkRopeHeadDim = 64;\n    const uint32_t qLoraRank = 1536;\n\n    // 使用硬编码值填充 OpParam 结构体\n    opParam.qkNopeHeadDim = qkNopeHeadDim;\n    opParam.kvLoraRank = kvLoraRank;\n    opParam.qkRopeHeadDim = qkRopeHeadDim;\n    opParam.qLoraRank = qLoraRank;\n\n    // 后续 tiling 计算使用硬编码值...\n    tilingData->hiddenStrateRope = qkRopeHeadDim;\n    tilingData->splitRmsNormSizeOne = qLoraRank;\n    ...\n}",
+      "context": "As far as I know, rms_norm is performed to `q_c(q_lora_rank)` and `kv_c(kv_lora_rank)`, why add `opParam.qkRopeHeadDim` here?"
+    },
+    "pattern": {
+      "file": "csrc/mla_preprocess/op_host/mla_preprocess.h",
+      "line": 405,
+      "code": "// csrc/mla_preprocess/op_host/mla_preprocess.h:690\n// ✅ 从 tensor shape 动态推导维度，并添加对齐检查\nvoid Init(const torch::Tensor& wuk, const torch::Tensor& gamma1,\n          const torch::Tensor& kv_cache_rope, ...) {\n    // ✅ 检查 tensor 维度并动态推导 MLA 参数\n    TORCH_CHECK(wuk.dim() >= 3,\n        \"wuk must have at least 3 dimensions, but got \", wuk.dim());\n    uint32_t qkNopeHeadDim = wuk.sizes()[1];\n    TORCH_CHECK(qkNopeHeadDim % 16 == 0,\n        \"qkNopeHeadDim must be a multiple of 16 for kernel alignment, but got \",\n        qkNopeHeadDim);\n    uint32_t kvLoraRank = wuk.sizes()[2];\n    TORCH_CHECK(kvLoraRank > 0 && kvLoraRank % 32 == 0,\n        \"kvLoraRank must be a positive multiple of 32 for kernel alignment, but got \",\n        kvLoraRank);\n\n    TORCH_CHECK(gamma1.dim() >= 1,\n        \"gamma1 must have at least 1 dimension, but got \", gamma1.dim());\n    uint32_t qLoraRank = gamma1.sizes()[0];\n\n    TORCH_CHECK(kv_cache_rope.dim() >= 1,\n        \"kv_cache_rope must have at least 1 dimension, but got \",\n        kv_cache_rope.dim());\n    uint32_t qkRopeHeadDim = kv_cache_rope.sizes().back();\n    TORCH_CHECK(qkRopeHeadDim > 0 && qkRopeHeadDim % 16 == 0,\n        \"qkRopeHeadDim must be a positive multiple of 16 for kernel alignment, but got \",\n        qkRopeHeadDim);\n\n    // ✅ 使用动态推导值填充 OpParam\n    opParam.qkNopeHeadDim = qkNopeHeadDim;\n    opParam.kvLoraRank = kvLoraRank;\n    opParam.qkRopeHeadDim = qkRopeHeadDim;\n    opParam.qLoraRank = qLoraRank;\n\n    // 后续 tiling 计算使用动态值...\n    tilingData->hiddenStrateRope = qkRopeHeadDim;\n    tilingData->splitRmsNormSizeOne = qLoraRank;\n    ...\n}",
+      "context": "As far as I know, rms_norm is performed to `q_c(q_lora_rank)` and `kv_c(kv_lora_rank)`, why add `opParam.qkRopeHeadDim` here?"
+    },
+    "diff": {
+      "unified": "--- a/csrc/mla_preprocess/op_host/mla_preprocess.h\n+++ b/csrc/mla_preprocess/op_host/mla_preprocess.h\n@@ -1,20 +1,38 @@\n // csrc/mla_preprocess/op_host/mla_preprocess.h:690\n-// ❌ 直接使用硬编码维度，未检查 tensor 维度，仅适用于 DeepSeek V3\n+// ✅ 从 tensor shape 动态推导维度，并添加对齐检查\n void Init(const torch::Tensor& wuk, const torch::Tensor& gamma1,\n           const torch::Tensor& kv_cache_rope, ...) {\n-    // 硬编码 DeepSeek V3 的 MLA 维度\n-    const uint32_t qkNopeHeadDim = 512;\n-    const uint32_t kvLoraRank = 512;\n-    const uint32_t qkRopeHeadDim = 64;\n-    const uint32_t qLoraRank = 1536;\n+    // ✅ 检查 tensor 维度并动态推导 MLA 参数\n+    TORCH_CHECK(wuk.dim() >= 3,\n+        \"wuk must have at least 3 dimensions, but got \", wuk.dim());\n+    uint32_t qkNopeHeadDim = wuk.sizes()[1];\n+    TORCH_CHECK(qkNopeHeadDim % 16 == 0,\n+        \"qkNopeHeadDim must be a multiple of 16 for kernel alignment, but got \",\n+        qkNopeHeadDim);\n+    uint32_t kvLoraRank = wuk.sizes()[2];\n+    TORCH_CHECK(kvLoraRank > 0 && kvLoraRank % 32 == 0,\n+        \"kvLoraRank must be a positive multiple of 32 for kernel alignment, but got \",\n+        kvLoraRank);\n \n-    // 使用硬编码值填充 OpParam 结构体\n+    TORCH_CHECK(gamma1.dim() >= 1,\n+        \"gamma1 must have at least 1 dimension, but got \", gamma1.dim());\n+    uint32_t qLoraRank = gamma1.sizes()[0];\n+\n+    TORCH_CHECK(kv_cache_rope.dim() >= 1,\n+        \"kv_cache_rope must have at least 1 dimension, but got \",\n+        kv_cache_rope.dim());\n+    uint32_t qkRopeHeadDim = kv_cache_rope.sizes().back();\n+    TORCH_CHECK(qkRopeHeadDim > 0 && qkRopeHeadDim % 16 == 0,\n+        \"qkRopeHeadDim must be a positive multiple of 16 for kernel alignment, but got \",\n+        qkRopeHeadDim);\n+\n+    // ✅ 使用动态推导值填充 OpParam\n     opParam.qkNopeHeadDim = qkNopeHeadDim;\n     opParam.kvLoraRank = kvLoraRank;\n     opParam.qkRopeHeadDim = qkRopeHeadDim;\n     opParam.qLoraRank = qLoraRank;\n \n-    // 后续 tiling 计算使用硬编码值...\n+    // 后续 tiling 计算使用动态值...\n     tilingData->hiddenStrateRope = qkRopeHeadDim;\n     tilingData->splitRmsNormSizeOne = qLoraRank;\n     ...",
+      "stats": "1 file changed, +26 lines, -8 lines",
+      "key_changes": [
+        "- // ❌ 直接使用硬编码维度，未检查 tensor 维度，仅适用于 DeepSeek V3",
+        "+ // ✅ 从 tensor shape 动态推导维度，并添加对齐检查",
+        "- // 硬编码 DeepSeek V3 的 MLA 维度",
+        "- const uint32_t qkNopeHeadDim = 512;",
+        "- const uint32_t kvLoraRank = 512;",
+        "- const uint32_t qkRopeHeadDim = 64;",
+        "- const uint32_t qLoraRank = 1536;",
+        "+ // ✅ 检查 tensor 维度并动态推导 MLA 参数",
+        "+ TORCH_CHECK(wuk.dim() >= 3,",
+        "+ \"wuk must have at least 3 dimensions, but got \", wuk.dim());",
+        "+ uint32_t qkNopeHeadDim = wuk.sizes()[1];",
+        "+ TORCH_CHECK(qkNopeHeadDim % 16 == 0,",
+        "+ \"qkNopeHeadDim must be a multiple of 16 for kernel alignment, but got \",",
+        "+ qkNopeHeadDim);",
+        "+ uint32_t kvLoraRank = wuk.sizes()[2];",
+        "+ TORCH_CHECK(kvLoraRank > 0 && kvLoraRank % 32 == 0,",
+        "+ \"kvLoraRank must be a positive multiple of 32 for kernel alignment, but got \",",
+        "+ kvLoraRank);",
+        "- // 使用硬编码值填充 OpParam 结构体",
+        "+ TORCH_CHECK(gamma1.dim() >= 1,",
+        "+ \"gamma1 must have at least 1 dimension, but got \", gamma1.dim());",
+        "+ uint32_t qLoraRank = gamma1.sizes()[0];",
+        "+ ",
+        "+ TORCH_CHECK(kv_cache_rope.dim() >= 1,",
+        "+ \"kv_cache_rope must have at least 1 dimension, but got \",",
+        "+ kv_cache_rope.dim());",
+        "+ uint32_t qkRopeHeadDim = kv_cache_rope.sizes().back();",
+        "+ TORCH_CHECK(qkRopeHeadDim > 0 && qkRopeHeadDim % 16 == 0,",
+        "+ \"qkRopeHeadDim must be a positive multiple of 16 for kernel alignment, but got \",",
+        "+ qkRopeHeadDim);",
+        "+ ",
+        "+ // ✅ 使用动态推导值填充 OpParam",
+        "- // 后续 tiling 计算使用硬编码值...",
+        "+ // 后续 tiling 计算使用动态值..."
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "report_id": "PR7010_001",
+  "pr_number": 7010,
+  "pr_title": "[MOE] commit GMM custom operator",
+  "pr_status": "merged",
+  "merged_at": "2026-03-09T01:56:32Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/fused_moe/moe_mlp.py:344",
+    "vllm_ascend/ops/fused_moe/moe_mlp.py:375"
+  ],
+  "landing_sha": "bd59ea8",
+  "source_quote": "Maybe `group_list.dim() == 2` is enough here?",
+  "correspondence": [
+    {
+      "review_quote": "whx-sjtu 指出在 `moe_mlp.py` 的两处（344 行和 375 行）维度检查过于复杂，建议简化为 `group_list.dim() == 2` 即可。作者通过 commit `bd59ea8` 采纳了建议，简化了维度检查逻辑，2/2 建议全部落地。",
+      "patch_snippet": "commit `bd59ea8`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "bd59ea8",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在判断 tensor 维度时，应使用最简洁且充分的条件（如 `dim() == 2`），避免添加不必要的额外检查条件，以提高代码可读性和可维护性。",
+    "context": "",
+    "checkpoints": [
+      "检查维度判断条件是否存在冗余的子条件",
+      "确认简化后的条件是否能覆盖所有预期场景",
+      "避免在维度检查中混入不相关的业务逻辑判断"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/fused_moe/moe_mlp.py",
+      "line": 330,
+      "code": "    if num_tokens <= SMALL_BATCH_THRESHOLD:\n        w13_list = [w13[i] for i in range(num_experts)]\n        group_list = group_list.to(torch.int32)\n\n        if group_list.dim() == 2 and group_list.shape[0] > 0:\n            gate_up_out = torch.ops._C_ascend.moe_grouped_matmul(\n                x=hidden_states,\n                weight=w13_list,\n                group_list=group_list,\n                transpose_weight=True,\n            )\n        else:\n            gate_up_out = torch_npu.npu_grouped_matmul(\n                x=[hidden_states],\n                weight=w13_list,\n                group_list=group_list,\n            )\n\n        gate, up = gate_up_out.chunk(2, dim=-1)\n        hidden_states = torch.nn.functional.silu(gate) * up\n\n        w2_list = [w2[i] for i in range(num_experts)]\n        hidden_states = torch.ops._C_ascend.moe_grouped_matmul(\n            x=hidden_states,\n            weight=w2_list,\n            group_list=group_list,\n            transpose_weight=True,\n        )",
+      "context": "Maybe `group_list.dim() == 2` is enough here?"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/fused_moe/moe_mlp.py",
+      "line": 330,
+      "code": "    if num_tokens <= SMALL_BATCH_THRESHOLD:\n        w13_list = [w13[i] for i in range(num_experts)]\n        group_list = group_list.to(torch.int32)\n\n        gate_up_out = torch.ops._C_ascend.moe_grouped_matmul(\n            x=hidden_states,\n            weight=w13_list,\n            group_list=group_list,\n            transpose_weight=True,\n        )\n\n        gate, up = gate_up_out.chunk(2, dim=-1)\n        hidden_states = torch.nn.functional.silu(gate) * up\n\n        w2_list = [w2[i] for i in range(num_experts)]\n        hidden_states = torch.ops._C_ascend.moe_grouped_matmul(\n            x=hidden_states,\n            weight=w2_list,\n            group_list=group_list,\n            transpose_weight=True,\n        )",
+      "context": "Maybe `group_list.dim() == 2` is enough here?"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/fused_moe/moe_mlp.py\n+++ b/vllm_ascend/ops/fused_moe/moe_mlp.py\n@@ -330,28 +330,21 @@\n         w13_list = [w13[i] for i in range(num_experts)]\n         group_list = group_list.to(torch.int32)\n \n-        if group_list.dim() == 2 and group_list.shape[0] > 0:\n-            gate_up_out = torch.ops._C_ascend.moe_grouped_matmul(\n-                x=hidden_states,\n-                weight=w13_list,\n-                group_list=group_list,\n-                transpose_weight=True,\n-            )\n-        else:\n-            gate_up_out = torch_npu.npu_grouped_matmul(\n-                x=[hidden_states],\n-                weight=w13_list,\n-                group_list=group_list,\n-            )\n+        gate_up_out = torch.ops._C_ascend.moe_grouped_matmul(\n+            x=hidden_states,\n+            weight=w13_list,\n+            group_list=group_list,\n+            transpose_weight=True,\n+        )\n \n         gate, up = gate_up_out.chunk(2, dim=-1)\n         hidden_states = torch.nn.functional.silu(gate) * up",
+      "stats": "1 file changed, +6 lines, -13 lines",
+      "key_changes": [
+        "修改了第 5-17 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

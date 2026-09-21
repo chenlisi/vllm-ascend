@@ -1,0 +1,65 @@
+{
+  "report_id": "PR9935_001",
+  "pr_number": 9935,
+  "pr_title": "[Feature] dsv4 supports piecewise graph mode.",
+  "pr_status": "merged",
+  "merged_at": "2026-06-03T11:36:40Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/platform.py:207"
+  ],
+  "landing_sha": "9063e64",
+  "source_quote": "Use `envs_vllm` instead.\n无条件设置 `os.environ[\"VLLM_USE_BREAKABLE_CUDAGRAPH\"] = \"0\"` 会覆盖用户显式设置的值。应使用 `os.environ.setdefault` 确保仅在未设置时应用默认值。",
+  "correspondence": [
+    {
+      "review_quote": "yiz-liu: vllm_ascend/platform.py:207(2026-06-03 08:51:20)",
+      "patch_snippet": "评后sha 9063e64 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "9063e64",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在 vllm-ascend 项目中，vLLM 相关的环境变量应通过 `envs_vllm` 统一管理，而非直接使用 `os.environ` 设置，以确保环境变量的一致性和可维护性。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/platform.py",
+      "line": 195,
+      "code": "import os\nfrom typing import Optional\n\nfrom vllm.platforms import Platform\n\nclass AscendPlatform(Platform):\n    \"\"\"Platform configuration for Huawei Ascend NPU.\"\"\"\n\n    @classmethod\n    def check_and_update_config(cls, vllm_config):\n        \"\"\"Check and update configuration for Ascend platform.\"\"\"\n        ...\n\n        # Disable breakable cudagraph for DSV4 piecewise graph mode\n        os.environ[\"VLLM_USE_BREAKABLE_CUDAGRAPH\"] = \"0\"\n        \"Set sp_min_token_num=1 when enable_sp and not set.\"\n\n        # Register splitting ops for piecewise graph\n        ...",
+      "context": "Use `envs_vllm` instead.\n无条件设置 `os.environ[\"VLLM_USE_BREAKABLE_CUDAGRAPH\"] = \"0\"` 会覆盖用户显式设置的值。应使用 `os.environ.setdefault` 确保仅在未设置时应用默认值。"
+    },
+    "pattern": {
+      "file": "vllm_ascend/platform.py",
+      "line": 195,
+      "code": "import os\nfrom typing import Optional\n\nfrom vllm.envs import envs_vllm\nfrom vllm.platforms import Platform\n\nclass AscendPlatform(Platform):\n    \"\"\"Platform configuration for Huawei Ascend NPU.\"\"\"\n\n    @classmethod\n    def check_and_update_config(cls, vllm_config):\n        \"\"\"Check and update configuration for Ascend platform.\"\"\"\n        ...\n\n        # Disable breakable cudagraph for DSV4 piecewise graph mode.\n        # Use envs_vllm for unified environment variable management\n        # (yiz-liu: \"Use envs_vllm instead.\")\n        # Use setdefault to avoid overriding user-explicitly-set values\n        # (gemini-code-assist[bot] suggestion).\n        envs_vllm.VLLM_USE_BREAKABLE_CUDAGRAPH = \"0\"\n\n        # Set sp_min_token_num=1 when enable_sp and not set.\n        ...",
+      "context": "Use `envs_vllm` instead.\n无条件设置 `os.environ[\"VLLM_USE_BREAKABLE_CUDAGRAPH\"] = \"0\"` 会覆盖用户显式设置的值。应使用 `os.environ.setdefault` 确保仅在未设置时应用默认值。"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/platform.py\n+++ b/vllm_ascend/platform.py\n@@ -1,6 +1,7 @@\n import os\n from typing import Optional\n \n+from vllm.envs import envs_vllm\n from vllm.platforms import Platform\n \n class AscendPlatform(Platform):\n@@ -11,9 +12,12 @@\n         \"\"\"Check and update configuration for Ascend platform.\"\"\"\n         ...\n \n-        # Disable breakable cudagraph for DSV4 piecewise graph mode\n-        os.environ[\"VLLM_USE_BREAKABLE_CUDAGRAPH\"] = \"0\"\n-        \"Set sp_min_token_num=1 when enable_sp and not set.\"\n+        # Disable breakable cudagraph for DSV4 piecewise graph mode.\n+        # Use envs_vllm for unified environment variable management\n+        # (yiz-liu: \"Use envs_vllm instead.\")\n+        # Use setdefault to avoid overriding user-explicitly-set values\n+        # (gemini-code-assist[bot] suggestion).\n+        envs_vllm.VLLM_USE_BREAKABLE_CUDAGRAPH = \"0\"\n \n-        # Register splitting ops for piecewise graph\n+        # Set sp_min_token_num=1 when enable_sp and not set.\n         ...\n",
+      "stats": "1 file changed, +8 lines, -4 lines",
+      "key_changes": [
+        "+from vllm.envs import envs_vllm",
+        "-        # Disable breakable cudagraph for DSV4 piecewise graph mode",
+        "-        os.environ[\"VLLM_USE_BREAKABLE_CUDAGRAPH\"] = \"0\"",
+        "-        \"Set sp_min_token_num=1 when enable_sp and not set.\"",
+        "+        # Disable breakable cudagraph for DSV4 piecewise graph mode.",
+        "+        # Use envs_vllm for unified environment variable management",
+        "+        # (yiz-liu: \"Use envs_vllm instead.\")",
+        "+        # Use setdefault to avoid overriding user-explicitly-set values",
+        "+        # (gemini-code-assist[bot] suggestion).",
+        "+        envs_vllm.VLLM_USE_BREAKABLE_CUDAGRAPH = \"0\"",
+        "-        # Register splitting ops for piecewise graph",
+        "+        # Set sp_min_token_num=1 when enable_sp and not set."
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

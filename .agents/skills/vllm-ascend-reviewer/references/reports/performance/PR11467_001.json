@@ -1,0 +1,63 @@
+{
+  "report_id": "PR11467_001",
+  "pr_number": 11467,
+  "pr_title": "[Feature] Add triton swiglustep kernel for SwigluStep activation",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/ops/triton/activation/swiglustep.py:2",
+    "vllm_ascend/ops/triton/activation/swiglustep.py:49"
+  ],
+  "landing_sha": "418c741",
+  "source_quote": "补充UT\n这几个修饰tl.constexpr的变量 实际中不会频繁变化把？频繁变化会触发重编译",
+  "correspondence": [
+    {
+      "review_quote": "chenlongxiao: vllm_ascend/ops/triton/activation/swiglustep.py:2",
+      "patch_snippet": "评后sha 418c741 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "chenlongxiao: vllm_ascend/ops/triton/activation/swiglustep.py:49",
+      "patch_snippet": "评后sha 418c741 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "418c741",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "新增的 Triton kernel 必须配套单元测试。使用 `tl.constexpr` 修饰的变量应确保在实际运行中不会频繁变化，否则会导致 Triton JIT 重编译，影响性能。同时注意 `tl.arange` 要求大小为 2 的幂次方。",
+    "context": "",
+    "checkpoints": [
+      "新增 Triton kernel 是否有配套 UT",
+      "tl.constexpr 变量是否会在运行时频繁变化",
+      "tl.arange 的大小是否为 2 的幂次方（否则需使用 next power-of-two + mask）"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/triton/activation/swiglustep.py",
+      "line": 1,
+      "code": "# 该文件不存在，SwigluStepAndMul 激活函数使用 vllm_ascend/ops/activation.py\n# 中的原生 PyTorch 实现，无 Triton 加速路径",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/triton/activation/swiglustep.py",
+      "line": 1,
+      "code": "import torch\nimport triton\nimport triton.language as tl\n\n\n@triton.jit\ndef _swiglustep_kernel(\n    x_ptr,\n    out_ptr,\n    M,  # total rows (runtime value, not constexpr)\n    TOTAL_COLS,\n    HALF_COLS,\n    LIMIT: tl.constexpr,\n    NUM_CORES: tl.constexpr,\n):\n    \"\"\"Fused Triton kernel for SwigluStepAndMul activation.\n\n    Computes: out = silu(gate) * clamp(up, -LIMIT, LIMIT)\n    where gate and up are split from the input along the feature dimension.\n\n    NOTE: LIMIT and NUM_CORES are tl.constexpr variables that do not change\n    frequently in practice (LIMIT is a fixed clamp value, NUM_CORES depends\n    on hardware), so they will not trigger frequent JIT recompilation.\n    \"\"\"\n    # even split of rows across cores\n    block_size = (M - 1) // NUM_CORES + 1\n    pid = tl.program_id(0)\n    row_begin = pid * block_size\n    if row_begin >= M:\n        return\n    row_end = tl.minimum((pid + 1) * block_size, M)\n\n    col_offsets = tl.arange(0, TOTAL_COLS)\n    out_offsets = tl.arange(0, HALF_COLS)\n\n    for row_idx in range(row_begin, row_end):\n        x_row = tl.load(x_ptr + row_idx * TOTAL_COLS + col_offsets)\n        gate = x_row[:HALF_COLS]\n        up = x_row[HALF_COLS:]\n\n        gate_f32 = gate.to(tl.float32)\n        up_f32 = up.to(tl.float32)\n\n        s = gate_f32 * tl.sigmoid(gate_f32)\n        s = tl.minimum(s, LIMIT)\n        up_f32 = tl.minimum(up_f32, LIMIT)\n        up_f32 = tl.maximum(-LIMIT, up_f32)\n        out = s * up_f32\n\n        tl.store(\n            out_ptr + row_idx * HALF_COLS + out_offsets,\n            out.to(x_ptr.dtype.element_ty),\n        )\n\n\ndef swiglustep_forward_triton(x: torch.Tensor,\n                              limit: float = 7.0) -> torch.Tensor:\n    \"\"\"Triton-accelerated SwigluStepAndMul forward pass.\"\"\"\n    assert x.dim() == 2, \"Input must be 2D\"\n    total_cols = x.shape[1]\n    half_cols = total_cols // 2\n    M = x.shape[0]\n\n    num_vectorcore = 32  # Ascend NPU vector core count\n    x_2d = x.view(M, total_cols)\n    out_2d = torch.empty(M, half_cols, dtype=x.dtype, device=x.device)\n\n    _swiglustep_kernel[(num_vectorcore,)](\n        x_2d,\n        out_2d,\n        M,\n        total_cols,\n        half_cols,\n        LIMIT=limit,\n        NUM_CORES=num_vectorcore,\n        multibuffer=True,\n    )\n    return out_2d",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/triton/activation/swiglustep.py\n+++ b/vllm_ascend/ops/triton/activation/swiglustep.py\n@@ -1,2 +1,78 @@\n-# 该文件不存在，SwigluStepAndMul 激活函数使用 vllm_ascend/ops/activation.py\n-# 中的原生 PyTorch 实现，无 Triton 加速路径\n+import torch\n+import triton\n+import triton.language as tl\n+\n+\n+@triton.jit\n+def _swiglustep_kernel(\n+    x_ptr,\n+    out_ptr,\n+    M,  # total rows (runtime value, not constexpr)\n+    TOTAL_COLS,\n+    HALF_COLS,\n+    LIMIT: tl.constexpr,\n+    NUM_CORES: tl.constexpr,\n+):\n+    \"\"\"Fused Triton kernel for SwigluStepAndMul activation.\n+\n+    Computes: out = silu(gate) * clamp(up, -LIMIT, LIMIT)\n+    where gate and up are split from the input along the feature dimension.\n+\n+    NOTE: LIMIT and NUM_CORES are tl.constexpr variables that do not change\n+    frequently in practice (LIMIT is a fixed clamp value, NUM_CORES depends\n+    on hardware), so they will not trigger frequent JIT recompilation.\n+    \"\"\"\n+    # even split of rows across cores\n+    block_size = (M - 1) // NUM_CORES + 1\n+    pid = tl.program_id(0)\n+    row_begin = pid * block_size\n+    if row_begin >= M:\n+        return\n+    row_end = tl.minimum((pid + 1) * block_size, M)\n+\n+    col_offsets = tl.arange(0, TOTAL_COLS)\n+    out_offsets = tl.arange(0, HALF_COLS)\n+\n+    for row_idx in range(row_begin, row_end):\n+        x_row = tl.load(x_ptr + row_idx * TOTAL_COLS + col_offsets)\n+        gate = x_row[:HALF_COLS]\n+        up = x_row[HALF_COLS:]\n+\n+        gate_f32 = gate.to(tl.float32)\n+        up_f32 = up.to(tl.float32)\n+\n+        s = gate_f32 * tl.sigmoid(gate_f32)\n+        s = tl.minimum(s, LIMIT)\n+        up_f32 = tl.minimum(up_f32, LIMIT)\n+        up_f32 = tl.maximum(-LIMIT, up_f32)\n+        out = s * up_f32\n+\n+        tl.store(\n+            out_ptr + row_idx * HALF_COLS + out_offsets,\n+            out.to(x_ptr.dtype.element_ty),\n+        )\n+\n+\n+def swiglustep_forward_triton(x: torch.Tensor,\n+                              limit: float = 7.0) -> torch.Tensor:\n+    \"\"\"Triton-accelerated SwigluStepAndMul forward pass.\"\"\"\n+    assert x.dim() == 2, \"Input must be 2D\"\n+    total_cols = x.shape[1]\n+    half_cols = total_cols // 2\n+    M = x.shape[0]\n+\n+    num_vectorcore = 32  # Ascend NPU vector core count\n+    x_2d = x.view(M, total_cols)\n+    out_2d = torch.empty(M, half_cols, dtype=x.dtype, device=x.device)\n+\n+    _swiglustep_kernel[(num_vectorcore,)](\n+        x_2d,\n+        out_2d,\n+        M,\n+        total_cols,\n+        half_cols,\n+        LIMIT=limit,\n+        NUM_CORES=num_vectorcore,\n+        multibuffer=True,\n+    )\n+    return out_2d",
+      "stats": "1 file changed, +78 lines, -2 lines",
+      "key_changes": [
+        "添加注释说明并修改代码逻辑"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

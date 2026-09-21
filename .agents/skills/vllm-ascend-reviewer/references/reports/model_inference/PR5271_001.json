@@ -1,0 +1,63 @@
+{
+  "report_id": "PR5271_001",
+  "pr_number": 5271,
+  "pr_title": "moe_gating_top_k",
+  "pr_status": "merged",
+  "merged_at": "",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/e2e/nightly/ops/test_npu_moe_gating_top_k.py:18",
+    "vllm_ascend/ops/fused_moe/experts_selector.py:231",
+    "csrc/build_aclnn.sh:72",
+    ".pre-commit-config.yaml:61"
+  ],
+  "landing_sha": "",
+  "source_quote": "plz use npu api",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 要求使用 NPU 原生 API，zzzzwwjj 要求移除无用注释代码、对齐缩进、还原调试期间的代码修改。作者经过 21 次 commit 迭代修改，4/4 建议全部落地。",
+      "patch_snippet": "",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "提交代码时应使用平台原生 API（如 NPU API），移除无用的注释代码，保持代码缩进对齐，并还原调试期间的所有临时修改。",
+    "context": "",
+    "checkpoints": [
+      "是否使用了平台原生 API（如 `torch_npu.npu_xxx`）而非通用 API",
+      "是否存在注释掉的无用代码",
+      "代码缩进是否对齐",
+      "是否还原了调试期间的临时修改（如 `.pre-commit-config.yaml` 的改动）"
+    ],
+    "antipattern": {
+      "file": "tests/e2e/nightly/ops/test_npu_moe_gating_top_k.py",
+      "line": 0,
+      "code": "import torch\nimport numpy as np\n\ndef test_moe_gating_top_k():\n    \"\"\"Test moe_gating_top_k operator.\"\"\"\n    scores = torch.randn(128, 64, device=\"npu\")\n    k = 8\n    result = torch.topk(scores, k)  # 应使用 NPU 原生 API\n    expected = ...\n    assert torch.allclose(result.values, expected)",
+      "context": "plz use npu api"
+    },
+    "pattern": {
+      "file": "tests/e2e/nightly/ops/test_npu_moe_gating_top_k.py",
+      "line": 0,
+      "code": "import torch\nimport torch_npu\nimport numpy as np\n\ndef test_moe_gating_top_k():\n    \"\"\"Test moe_gating_top_k operator.\"\"\"\n    scores = torch.randn(128, 64, device=\"npu\")\n    k = 8\n    result = torch_npu.npu_moe_gating_top_k(scores, k)\n    expected = ...\n    assert torch.allclose(result.values, expected)",
+      "context": "plz use npu api"
+    },
+    "diff": {
+      "unified": "--- a/tests/e2e/nightly/ops/test_npu_moe_gating_top_k.py\n+++ b/tests/e2e/nightly/ops/test_npu_moe_gating_top_k.py\n@@ -1,10 +1,11 @@\n import torch\n+import torch_npu\n import numpy as np\n \n def test_moe_gating_top_k():\n     \"\"\"Test moe_gating_top_k operator.\"\"\"\n     scores = torch.randn(128, 64, device=\"npu\")\n     k = 8\n-    result = torch.topk(scores, k)  # 应使用 NPU 原生 API\n+    result = torch_npu.npu_moe_gating_top_k(scores, k)\n     expected = ...\n     assert torch.allclose(result.values, expected)",
+      "stats": "1 file changed, +2 lines, -1 lines",
+      "key_changes": [
+        "在第 2-2 行新增了代码",
+        "修改了第 8-8 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

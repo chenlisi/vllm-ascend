@@ -1,0 +1,61 @@
+{
+  "report_id": "PR11055_001",
+  "pr_number": 11055,
+  "pr_title": "[Doc] Gemma4 Deployment Tutorial",
+  "pr_status": "merged",
+  "merged_at": "2026-07-09T08:42:41Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "docs/source/tutorials/models/Gemma4.md:38",
+    "docs/source/tutorials/models/Gemma4.md:258"
+  ],
+  "landing_sha": "47e7d7a",
+  "source_quote": "quay images do not support ascned950, so we should here claim how to build vllm-ascend from source. and attach the software environment here.",
+  "correspondence": [
+    {
+      "review_quote": "herizhen 指出文档缺少推荐配置表，需参照模板补充。linfeng-yuan 指出 quay 镜像不支持 Ascend950，应在文档中说明如何从源码编译 vllm-ascend，并附上软件环境要求。作者通过 commit `47e7d7a`（\"refine Gemma4 deployment wording\"）完成了修改。",
+      "patch_snippet": "commit `47e7d7a`",
+      "adoption_judgment": "全部采纳"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "47e7d7a",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当 quay 等公共镜像不支持特定硬件平台（如 Ascend950）时，文档应明确说明并提供源码编译指南及软件环境要求。",
+    "context": "linfeng-yuan 指出 quay 镜像不支持 Ascend950",
+    "checkpoints": [
+      "文档中引用的镜像是否支持目标硬件平台",
+      "是否提供了源码编译的替代方案",
+      "是否列出了软件环境依赖"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/Gemma4.md",
+      "line": 38,
+      "code": "## 2. Environment Setup\n\n### Using Docker Image\n\nPull and run the pre-built image:\n\n```bash\n# 使用 quay 镜像运行 Gemma4\ndocker pull quay.io/ascend/vllm-ascend:latest\ndocker run -it --device /dev/davinci0 quay.io/ascend/vllm-ascend:latest /bin/bash\n```\n\n### Install from Source\n\nAlternatively, build from source if needed.",
+      "context": "linfeng-yuan: quay images do not support ascned950"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/Gemma4.md",
+      "line": 38,
+      "code": "## 2. Environment Setup\n\n> **Note**: quay images do not support Ascend 950. For Ascend 950, you need to build vllm-ascend from source.\n\n### Install from Source (Required for Ascend 950)\n\n#### Software Requirements\n\n- CANN >= 8.1.RC1\n- Python >= 3.9\n- torch >= 2.5.0\n- torch_npu >= 2.5.0",
+      "context": "明确说明镜像兼容性并提供源码编译指南"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/Gemma4.md\n+++ b/docs/source/tutorials/models/Gemma4.md\n@@ -38,10 +38,15 @@\n-### Using Docker Image\n-Pull and run the pre-built image:\n+> **Note**: quay images do not support Ascend 950.\n+\n+### Install from Source (Required for Ascend 950)\n+\n+#### Software Requirements\n+- CANN >= 8.1.RC1\n+- Python >= 3.9",
+      "stats": "1 file changed, added platform compatibility note and source build guide",
+      "key_changes": [
+        "新增: 镜像兼容性说明（quay 不支持 Ascend950）",
+        "新增: 源码编译指南及软件环境要求",
+        "新增: 推荐配置表"
+      ]
+    },
+    "language": "markdown",
+    "_status": "complete"
+  }
+}

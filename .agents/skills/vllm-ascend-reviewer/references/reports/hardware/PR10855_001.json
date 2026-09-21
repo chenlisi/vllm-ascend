@@ -1,0 +1,68 @@
+{
+  "report_id": "PR10855_001",
+  "pr_number": 10855,
+  "pr_title": "[BugFix]Resolve the bubble in the PP pipeline of PP+MTP and fix the verification of PP in the pd separation scenario.",
+  "pr_status": "merged",
+  "merged_at": "2026-06-24T11:49:48Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py:1417",
+    "vllm_ascend/worker/model_runner_v1.py:2397"
+  ],
+  "landing_sha": "c654eb4",
+  "source_quote": "增加PR描述与必要的UT",
+  "correspondence": [
+    {
+      "review_quote": "Tflowers-0129 要求增加 PR 描述与必要的 UT。winson-00178005 指出 PR description 缺失，建议补充问题根因、修复思路和影响范围说明。作者通过 commit `c654eb4` 合并了 main 分支，修复了 PP+MTP 流水线气泡问题。",
+      "patch_snippet": "commit `c654eb4`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "c654eb4",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "涉及复杂场景（如 PP+MTP+PD 分离）的 BugFix PR 必须在 description 中说明：问题根因、修复逻辑、影响范围。同时应补充必要的单元测试覆盖关键逻辑路径。",
+    "context": "",
+    "checkpoints": [
+      "检查 PR description 是否包含 What/Why/How",
+      "确认复杂条件组合逻辑是否有 UT 覆盖",
+      "验证新增方法是否有清晰的命名和注释"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py",
+      "line": 1417,
+      "code": "# vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py\n# MooncakeConnector 类中\n\nclass MooncakeConnector(KVConnectorBase):\n    \"\"\"Mooncake KV transfer connector for PD separation.\"\"\"\n\n    def set_xfer_handshake_metadata(self, metadata: dict) -> None:\n        \"\"\"Set transfer handshake metadata for flat (tp_rank) keys.\"\"\"\n        tp_size = max(tp_rank for (_, tp_rank) in metadata) + 1\n        # ... 设置 metadata 的逻辑 ...\n        self.transfer_engine.set_handshake_metadata(metadata)",
+      "context": "增加PR描述与必要的UT"
+    },
+    "pattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py",
+      "line": 1417,
+      "code": "# vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py\n# MooncakeConnector 类中\n\nclass MooncakeConnector(KVConnectorBase):\n    \"\"\"Mooncake KV transfer connector for PD separation.\"\"\"\n\n    def set_xfer_handshake_metadata_pp_aware(\n        self, metadata: dict\n    ) -> None:\n        \"\"\"Set transfer handshake metadata with PP-aware mapping.\n\n        Maps (pp_rank, tp_rank) → flat metadata dictionary,\n        correctly handling pipeline parallelism scenarios.\n        \"\"\"\n        if not metadata:\n            self.set_xfer_handshake_metadata({})\n            return\n        tp_size = max(tp_rank for (_, tp_rank) in metadata) + 1\n        # ... PP-aware metadata 映射逻辑 ...\n        self.transfer_engine.set_handshake_metadata(metadata)",
+      "context": "增加PR描述与必要的UT"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py\n+++ b/vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py\n@@ -4,8 +4,17 @@\n class MooncakeConnector(KVConnectorBase):\n     \"\"\"Mooncake KV transfer connector for PD separation.\"\"\"\n \n-    def set_xfer_handshake_metadata(self, metadata: dict) -> None:\n-        \"\"\"Set transfer handshake metadata for flat (tp_rank) keys.\"\"\"\n+    def set_xfer_handshake_metadata_pp_aware(\n+        self, metadata: dict\n+    ) -> None:\n+        \"\"\"Set transfer handshake metadata with PP-aware mapping.\n+\n+        Maps (pp_rank, tp_rank) → flat metadata dictionary,\n+        correctly handling pipeline parallelism scenarios.\n+        \"\"\"\n+        if not metadata:\n+            self.set_xfer_handshake_metadata({})\n+            return\n         tp_size = max(tp_rank for (_, tp_rank) in metadata) + 1\n-        # ... 设置 metadata 的逻辑 ...\n+        # ... PP-aware metadata 映射逻辑 ...\n         self.transfer_engine.set_handshake_metadata(metadata)",
+      "stats": "1 file changed, +12 lines, -3 lines",
+      "key_changes": [
+        "移除: def set_xfer_handshake_metadata(self, metadata: dict) -> None:",
+        "移除: \"\"\"Set transfer handshake metadata for flat (tp_rank) keys.\"\"\"",
+        "新增: def set_xfer_handshake_metadata_pp_aware(",
+        "新增: self, metadata: dict",
+        "新增: ) -> None:",
+        "新增: \"\"\"Set transfer handshake metadata with PP-aware mapping.",
+        "新增: Maps (pp_rank, tp_rank) → flat metadata dictionary,",
+        "新增: correctly handling pipeline parallelism scenarios.",
+        "新增: \"\"\"",
+        "新增: if not metadata:"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

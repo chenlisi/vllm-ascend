@@ -1,0 +1,78 @@
+{
+  "report_id": "PR10754_001",
+  "pr_number": 10754,
+  "pr_title": "[Misc] Standardize logging and prefixing across ascend modules",
+  "pr_status": "merged",
+  "merged_at": "2026-06-22T13:56:35Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/worker.py:779",
+    "vllm_ascend/worker/worker.py:741",
+    "vllm_ascend/worker/pcp_utils.py:161",
+    "vllm_ascend/worker/v2/input_batch.py:56",
+    "vllm_ascend/worker/v2/states.py:55",
+    "vllm_ascend/worker/v2/spec_decode/eagle/speculator.py:337",
+    "vllm_ascend/core/scheduler_profiling_chunk.py:185",
+    "vllm_ascend/core/scheduler_profiling_chunk.py:171",
+    "vllm_ascend/core/profiling_chunk_predictor.py:285",
+    "vllm_ascend/core/profiling_chunk_predictor.py:147",
+    "vllm_ascend/core/profiling_chunk_predictor.py:75"
+  ],
+  "landing_sha": "7168021",
+  "source_quote": "plz keep this as is, the change makes the code more redundant.",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 指出多处修改不必要应保持原样、日志级别应改为 debug、多处新增日志不需要、应保持 int 而非 string。gjc0824 确认 fitted_b 设为 1e-9 无必要，后续会删除。作者通过 commit `7168021` 完成修改，12/12 建议全部落地。",
+      "patch_snippet": "commit `7168021`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "7168021",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "日志标准化应聚焦于真正需要改进的地方，不应将不必要的修改（如 int 改 string、添加冗余日志）引入代码。日志级别应根据实际需要设置（info vs debug）。",
+    "context": "",
+    "checkpoints": [
+      "日志修改是否真正改善了可观测性，还是增加了冗余",
+      "日志级别是否合理（高频信息应使用 debug 级别）",
+      "数据类型是否应保持原样而非不必要的转换",
+      "新增日志是否有实际调试价值"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/worker.py",
+      "line": 730,
+      "code": "# （根据评审意见推断）作者将日志格式标准化时\n# 将 int 改为 string，评审人认为不必要\n\n    def _execute_model(self, scheduler_output):\n        \"\"\"Execute model forward pass.\"\"\"\n        # 作者将 step 从 int 改为 string（不必要）\n        step_str = str(self.step_counter)  # ❌ 不需要转为 string\n        logger.info(f\"[AscendWorker] Executing step {step_str}\")\n\n        # 作者修改了日志格式使代码更冗余\n        log_prefix = f\"[AscendWorker][step={step_str}]\"  # ❌ 冗余\n        logger.info(f\"{log_prefix} Starting forward pass\")\n        logger.info(f\"{log_prefix} Batch size: {scheduler_output.num_scheduled_steps}\")\n        ...\n\n    def _check_health(self):\n        \"\"\"Check worker health status.\"\"\"\n        # 作者修改了 check_health 日志级别\n        logger.info(\"Health check passed\")  # 应保持原样",
+      "context": "plz keep this as is, the change makes the code more redundant."
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/worker.py",
+      "line": 730,
+      "code": "# 恢复了不应修改的代码（keep as is）\n\n    def _execute_model(self, scheduler_output):\n        \"\"\"Execute model forward pass.\"\"\"\n        step = self.step_counter  # ✅ 保持 int 类型\n        logger.info(f\"[AscendWorker] Executing step {step}\")\n\n        logger.info(f\"[AscendWorker] Starting forward pass\")\n        logger.info(f\"[AscendWorker] Batch size: {scheduler_output.num_scheduled_steps}\")\n        ...\n\n    def _check_health(self):\n        \"\"\"Check worker health status.\"\"\"\n        logger.info(\"Health check passed\")  # ✅ 保持原样",
+      "context": "plz keep this as is, the change makes the code more redundant."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/worker.py\n+++ b/vllm_ascend/worker/worker.py\n@@ -1,19 +1,14 @@\n-# （根据评审意见推断）作者将日志格式标准化时\n-# 将 int 改为 string，评审人认为不必要\n+# 恢复了不应修改的代码（keep as is）\n \n     def _execute_model(self, scheduler_output):\n         \"\"\"Execute model forward pass.\"\"\"\n-        # 作者将 step 从 int 改为 string（不必要）\n-        step_str = str(self.step_counter)  # ❌ 不需要转为 string\n-        logger.info(f\"[AscendWorker] Executing step {step_str}\")\n+        step = self.step_counter  # ✅ 保持 int 类型\n+        logger.info(f\"[AscendWorker] Executing step {step}\")\n \n-        # 作者修改了日志格式使代码更冗余\n-        log_prefix = f\"[AscendWorker][step={step_str}]\"  # ❌ 冗余\n-        logger.info(f\"{log_prefix} Starting forward pass\")\n-        logger.info(f\"{log_prefix} Batch size: {scheduler_output.num_scheduled_steps}\")\n+        logger.info(f\"[AscendWorker] Starting forward pass\")\n+        logger.info(f\"[AscendWorker] Batch size: {scheduler_output.num_scheduled_steps}\")\n         ...\n \n     def _check_health(self):\n         \"\"\"Check worker health status.\"\"\"\n-        # 作者修改了 check_health 日志级别\n-        logger.info(\"Health check passed\")  # 应保持原样\n+        logger.info(\"Health check passed\")  # ✅ 保持原样",
+      "stats": "1 file changed, +6 lines, -11 lines",
+      "key_changes": [
+        "移除: # （根据评审意见推断）作者将日志格式标准化时",
+        "移除: # 将 int 改为 string，评审人认为不必要",
+        "新增: # 恢复了不应修改的代码（keep as is）",
+        "移除: # 作者将 step 从 int 改为 string（不必要）",
+        "移除: step_str = str(self.step_counter)  # ❌ 不需要转为 string",
+        "移除: logger.info(f\"[AscendWorker] Executing step {step_str}\")",
+        "新增: step = self.step_counter  # ✅ 保持 int 类型",
+        "新增: logger.info(f\"[AscendWorker] Executing step {step}\")",
+        "移除: # 作者修改了日志格式使代码更冗余",
+        "移除: log_prefix = f\"[AscendWorker][step={step_str}]\"  # ❌ 冗余"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

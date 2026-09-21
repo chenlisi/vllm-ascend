@@ -1,0 +1,62 @@
+{
+  "report_id": "PR11022_001",
+  "pr_number": 11022,
+  "pr_title": "[main][Feature] enable prefill with mc2 with additional_config",
+  "pr_status": "merged",
+  "merged_at": "2026-07-02T15:27:58Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/e2e/nightly/single_node/models/configs/GLM-5.1-W8A8-PrefillMC2.yaml:6"
+  ],
+  "landing_sha": "9c701e9",
+  "source_quote": "",
+  "correspondence": [
+    {
+      "review_quote": "zhangxinyuehfad 指出新增的测试用例 `GLM-5.1-W8A8-PrefillMC2.yaml` 应同时添加到 `nightly_config.yaml` 中，以确保 nightly 流水线能正确调度执行。作者通过 commit `9c701e9`（\"update to workflow\"）完成了修改。",
+      "patch_snippet": "commit `9c701e9`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "9c701e9",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 `tests/e2e/nightly/` 目录下新增的测试用例配置文件，必须同时在 `.github/workflows/configs/nightly_config.yaml` 中注册，否则 nightly CI 流水线不会调度执行该测试。",
+    "context": "",
+    "checkpoints": [
+      "新增的测试 YAML 文件是否在 `nightly_config.yaml` 中注册",
+      "测试名称是否与 workflow 中的调度配置匹配"
+    ],
+    "antipattern": {
+      "file": ".github/workflows/configs/nightly_config.yaml",
+      "line": 6,
+      "code": "# Nightly CI test configuration\nmodels:\n  - test_name: GLM-5.1-W8A8\n    config: tests/e2e/nightly/single_node/models/configs/GLM-5.1-W8A8.yaml\n  - test_name: Qwen2.5-72B-Instruct-FP8\n    config: tests/e2e/nightly/single_node/models/configs/Qwen2.5-72B-Instruct-FP8.yaml\n  - test_name: DeepSeek-V2-Lite\n    config: tests/e2e/nightly/single_node/models/configs/DeepSeek-V2-Lite.yaml\n  # GLM-5.1-W8A8-PrefillMC2.yaml 已在 tests/e2e/nightly/single_node/models/configs/ 下创建\n  # 但未在此文件中注册，导致 nightly CI 不会调度执行该测试",
+      "context": "The test case should add in https://github.com/vllm-project/vllm-ascend/blob/main/.github/workflows/configs/nightly_config.yaml"
+    },
+    "pattern": {
+      "file": ".github/workflows/configs/nightly_config.yaml",
+      "line": 6,
+      "code": "# Nightly CI test configuration\nmodels:\n  - test_name: GLM-5.1-W8A8\n    config: tests/e2e/nightly/single_node/models/configs/GLM-5.1-W8A8.yaml\n  - test_name: GLM-5.1-W8A8-PrefillMC2\n    config: tests/e2e/nightly/single_node/models/configs/GLM-5.1-W8A8-PrefillMC2.yaml\n  - test_name: Qwen2.5-72B-Instruct-FP8\n    config: tests/e2e/nightly/single_node/models/configs/Qwen2.5-72B-Instruct-FP8.yaml\n  - test_name: DeepSeek-V2-Lite\n    config: tests/e2e/nightly/single_node/models/configs/DeepSeek-V2-Lite.yaml\n  # 已将 GLM-5.1-W8A8-PrefillMC2 测试用例注册到 nightly_config.yaml\n  # （根据评审意见推断：评审人指出测试用例应添加到 nightly_config.yaml）",
+      "context": "The test case should add in https://github.com/vllm-project/vllm-ascend/blob/main/.github/workflows/configs/nightly_config.yaml"
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/configs/nightly_config.yaml\n+++ b/.github/workflows/configs/nightly_config.yaml\n@@ -2,9 +2,11 @@\n models:\n   - test_name: GLM-5.1-W8A8\n     config: tests/e2e/nightly/single_node/models/configs/GLM-5.1-W8A8.yaml\n+  - test_name: GLM-5.1-W8A8-PrefillMC2\n+    config: tests/e2e/nightly/single_node/models/configs/GLM-5.1-W8A8-PrefillMC2.yaml\n   - test_name: Qwen2.5-72B-Instruct-FP8\n     config: tests/e2e/nightly/single_node/models/configs/Qwen2.5-72B-Instruct-FP8.yaml\n   - test_name: DeepSeek-V2-Lite\n     config: tests/e2e/nightly/single_node/models/configs/DeepSeek-V2-Lite.yaml\n-  # GLM-5.1-W8A8-PrefillMC2.yaml 已在 tests/e2e/nightly/single_node/models/configs/ 下创建\n-  # 但未在此文件中注册，导致 nightly CI 不会调度执行该测试\n+  # 已将 GLM-5.1-W8A8-PrefillMC2 测试用例注册到 nightly_config.yaml\n+  # （根据评审意见推断：评审人指出测试用例应添加到 nightly_config.yaml）",
+      "stats": "1 file changed, +4 lines, -2 lines",
+      "key_changes": [
+        "新增: - test_name: GLM-5.1-W8A8-PrefillMC2",
+        "新增: config: tests/e2e/nightly/single_node/models/configs/GLM-5.1-W8A8-PrefillMC2.yam",
+        "移除: # GLM-5.1-W8A8-PrefillMC2.yaml 已在 tests/e2e/nightly/single_node/models/configs/ ",
+        "移除: # 但未在此文件中注册，导致 nightly CI 不会调度执行该测试",
+        "新增: # 已将 GLM-5.1-W8A8-PrefillMC2 测试用例注册到 nightly_config.yaml",
+        "新增: # （根据评审意见推断：评审人指出测试用例应添加到 nightly_config.yaml）"
+      ]
+    },
+    "language": "yaml",
+    "_status": "extracted"
+  }
+}

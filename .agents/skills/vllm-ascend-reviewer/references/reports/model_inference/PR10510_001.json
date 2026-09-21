@@ -1,0 +1,69 @@
+{
+  "report_id": "PR10510_001",
+  "pr_number": 10510,
+  "pr_title": "[Feature]Support IndexCache top-k index reuse for GLM5.2",
+  "pr_status": "merged",
+  "merged_at": "2026-06-27T01:16:13Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/spec_decode/llm_base_proposer.py:1055",
+    "vllm_ascend/spec_decode/llm_base_proposer.py:478",
+    "tests/ut/spec_decode/a2/test_eagle_proposer.py:4387"
+  ],
+  "landing_sha": "5e6c253",
+  "source_quote": "just wonder what is the usage of index cache for MTP since MTP usually has only one layer? But certainly, I understand that skiping the mtp-layer's indexer also has performance gain.",
+  "correspondence": [
+    {
+      "review_quote": "本次评审涉及 2 位人工评审人：\n- **YzTongNiar** 询问 MTP 通常只有一层，index cache 的用途是什么。作者解释虽然 MTP 层少，但跳过 indexer 仍有性能收益，且论文实验表明相邻层的 top-k indices 重叠度达 70%-100%。\n- **lilinsiman** 要求确认是否可以复用 vLLM 的逻辑。作者解释该修改位于 vLLM 的 `load_eagle_model()` 函数末尾，不能直接复用。同时要求添加 nightly 测试，但因新模型的量化版本尚未发布而无法添加。\n\n该功能仅在模型 `config.json` 中存在 `index",
+      "patch_snippet": "",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "5e6c253",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在 MTP 推理中，相邻步骤的 top-k indices 高度重叠（70%-100%），可以通过共享 target model 的 `topk_indices_buffer` 来跳过 draft model 的 indexer 计算，减少冗余计算。",
+    "context": "",
+    "checkpoints": [
+      "检查 `draft_hf_config` 是否为 None 的安全处理",
+      "确认 `set_skip_topk` 的切换时机是否在 `_run_merged_draft` 内部",
+      "验证功能是否通过 `index_share_for_mtp_iteration` 配置开关控制"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/spec_decode/llm_base_proposer.py",
+      "line": 175,
+      "code": "# gemini-code-assist[bot] 指出: draft_hf_config 为 None 时 getattr 会抛出 AttributeError\n\n    def __init__(self, vllm_config, ...):\n        \"\"\"Initialize the MTP proposer for IndexCache top-k index reuse.\"\"\"\n        self.vllm_config = vllm_config\n        self.model = None\n\n        # BUG: draft_hf_config 可能为 None（当 draft_model_config 为 None 时）\n        # getattr(None, ...) 会抛出 AttributeError\n        spec_config = vllm_config.speculative_config\n        draft_model_config = spec_config.draft_model_config\n        draft_hf_config = draft_model_config.hf_config\n\n        self._share_mtp_indices = getattr(\n            draft_hf_config, \"index_share_for_mtp_iteration\", False\n        )\n        self._topk_indices_buffer = None",
+      "context": "just wonder what is the usage of index cache for MTP since MTP usually has only one layer? But certainly, I understand that skiping the mtp-layer's indexer also has performance gain."
+    },
+    "pattern": {
+      "file": "vllm_ascend/spec_decode/llm_base_proposer.py",
+      "line": 175,
+      "code": "# gemini-code-assist[bot] 建议: 安全处理 None，从 vllm_config 参数获取配置\n\n    def __init__(self, vllm_config, ...):\n        \"\"\"Initialize the MTP proposer for IndexCache top-k index reuse.\"\"\"\n        self.vllm_config = vllm_config\n        self.model = None\n\n        # FIX: 安全处理 draft_hf_config 为 None 的情况\n        self._share_mtp_indices = False\n        spec_config = vllm_config.speculative_config\n        draft_model_config = getattr(spec_config, \"draft_model_config\", None)\n        draft_hf_config = (\n            getattr(draft_model_config, \"hf_config\", None)\n            if draft_model_config is not None\n            else None\n        )\n        self._share_mtp_indices = (\n            getattr(draft_hf_config, \"index_share_for_mtp_iteration\", False)\n            if draft_hf_config is not None\n            else False\n        )\n        self._topk_indices_buffer = None",
+      "context": "just wonder what is the usage of index cache for MTP since MTP usually has only one layer? But certainly, I understand that skiping the mtp-layer's indexer also has performance gain."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/spec_decode/llm_base_proposer.py\n+++ b/vllm_ascend/spec_decode/llm_base_proposer.py\n@@ -1,17 +1,22 @@\n-# gemini-code-assist[bot] 指出: draft_hf_config 为 None 时 getattr 会抛出 AttributeError\n+# gemini-code-assist[bot] 建议: 安全处理 None，从 vllm_config 参数获取配置\n \n     def __init__(self, vllm_config, ...):\n         \"\"\"Initialize the MTP proposer for IndexCache top-k index reuse.\"\"\"\n         self.vllm_config = vllm_config\n         self.model = None\n \n-        # BUG: draft_hf_config 可能为 None（当 draft_model_config 为 None 时）\n-        # getattr(None, ...) 会抛出 AttributeError\n+        # FIX: 安全处理 draft_hf_config 为 None 的情况\n+        self._share_mtp_indices = False\n         spec_config = vllm_config.speculative_config\n-        draft_model_config = spec_config.draft_model_config\n-        draft_hf_config = draft_model_config.hf_config\n-\n-        self._share_mtp_indices = getattr(\n-            draft_hf_config, \"index_share_for_mtp_iteration\", False\n+        draft_model_config = getattr(spec_config, \"draft_model_config\", None)\n+        draft_hf_config = (\n+            getattr(draft_model_config, \"hf_config\", None)\n+            if draft_model_config is not None\n+            else None\n+        )\n+        self._share_mtp_indices = (\n+            getattr(draft_hf_config, \"index_share_for_mtp_iteration\", False)\n+            if draft_hf_config is not None\n+            else False\n         )\n         self._topk_indices_buffer = None",
+      "stats": "1 file changed, +13 lines, -8 lines",
+      "key_changes": [
+        "移除: # gemini-code-assist[bot] 指出: draft_hf_config 为 None 时 getattr 会抛出 AttributeErro",
+        "新增: # gemini-code-assist[bot] 建议: 安全处理 None，从 vllm_config 参数获取配置",
+        "移除: # BUG: draft_hf_config 可能为 None（当 draft_model_config 为 None 时）",
+        "移除: # getattr(None, ...) 会抛出 AttributeError",
+        "新增: # FIX: 安全处理 draft_hf_config 为 None 的情况",
+        "新增: self._share_mtp_indices = False",
+        "移除: draft_model_config = spec_config.draft_model_config",
+        "移除: draft_hf_config = draft_model_config.hf_config",
+        "移除: self._share_mtp_indices = getattr(",
+        "移除: draft_hf_config, \"index_share_for_mtp_iteration\", False"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

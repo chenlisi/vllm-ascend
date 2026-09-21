@@ -1,0 +1,57 @@
+{
+  "report_id": "PR7578_001",
+  "pr_number": 7578,
+  "pr_title": "adapt to main2main for model runner v2",
+  "pr_status": "merged",
+  "merged_at": "2026-03-25T01:08:44Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/patch/worker/patch_triton.py"
+  ],
+  "landing_sha": "7d77f40",
+  "source_quote": "返回类型标注 `-> int` 与实际返回语义不一致。函数实际返回一个包含两个元素的结构：padded 后的 query_start_loc numpy 数组（ndarray）和 padding 后有效请求数（int），静态类型标注仅声明了 `int`，会导致 mypy/pyright 类型检查不通过、调用方解包时 IDE 无警告、以及 ruff `T484`/`ANN` 系列规则告警。",
+  "correspondence": [
+    {
+      "review_quote": "gemini-code-assist[bot] (标注级别：HIGH): vllm_ascend/patch/worker/patch_triton.py",
+      "patch_snippet": "评后sha 7d77f40 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "7d77f40",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 `vllm_ascend/patch/worker/` 与 `vllm_ascend/patch/worker/patch_v2/` 下所有 Triton patch 辅助函数（尤其 `_pad_query_start_loc_for_fia`、`_build_cu_seqlens` 等与 layout=TND/BND 协同的工具函数），签名 `-> X` 必须与：(a) 函数末尾实际 `return a, b` 的元组结构一致；(b) 所有调用方 `arr, n = _pad_query_start_loc_for_fia(...)` 的解包目标数量一致；(c) 下游传入 `fused_recurrent_gated_delta_rule_fwd_kernel` 的 `num_valid_token_ids` 参数类型（int）一致。patch 与 patch_v2 两条目录一旦有同名函数，两边的类型标注必须对齐，否则 ruff/mypy 交替告警。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/patch/worker/patch_triton.py",
+      "line": 0,
+      "code": "# vllm_ascend/patch/worker/patch_triton.py（7d77f40^）\ndef _pad_query_start_loc_for_fia(\n    query_start_loc: torch.Tensor,\n    num_reqs_padded: int,\n    cudagraph_runtime_mode: CUDAGraphMode | None = None,\n    batch_desc_num_reqs: int | None = None,\n) -> int:   # ❌ 实际返回 tuple(ndarray, int)，类型仅写了 int\n    ...",
+      "context": "返回类型标注 `-> int` 与实际返回语义不一致。函数实际返回一个包含两个元素的结构：padded 后的 query_start_loc numpy 数组（ndarray）和 padding 后有效请求数（int），静态类型标注仅声明了 `int`，会导致 mypy/pyright 类型检查不通过、调用方解包时 IDE 无警告、以及 ruff `T484`/`ANN` 系列规则告警。"
+    },
+    "pattern": {
+      "file": "vllm_ascend/patch/worker/patch_triton.py",
+      "line": 0,
+      "code": "# vllm_ascend/patch/worker/patch_triton.py（7d77f40 patch diff 精确 +0/-1 +1/-0，实际 = +1/-1）\ndef _pad_query_start_loc_for_fia(\n    query_start_loc: torch.Tensor,\n    num_reqs_padded: int,\n    cudagraph_runtime_mode: CUDAGraphMode | None = None,\n    batch_desc_num_reqs: int | None = None,\n) -> tuple[np.ndarray, int]:   # ✅ 与实际返回 tuple[ndarray, int] 对齐\n    ...",
+      "context": "返回类型标注 `-> int` 与实际返回语义不一致。函数实际返回一个包含两个元素的结构：padded 后的 query_start_loc numpy 数组（ndarray）和 padding 后有效请求数（int），静态类型标注仅声明了 `int`，会导致 mypy/pyright 类型检查不通过、调用方解包时 IDE 无警告、以及 ruff `T484`/`ANN` 系列规则告警。"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/patch/worker/patch_triton.py\n+++ b/vllm_ascend/patch/worker/patch_triton.py\n@@ -1,8 +1,8 @@\n-# vllm_ascend/patch/worker/patch_triton.py（7d77f40^）\n+# vllm_ascend/patch/worker/patch_triton.py（7d77f40 patch diff 精确 +0/-1 +1/-0，实际 = +1/-1）\n def _pad_query_start_loc_for_fia(\n     query_start_loc: torch.Tensor,\n     num_reqs_padded: int,\n     cudagraph_runtime_mode: CUDAGraphMode | None = None,\n     batch_desc_num_reqs: int | None = None,\n-) -> int:   # ❌ 实际返回 tuple(ndarray, int)，类型仅写了 int\n+) -> tuple[np.ndarray, int]:   # ✅ 与实际返回 tuple[ndarray, int] 对齐\n     ...\n",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "-# vllm_ascend/patch/worker/patch_triton.py（7d77f40^）",
+        "+# vllm_ascend/patch/worker/patch_triton.py（7d77f40 patch diff 精确 +0/-1 +1/-0，实际 = +1/-1）",
+        "-) -> int:   # ❌ 实际返回 tuple(ndarray, int)，类型仅写了 int",
+        "+) -> tuple[np.ndarray, int]:   # ✅ 与实际返回 tuple[ndarray, int] 对齐"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

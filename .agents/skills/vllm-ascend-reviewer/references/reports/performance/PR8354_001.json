@@ -1,0 +1,73 @@
+{
+  "report_id": "PR8354_001",
+  "pr_number": 8354,
+  "pr_title": "[BugFix] fix hang in async scheduling while open ENPU",
+  "pr_status": "merged",
+  "merged_at": "2026-04-20T02:43:27Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/compilation/acl_graph.py:209"
+  ],
+  "landing_sha": "8e86190",
+  "source_quote": "The only sync we need when `mode=FULL` is the one between two steps, i.e., after the draft model and before the next target model.\n> We don't need any sync in between the target model and draft model, or between different steps of spec, anymore.",
+  "correspondence": [
+    {
+      "review_quote": "yiz-liu: vllm_ascend/compilation/acl_graph.py:209",
+      "patch_snippet": "评后sha 8e86190 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "8e86190",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 speculative decoding 的异步调度中，`mode=FULL` 下仅需要在两个 step 之间（draft model 完成后、下一个 target model 开始前）进行 stream 同步。target model 和 draft model 之间、以及 spec 不同步骤之间的同步是不必要的，会导致性能下降甚至 hang。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/compilation/acl_graph.py",
+      "line": 200,
+      "code": "# between two steps, i.e., after the draft model and before the\n# next target model. We don't need any sync in between the target\n# model and draft model, or between different steps of spec, anymore.\"\n\n    def _sync_for_spec_decode(self, mode, step_type):\n        \"\"\"Synchronize NPU stream for speculative decoding.\"\"\"\n        if mode == FULL:\n            if step_type == \"after_target\":\n                # target model 和 draft model 之间的同步 - 不必要\n                torch.npu.current_stream().synchronize()\n            elif step_type == \"between_spec_steps\":\n                # 不同 spec 步骤之间的同步 - 不必要\n                torch.npu.current_stream().synchronize()\n            elif step_type == \"after_draft\":\n                # draft model 完成后、下一个 target model 之前 - 必要\n                torch.npu.current_stream().synchronize()\n\n    def _replay_graph(self, graph, mode):\n        \"\"\"Replay a captured ACL graph.\"\"\"\n        if mode == FULL:\n            # 多处冗余同步导致异步调度 hang\n            torch.npu.current_stream().synchronize()\n            graph.replay()\n            torch.npu.current_stream().synchronize()\n        return graph",
+      "context": "The only sync we need when `mode=FULL` is the one between two steps, i.e., after the draft model and before the next target model.\n> We don't need any sync in between the target model and draft model,"
+    },
+    "pattern": {
+      "file": "vllm_ascend/compilation/acl_graph.py",
+      "line": 200,
+      "code": "# commit 8e86190 \"Remove unnecessary conditions when using\n# stream synchronization\" (+5/-8)\n# mode=FULL 时仅保留步骤间必要的同步\n\n    def _sync_for_spec_decode(self, mode, step_type):\n        \"\"\"Synchronize NPU stream for speculative decoding.\"\"\"\n        if mode == FULL:\n            # 仅在两个 step 之间同步：draft model 完成后、下一个 target model 之前\n            if step_type == \"after_draft\":\n                torch.npu.current_stream().synchronize()\n            # 移除了 after_target 和 between_spec_steps 的不必要同步\n\n    def _replay_graph(self, graph, mode):\n        \"\"\"Replay a captured ACL graph.\"\"\"\n        if mode == FULL:\n            # 仅保留必要的步骤间同步\n            graph.replay()\n            torch.npu.current_stream().synchronize()\n        return graph",
+      "context": "The only sync we need when `mode=FULL` is the one between two steps, i.e., after the draft model and before the next target model.\n> We don't need any sync in between the target model and draft model,"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/compilation/acl_graph.py\n+++ b/vllm_ascend/compilation/acl_graph.py\n@@ -1,25 +1,19 @@\n-# between two steps, i.e., after the draft model and before the\n-# next target model. We don't need any sync in between the target\n-# model and draft model, or between different steps of spec, anymore.\"\n+# commit 8e86190 \"Remove unnecessary conditions when using\n+# stream synchronization\" (+5/-8)\n+# mode=FULL 时仅保留步骤间必要的同步\n \n     def _sync_for_spec_decode(self, mode, step_type):\n         \"\"\"Synchronize NPU stream for speculative decoding.\"\"\"\n         if mode == FULL:\n-            if step_type == \"after_target\":\n-                # target model 和 draft model 之间的同步 - 不必要\n+            # 仅在两个 step 之间同步：draft model 完成后、下一个 target model 之前\n+            if step_type == \"after_draft\":\n                 torch.npu.current_stream().synchronize()\n-            elif step_type == \"between_spec_steps\":\n-                # 不同 spec 步骤之间的同步 - 不必要\n-                torch.npu.current_stream().synchronize()\n-            elif step_type == \"after_draft\":\n-                # draft model 完成后、下一个 target model 之前 - 必要\n-                torch.npu.current_stream().synchronize()\n+            # 移除了 after_target 和 between_spec_steps 的不必要同步\n \n     def _replay_graph(self, graph, mode):\n         \"\"\"Replay a captured ACL graph.\"\"\"\n         if mode == FULL:\n-            # 多处冗余同步导致异步调度 hang\n-            torch.npu.current_stream().synchronize()\n+            # 仅保留必要的步骤间同步\n             graph.replay()\n             torch.npu.current_stream().synchronize()\n         return graph\n",
+      "stats": "1 file changed, +7 lines, -13 lines",
+      "key_changes": [
+        "-# between two steps, i.e., after the draft model and before the",
+        "-# next target model. We don't need any sync in between the target",
+        "-# model and draft model, or between different steps of spec, anymore.\"",
+        "+# commit 8e86190 \"Remove unnecessary conditions when using",
+        "+# stream synchronization\" (+5/-8)",
+        "+# mode=FULL 时仅保留步骤间必要的同步",
+        "-            if step_type == \"after_target\":",
+        "-                # target model 和 draft model 之间的同步 - 不必要",
+        "+            # 仅在两个 step 之间同步：draft model 完成后、下一个 target model 之前",
+        "+            if step_type == \"after_draft\":",
+        "-            elif step_type == \"between_spec_steps\":",
+        "-                # 不同 spec 步骤之间的同步 - 不必要",
+        "-                torch.npu.current_stream().synchronize()",
+        "-            elif step_type == \"after_draft\":",
+        "-                # draft model 完成后、下一个 target model 之前 - 必要",
+        "-                torch.npu.current_stream().synchronize()",
+        "+            # 移除了 after_target 和 between_spec_steps 的不必要同步",
+        "-            # 多处冗余同步导致异步调度 hang",
+        "-            torch.npu.current_stream().synchronize()",
+        "+            # 仅保留必要的步骤间同步"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "report_id": "PR9763_001",
+  "pr_number": 9763,
+  "pr_title": "[Feature] Support extract_hidden_states for hybrid models on Ascend NPU",
+  "pr_status": "merged",
+  "merged_at": "2026-06-17T07:54:58Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    ".github/workflows/scripts/test_config.yaml:496"
+  ],
+  "landing_sha": "45ae91f",
+  "source_quote": "it's better to combine the `test_extract_hidden_states` and `test_extract_hidden_states_qwen35.py` into one file with pytest.parameterize.\nDone — combined both into test_extract_hidden_states.py with pytest.mark.parametrize (dense_eager, dense_aclgraph, hybrid_dummy_eager), removed the qwen35 file, and updated test_config.yaml.",
+  "correspondence": [
+    {
+      "review_quote": "Ronald1995: .github/workflows/scripts/test_config.yaml:496",
+      "patch_snippet": "评后sha 45ae91f 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "45ae91f",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当多个测试文件测试同一功能的不同配置时，应合并为一个文件并使用 `pytest.mark.parametrize` 进行参数化，避免测试文件冗余。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": ".github/workflows/scripts/test_config.yaml",
+      "line": 490,
+      "code": "# （根据评审意见推断）存在两个独立的测试条目\n# Ronald1995 评论: \"it's better to combine the test_extract_hidden_states and\n# test_extract_hidden_states_qwen35.py into one file with pytest.parameterize\"\n\ntest_matrix:\n  # ... 其他测试条目 ...\n  - name: test_extract_hidden_states\n    script: tests/e2e/spec_decode/test_extract_hidden_states.py\n    cards: 1\n    timeout: 600\n  - name: test_extract_hidden_states_qwen35\n    script: tests/e2e/spec_decode/test_extract_hidden_states_qwen35.py\n    cards: 1\n    timeout: 600\n  # ... 其他测试条目 ...",
+      "context": "it's better to combine the `test_extract_hidden_states` and `test_extract_hidden_states_qwen35.py` into one file with pytest.parameterize.\nDone — combined both into test_extract_hidden_states.py with "
+    },
+    "pattern": {
+      "file": ".github/workflows/scripts/test_config.yaml",
+      "line": 490,
+      "code": "# 合并为一个测试条目，删除 qwen35 独立文件\n# learning-sketch 回复: \"Done — combined both into test_extract_hidden_states.py\n# with pytest.mark.parametrize (dense_eager, dense_aclgraph, hybrid_dummy_eager),\n# removed the qwen35 file, and updated test_config.yaml.\"\n\ntest_matrix:\n  # ... 其他测试条目 ...\n  - name: test_extract_hidden_states\n    script: tests/e2e/spec_decode/test_extract_hidden_states.py\n    cards: 1\n    timeout: 900\n  # test_extract_hidden_states_qwen35 已删除\n  # ... 其他测试条目 ...",
+      "context": "it's better to combine the `test_extract_hidden_states` and `test_extract_hidden_states_qwen35.py` into one file with pytest.parameterize.\nDone — combined both into test_extract_hidden_states.py with "
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/scripts/test_config.yaml\n+++ b/.github/workflows/scripts/test_config.yaml\n@@ -1,15 +1,13 @@\n-# （根据评审意见推断）存在两个独立的测试条目\n-# Ronald1995 评论: \"it's better to combine the test_extract_hidden_states and\n-# test_extract_hidden_states_qwen35.py into one file with pytest.parameterize\"\n+# 合并为一个测试条目，删除 qwen35 独立文件\n+# learning-sketch 回复: \"Done — combined both into test_extract_hidden_states.py\n+# with pytest.mark.parametrize (dense_eager, dense_aclgraph, hybrid_dummy_eager),\n+# removed the qwen35 file, and updated test_config.yaml.\"\n \n test_matrix:\n   # ... 其他测试条目 ...\n   - name: test_extract_hidden_states\n     script: tests/e2e/spec_decode/test_extract_hidden_states.py\n     cards: 1\n-    timeout: 600\n-  - name: test_extract_hidden_states_qwen35\n-    script: tests/e2e/spec_decode/test_extract_hidden_states_qwen35.py\n-    cards: 1\n-    timeout: 600\n+    timeout: 900\n+  # test_extract_hidden_states_qwen35 已删除\n   # ... 其他测试条目 ...\n",
+      "stats": "1 file changed, +6 lines, -8 lines",
+      "key_changes": [
+        "-# （根据评审意见推断）存在两个独立的测试条目",
+        "-# Ronald1995 评论: \"it's better to combine the test_extract_hidden_states and",
+        "-# test_extract_hidden_states_qwen35.py into one file with pytest.parameterize\"",
+        "+# 合并为一个测试条目，删除 qwen35 独立文件",
+        "+# learning-sketch 回复: \"Done — combined both into test_extract_hidden_states.py",
+        "+# with pytest.mark.parametrize (dense_eager, dense_aclgraph, hybrid_dummy_eager),",
+        "+# removed the qwen35 file, and updated test_config.yaml.\"",
+        "-    timeout: 600",
+        "-  - name: test_extract_hidden_states_qwen35",
+        "-    script: tests/e2e/spec_decode/test_extract_hidden_states_qwen35.py",
+        "-    cards: 1",
+        "-    timeout: 600",
+        "+    timeout: 900",
+        "+  # test_extract_hidden_states_qwen35 已删除"
+      ]
+    },
+    "language": "yaml",
+    "_status": "pending_llm_extract"
+  }
+}

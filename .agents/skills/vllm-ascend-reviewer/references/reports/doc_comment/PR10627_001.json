@@ -1,0 +1,69 @@
+{
+  "report_id": "PR10627_001",
+  "pr_number": 10627,
+  "pr_title": "[Feature] Add dynamic bucket load balancer proxy example",
+  "pr_status": "merged",
+  "merged_at": "2026-06-30T09:13:43Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "examples/dynamic_bucket_load_balancer/dynamic_bucket_load_balancer.py:120",
+    "examples/dynamic_bucket_load_balancer/hybrid_proxy_server.py:7"
+  ],
+  "landing_sha": "5ae6b66",
+  "source_quote": "Optimize the comments, make them more concise, and use English.",
+  "correspondence": [
+    {
+      "review_quote": "kunpengW-code 提出 2 条意见：\n1. `dynamic_bucket_load_balancer.py:120` 处的注释需要优化——使其更简洁并使用英文\n2. `hybrid_proxy_server.py:7` 处的功能说明不应通过代码注释呈现，应在 docs 目录下添加正式的使用文档\n\n作者通过 commit `5ae6b66`（\"[Misc] Optimize the comments\"）将中文注释精简为简洁英文注释，并通过后续 commit `62babac`（\"[Doc] Add dynamic bucket load balancer proxy usage do",
+      "patch_snippet": "commit `5ae6b66`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "5ae6b66",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "示例代码中的注释应使用简洁的英文编写，避免冗长的中文说明。功能使用说明应作为正式文档放在 docs 目录下，而非通过代码注释呈现。",
+    "context": "",
+    "checkpoints": [
+      "检查示例代码中的注释是否使用英文",
+      "检查注释是否简洁，避免大段说明文字",
+      "检查功能使用说明是否放在 docs 目录下而非仅存在于代码注释中",
+      "检查是否有 commit `5ae6b66` 对应的 \"[Misc] Optimize the comments\" 类型修改"
+    ],
+    "antipattern": {
+      "file": "examples/dynamic_bucket_load_balancer/dynamic_bucket_load_balancer.py",
+      "line": 120,
+      "code": "    def _calculate_redirect_probability(self, task_length, standard_bucket_idx, neighbor_bucket_idx):\n        \"\"\"\n        计算重定向概率\n        根据标准桶和邻居桶的负载差异，计算将请求从重负载桶\n        重定向到低负载邻居桶的概率...\n        （冗长的中文注释）\n        \"\"\"\n        standard_load = self.buckets[standard_bucket_idx].total_load\n        neighbor_load = self.buckets[neighbor_bucket_idx].total_load\n\n        # --- 1. 基于负载差距计算基础概率 ---\n        if standard_load <= 0:\n            load_probability = 0.0  # 标准桶无负载，无需重定向\n        else:\n            # 计算邻居桶与标准桶的负载比率\n            load_ratio = neighbor_load / standard_load\n\n            # 应用敏感度系数并限制在 [0, 1] 范围内\n            # 邻居桶的负载比标准桶的负载越小，重定向概率越大\n            # neighbor_load / standard_load = 5/6，self.sensitivity=1.0时，load_probability=1/6=0.16666\n            load_probability = 1 - load_ratio**self.sensitivity\n            load_probability = max(0.0, min(load_probability, 1))\n\n        # --- 2. 基于长度亲和性调整概率 ---\n        bucket_avg_length = self.buckets[neighbor_bucket_idx].avg_length\n        if bucket_avg_length > 0:\n            length_ratio = task_length / bucket_avg_length\n            length_probability = 1 - abs(1 - length_ratio) * self.length_sensitivity\n            length_probability = max(0.0, min(length_probability, 1))\n        else:\n            length_probability = 0.5\n\n        # --- 3. 综合概率 ---\n        final_probability = (self.load_weight * load_probability +\n                             self.length_weight * length_probability)\n        return max(0.0, min(final_probability, 1))",
+      "context": "Optimize the comments, make them more concise, and use English."
+    },
+    "pattern": {
+      "file": "examples/dynamic_bucket_load_balancer/dynamic_bucket_load_balancer.py",
+      "line": 120,
+      "code": "    def _calculate_redirect_probability(self, task_length, standard_bucket_idx, neighbor_bucket_idx):\n        \"\"\"Calculate redirect probability based on load difference and length affinity.\"\"\"\n        standard_load = max(0.0, self.buckets[standard_bucket_idx].total_load)\n        neighbor_load = max(0.0, self.buckets[neighbor_bucket_idx].total_load)\n\n        # 1. Load-based probability\n        if standard_load <= 0:\n            load_probability = 0.0\n        else:\n            load_ratio = max(0.0, min(neighbor_load / max(standard_load, 1e-9), 1.0))\n            load_probability = 1 - load_ratio**self.sensitivity\n            load_probability = max(0.0, min(load_probability, 1))\n\n        # 2. Length-affinity probability\n        bucket_avg_length = self.buckets[neighbor_bucket_idx].avg_length\n        if bucket_avg_length > 0:\n            length_ratio = task_length / bucket_avg_length\n            length_probability = 1 - abs(1 - length_ratio) * self.length_sensitivity\n            length_probability = max(0.0, min(length_probability, 1))\n        else:\n            length_probability = 0.5\n\n        # 3. Combined probability\n        final_probability = (self.load_weight * load_probability +\n                             self.length_weight * length_probability)\n        return max(0.0, min(final_probability, 1))",
+      "context": "Optimize the comments, make them more concise, and use English."
+    },
+    "diff": {
+      "unified": "--- a/examples/dynamic_bucket_load_balancer/dynamic_bucket_load_balancer.py\n+++ b/examples/dynamic_bucket_load_balancer/dynamic_bucket_load_balancer.py\n@@ -1,27 +1,17 @@\n     def _calculate_redirect_probability(self, task_length, standard_bucket_idx, neighbor_bucket_idx):\n-        \"\"\"\n-        计算重定向概率\n-        根据标准桶和邻居桶的负载差异，计算将请求从重负载桶\n-        重定向到低负载邻居桶的概率...\n-        （冗长的中文注释）\n-        \"\"\"\n-        standard_load = self.buckets[standard_bucket_idx].total_load\n-        neighbor_load = self.buckets[neighbor_bucket_idx].total_load\n+        \"\"\"Calculate redirect probability based on load difference and length affinity.\"\"\"\n+        standard_load = max(0.0, self.buckets[standard_bucket_idx].total_load)\n+        neighbor_load = max(0.0, self.buckets[neighbor_bucket_idx].total_load)\n \n-        # --- 1. 基于负载差距计算基础概率 ---\n+        # 1. Load-based probability\n         if standard_load <= 0:\n-            load_probability = 0.0  # 标准桶无负载，无需重定向\n+            load_probability = 0.0\n         else:\n-            # 计算邻居桶与标准桶的负载比率\n-            load_ratio = neighbor_load / standard_load\n-\n-            # 应用敏感度系数并限制在 [0, 1] 范围内\n-            # 邻居桶的负载比标准桶的负载越小，重定向概率越大\n-            # neighbor_load / standard_load = 5/6，self.sensitivity=1.0时，load_probability=1/6=0.16666\n+            load_ratio = max(0.0, min(neighbor_load / max(standard_load, 1e-9), 1.0))\n             load_probability = 1 - load_ratio**self.sensitivity\n             load_probability = max(0.0, min(load_probability, 1))\n \n-        # --- 2. 基于长度亲和性调整概率 ---\n+        # 2. Length-affinity probability\n         bucket_avg_length = self.buckets[neighbor_bucket_idx].avg_length\n         if bucket_avg_length > 0:\n             length_ratio = task_length / bucket_avg_length\n@@ -30,7 +20,7 @@\n         else:\n             length_probability = 0.5\n \n-        # --- 3. 综合概率 ---\n+        # 3. Combined probability\n         final_probability = (self.load_weight * load_probability +\n                              self.length_weight * length_probability)\n         return max(0.0, min(final_probability, 1))",
+      "stats": "1 file changed, +8 lines, -18 lines",
+      "key_changes": [
+        "移除: \"\"\"",
+        "移除: 计算重定向概率",
+        "移除: 根据标准桶和邻居桶的负载差异，计算将请求从重负载桶",
+        "移除: 重定向到低负载邻居桶的概率...",
+        "移除: （冗长的中文注释）",
+        "移除: \"\"\"",
+        "移除: standard_load = self.buckets[standard_bucket_idx].total_load",
+        "移除: neighbor_load = self.buckets[neighbor_bucket_idx].total_load",
+        "新增: \"\"\"Calculate redirect probability based on load difference and length affinity.\"",
+        "新增: standard_load = max(0.0, self.buckets[standard_bucket_idx].total_load)"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

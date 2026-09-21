@@ -1,0 +1,45 @@
+{
+  "report_id": "PR12399_001",
+  "pr_number": 0,
+  "pr_title": "",
+  "pr_status": "unknown",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "",
+  "source_quote": "",
+  "correspondence": [],
+  "verification": {
+    "merged": false,
+    "modified_commit": "",
+    "approvals": 0
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": ".pre-commit-config.yaml",
+      "line": 0,
+      "code": "# .pre-commit-config.yaml L60-L65（已有的 repo: local 块）\nrepos:\n- repo: local\n  hooks:\n  - id: shellcheck\n    name: Lint shell scripts\n    entry: bash -c 'shellcheck \"$@\"'\n    language: system\n    types: [shell]\n    stages: [pre-commit]\n  # ... L132 suggestion entry ...\n  # Insert new entries above the suggestion entry\n  - id: suggestion\n    name: Insert suggestion entry\n    ...\n\n# 👇 L143-L154 EOF — 错误新增的重复 - repo: local 块\n- repo: local\nhooks:                                          # ❌ YAML语法错误：hooks 未缩进2空格\n    - id: gitleaks-offline-scan\n      name: Gitleaks Secret Scan(Local Binary)\n      entry: gitleaks\n      language: system\n      pass_filenames: true\n      args:\n        - protect\n        - --verbose\n        - --redact\n        - --config=pre-commit/.gitleaks.toml\n      stages: [pre-commit]",
+      "context": "修改前代码 (yaml)"
+    },
+    "pattern": {
+      "file": ".pre-commit-config.yaml",
+      "line": 0,
+      "code": "# .pre-commit-config.yaml L60-L75 — commit: 47b68e9\nrepos:\n- repo: local\n  hooks:\n  - id: gitleaks-offline-scan                   # ✅ 新增到已有 repo: local 块内\n    name: Gitleaks Secret Scan(Local Binary)\n    entry: gitleaks\n    language: system\n    pass_filenames: true\n    args:\n      - protect\n      - --verbose\n      - --redact\n      - --config=pre-commit/.gitleaks.toml\n    stages: [pre-commit]\n  - id: shellcheck                              # 原有hook继续跟在后面\n    name: Lint shell scripts\n    entry: bash -c 'shellcheck \"$@\"'\n    language: system\n    types: [shell]\n    stages: [pre-commit]\n  # ... L132 suggestion entry ...\n  # Insert new entries above the suggestion entry\n  - id: suggestion\n    name: Insert suggestion entry\n    ...\n# ✅ 末尾 L143 旧重复 repo: local 块整块删除（-13行）",
+      "context": "修改后代码 (yaml)"
+    },
+    "diff": {
+      "unified": "--- a/.pre-commit-config.yaml\n+++ b/.pre-commit-config.yaml\n@@ -1,8 +1,19 @@\n-# .pre-commit-config.yaml L60-L65（已有的 repo: local 块）\n+# .pre-commit-config.yaml L60-L75 — commit: 47b68e9\n repos:\n - repo: local\n   hooks:\n-  - id: shellcheck\n+  - id: gitleaks-offline-scan                   # ✅ 新增到已有 repo: local 块内\n+    name: Gitleaks Secret Scan(Local Binary)\n+    entry: gitleaks\n+    language: system\n+    pass_filenames: true\n+    args:\n+      - protect\n+      - --verbose\n+      - --redact\n+      - --config=pre-commit/.gitleaks.toml\n+    stages: [pre-commit]\n+  - id: shellcheck                              # 原有hook继续跟在后面\n     name: Lint shell scripts\n     entry: bash -c 'shellcheck \"$@\"'\n     language: system\n@@ -13,18 +24,4 @@\n   - id: suggestion\n     name: Insert suggestion entry\n     ...\n-\n-# 👇 L143-L154 EOF — 错误新增的重复 - repo: local 块\n-- repo: local\n-hooks:                                          # ❌ YAML语法错误：hooks 未缩进2空格\n-    - id: gitleaks-offline-scan\n-      name: Gitleaks Secret Scan(Local Binary)\n-      entry: gitleaks\n-      language: system\n-      pass_filenames: true\n-      args:\n-        - protect\n-        - --verbose\n-        - --redact\n-        - --config=pre-commit/.gitleaks.toml\n-      stages: [pre-commit]\n+# ✅ 末尾 L143 旧重复 repo: local 块整块删除（-13行）",
+      "stats": "1 file changed, +14 lines, -17 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "yaml",
+    "_status": "pending_llm_extract"
+  }
+}

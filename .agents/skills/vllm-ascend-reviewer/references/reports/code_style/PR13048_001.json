@@ -1,0 +1,57 @@
+{
+  "report_id": "PR13048_001",
+  "pr_number": 13048,
+  "pr_title": "[Performance][Kernel]optimize compute_slot_mapping_kernel",
+  "pr_status": "merged",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/triton/compute_slot_mapping.py:75"
+  ],
+  "landing_sha": "f689d07",
+  "source_quote": "name this largest integer to avoid hardness to understand your code would be better\nOK, I'll replace it with INT_MAX",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/ops/triton/compute_slot_mapping.py:75",
+      "patch_snippet": "评后sha f689d07 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f689d07",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "代码中不应直接使用含义不明确的数值字面量（尤其是边界值、极限值），应将其命名为具有语义的常量，使代码意图自解释。",
+    "context": "",
+    "checkpoints": [
+      "识别代码中的裸数字字面量（特别是大整数、位掩码、极限值）",
+      "判断该数字是否有明确语义（如类型最大值、对齐掩码等）",
+      "用命名常量替代裸数字，命名应反映其语义（如 `INT32_MAX`、`ALIGNMENT_MASK`）"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/triton/compute_slot_mapping.py",
+      "line": 75,
+      "code": "import triton\nimport triton.language as tl\n\n\n@triton.jit\ndef _compute_slot_mapping_kernel(\n    positions_ptr,\n    block_table_ptr,\n    slot_mapping_ptr,\n    num_tokens,\n    max_num_batched_tokens,\n    block_size: tl.constexpr,\n    TILE_BLOCK_SIZE: tl.constexpr,\n    BLOCK_TABLE_WINDOW_SIZE: tl.constexpr,\n    TOTAL_CP_WORLD_SIZE: tl.constexpr,\n    TOTAL_CP_RANK: tl.constexpr,\n    CP_KV_CACHE_INTERLEAVE_SIZE: tl.constexpr,\n    PAD_ID: tl.constexpr,\n    KV_CACHE_BLOCK_SIZE: tl.constexpr,\n    BLOCKS_PER_KV_BLOCK: tl.constexpr,\n):\n    pid = tl.program_id(0)\n    token_offsets = pid * TILE_BLOCK_SIZE + tl.arange(0, TILE_BLOCK_SIZE)\n    mask = token_offsets < num_tokens\n    pos = tl.load(positions_ptr + token_offsets, mask=mask, other=PAD_ID)\n    pos = pos.to(tl.int32)\n\n    block_indices = pos // block_size\n    block_offsets = pos % block_size\n\n    # Use INT32 max as sentinel so tl.min ignores invalid entries\n    valid_block_indices = tl.where(mask, block_indices, 2147483647)\n    block_idx_base = tl.min(valid_block_indices, axis=0)\n\n    # Load block table entries in a window starting from block_idx_base\n    window_offsets = tl.arange(0, BLOCK_TABLE_WINDOW_SIZE)\n    ...",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/triton/compute_slot_mapping.py",
+      "line": 75,
+      "code": "import triton\nimport triton.language as tl\n\nINT32_MAX = 2147483647\n\n\n@triton.jit\ndef _compute_slot_mapping_kernel(\n    positions_ptr,\n    block_table_ptr,\n    slot_mapping_ptr,\n    num_tokens,\n    max_num_batched_tokens,\n    block_size: tl.constexpr,\n    TILE_BLOCK_SIZE: tl.constexpr,\n    BLOCK_TABLE_WINDOW_SIZE: tl.constexpr,\n    TOTAL_CP_WORLD_SIZE: tl.constexpr,\n    TOTAL_CP_RANK: tl.constexpr,\n    CP_KV_CACHE_INTERLEAVE_SIZE: tl.constexpr,\n    PAD_ID: tl.constexpr,\n    KV_CACHE_BLOCK_SIZE: tl.constexpr,\n    BLOCKS_PER_KV_BLOCK: tl.constexpr,\n):\n    pid = tl.program_id(0)\n    token_offsets = pid * TILE_BLOCK_SIZE + tl.arange(0, TILE_BLOCK_SIZE)\n    mask = token_offsets < num_tokens\n    pos = tl.load(positions_ptr + token_offsets, mask=mask, other=PAD_ID)\n    pos = pos.to(tl.int32)\n\n    block_indices = pos // block_size\n    block_offsets = pos % block_size\n\n    # Use INT32_MAX as sentinel so tl.min ignores invalid entries\n    valid_block_indices = tl.where(mask, block_indices, INT32_MAX)\n    block_idx_base = tl.min(valid_block_indices, axis=0)\n\n    # Load block table entries in a window starting from block_idx_base\n    window_offsets = tl.arange(0, BLOCK_TABLE_WINDOW_SIZE)\n    ...",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/triton/compute_slot_mapping.py\n+++ b/vllm_ascend/ops/triton/compute_slot_mapping.py\n@@ -1,5 +1,7 @@\n import triton\n import triton.language as tl\n+\n+INT32_MAX = 2147483647\n \n \n @triton.jit\n@@ -28,8 +30,8 @@\n     block_indices = pos // block_size\n     block_offsets = pos % block_size\n \n-    # Use INT32 max as sentinel so tl.min ignores invalid entries\n-    valid_block_indices = tl.where(mask, block_indices, 2147483647)\n+    # Use INT32_MAX as sentinel so tl.min ignores invalid entries\n+    valid_block_indices = tl.where(mask, block_indices, INT32_MAX)\n     block_idx_base = tl.min(valid_block_indices, axis=0)\n \n     # Load block table entries in a window starting from block_idx_base",
+      "stats": "1 file changed, +4 lines, -2 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

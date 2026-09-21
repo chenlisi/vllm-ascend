@@ -1,0 +1,66 @@
+{
+  "report_id": "PR4241_001",
+  "pr_number": 4241,
+  "pr_title": "[feature] vllm-ascend support msprobe (eager mode dump)",
+  "pr_status": "merged",
+  "merged_at": "2025-11-24T13:58:31Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/model_runner_v1.py:349",
+    "vllm_ascend/ascend_config.py:243",
+    "vllm_ascend/ascend_config.py:48",
+    "vllm_ascend/worker/model_runner_v1.py:358",
+    "vllm_ascend/worker/model_runner_v1.py:311",
+    "docs/source/developer_guide/debug/index.md:1"
+  ],
+  "landing_sha": "f56103c",
+  "source_quote": "It's better to raise an error. Then, we only need one variable to determine if the debugger dump feature is enabled. BTW, I think this configuration check logic should go in `ascend_config.py`.",
+  "correspondence": [
+    {
+      "review_quote": "三位评审人提出了 7 条意见：ApsarasX 建议通过抛出错误简化配置检查，并将配置逻辑移至 `ascend_config.py`；realliujiaxu 要求将中文注释改为英文，并将 `dump` 重命名为 `dump_path` 以提高直观性；wangxiyuan 要求同步更新配置文档、完善错误信息、添加开发者文档，并将调试文档移至 performance 目录。作者通过 commit `f56103c` 完成了文档合并和改进。",
+      "patch_snippet": "commit `f56103c`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f56103c",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "配置项的命名应准确反映其用途和类型，如 `dump_path` 比 `dump` 更明确地表示这是一个路径值，而非布尔开关。",
+    "context": "",
+    "checkpoints": [
+      "检查配置项名称是否可能被误解",
+      "确认名称是否反映了实际数据类型",
+      "验证是否需要在名称中添加类型提示"
+    ],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "def execute_model(self, ...):\n    need_dump = self.dump_enable and self.debugger is not None\n    if need_dump:\n        self.debugger.start()\n\n    if not get_pp_group().is_last_rank:\n        if not broadcast_pp_output:\n            hidden_states.kv_connector_output = kv_connector_output\n            self.debugger.stop()    # 重复 #1\n            self.debugger.step()\n            return hidden_states\n\n    if some_condition:\n        self.debugger.stop()    # 重复 #2\n        self.debugger.step()\n        return some_result\n\n    if another_condition:\n        self.debugger.stop()    # 重复 #3\n        self.debugger.step()\n        return another_result\n\n    self.debugger.stop()    # 重复 #4\n    self.debugger.step()\n    return final_result\n\nclass AscendConfig:\n    dump: str = ...\n    配置说明 = \"...\"\n\nraise ValueError(\"msprobe is not supported in graph mode.\")",
+      "context": "It's better to raise an error. Then, we only need one variable to determine if the debugger dump feature is enabled. BTW, I think this configuration check logic should go in `ascend_config.py`."
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "def execute_model(self, ...):\n    need_dump = self.dump_enable and self.debugger is not None\n    if need_dump:\n        self.debugger.start()\n\n    try:\n        if not get_pp_group().is_last_rank:\n            if not broadcast_pp_output:\n                hidden_states.kv_connector_output = kv_connector_output\n                return hidden_states  # finally 会自动清理\n\n        if some_condition:\n            return some_result\n\n        if another_condition:\n            return another_result\n\n        return final_result\n    finally:\n        if need_dump:\n            self.debugger.stop()\n            self.debugger.step()\n\nclass AscendConfig:\n    dump_path: str = ...  # 明确表示是路径而非 bool\n    config_description = \"...\"\n\nraise ValueError(\"Dumping/debugging only works in eager mode.\")",
+      "context": "It's better to raise an error. Then, we only need one variable to determine if the debugger dump feature is enabled. BTW, I think this configuration check logic should go in `ascend_config.py`."
+    },
+    "diff": {
+      "unified": "--- a/a/file\n+++ b/b/file\n@@ -1,31 +1,28 @@\n     if need_dump:\n         self.debugger.start()\n \n-    if not get_pp_group().is_last_rank:\n-        if not broadcast_pp_output:\n-            hidden_states.kv_connector_output = kv_connector_output\n-            self.debugger.stop()    # 重复 #1\n+    try:\n+        if not get_pp_group().is_last_rank:\n+            if not broadcast_pp_output:\n+                hidden_states.kv_connector_output = kv_connector_output\n+                return hidden_states  # finally 会自动清理\n+\n+        if some_condition:\n+            return some_result\n+\n+        if another_condition:\n+            return another_result\n+\n+        return final_result\n+    finally:\n+        if need_dump:\n+            self.debugger.stop()\n             self.debugger.step()\n-            return hidden_states\n-\n-    if some_condition:\n-        self.debugger.stop()    # 重复 #2\n-        self.debugger.step()\n-        return some_result\n-\n-    if another_condition:\n-        self.debugger.stop()    # 重复 #3\n-        self.debugger.step()\n-        return another_result\n-\n-    self.debugger.stop()    # 重复 #4\n-    self.debugger.step()\n-    return final_result\n \n class AscendConfig:\n-    dump: str = ...\n-    配置说明 = \"...\"\n+    dump_path: str = ...  # 明确表示是路径而非 bool\n+    config_description = \"...\"\n \n-raise ValueError(\"msprobe is not supported in graph mode.\")\n+raise ValueError(\"Dumping/debugging only works in eager mode.\")",
+      "stats": "1 file changed, +19 lines, -22 lines",
+      "key_changes": [
+        "修改了第 6-9 行的代码",
+        "删除了第 11-25 行的代码",
+        "修改了第 28-29 行的代码",
+        "修改了第 31-31 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

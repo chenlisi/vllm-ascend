@@ -1,0 +1,67 @@
+{
+  "report_id": "PR11138_001",
+  "pr_number": 11138,
+  "pr_title": "[Doc]Update DeepseekOCR2 & Qwen-VL-Dense & Qwen3-Next documentation",
+  "pr_status": "merged",
+  "merged_at": "2026-06-30T03:06:32Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/models/Qwen-VL-Dense.md:1",
+    "docs/source/tutorials/models/DeepSeekOCR2.md:248",
+    "docs/source/tutorials/models/Qwen-VL-Dense.md:226",
+    "docs/source/tutorials/models/Qwen-VL-Dense.md:114",
+    "docs/source/tutorials/models/Qwen3-Next.md:122",
+    "docs/source/tutorials/models/Qwen3-Next.md:21",
+    "docs/source/tutorials/models/Qwen-VL-Dense.md:21",
+    "docs/source/tutorials/models/Qwen-VL-Dense.md:27"
+  ],
+  "landing_sha": "eedcd63",
+  "source_quote": "",
+  "correspondence": [
+    {
+      "review_quote": "sunshine202600 指出 Qwen-VL-Dense.md 的标题与文件名不一致。herizhen 指出 DeepSeekOCR2.md 缺少章节介绍说明、Qwen-VL-Dense.md 表格渲染异常、多个文档缺少 5.2 节（PD 分离）、以及 Qwen3-Next.md 中 \"require\" 应为 \"requires\"。MengqingCao 指出 NPU 卡数错误需回退，并提供了正确的硬件配置建议。作者通过 6 个 commit 完成了所有修改。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "eedcd63",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "Markdown 文档的一级标题必须与文件名对应（如 `Qwen-VL-Dense.md` 的标题应为 \"Qwen-VL-Dense\"）。",
+    "context": "",
+    "checkpoints": [
+      "文档标题是否与文件名一致",
+      "是否存在复制粘贴导致的标题错误"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/Qwen-VL-Dense.md",
+      "line": 1,
+      "code": "<!-- 文件: docs/source/tutorials/models/Qwen-VL-Dense.md -->\n<!-- 行号: 约第1-15行 -->\n\n# DeepSeek-OCR-2\n\nThis tutorial describes how to deploy DeepSeek-OCR-2 on Ascend.\n\n## Prerequisites\n\n- Python >= 3.9\n- CANN >= 8.0\n- vllm-ascend installed",
+      "context": "The title name is inconsistent with the file name."
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/Qwen-VL-Dense.md",
+      "line": 1,
+      "code": "<!-- 文件: docs/source/tutorials/models/Qwen-VL-Dense.md -->\n<!-- 行号: 约第1-15行 -->\n\n# Qwen-VL-Dense\n\nThis tutorial describes how to deploy Qwen-VL-Dense on Ascend.\n\n## Prerequisites\n\n- Python >= 3.9\n- CANN >= 8.0\n- vllm-ascend installed",
+      "context": "The title name is inconsistent with the file name."
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/Qwen-VL-Dense.md\n+++ b/docs/source/tutorials/models/Qwen-VL-Dense.md\n@@ -1,9 +1,9 @@\n <!-- 文件: docs/source/tutorials/models/Qwen-VL-Dense.md -->\n <!-- 行号: 约第1-15行 -->\n \n-# DeepSeek-OCR-2\n+# Qwen-VL-Dense\n \n-This tutorial describes how to deploy DeepSeek-OCR-2 on Ascend.\n+This tutorial describes how to deploy Qwen-VL-Dense on Ascend.\n \n ## Prerequisites\n ",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "移除: # DeepSeek-OCR-2",
+        "新增: # Qwen-VL-Dense",
+        "移除: This tutorial describes how to deploy DeepSeek-OCR-2 on Ascend.",
+        "新增: This tutorial describes how to deploy Qwen-VL-Dense on Ascend."
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

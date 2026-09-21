@@ -1,0 +1,62 @@
+{
+  "report_id": "PR13477_001",
+  "pr_number": 13477,
+  "pr_title": "[CI]Main2Main 0807",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/ops/triton/mamba/postprocess.py:150"
+  ],
+  "landing_sha": "78a10d9",
+  "source_quote": "**[P1] Fix the DS convolution row copy dimensions and advance the row address.**\n> For DS layout (`state[block, dim, state_len]`), the kernel must iterate `dim_row_count` rows and copy `(conv_width - accept_token_bias) * state_elem_size` bytes per row, advancing source and destination by `dim_row_stride` for each row. This code swaps those quantities: it uses `conv_width - bias` as the loop count and `dim_row_count * dim_row_stride` as the per-loop copy size. The loop at lines 192-196 then never applies a row offset, so it repeats the same oversized copy.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/ops/triton/mamba/postprocess.py:150",
+      "patch_snippet": "评后sha 78a10d9 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "78a10d9",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "对于 `state[block, dim, state_len]` 这类以 `state_len` 为滑动轴的 DS 布局逐行拷贝，循环次数必须是行数 `dim_row_count`，单次拷贝大小必须是 `(slide_width - bias) * elem_size`，二者不可对调；且每次循环必须按 `dim_row_stride` 推进源/目的指针，否则会重复同一超大拷贝并越界。",
+    "context": "",
+    "checkpoints": [
+      "检查 `num_loops`/`range(...)` 是否等于行数 `dim_row_count`（而非滑动宽度 `conv_width - bias`）",
+      "检查 `copy_size` 是否等于 `(slide_width - bias) * elem_size`（而非 `dim_row_count * dim_row_stride`）",
+      "检查循环体内是否按 `row * dim_row_stride` 推进 `src_addr`/`dst_addr`（未推进会重复拷贝同一区域）",
+      "检查循环变量 `dim_row_count`/`dim_row_stride` 是否与拷贝循环位于同一控制流作用域（Triton 无法跨分支证明定义）"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/triton/mamba/postprocess.py",
+      "line": 140,
+      "code": "@triton.jit\ndef postprocess_mamba_fused_kernel(\n    src_ptr, dst_ptr,\n    state_dim_row_count_ptr, state_dim_row_stride_ptr,\n    conv_width_ptr, accept_token_bias_ptr,\n    state_elem_size_ptr,\n    # ... other params ...\n    CONV_STATE_DIM_FIRST: tl.constexpr,\n    COPY_BLOCK_SIZE: tl.constexpr,\n):\n    state_idx = tl.program_id(1)\n    src_addr = tl.load(src_ptr + state_idx).to(tl.pointer_type(tl.uint8))\n    dst_addr = tl.load(dst_ptr + state_idx).to(tl.pointer_type(tl.uint8))\n    conv_width = tl.load(conv_width_ptr + state_idx)\n    accept_token_bias = tl.load(accept_token_bias_ptr + state_idx)\n    state_elem_size = tl.load(state_elem_size_ptr + state_idx)\n\n    if CONV_STATE_DIM_FIRST:\n        dim_row_count = tl.load(state_dim_row_count_ptr + state_idx)\n        dim_row_stride = tl.load(state_dim_row_stride_ptr + state_idx)\n        num_rows_to_copy = (conv_width - accept_token_bias).to(tl.int64)\n        copy_size = dim_row_count * dim_row_stride\n        num_loops = num_rows_to_copy\n\n    for _ in range(num_loops):\n        # 未应用 row 偏移，重复同一超大拷贝\n        for i in range(0, copy_size, COPY_BLOCK_SIZE):\n            # ... copy block ...",
+      "context": "... other params ... 未应用 row 偏移，重复同一超大拷贝 ... copy block ..."
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/triton/mamba/postprocess.py",
+      "line": 140,
+      "code": "@triton.jit\ndef postprocess_mamba_fused_kernel(\n    src_ptr, dst_ptr,\n    state_dim_row_count_ptr, state_dim_row_stride_ptr,\n    conv_width_ptr, accept_token_bias_ptr,\n    state_elem_size_ptr, is_conv_state_ptr,\n    # ... other params ...\n    CONV_STATE_DIM_FIRST: tl.constexpr,\n    COPY_BLOCK_SIZE: tl.constexpr,\n):\n    state_idx = tl.program_id(1)\n    src_addr = tl.load(src_ptr + state_idx).to(tl.pointer_type(tl.uint8))\n    dst_addr = tl.load(dst_ptr + state_idx).to(tl.pointer_type(tl.uint8))\n    conv_width = tl.load(conv_width_ptr + state_idx)\n    accept_token_bias = tl.load(accept_token_bias_ptr + state_idx)\n    state_elem_size = tl.load(state_elem_size_ptr + state_idx)\n    is_conv_state = tl.load(is_conv_state_ptr + state_idx)\n\n    if CONV_STATE_DIM_FIRST and is_conv_state:\n        # DS conv layout: state[block, dim, state_len]. state_len is the slide\n        # axis, so copy per dim row (dim_row_count rows of\n        # (conv_width - accept_token_bias) * elem_size bytes each, advancing\n        # by dim_row_stride per row). Load the row metadata here (not earlier)\n        # so it stays in the same scope as the copy loop.\n        dim_row_count = tl.load(state_dim_row_count_ptr + state_idx)\n        dim_row_stride = tl.load(state_dim_row_stride_ptr + state_idx)\n        copy_size = (conv_width - accept_token_bias).to(tl.int64) * state_elem_size\n        for row in range(dim_row_count):\n            row_src = (src_addr + row * dim_row_stride).to(tl.pointer_type(tl.uint8))\n            row_dst = (dst_addr + row * dim_row_stride).to(tl.pointer_type(tl.uint8))\n            for i in range(0, copy_size, COPY_BLOCK_SIZE):\n                # ... copy block with row offset ...",
+      "context": "... other params ... DS conv layout: state[block, dim, state_len]. state_len is the slide axis, so copy per dim row (dim_row_count rows of"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/triton/mamba/postprocess.py\n+++ b/vllm_ascend/ops/triton/mamba/postprocess.py\n@@ -3,7 +3,7 @@\n     src_ptr, dst_ptr,\n     state_dim_row_count_ptr, state_dim_row_stride_ptr,\n     conv_width_ptr, accept_token_bias_ptr,\n-    state_elem_size_ptr,\n+    state_elem_size_ptr, is_conv_state_ptr,\n     # ... other params ...\n     CONV_STATE_DIM_FIRST: tl.constexpr,\n     COPY_BLOCK_SIZE: tl.constexpr,\n@@ -14,15 +14,19 @@\n     conv_width = tl.load(conv_width_ptr + state_idx)\n     accept_token_bias = tl.load(accept_token_bias_ptr + state_idx)\n     state_elem_size = tl.load(state_elem_size_ptr + state_idx)\n+    is_conv_state = tl.load(is_conv_state_ptr + state_idx)\n \n-    if CONV_STATE_DIM_FIRST:\n+    if CONV_STATE_DIM_FIRST and is_conv_state:\n+        # DS conv layout: state[block, dim, state_len]. state_len is the slide\n+        # axis, so copy per dim row (dim_row_count rows of\n+        # (conv_width - accept_token_bias) * elem_size bytes each, advancing\n+        # by dim_row_stride per row). Load the row metadata here (not earlier)\n+        # so it stays in the same scope as the copy loop.\n         dim_row_count = tl.load(state_dim_row_count_ptr + state_idx)\n         dim_row_stride = tl.load(state_dim_row_stride_ptr + state_idx)\n-        num_rows_to_copy = (conv_width - accept_token_bias).to(tl.int64)\n-        copy_size = dim_row_count * dim_row_stride\n-        num_loops = num_rows_to_copy\n-\n-    for _ in range(num_loops):\n-        # 未应用 row 偏移，重复同一超大拷贝\n-        for i in range(0, copy_size, COPY_BLOCK_SIZE):\n-            # ... copy block ...\n+        copy_size = (conv_width - accept_token_bias).to(tl.int64) * state_elem_size\n+        for row in range(dim_row_count):\n+            row_src = (src_addr + row * dim_row_stride).to(tl.pointer_type(tl.uint8))\n+            row_dst = (dst_addr + row * dim_row_stride).to(tl.pointer_type(tl.uint8))\n+            for i in range(0, copy_size, COPY_BLOCK_SIZE):\n+                # ... copy block with row offset ...\n",
+      "stats": "1 file changed, +14 lines, -10 lines",
+      "key_changes": [
+        "移除: state_elem_size_ptr,",
+        "移除: num_rows_to_copy = (conv_width - accept_token_bias).to(tl.int64)",
+        "移除: for _ in range(num_loops):",
+        "新增: row_dst = (dst_addr + row * dim_row_stride).to(tl.pointer_type(tl.uint8))",
+        "新增: is_conv_state = tl.load(is_conv_state_ptr + state_idx)"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

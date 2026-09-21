@@ -1,0 +1,64 @@
+{
+  "report_id": "PR5391_001",
+  "pr_number": 5391,
+  "pr_title": "rollback causal_conv1d_fn to torch ops & update qwen3Next doc",
+  "pr_status": "merged",
+  "merged_at": "",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/triton/mamba/causal_conv1d.py:19",
+    "docs/source/tutorials/Qwen3-Next.md:171"
+  ],
+  "landing_sha": "d61dcae",
+  "source_quote": "could we keep this kernel, but add a TODO comment that we'll reuse it when the bug is fixed? also cc @wangxiyuan @zzzzwwjj for more suggestions",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 建议保留 Triton kernel 代码并添加 TODO 注释以便后续 bug 修复后复用。wangxiyuan 和 MengqingCao 指出文档中 `|vllm_ascend_version|` 占位符问题，MengqingCao 要求后续 PR 修复。3/3 建议全部落地。",
+      "patch_snippet": "",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "d61dcae",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "回滚某段实现（如从 Triton kernel 回滚到 PyTorch）时，应保留原始代码并添加 TODO 注释说明回滚原因和后续复用计划，而非直接删除。",
+    "context": "",
+    "checkpoints": [
+      "回滚时是否保留了原始实现代码",
+      "是否添加了 TODO 注释说明回滚原因",
+      "是否标注了后续复用的条件（如 bug 修复后）"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/triton/mamba/causal_conv1d.py",
+      "line": 1,
+      "code": "import torch\nimport triton\nimport triton.language as tl\nfrom vllm_ascend.ops.triton.mamba.causal_conv1d_kernels import (\n    causal_conv1d_fwd_kernel, causal_conv1d_update_kernel)\n\n# ... 其他导入 ...\n\n# 使用 Triton kernel 实现 causal_conv1d_fn\n# 存在 hang 问题",
+      "context": "could we keep this kernel, but add a TODO comment that we'll reuse it when the bug is fixed? also cc @wangxiyuan @zzzzwwjj for more suggestions"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/triton/mamba/causal_conv1d.py",
+      "line": 19,
+      "code": "import torch\nimport triton\nimport triton.language as tl\nfrom vllm_ascend.ops.triton.mamba.causal_conv1d_kernels import (\n    causal_conv1d_fwd_kernel, causal_conv1d_update_kernel)\n\n# ... 其他导入 ...\n\n# 使用 Triton kernel 实现 causal_conv1d_fn\n# 存在 hang 问题",
+      "context": "could we keep this kernel, but add a TODO comment that we'll reuse it when the bug is fixed? also cc @wangxiyuan @zzzzwwjj for more suggestions"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/triton/mamba/causal_conv1d.py\n+++ b/vllm_ascend/ops/triton/mamba/causal_conv1d.py\n@@ -6,5 +6,7 @@\n \n # ... 其他导入 ...\n \n-# 使用 Triton kernel 实现 causal_conv1d_fn\n-# 存在 hang 问题\n+# TODO: Reuse Triton kernel when the hang bug is fixed\n+# Original Triton implementation is preserved below for future reference\n+# def causal_conv1d_fn_triton(x, weight, conv_state, ...):\n+#     return causal_conv1d_triton_kernel(x, weight, conv_state, ...)",
+      "stats": "1 file changed, +4 lines, -2 lines",
+      "key_changes": [
+        "- # 使用 Triton kernel 实现 causal_conv1d_fn",
+        "- # 存在 hang 问题",
+        "+ # TODO: Reuse Triton kernel when the hang bug is fixed",
+        "+ # Original Triton implementation is preserved below for future reference",
+        "+ # def causal_conv1d_fn_triton(x, weight, conv_state, ...):",
+        "+ #     return causal_conv1d_triton_kernel(x, weight, conv_state, ...)"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

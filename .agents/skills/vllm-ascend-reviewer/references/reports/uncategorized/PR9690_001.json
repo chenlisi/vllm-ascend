@@ -1,0 +1,83 @@
+{
+  "report_id": "PR9690_001",
+  "pr_number": 9690,
+  "pr_title": "[Worker][Doc] Add A5 server disaggregated PD endpoint configuration",
+  "pr_status": "merged",
+  "merged_at": "2026-06-02T06:18:50Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "examples/disaggregated_prefill_a5_adaption/gen_route.sh:19",
+    "vllm_ascend/utils.py:508"
+  ],
+  "landing_sha": "2b8f97d",
+  "source_quote": "plz use english both in the comments and code\ncould we use additional config instead of env variable？",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao: examples/disaggregated_prefill_a5_adaption/gen_route.sh:19",
+      "patch_snippet": "评后sha 2b8f97d 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/utils.py:508",
+      "patch_snippet": "评后sha 2b8f97d 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "2b8f97d",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "所有代码、脚本和注释应使用英文字符，避免中文字符导致的编码问题。配置项应优先使用 additional config 机制而非环境变量，以保持配置方式的一致性。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "examples/disaggregated_prefill_a5_adaption/gen_route.sh",
+      "line": 1,
+      "code": "#!/bin/bash\n# （根据评审意见推断）脚本中包含中文字符的注释和输出\n# MengqingCao 评论: \"plz use english both in the comments and code\"\n\n# A5 服务器 disaggregated PD 端点配置脚本\n# 此脚本用于生成路由配置文件\n\n# 检查 root 权限\nif [ \"$EUID\" -ne 0 ]; then\n    echo \"错误: 请以 root 权限运行此脚本\"\n    exit 1\nfi\n\n# 设置路由配置\necho \"正在配置路由信息...\" > /lib/route.conf\n\n# 生成 NPU 端点配置文件\npython3 generate_ep.py -s\n\n# 启动服务\necho \"启动 disaggregated PD 服务...\"\necho \"路由配置完成\"",
+      "context": "plz use english both in the comments and code\ncould we use additional config instead of env variable？"
+    },
+    "pattern": {
+      "file": "examples/disaggregated_prefill_a5_adaption/gen_route.sh",
+      "line": 1,
+      "code": "#!/bin/bash\n# 全部使用英文字符\n# commit message: \"Convert non-English character to English\"\n\n# A5 server disaggregated PD endpoint configuration script\n# This script generates route configuration files\n\n# Check root privilege\nif [ \"$EUID\" -ne 0 ]; then\n    echo \"Error: Please run this script with root privileges\"\n    exit 1\nfi\n\n# Setup route configuration\necho \"Configuring route information...\" > /lib/route.conf\n\n# Generate NPU endpoint configuration files\npython3 generate_ep.py -s\n\n# Start service\necho \"Starting disaggregated PD service...\"\necho \"Route configuration completed\"",
+      "context": "plz use english both in the comments and code\ncould we use additional config instead of env variable？"
+    },
+    "diff": {
+      "unified": "--- a/examples/disaggregated_prefill_a5_adaption/gen_route.sh\n+++ b/examples/disaggregated_prefill_a5_adaption/gen_route.sh\n@@ -1,22 +1,22 @@\n #!/bin/bash\n-# （根据评审意见推断）脚本中包含中文字符的注释和输出\n-# MengqingCao 评论: \"plz use english both in the comments and code\"\n+# 全部使用英文字符\n+# commit message: \"Convert non-English character to English\"\n \n-# A5 服务器 disaggregated PD 端点配置脚本\n-# 此脚本用于生成路由配置文件\n+# A5 server disaggregated PD endpoint configuration script\n+# This script generates route configuration files\n \n-# 检查 root 权限\n+# Check root privilege\n if [ \"$EUID\" -ne 0 ]; then\n-    echo \"错误: 请以 root 权限运行此脚本\"\n+    echo \"Error: Please run this script with root privileges\"\n     exit 1\n fi\n \n-# 设置路由配置\n-echo \"正在配置路由信息...\" > /lib/route.conf\n+# Setup route configuration\n+echo \"Configuring route information...\" > /lib/route.conf\n \n-# 生成 NPU 端点配置文件\n+# Generate NPU endpoint configuration files\n python3 generate_ep.py -s\n \n-# 启动服务\n-echo \"启动 disaggregated PD 服务...\"\n-echo \"路由配置完成\"\n+# Start service\n+echo \"Starting disaggregated PD service...\"\n+echo \"Route configuration completed\"\n",
+      "stats": "1 file changed, +12 lines, -12 lines",
+      "key_changes": [
+        "-# （根据评审意见推断）脚本中包含中文字符的注释和输出",
+        "-# MengqingCao 评论: \"plz use english both in the comments and code\"",
+        "+# 全部使用英文字符",
+        "+# commit message: \"Convert non-English character to English\"",
+        "-# A5 服务器 disaggregated PD 端点配置脚本",
+        "-# 此脚本用于生成路由配置文件",
+        "+# A5 server disaggregated PD endpoint configuration script",
+        "+# This script generates route configuration files",
+        "-# 检查 root 权限",
+        "+# Check root privilege",
+        "-    echo \"错误: 请以 root 权限运行此脚本\"",
+        "+    echo \"Error: Please run this script with root privileges\"",
+        "-# 设置路由配置",
+        "-echo \"正在配置路由信息...\" > /lib/route.conf",
+        "+# Setup route configuration",
+        "+echo \"Configuring route information...\" > /lib/route.conf",
+        "-# 生成 NPU 端点配置文件",
+        "+# Generate NPU endpoint configuration files",
+        "-# 启动服务",
+        "-echo \"启动 disaggregated PD 服务...\"",
+        "-echo \"路由配置完成\"",
+        "+# Start service",
+        "+echo \"Starting disaggregated PD service...\"",
+        "+echo \"Route configuration completed\""
+      ]
+    },
+    "language": "sh",
+    "_status": "pending_llm_extract"
+  }
+}

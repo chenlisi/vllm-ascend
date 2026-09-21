@@ -1,0 +1,61 @@
+{
+  "report_id": "PR13155_002",
+  "pr_number": 13155,
+  "pr_title": "[Feature][MRV2] Support DSA in ModelRunner V2",
+  "pr_status": "merged",
+  "dimension": [
+    "design"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/models/deepseek_v4.py:1116"
+  ],
+  "landing_sha": "ce3590f",
+  "source_quote": "![high]\n> Bypassing `_EXTRA_CTX` and setting `input_ids` directly on the standard vLLM `ForwardContext` object via `get_forward_context().input_ids = input_ids` is fragile and can raise an `AttributeError` on newer vLLM versions where `ForwardContext` is a structured dataclass or has strict `__slots__`. Using `_EXTRA_CTX` is safer and more robust as it uses `additional_kwargs` internally for ModelRunner V2.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/models/deepseek_v4.py:1116",
+      "patch_snippet": "评后sha ce3590f 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "ce3590f",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "不要通过 `get_forward_context().xxx = value` 在标准 vLLM `ForwardContext` 对象上动态设置未在类定义中声明的字段。`ForwardContext` 在 vLLM 新版本中可能是结构化 dataclass 或启用 `__slots__`，动态设置未声明字段会抛 `AttributeError`。跨模块共享的数据应通过函数参数显式传递，而非依赖对共享 context 对象的属性写入/读取。",
+    "context": "",
+    "checkpoints": [
+      "检查代码中是否存在 `get_forward_context().some_field = value` 模式（动态写 ForwardContext 属性）",
+      "检查被写入的字段是否在 `ForwardContext` 类定义中声明",
+      "检查读取侧 `forward_context.some_field` 是否能正确取到值（`__slots__` 场景会失败）",
+      "检查跨模块共享数据是否可通过函数参数链路显式传递"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/fused_moe/experts_selector.py",
+      "line": 245,
+      "code": "class DeepSeekV4ForCausalLM:\n    def forward(self, input_ids, positions, ...):\n        # ❌ 通过标准 ForwardContext 对象动态设置 input_ids\n        # 在 vLLM 新版本中 ForwardContext 是 dataclass 或有 __slots__\n        # 会抛 AttributeError\n        get_forward_context().input_ids = input_ids\n        for layer in islice(self.layers, self.start_layer, self.end_layer):\n            hidden_states, residual = layer(\n                positions, hidden_states, residual, llama_4_scaling,\n            )\n\n    input_ids = forward_context.input_ids.to(torch.int64)  # ❌ 从 ForwardContext 读取脆弱",
+      "context": "❌ 通过标准 ForwardContext 对象动态设置 input_ids 在 vLLM 新版本中 ForwardContext 是 dataclass 或有 __slots__ 会抛 AttributeError"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/fused_moe/router/fused_topk_router.py (_compute_routing)",
+      "line": 1110,
+      "code": "# 移除了 input_ids 参数和 forward_context.input_ids 的设置\ndef set_ascend_forward_context(\n    attn_metadata, vllm_config, num_tokens,\n    # input_ids=None,  ← ✅ 删除\n):\n    ...\n    # forward_context.input_ids = input_ids  ← ✅ 删除\n    # _ExtraForwardContextProxy._fields 移除 \"input_ids\"\n\nclass DeepSeekV4ForCausalLM:\n    def forward(self, input_ids, positions, ...):\n        # ✅ 改为通过 layer 调用链显式传递 input_ids\n        for layer in islice(self.layers, self.start_layer, self.end_layer):\n            hidden_states, residual = layer(\n                positions, hidden_states, residual, llama_4_scaling,\n                input_ids=input_ids,   # 显式参数传递\n            )\n\n    def _select_experts(\n        self, hidden_states, router_logits,\n        enable_force_load_balance,\n        input_ids: torch.Tensor | None = None,   # ✅ 接收参数而非读 forward_context\n    ):\n        topk_weights, topk_ids = self.router._select_experts(\n            hidden_states=hidden_states,\n            router_logits=router_logits,\n            input_ids=input_ids,   # ✅ 透传\n        )\n\n    def _compute_routing(self, hidden_states, router_logits, dtype, input_ids=None):\n        if self.tid2eid is not None:\n            if input_ids is None:\n                raise ValueError(\"DeepSeek V4 hash MoE routing requires input_ids.\")\n            input_ids = input_ids.to(torch.int64)   # ✅ 用传入参数而非 forward_context",
+      "context": "移除了 input_ids 参数和 forward_context.input_ids 的设置 input_ids=None,  ← ✅ 删除 forward_context.input_ids = input_ids  ← ✅ 删除"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/fused_moe/experts_selector.py\n+++ b/vllm_ascend/ops/fused_moe/experts_selector.py\n@@ -1,12 +1,34 @@\n+# 移除了 input_ids 参数和 forward_context.input_ids 的设置\n+def set_ascend_forward_context(\n+    attn_metadata, vllm_config, num_tokens,\n+    # input_ids=None,  ← ✅ 删除\n+):\n+    ...\n+    # forward_context.input_ids = input_ids  ← ✅ 删除\n+    # _ExtraForwardContextProxy._fields 移除 \"input_ids\"\n+\n class DeepSeekV4ForCausalLM:\n     def forward(self, input_ids, positions, ...):\n-        # ❌ 通过标准 ForwardContext 对象动态设置 input_ids\n-        # 在 vLLM 新版本中 ForwardContext 是 dataclass 或有 __slots__\n-        # 会抛 AttributeError\n-        get_forward_context().input_ids = input_ids\n+        # ✅ 改为通过 layer 调用链显式传递 input_ids\n         for layer in islice(self.layers, self.start_layer, self.end_layer):\n             hidden_states, residual = layer(\n                 positions, hidden_states, residual, llama_4_scaling,\n+                input_ids=input_ids,   # 显式参数传递\n             )\n \n-    input_ids = forward_context.input_ids.to(torch.int64)  # ❌ 从 ForwardContext 读取脆弱\n+    def _select_experts(\n+        self, hidden_states, router_logits,\n+        enable_force_load_balance,\n+        input_ids: torch.Tensor | None = None,   # ✅ 接收参数而非读 forward_context\n+    ):\n+        topk_weights, topk_ids = self.router._select_experts(\n+            hidden_states=hidden_states,\n+            router_logits=router_logits,\n+            input_ids=input_ids,   # ✅ 透传\n+        )\n+\n+    def _compute_routing(self, hidden_states, router_logits, dtype, input_ids=None):\n+        if self.tid2eid is not None:\n+            if input_ids is None:\n+                raise ValueError(\"DeepSeek V4 hash MoE routing requires input_ids.\")\n+            input_ids = input_ids.to(torch.int64)   # ✅ 用传入参数而非 forward_context\n",
+      "stats": "1 file changed, +27 lines, -5 lines",
+      "key_changes": [
+        "移除: get_forward_context().input_ids = input_ids",
+        "新增: def set_ascend_forward_context(",
+        "新增: attn_metadata, vllm_config, num_tokens,",
+        "新增: enable_force_load_balance,"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

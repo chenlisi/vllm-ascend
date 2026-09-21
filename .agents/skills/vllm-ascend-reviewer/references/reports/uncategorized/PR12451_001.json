@@ -1,0 +1,45 @@
+{
+  "report_id": "PR12451_001",
+  "pr_number": 0,
+  "pr_title": "",
+  "pr_status": "unknown",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "",
+  "source_quote": "",
+  "correspondence": [],
+  "verification": {
+    "merged": false,
+    "modified_commit": "",
+    "approvals": 0
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/lora/fused_moe.py（新文件，评前不存在）",
+      "line": 0,
+      "code": "# 该文件在评前不存在，LoRA 索引处理代码散落在以下 3 个主流程文件中：\n#   vllm_ascend/ops/fused_moe/token_dispatcher.py    — prepare/preprocess/all2all/postprocess\n#   vllm_ascend/ops/fused_moe/prepare_finalize.py    — truncate+pad+tp_split\n#   vllm_ascend/ops/fused_moe/fused_moe.py           — 重复 _moe_sync_lora_context",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/lora/fused_moe.py",
+      "line": 1,
+      "code": "from typing import Optional\nimport torch\nfrom vllm_ascend.ops.fused_moe.comm_utils import async_all_to_all\n\n_MOE_LORA_INDEX_FIELDS = [\n    \"split_lora_indices\", \"permuted_lora_indices\",\n    \"exchanged_lora_indices\",\n]\n\ndef reset_lora_indices(lora_context) -> None:\n    \"\"\"统一复位，替代 initialize_moe_lora_context_indices\"\"\"\n    for field in _MOE_LORA_INDEX_FIELDS:\n        setattr(lora_context, field, None)\n\ndef prepare_lora_indices(lora_context, *, num_tokens, pad_size, tp_size, tp_rank):\n    \"\"\"truncate+pad+tp_split 组合，替代 prepare_finalize.py 内联\"\"\"\n    token_lora_indices = lora_context.punica_wrapper.token_lora_indices\n    token_lora_indices = token_lora_indices[:num_tokens]\n    if pad_size > 0:\n        token_lora_indices = torch.nn.functional.pad(\n            token_lora_indices, (0, pad_size), value=-1)\n    lora_context.split_lora_indices = torch.tensor_split(\n        token_lora_indices, tp_size, dim=0)[tp_rank]\n\ndef preprocess_lora_indices(lora_context, *, topk_ids, reversed_permutation_mapping):\n    \"\"\"expand+permute，替代 token_dispatcher._dispatch_preprocess 内联\"\"\"\n    split_indices = getattr(lora_context, \"split_lora_indices\", None)\n    if split_indices is not None:\n        expanded = split_indices.repeat_interleave(topk_ids.shape[1])\n        perm = torch.argsort(reversed_permutation_mapping.reshape(-1).long())\n        lora_context.permuted_lora_indices = expanded[perm]\n\ndef all2all_lora_indices(lora_context, *, output_splits, input_splits, ep_group):\n    \"\"\"all2all 交换，替代 token_dispatch 主函数内联\"\"\"\n    permuted = getattr(lora_context, \"permuted_lora_indices\", None)\n    if permuted is not None:\n        lora_dtype = permuted.dtype\n        _, exchanged, handle = async_all_to_all(\n            permuted.to(torch.int32), output_splits, input_splits, ep_group)\n        handle.wait()\n        lora_context.exchanged_lora_indices = exchanged.to(lora_dtype)\n\ndef postprocess_lora_indices(lora_context, *, reversed_permutation_mapping):\n    \"\"\"re-permute 还原，替代 token_dispatcher._dispatch_postprocess L675 内联\"\"\"\n    exchanged = getattr(lora_context, \"exchanged_lora_indices\", None)\n    if exchanged is not None:\n        perm = torch.argsort(reversed_permutation_mapping.reshape(-1).long())\n        lora_context.exchanged_lora_indices = exchanged[perm]\n\ndef sync_lora_context(quant_method, lora_context):\n    \"\"\"通信单例同步，替代 fused_moe.py 重复 _moe_sync_lora_context\"\"\"\n    if hasattr(_EXTRA_CTX.moe_comm_method, \"set_lora_context\"):\n        _EXTRA_CTX.moe_comm_method.set_lora_context(lora_context)\n    if hasattr(quant_method, \"set_lora_context\"):\n        quant_method.set_lora_context(lora_context)",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/lora/fused_moe.py\n+++ b/vllm_ascend/lora/fused_moe.py\n@@ -1,4 +1,55 @@\n-# 该文件在评前不存在，LoRA 索引处理代码散落在以下 3 个主流程文件中：\n-#   vllm_ascend/ops/fused_moe/token_dispatcher.py    — prepare/preprocess/all2all/postprocess\n-#   vllm_ascend/ops/fused_moe/prepare_finalize.py    — truncate+pad+tp_split\n-#   vllm_ascend/ops/fused_moe/fused_moe.py           — 重复 _moe_sync_lora_context\n+from typing import Optional\n+import torch\n+from vllm_ascend.ops.fused_moe.comm_utils import async_all_to_all\n+\n+_MOE_LORA_INDEX_FIELDS = [\n+    \"split_lora_indices\", \"permuted_lora_indices\",\n+    \"exchanged_lora_indices\",\n+]\n+\n+def reset_lora_indices(lora_context) -> None:\n+    \"\"\"统一复位，替代 initialize_moe_lora_context_indices\"\"\"\n+    for field in _MOE_LORA_INDEX_FIELDS:\n+        setattr(lora_context, field, None)\n+\n+def prepare_lora_indices(lora_context, *, num_tokens, pad_size, tp_size, tp_rank):\n+    \"\"\"truncate+pad+tp_split 组合，替代 prepare_finalize.py 内联\"\"\"\n+    token_lora_indices = lora_context.punica_wrapper.token_lora_indices\n+    token_lora_indices = token_lora_indices[:num_tokens]\n+    if pad_size > 0:\n+        token_lora_indices = torch.nn.functional.pad(\n+            token_lora_indices, (0, pad_size), value=-1)\n+    lora_context.split_lora_indices = torch.tensor_split(\n+        token_lora_indices, tp_size, dim=0)[tp_rank]\n+\n+def preprocess_lora_indices(lora_context, *, topk_ids, reversed_permutation_mapping):\n+    \"\"\"expand+permute，替代 token_dispatcher._dispatch_preprocess 内联\"\"\"\n+    split_indices = getattr(lora_context, \"split_lora_indices\", None)\n+    if split_indices is not None:\n+        expanded = split_indices.repeat_interleave(topk_ids.shape[1])\n+        perm = torch.argsort(reversed_permutation_mapping.reshape(-1).long())\n+        lora_context.permuted_lora_indices = expanded[perm]\n+\n+def all2all_lora_indices(lora_context, *, output_splits, input_splits, ep_group):\n+    \"\"\"all2all 交换，替代 token_dispatch 主函数内联\"\"\"\n+    permuted = getattr(lora_context, \"permuted_lora_indices\", None)\n+    if permuted is not None:\n+        lora_dtype = permuted.dtype\n+        _, exchanged, handle = async_all_to_all(\n+            permuted.to(torch.int32), output_splits, input_splits, ep_group)\n+        handle.wait()\n+        lora_context.exchanged_lora_indices = exchanged.to(lora_dtype)\n+\n+def postprocess_lora_indices(lora_context, *, reversed_permutation_mapping):\n+    \"\"\"re-permute 还原，替代 token_dispatcher._dispatch_postprocess L675 内联\"\"\"\n+    exchanged = getattr(lora_context, \"exchanged_lora_indices\", None)\n+    if exchanged is not None:\n+        perm = torch.argsort(reversed_permutation_mapping.reshape(-1).long())\n+        lora_context.exchanged_lora_indices = exchanged[perm]\n+\n+def sync_lora_context(quant_method, lora_context):\n+    \"\"\"通信单例同步，替代 fused_moe.py 重复 _moe_sync_lora_context\"\"\"\n+    if hasattr(_EXTRA_CTX.moe_comm_method, \"set_lora_context\"):\n+        _EXTRA_CTX.moe_comm_method.set_lora_context(lora_context)\n+    if hasattr(quant_method, \"set_lora_context\"):\n+        quant_method.set_lora_context(lora_context)",
+      "stats": "1 file changed, +55 lines, -4 lines",
+      "key_changes": [
+        "修改代码逻辑"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

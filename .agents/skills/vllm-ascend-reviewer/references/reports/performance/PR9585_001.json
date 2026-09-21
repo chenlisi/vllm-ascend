@@ -1,0 +1,112 @@
+{
+  "report_id": "PR9585_001",
+  "pr_number": 9585,
+  "pr_title": "[Feature] vllm-ascend sleep mode optimization for residual memory usage",
+  "pr_status": "merged",
+  "merged_at": "2026-06-22T00:58:31Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/ut/compilation/a2/test_acl_graph.py:26",
+    "vllm_ascend/compilation/acl_graph.py:360",
+    "vllm_ascend/compilation/acl_graph.py:362",
+    "vllm_ascend/patch/worker/patch_distributed.py:239",
+    "vllm_ascend/worker/worker.py:139"
+  ],
+  "landing_sha": "95df9fa",
+  "source_quote": "please add a e2e test to guard that function of sleep mode level=3 is ok.\nThe code is duplicated, you could refine this\nattributes = [\n\"events\", \"handles\", \"attn_params\",\n\"conv1d_params\", \"conv1d_handles\", \"conv1d_events\",\n]\nfor attr_name in attributes:\nattr_dict = getattr(params, attr_name)\nfor num_tokens in list(attr_dict.keys()):\nattr_dict[num_tokens] = []\nRonald1995 行级评论（2026-06-02 03:21:57），评后 sha `95df9fa` 体现修改。\nRonald1995 行级评论（2026-06-02 03:27:45），评后 sha `95df9fa` 体现修改。\nRonald1995 行级评论（2026-06-02 03:46:44），评后 sha `95df9fa` 体现修改。\nRonald1995 和 weijinqian0 共 30 处行级评论，涵盖 sleep mode 清理逻辑、ACL graph 参数重置、rotary embedding 缓存卸载/恢复、HCCL 通信组销毁/重建等。",
+  "correspondence": [
+    {
+      "review_quote": "Ronald1995: tests/ut/compilation/a2/test_acl_graph.py:26",
+      "patch_snippet": "评后sha 95df9fa 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Ronald1995: vllm_ascend/compilation/acl_graph.py:360",
+      "patch_snippet": "评后sha 95df9fa 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Ronald1995: vllm_ascend/compilation/acl_graph.py:362",
+      "patch_snippet": "评后sha 95df9fa 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Ronald1995: vllm_ascend/patch/worker/patch_distributed.py:239",
+      "patch_snippet": "评后sha 95df9fa 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Ronald1995: vllm_ascend/worker/worker.py:139",
+      "patch_snippet": "评后sha 95df9fa 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Ronald1995: worker.py",
+      "patch_snippet": "评后sha 95df9fa 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "95df9fa",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在 sleep mode 实现中，ACL graph 参数清理应使用统一的属性列表循环处理，避免重复代码；同时需确保 attention workspace、rotary embedding 缓存、HCCL 通信组的清理和恢复逻辑完整对称。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/compilation/acl_graph.py",
+      "line": 345,
+      "code": "# （根据评审意见推断）每个属性单独清理，代码重复\n# Ronald1995 评论: \"The code is duplicated, you could refine this\"\n\ndef clear_acl_graph_params(params: Any) -> None:\n    \"\"\"Clear all ACL graph parameters for sleep mode cleanup.\"\"\"\n    # 逐个属性重复清理代码 — 每个属性使用相同的循环模式\n    for num_tokens in list(params.events.keys()):\n        params.events[num_tokens] = []\n    for num_tokens in list(params.handles.keys()):\n        params.handles[num_tokens] = []\n    for num_tokens in list(params.attn_params.keys()):\n        params.attn_params[num_tokens] = []\n    for num_tokens in list(params.conv1d_params.keys()):\n        params.conv1d_params[num_tokens] = []\n    for num_tokens in list(params.conv1d_handles.keys()):\n        params.conv1d_handles[num_tokens] = []\n    for num_tokens in list(params.conv1d_events.keys()):\n        params.conv1d_events[num_tokens] = []",
+      "context": "please add a e2e test to guard that function of sleep mode level=3 is ok.\nThe code is duplicated, you could refine this\nattributes = [\n\"events\", \"handles\", \"attn_params\",\n\"conv1d_params\", \"conv1d_hand"
+    },
+    "pattern": {
+      "file": "vllm_ascend/compilation/acl_graph.py",
+      "line": 345,
+      "code": "# 统一使用属性列表循环清理，消除重复\n# Ronald1995 提供的 suggestion 代码\n\ndef clear_acl_graph_params(params: Any) -> None:\n    \"\"\"Clear all ACL graph parameters for sleep mode cleanup.\"\"\"\n    attributes = [\n        \"events\",\n        \"handles\",\n        \"attn_params\",\n        \"conv1d_params\",\n        \"conv1d_handles\",\n        \"conv1d_events\",\n    ]\n\n    for attr_name in attributes:\n        attr_dict = getattr(params, attr_name)\n        for num_tokens in list(attr_dict.keys()):\n            attr_dict[num_tokens] = []",
+      "context": "please add a e2e test to guard that function of sleep mode level=3 is ok.\nThe code is duplicated, you could refine this\nattributes = [\n\"events\", \"handles\", \"attn_params\",\n\"conv1d_params\", \"conv1d_hand"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/compilation/acl_graph.py\n+++ b/vllm_ascend/compilation/acl_graph.py\n@@ -1,18 +1,18 @@\n-# （根据评审意见推断）每个属性单独清理，代码重复\n-# Ronald1995 评论: \"The code is duplicated, you could refine this\"\n+# 统一使用属性列表循环清理，消除重复\n+# Ronald1995 提供的 suggestion 代码\n \n def clear_acl_graph_params(params: Any) -> None:\n     \"\"\"Clear all ACL graph parameters for sleep mode cleanup.\"\"\"\n-    # 逐个属性重复清理代码 — 每个属性使用相同的循环模式\n-    for num_tokens in list(params.events.keys()):\n-        params.events[num_tokens] = []\n-    for num_tokens in list(params.handles.keys()):\n-        params.handles[num_tokens] = []\n-    for num_tokens in list(params.attn_params.keys()):\n-        params.attn_params[num_tokens] = []\n-    for num_tokens in list(params.conv1d_params.keys()):\n-        params.conv1d_params[num_tokens] = []\n-    for num_tokens in list(params.conv1d_handles.keys()):\n-        params.conv1d_handles[num_tokens] = []\n-    for num_tokens in list(params.conv1d_events.keys()):\n-        params.conv1d_events[num_tokens] = []\n+    attributes = [\n+        \"events\",\n+        \"handles\",\n+        \"attn_params\",\n+        \"conv1d_params\",\n+        \"conv1d_handles\",\n+        \"conv1d_events\",\n+    ]\n+\n+    for attr_name in attributes:\n+        attr_dict = getattr(params, attr_name)\n+        for num_tokens in list(attr_dict.keys()):\n+            attr_dict[num_tokens] = []\n",
+      "stats": "1 file changed, +15 lines, -15 lines",
+      "key_changes": [
+        "-# （根据评审意见推断）每个属性单独清理，代码重复",
+        "-# Ronald1995 评论: \"The code is duplicated, you could refine this\"",
+        "+# 统一使用属性列表循环清理，消除重复",
+        "+# Ronald1995 提供的 suggestion 代码",
+        "-    # 逐个属性重复清理代码 — 每个属性使用相同的循环模式",
+        "-    for num_tokens in list(params.events.keys()):",
+        "-        params.events[num_tokens] = []",
+        "-    for num_tokens in list(params.handles.keys()):",
+        "-        params.handles[num_tokens] = []",
+        "-    for num_tokens in list(params.attn_params.keys()):",
+        "-        params.attn_params[num_tokens] = []",
+        "-    for num_tokens in list(params.conv1d_params.keys()):",
+        "-        params.conv1d_params[num_tokens] = []",
+        "-    for num_tokens in list(params.conv1d_handles.keys()):",
+        "-        params.conv1d_handles[num_tokens] = []",
+        "-    for num_tokens in list(params.conv1d_events.keys()):",
+        "-        params.conv1d_events[num_tokens] = []",
+        "+    attributes = [",
+        "+        \"events\",",
+        "+        \"handles\",",
+        "+        \"attn_params\",",
+        "+        \"conv1d_params\",",
+        "+        \"conv1d_handles\",",
+        "+        \"conv1d_events\",",
+        "+    ]",
+        "+",
+        "+    for attr_name in attributes:",
+        "+        attr_dict = getattr(params, attr_name)",
+        "+        for num_tokens in list(attr_dict.keys()):",
+        "+            attr_dict[num_tokens] = []"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

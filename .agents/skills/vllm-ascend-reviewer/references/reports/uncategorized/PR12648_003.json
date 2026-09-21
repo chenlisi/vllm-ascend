@@ -1,0 +1,45 @@
+{
+  "report_id": "PR12648_003",
+  "pr_number": 0,
+  "pr_title": "",
+  "pr_status": "unknown",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "",
+  "source_quote": "",
+  "correspondence": [],
+  "verification": {
+    "merged": false,
+    "modified_commit": "",
+    "approvals": 0
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/worker/v2/attn_utils.py",
+      "line": 0,
+      "code": "from vllm_ascend.attention.utils import AscendCommonAttentionMetadata\nfrom vllm_ascend.core.kv_cache_interface import AscendMLAAttentionSpec\nfrom vllm_ascend.quantization.utils import enable_fa_quant\nfrom vllm_ascend.utils import calc_split_factor   # 未 import vllm_version_is\n\n_ATTENTION_MASK_BUILDER = None",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/v2/attn_utils.py",
+      "line": 0,
+      "code": "from vllm_ascend.attention.utils import AscendCommonAttentionMetadata\nfrom vllm_ascend.core.kv_cache_interface import AscendMLAAttentionSpec\nfrom vllm_ascend.quantization.utils import enable_fa_quant\nfrom vllm_ascend.utils import calc_split_factor, vllm_version_is\n\n_ATTENTION_MASK_BUILDER = None",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/v2/attn_utils.py\n+++ b/vllm_ascend/worker/v2/attn_utils.py\n@@ -1,6 +1,6 @@\n from vllm_ascend.attention.utils import AscendCommonAttentionMetadata\n from vllm_ascend.core.kv_cache_interface import AscendMLAAttentionSpec\n from vllm_ascend.quantization.utils import enable_fa_quant\n-from vllm_ascend.utils import calc_split_factor   # 未 import vllm_version_is\n+from vllm_ascend.utils import calc_split_factor, vllm_version_is\n \n _ATTENTION_MASK_BUILDER = None",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "修改代码逻辑"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

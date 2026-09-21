@@ -1,0 +1,70 @@
+{
+  "report_id": "PR7067_001",
+  "pr_number": 7067,
+  "pr_title": "[Doc][ReleaseNote] Add release notes for v0.16.0rc1",
+  "pr_status": "merged",
+  "merged_at": "2026-03-10T14:45:06Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "docs/source/user_guide/release_notes.md:11",
+    "docs/source/user_guide/release_notes.md:14",
+    "docs/source/user_guide/release_notes.md:24",
+    "docs/source/user_guide/release_notes.md:36",
+    "docs/source/user_guide/release_notes.md:40",
+    "docs/source/user_guide/release_notes.md:45",
+    "docs/source/user_guide/release_notes.md:90",
+    "docs/source/user_guide/release_notes.md:92",
+    "docs/source/user_guide/release_notes.md:91"
+  ],
+  "landing_sha": "e683369",
+  "source_quote": "```suggestion\n```（删除该行，wangxiyuan 补充：this can be removed, it's only for 950）",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 和 wangxiyuan 对发布说明进行了详细审阅，提出了12条修改建议：删除 950 专属内容、补充 PR 链接、移除 310p 进度、完善已知问题描述和 workaround、推迟有 CI 问题的 PR 到下个版本等。作者通过多个 commit 逐步采纳了所有建议，12/12 建议全部落地。",
+      "patch_snippet": "",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "e683369",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "发布说明中每个条目必须附带对应的 PR 链接。不应在通用发布说明中包含特定硬件（如 950）或特定平台（如 310p）的进度信息。已知问题需提供完整的描述和可用的 workaround。有 CI 问题的 PR 应推迟到下个版本。",
+    "context": "",
+    "checkpoints": [
+      "确认每个发布条目是否附带了 PR 链接",
+      "检查是否包含特定硬件/平台的专属信息（不应出现在通用说明中）",
+      "验证已知问题是否有完整的描述和 workaround",
+      "确认有 CI 问题的 PR 是否被正确推迟",
+      "检查 release notes 是否经过多人审阅"
+    ],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "<!-- 文件: docs/source/user_guide/release_notes.md -->\n<!-- 行号: 1-20（根据评审意见推断补全上下文）-->\n<!-- 包含了 950 专属内容和不完整的 PR 链接 -->\n\n\n\n- Some feature only for 950.\n- [Experimental] Support FabricMem Mode for ADXL/HIXL interconnect.\n- Improved MoE performance on 310P devices.\n- Added support for Qwen3-VL model.\n- Optimized memory usage for large-scale models.\n- Fixed various bugs and improved stability.\n- 310p support progress update...\n- Added new quantization methods.",
+      "context": "```suggestion"
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "<!-- 文件: docs/source/user_guide/release_notes.md -->\n<!-- 行号: 1-20（根据评审意见和 suggestion 推断补全上下文）-->\n<!-- 删除了 950 专属内容，添加了 PR 链接 -->\n\n\n\n- [Experimental] Support FabricMem Mode for ADXL/HIXL interconnect. [#6806](https://github.com/vllm-project/vllm-ascend/pull/6806)\n- Added support for Qwen3-VL model.\n- Optimized memory usage for large-scale models.\n- Fixed various bugs and improved stability.\n- Added new quantization methods.",
+      "context": "```suggestion"
+    },
+    "diff": {
+      "unified": "--- a/a/file\n+++ b/b/file\n@@ -1,14 +1,11 @@\n <!-- 文件: docs/source/user_guide/release_notes.md -->\n-<!-- 行号: 1-20（根据评审意见推断补全上下文）-->\n-<!-- 包含了 950 专属内容和不完整的 PR 链接 -->\n+<!-- 行号: 1-20（根据评审意见和 suggestion 推断补全上下文）-->\n+<!-- 删除了 950 专属内容，添加了 PR 链接 -->\n \n \n \n-- Some feature only for 950.\n-- [Experimental] Support FabricMem Mode for ADXL/HIXL interconnect.\n-- Improved MoE performance on 310P devices.\n+- [Experimental] Support FabricMem Mode for ADXL/HIXL interconnect. [#6806](https://github.com/vllm-project/vllm-ascend/pull/6806)\n - Added support for Qwen3-VL model.\n - Optimized memory usage for large-scale models.\n - Fixed various bugs and improved stability.\n-- 310p support progress update...\n - Added new quantization methods.",
+      "stats": "1 file changed, +3 lines, -6 lines",
+      "key_changes": [
+        "修改了第 2-3 行的代码",
+        "修改了第 7-9 行的代码",
+        "删除了第 13-13 行的代码"
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "report_id": "PR12997_001",
+  "pr_number": 12997,
+  "pr_title": "[Feature][MRV2] Support pipeline parallelism on Ascend",
+  "pr_status": "merged",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/worker/worker.py:650"
+  ],
+  "landing_sha": "cb0792d",
+  "source_quote": "1. Please at least add comments here why we need this modification, otherwise we can not understand why we need an early-return here.\n2. If upstream GPUWorker uses this implementation of `execute_model` to support PP?",
+  "correspondence": [
+    {
+      "review_quote": "linfeng-yuan: vllm_ascend/worker/worker.py:650",
+      "patch_snippet": "评后sha cb0792d 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "cb0792d",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当代码中出现非直观的 early-return（尤其是与上游实现行为不一致、或不同代码路径有差异化处理时），必须在 early-return 处添加注释，说明为何需要提前返回以及与上游/其他路径的关系，避免后续维护者无法理解。",
+    "context": "",
+    "checkpoints": [
+      "识别 early-return / 短路返回逻辑，判断其意图是否显而易见",
+      "若 early-return 是为了适配特定场景（如不同 model runner 版本、PP rank 位置），必须注释说明",
+      "注释应点明与上游实现的对应关系（如 \"Align with upstream GPUWorker\"）",
+      "注释应说明为何该路径可以提前返回而其他路径不能"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/worker.py",
+      "line": 650,
+      "code": "    def execute_model(\n        self,\n        scheduler_output: \"SchedulerOutput\",\n    ) -> Optional[Union[ModelRunnerOutput, AsyncModelRunnerOutput]]:\n        # Handle pipeline parallelism: non-last PP ranks only need to\n        # receive activations from the previous rank and send to the next.\n        if self.pp_rank != self.pp_size - 1:\n            # ... (PP recv / forward / send logic) ...\n            pp_output = self.pp_handler.receive_and_forward(scheduler_output)\n            if self.use_v2_model_runner:\n                return None\n            # V1 path: must continue to handle PP + KV connector propagation\n            return pp_output\n\n        # Last PP rank (or non-PP): run the full model execution path.\n        if self.use_v2_model_runner:\n            # Model Runner V2 handles its own output construction.\n            async_output = await self.model_runner.execute_model(scheduler_output)\n            return AsyncModelRunnerOutput(async_output)\n\n        # Model Runner V1 path\n        model_runner_output = self.model_runner.execute_model(scheduler_output)\n        return model_runner_output",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/worker.py",
+      "line": 650,
+      "code": "    def execute_model(\n        self,\n        scheduler_output: \"SchedulerOutput\",\n    ) -> Optional[Union[ModelRunnerOutput, AsyncModelRunnerOutput]]:\n        # Handle pipeline parallelism: non-last PP ranks only need to\n        # receive activations from the previous rank and send to the next.\n        if self.pp_rank != self.pp_size - 1:\n            # ... (PP recv / forward / send logic) ...\n            pp_output = self.pp_handler.receive_and_forward(scheduler_output)\n\n            # Align with upstream GPUWorker: Model Runner V2 has no\n            # kv_connector_output to propagate from non-last PP ranks. Model\n            # Runner V1 must continue below to handle the PP + KV connector path.\n            if self.use_v2_model_runner:\n                return None\n            # V1 path: must continue to handle PP + KV connector propagation\n            return pp_output\n\n        # Last PP rank (or non-PP): run the full model execution path.\n        if self.use_v2_model_runner:\n            # Model Runner V2 handles its own output construction.\n            async_output = await self.model_runner.execute_model(scheduler_output)\n            return AsyncModelRunnerOutput(async_output)\n\n        # Model Runner V1 path\n        model_runner_output = self.model_runner.execute_model(scheduler_output)\n        return model_runner_output",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/worker.py\n+++ b/vllm_ascend/worker/worker.py\n@@ -7,6 +7,10 @@\n         if self.pp_rank != self.pp_size - 1:\n             # ... (PP recv / forward / send logic) ...\n             pp_output = self.pp_handler.receive_and_forward(scheduler_output)\n+\n+            # Align with upstream GPUWorker: Model Runner V2 has no\n+            # kv_connector_output to propagate from non-last PP ranks. Model\n+            # Runner V1 must continue below to handle the PP + KV connector path.\n             if self.use_v2_model_runner:\n                 return None\n             # V1 path: must continue to handle PP + KV connector propagation",
+      "stats": "1 file changed, +4 lines, -0 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

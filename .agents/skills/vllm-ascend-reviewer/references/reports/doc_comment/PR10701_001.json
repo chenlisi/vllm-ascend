@@ -1,0 +1,58 @@
+{
+  "report_id": "PR10701_001",
+  "pr_number": 10701,
+  "pr_title": "[CI] Adjust test case timeout to fit different scenarios",
+  "pr_status": "merged",
+  "merged_at": "2026-06-18T09:49:27Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    ".github/workflows/_e2e_nightly_multi_node.yaml:100",
+    ".github/workflows/_e2e_nightly_single_node.yaml:91"
+  ],
+  "landing_sha": "92bca21",
+  "source_quote": "plz remove this comment.",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 指出两个 workflow 文件中的注释应删除。作者通过 commit `92bca21` 移除了不必要的注释，2/2 建议全部落地。",
+      "patch_snippet": "commit `92bca21`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "92bca21",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "CI workflow 文件中的注释应简洁明了，调试性或临时性注释不应留在最终代码中。",
+    "context": "",
+    "checkpoints": [
+      "workflow 文件中是否有不必要的临时注释",
+      "注释是否对理解配置有帮助，还是冗余信息"
+    ],
+    "antipattern": {
+      "file": ".github/workflows/_e2e_nightly_multi_node.yaml",
+      "line": 90,
+      "code": "    - name: Run multi-node e2e nightly tests\n      uses: ./.github/actions/e2e-test\n      with:\n        test_script: tests/e2e/nightly_multi_node.sh\n        timeout-minutes: 60\n        # TODO: adjust timeout after stabilization\n        upload_logs: true\n        artifact_name: multi-node-nightly\n\n    - name: Upload test results\n      if: always()\n      uses: actions/upload-artifact@v4\n      with:\n        name: multi-node-results\n        path: test-results/\n        retention-days: 7",
+      "context": "plz remove this comment."
+    },
+    "pattern": {
+      "file": ".github/workflows/_e2e_nightly_multi_node.yaml",
+      "line": 90,
+      "code": "    - name: Run multi-node e2e nightly tests\n      uses: ./.github/actions/e2e-test\n      with:\n        test_script: tests/e2e/nightly_multi_node.sh\n        timeout-minutes: 60\n        upload_logs: true\n        artifact_name: multi-node-nightly\n\n    - name: Upload test results\n      if: always()\n      uses: actions/upload-artifact@v4\n      with:\n        name: multi-node-results\n        path: test-results/\n        retention-days: 7",
+      "context": "plz remove this comment."
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/_e2e_nightly_multi_node.yaml\n+++ b/.github/workflows/_e2e_nightly_multi_node.yaml\n@@ -3,7 +3,6 @@\n       with:\n         test_script: tests/e2e/nightly_multi_node.sh\n         timeout-minutes: 60\n-        # TODO: adjust timeout after stabilization\n         upload_logs: true\n         artifact_name: multi-node-nightly\n ",
+      "stats": "1 file changed, -1 lines",
+      "key_changes": [
+        "移除: # TODO: adjust timeout after stabilization"
+      ]
+    },
+    "language": "yaml",
+    "_status": "extracted"
+  }
+}

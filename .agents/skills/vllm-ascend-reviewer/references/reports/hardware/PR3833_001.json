@@ -1,0 +1,59 @@
+{
+  "report_id": "PR3833_001",
+  "pr_number": 3833,
+  "pr_title": "[Model] Add LongCat-Flash",
+  "pr_status": "merged",
+  "dimension": [
+    "design"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/models/layers/mla.py:86"
+  ],
+  "landing_sha": "f8ae1a3",
+  "source_quote": "Using a hardcoded index `[2]` to parse the layer index from the prefix string is brittle and assumes a fixed prefix structure (e.g., `model.layers.{idx}.<...>`). This can easily break if the model's naming convention or the prefix structure changes. A more robust approach would be to use regular expressions or a more structured method to extract the layer index.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/models/layers/mla.py:86",
+      "patch_snippet": "评后sha f8ae1a3 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f8ae1a3",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "从 `prefix` 等结构化字符串中提取信息时，不应使用硬编码的 split 索引（如 `[2]`），因为该索引假设了固定的层级结构，模型命名变化时会导致错误。",
+    "context": "",
+    "checkpoints": [
+      "检查 `prefix.split(\".\")[N]` 是否使用了硬编码索引",
+      "确认是否有更健壮的方式提取信息（如正则表达式、命名分组）",
+      "如果逻辑不再需要，直接移除而非保留脆弱代码"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/models/layers/mla.py",
+      "line": 86,
+      "code": "# vllm_ascend/models/layers/mla.py\nif hf_config.model_type == \"longcat_flash\":\n    self.debug_layer_idx = int(self.prefix.split(\".\")[2])  # ← 硬编码索引\nelse:\n    self.debug_layer_idx = int(self.prefix.split(\".\")[-2])",
+      "context": "vllm_ascend/models/layers/mla.py"
+    },
+    "pattern": {
+      "file": "vllm_ascend/models/layers/mla.py",
+      "line": 86,
+      "code": "# vllm_ascend/models/layers/mla.py\n# 整个 if/else 块被移除，不再使用硬编码索引解析 prefix",
+      "context": "vllm_ascend/models/layers/mla.py 整个 if/else 块被移除，不再使用硬编码索引解析 prefix"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/models/layers/mla.py\n+++ b/vllm_ascend/models/layers/mla.py\n@@ -1,5 +1,2 @@\n # vllm_ascend/models/layers/mla.py\n-if hf_config.model_type == \"longcat_flash\":\n-    self.debug_layer_idx = int(self.prefix.split(\".\")[2])  # ← 硬编码索引\n-else:\n-    self.debug_layer_idx = int(self.prefix.split(\".\")[-2])\n+# 整个 if/else 块被移除，不再使用硬编码索引解析 prefix\n",
+      "stats": "1 file changed, +1 lines, -4 lines",
+      "key_changes": [
+        "移除: self.debug_layer_idx = int(self.prefix.split(\".\")[2])  # ← 硬编码索引",
+        "移除: else:",
+        "移除: if hf_config.model_type == \"longcat_flash\":"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "report_id": "PR9560_001",
+  "pr_number": 9560,
+  "pr_title": "[Feature][Attention] Support Model GLM4.7-Flash",
+  "pr_status": "merged",
+  "merged_at": "2026-06-02T01:57:16Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/mla_v1.py:1290"
+  ],
+  "landing_sha": "c61ebe0",
+  "source_quote": "Plz merge these two branches.",
+  "correspondence": [
+    {
+      "review_quote": "weijinqian0: vllm_ascend/attention/mla_v1.py:1290",
+      "patch_snippet": "评后sha c61ebe0 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "c61ebe0",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当同一函数或关联函数中存在相同条件的多个分支时，应合并为一个分支以减少代码重复和提高可维护性。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/attention/mla_v1.py",
+      "line": 1280,
+      "code": "# （根据评审意见推断）_forward_prefill 中存在两个独立的 if self.head_padding > 0 条件分支\n# 分别处理 query 和 key 的 padding，代码重复需要合并\n# weijinqian0 评论: \"Plz merge these two branches.\"\n\ndef _forward_prefill(\n    self,\n    query: torch.Tensor,\n    key: torch.Tensor,\n    value: torch.Tensor,\n    attn_metadata: Any,\n    **kwargs,\n) -> torch.Tensor:\n    # ... 前置逻辑: 准备 q_nope, q_pe, k_nope, k_pe ...\n    num_heads = self.num_heads\n    kv_lora_rank = self.kv_lora_rank\n\n    if self.head_padding > 0:\n        # branch 1: pad query heads to power of two\n        pad_count = self.head_padding\n        query = torch.cat([\n            query,\n            query.new_zeros(*query.shape[:-2], pad_count, query.shape[-1])\n        ], dim=-2)\n\n    if self.head_padding > 0:\n        # branch 2: pad key heads (duplicate condition)\n        key = torch.cat([\n            key,\n            key.new_zeros(*key.shape[:-2], pad_count, key.shape[-1])\n        ], dim=-2)\n\n    # ... 后续逻辑: 调用注意力算子 ...\n    attn_output = self._compute_attention(query, key, value, attn_metadata)\n    return attn_output[:, :num_heads]",
+      "context": "Plz merge these two branches."
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/mla_v1.py",
+      "line": 1280,
+      "code": "# 合并两个分支为一个，消除重复的条件判断\n# dsxsteven 回复: \"Done. I merged two branches both in _forward_prefill\n#                  and _compute_prefill_context functions\"\n\ndef _forward_prefill(\n    self,\n    query: torch.Tensor,\n    key: torch.Tensor,\n    value: torch.Tensor,\n    attn_metadata: Any,\n    **kwargs,\n) -> torch.Tensor:\n    # ... 前置逻辑: 准备 q_nope, q_pe, k_nope, k_pe ...\n    num_heads = self.num_heads\n    kv_lora_rank = self.kv_lora_rank\n\n    if self.head_padding > 0:\n        # 统一处理 query 和 key 的 padding\n        pad_count = self.head_padding\n        query = torch.cat([\n            query,\n            query.new_zeros(*query.shape[:-2], pad_count, query.shape[-1])\n        ], dim=-2)\n        key = torch.cat([\n            key,\n            key.new_zeros(*key.shape[:-2], pad_count, key.shape[-1])\n        ], dim=-2)\n\n    # ... 后续逻辑: 调用注意力算子 ...\n    attn_output = self._compute_attention(query, key, value, attn_metadata)\n    return attn_output[:, :num_heads]",
+      "context": "Plz merge these two branches."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/mla_v1.py\n+++ b/vllm_ascend/attention/mla_v1.py\n@@ -1,6 +1,6 @@\n-# （根据评审意见推断）_forward_prefill 中存在两个独立的 if self.head_padding > 0 条件分支\n-# 分别处理 query 和 key 的 padding，代码重复需要合并\n-# weijinqian0 评论: \"Plz merge these two branches.\"\n+# 合并两个分支为一个，消除重复的条件判断\n+# dsxsteven 回复: \"Done. I merged two branches both in _forward_prefill\n+#                  and _compute_prefill_context functions\"\n \n def _forward_prefill(\n     self,\n@@ -15,15 +15,12 @@\n     kv_lora_rank = self.kv_lora_rank\n \n     if self.head_padding > 0:\n-        # branch 1: pad query heads to power of two\n+        # 统一处理 query 和 key 的 padding\n         pad_count = self.head_padding\n         query = torch.cat([\n             query,\n             query.new_zeros(*query.shape[:-2], pad_count, query.shape[-1])\n         ], dim=-2)\n-\n-    if self.head_padding > 0:\n-        # branch 2: pad key heads (duplicate condition)\n         key = torch.cat([\n             key,\n             key.new_zeros(*key.shape[:-2], pad_count, key.shape[-1])\n",
+      "stats": "1 file changed, +4 lines, -7 lines",
+      "key_changes": [
+        "-# （根据评审意见推断）_forward_prefill 中存在两个独立的 if self.head_padding > 0 条件分支",
+        "-# 分别处理 query 和 key 的 padding，代码重复需要合并",
+        "-# weijinqian0 评论: \"Plz merge these two branches.\"",
+        "+# 合并两个分支为一个，消除重复的条件判断",
+        "+# dsxsteven 回复: \"Done. I merged two branches both in _forward_prefill",
+        "+#                  and _compute_prefill_context functions\"",
+        "-        # branch 1: pad query heads to power of two",
+        "+        # 统一处理 query 和 key 的 padding",
+        "-",
+        "-    if self.head_padding > 0:",
+        "-        # branch 2: pad key heads (duplicate condition)"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

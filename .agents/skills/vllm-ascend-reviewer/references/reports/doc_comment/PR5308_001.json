@@ -1,0 +1,60 @@
+{
+  "report_id": "PR5308_001",
+  "pr_number": 5308,
+  "pr_title": "[BugFix][Fusion] Patch compile backend to make fusion available",
+  "pr_status": "merged",
+  "merged_at": "",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/patch/platform/patch_compile_backend.py:21",
+    "tests/e2e/singlecard/test_aclgraph_accuracy.py:135"
+  ],
+  "landing_sha": "f7b8804",
+  "source_quote": "we need to descibe the details of the reason and plan of this patch",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 要求详细描述补丁的原因和计划，并询问精度变化问题。作者通过 commit `f7b8804` 补充了详细说明，并解释了融合算子与 torch 算子的精度差异是已知问题（Triton 未集成到 CI 导致此前未暴露），MengqingCao 表示认可。3/3 建议全部落地。",
+      "patch_snippet": "commit `f7b8804`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f7b8804",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "对核心模块进行 monkey-patch 时，必须在补丁文件中详细描述补丁的原因、计划和已知问题，以便后续维护者理解补丁的背景和必要性。",
+    "context": "",
+    "checkpoints": [
+      "补丁文件是否包含详细的原因说明",
+      "是否描述了补丁的计划和时间线",
+      "是否记录了已知问题（如精度差异）及其原因",
+      "是否说明了问题此前未被发现的原因"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/patch/platform/patch_compile_backend.py",
+      "line": 0,
+      "code": "import torch\nfrom vllm.compilation import PiecewiseBackend\n\nclass AscendPiecewiseBackend(PiecewiseBackend):\n    \"\"\"Custom backend for Ascend fusion operators.\"\"\"\n\n    def __init__(self, ...):\n        super().__init__(...)\n        self.range_entries = []\n        self.compile_sizes = []\n\n    def __call__(self, *args):\n        return self.compiled_graph_for_general_shape(*args)\n\n\ndef patch_compile_backend():\n    \"\"\"Monkey-patch the compile backend.\"\"\"\n    ...",
+      "context": "we need to descibe the details of the reason and plan of this patch"
+    },
+    "pattern": {
+      "file": "vllm_ascend/patch/platform/patch_compile_backend.py",
+      "line": 0,
+      "code": "\"\"\"\nPatch for PiecewiseCompileInterpreter and PiecewiseBackend.\n\nReason: The upstream compile backend does not support Ascend fusion operators.\n         Ascend platforms require custom compilation logic to enable operator\n         fusion for better performance.\n\nPlan: This patch will be removed once vLLM supports custom compile backends\n      natively. We are working with the upstream team on this.\n\nKnown issues:\n  - Fusion operators and torch operators have slight accuracy differences,\n    but tests have shown no decrease in accuracy.\n  - This issue was not previously exposed because Triton is not integrated\n    into CI, and the fusion operator is not enabled by default.\n\"\"\"\n\nimport torch\nfrom vllm.compilation import PiecewiseBackend\n\nclass AscendPiecewiseBackend(PiecewiseBackend):\n    \"\"\"Custom backend for Ascend fusion operators.\"\"\"\n\n    def __init__(self, ...):\n        super().__init__(...)\n        self.range_entries = []\n        self.compile_sizes = []\n\n    def __call__(self, *args):\n        return self.compiled_graph_for_general_shape(*args)\n\n\ndef patch_compile_backend():\n    \"\"\"Monkey-patch the compile backend.\"\"\"\n    ...",
+      "context": "we need to descibe the details of the reason and plan of this patch"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/patch/platform/patch_compile_backend.py\n+++ b/vllm_ascend/patch/platform/patch_compile_backend.py\n@@ -1,18 +1,35 @@\n+\"\"\"\n+Patch for PiecewiseCompileInterpreter and PiecewiseBackend.\n+\n+Reason: The upstream compile backend does not support Ascend fusion operators.\n+         Ascend platforms require custom compilation logic to enable operator\n+         fusion for better performance.\n+\n+Plan: This patch will be removed once vLLM supports custom compile backends\n+      natively. We are working with the upstream team on this.\n+\n+Known issues:\n+  - Fusion operators and torch operators have slight accuracy differences,\n+    but tests have shown no decrease in accuracy.\n+  - This issue was not previously exposed because Triton is not integrated\n+    into CI, and the fusion operator is not enabled by default.\n+\"\"\"\n+\n import torch\n from vllm.compilation import PiecewiseBackend\n ",
+      "stats": "1 file changed, +17 lines, -0 lines",
+      "key_changes": [
+        "在第 1-17 行新增了代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

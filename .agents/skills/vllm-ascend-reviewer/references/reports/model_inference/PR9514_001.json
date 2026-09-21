@@ -1,0 +1,55 @@
+{
+  "report_id": "PR9514_001",
+  "pr_number": 9514,
+  "pr_title": "[Feature][310p] support Prefix Mamba Cache on 310p",
+  "pr_status": "merged",
+  "merged_at": "2026-05-30T06:29:54Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/patch/worker/patch_mamba_utils.py:13"
+  ],
+  "landing_sha": "aae8598",
+  "source_quote": "why we also need to check `batch_memcpy_kernel`?",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao: vllm_ascend/patch/worker/patch_mamba_utils.py:13",
+      "patch_snippet": "评后sha aae8598 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "aae8598",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "why we also need to check `batch_memcpy_kernel`?",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/patch/worker/patch_mamba_utils.py",
+      "line": 13,
+      "code": "# vllm_ascend/_310p/model_runner_310p.py:845\nmax_model_len = max(self.max_model_len, self.max_encoder_len)",
+      "context": "why we also need to check `batch_memcpy_kernel`?"
+    },
+    "pattern": {
+      "file": "vllm_ascend/patch/worker/patch_mamba_utils.py",
+      "line": 13,
+      "code": "# vllm_ascend/_310p/model_runner_310p.py:845\nmax_model_len = max(self.model_config.max_model_len, self.max_encoder_len)",
+      "context": "why we also need to check `batch_memcpy_kernel`?"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/patch/worker/patch_mamba_utils.py\n+++ b/vllm_ascend/patch/worker/patch_mamba_utils.py\n@@ -1,2 +1,2 @@\n # vllm_ascend/_310p/model_runner_310p.py:845\n-max_model_len = max(self.max_model_len, self.max_encoder_len)\n+max_model_len = max(self.model_config.max_model_len, self.max_encoder_len)\n",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "-max_model_len = max(self.max_model_len, self.max_encoder_len)",
+        "+max_model_len = max(self.model_config.max_model_len, self.max_encoder_len)"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

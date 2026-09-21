@@ -1,0 +1,57 @@
+{
+  "report_id": "PR5103_001",
+  "pr_number": 5103,
+  "pr_title": "fix vl pd smoke error",
+  "pr_status": "merged",
+  "merged_at": "2025-12-18T14:20:45Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/distributed/mooncake_connector.py:323"
+  ],
+  "landing_sha": "b546462",
+  "source_quote": "why not add this:\nif is_vl_model:  return",
+  "correspondence": [
+    {
+      "review_quote": "weijinqian0 建议对 VL 模型直接 return 以简化逻辑。作者通过 commit `b546462` 采纳建议重写逻辑，1/1 建议全部落地。",
+      "patch_snippet": "commit `b546462`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "b546462",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在分布式连接器中，VL 模型可能有不同的初始化需求，应通过 early return 避免不必要的属性初始化。",
+    "context": "",
+    "checkpoints": [
+      "分布式连接器中是否区分了 VL 模型和普通模型的处理路径",
+      "避免为 VL 模型初始化不必要的属性导致错误"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/distributed/mooncake_connector.py",
+      "line": 0,
+      "code": "class KVCacheRecvingThread:\n    \"\"\"Thread for receiving KV cache from remote nodes.\"\"\"\n\n    def init_kv_cache_recving_thread(self):\n        self.kv_cache_config = self.vllm_config.cache_config\n        self.block_size = self.kv_cache_config.block_size\n        self.num_layers = self.model_config.get_num_layers(...)\n        self.head_dim = self.model_config.get_head_size(...)\n        self._setup_transfer_engine()\n        self._init_kv_cache_buffers()",
+      "context": "why not add this:"
+    },
+    "pattern": {
+      "file": "vllm_ascend/distributed/mooncake_connector.py",
+      "line": 0,
+      "code": "class KVCacheRecvingThread:\n    \"\"\"Thread for receiving KV cache from remote nodes.\"\"\"\n\n    def init_kv_cache_recving_thread(self):\n        if self.is_vl_model:\n            return\n        self.kv_cache_config = self.vllm_config.cache_config\n        self.block_size = self.kv_cache_config.block_size\n        self.num_layers = self.model_config.get_num_layers(...)\n        self.head_dim = self.model_config.get_head_size(...)\n        self._setup_transfer_engine()\n        self._init_kv_cache_buffers()",
+      "context": "why not add this:"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/distributed/mooncake_connector.py\n+++ b/vllm_ascend/distributed/mooncake_connector.py\n@@ -1,10 +1,12 @@\n     \"\"\"Thread for receiving KV cache from remote nodes.\"\"\"\n \n     def init_kv_cache_recving_thread(self):\n+        if self.is_vl_model:\n+            return\n         self.kv_cache_config = self.vllm_config.cache_config\n         self.block_size = self.kv_cache_config.block_size\n         self.num_layers = self.model_config.get_num_layers(...)",
+      "stats": "1 file changed, +2 lines, -0 lines",
+      "key_changes": [
+        "在第 5-6 行新增了代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

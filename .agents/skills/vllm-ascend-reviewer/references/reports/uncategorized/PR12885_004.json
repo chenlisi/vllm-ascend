@@ -1,0 +1,57 @@
+{
+  "report_id": "PR12885_004",
+  "pr_number": 12885,
+  "pr_title": "[BugFix][NetLoader] Fix processed-layout P2P for INT8_CACHE=no",
+  "pr_status": "merged",
+  "dimension": [
+    "test"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "tests/ut/model_loader/netloader/test_netloader.py:299"
+  ],
+  "landing_sha": "f011ca4",
+  "source_quote": "The second assertion inside the `with` block contradicts the first one and will fail once the test actually runs. `pre_transfer_weight_processing` unwraps `process_weights_after_loading` to its `__wrapped__` original on `__enter__`, and restores the wrapped version only on `__exit__`. Inside the `with` block the attribute is still the unwrapped `original_process_weights`, so asserting it `is wrapped_process_weights` cannot hold. Line 299 is redundant with line 300 (`calls == [\"original\"]` already proves the original was invoked). Either drop it, or assert the unwrap is stable across the call and add an explicit restore check after the `with`.",
+  "correspondence": [
+    {
+      "review_quote": "xuchi-0808: tests/ut/model_loader/netloader/test_netloader.py:299",
+      "patch_snippet": "评后sha f011ca4 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f011ca4",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "对实现了 `__enter__`/`__exit__` 副作用的上下文管理器编写 UT 时，`with` 块内断言须反映 `__enter__` 后的状态，restore 行为须在 `with` 块外显式断言，不得在 `with` 块内断言与 `__enter__` 副作用矛盾的状态。",
+    "context": "",
+    "checkpoints": [
+      "检查 `with` 块内是否存在与 `__enter__` 副作用矛盾的 `is` 断言",
+      "restore/还原行为应通过 `with` 块退出后的显式断言验证",
+      "确认 UT 实际被 CI 执行（避免因测试被 skip 而掩盖必失败用例）"
+    ],
+    "antipattern": {
+      "file": "tests/ut/model_loader/netloader/test_netloader.py",
+      "line": 285,
+      "code": "class TestPreTransferWeightProcessing(unittest.TestCase):\n    def test_unwrap_and_restore(self):\n        calls = []\n\n        def original_process_weights():\n            calls.append(\"original\")\n\n        def wrapped_process_weights():\n            calls.append(\"wrapped\")\n            original_process_weights()\n\n        wrapped_process_weights.__wrapped__ = original_process_weights\n        quant_method = MagicMock()\n        quant_method.process_weights_after_loading = wrapped_process_weights\n        fake_module = MagicMock()\n        fake_module.modules.return_value = [quant_method]\n\n        with pre_transfer_weight_processing(fake_module):\n            assert quant_method.process_weights_after_loading is original_process_weights   # 行297 ✓\n            quant_method.process_weights_after_loading()\n            assert quant_method.process_weights_after_loading is wrapped_process_weights    # 行299 ✗ 与上行矛盾\n            assert calls == [\"original\"]",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "tests/ut/model_loader/netloader/test_netloader.py",
+      "line": 285,
+      "code": "class TestPreTransferWeightProcessing(unittest.TestCase):\n    def test_unwrap_and_restore(self):\n        calls = []\n\n        def original_process_weights():\n            calls.append(\"original\")\n\n        def wrapped_process_weights():\n            calls.append(\"wrapped\")\n            original_process_weights()\n\n        wrapped_process_weights.__wrapped__ = original_process_weights\n        quant_method = MagicMock()\n        quant_method.process_weights_after_loading = wrapped_process_weights\n        fake_module = MagicMock()\n        fake_module.modules.return_value = [quant_method]\n\n        with pre_transfer_weight_processing(fake_module):\n            calls.clear()\n            quant_method.process_weights_after_loading()\n            assert calls == [\"original\"]                                  # with 内仍是 original\n            # 移除了矛盾的 is wrapped_process_weights 断言\n\n        # with 外显式校验 __exit__ 已 restore 回 wrapped\n        calls.clear()\n        quant_method.process_weights_after_loading()\n        assert calls == [\"wrapped\", \"original\"]                          # restore 回 wrapped 后调用",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/tests/ut/model_loader/netloader/test_netloader.py\n+++ b/tests/ut/model_loader/netloader/test_netloader.py\n@@ -16,7 +16,12 @@\n         fake_module.modules.return_value = [quant_method]\n \n         with pre_transfer_weight_processing(fake_module):\n-            assert quant_method.process_weights_after_loading is original_process_weights   # 行297 ✓\n+            calls.clear()\n             quant_method.process_weights_after_loading()\n-            assert quant_method.process_weights_after_loading is wrapped_process_weights    # 行299 ✗ 与上行矛盾\n-            assert calls == [\"original\"]\n+            assert calls == [\"original\"]                                  # with 内仍是 original\n+            # 移除了矛盾的 is wrapped_process_weights 断言\n+\n+        # with 外显式校验 __exit__ 已 restore 回 wrapped\n+        calls.clear()\n+        quant_method.process_weights_after_loading()\n+        assert calls == [\"wrapped\", \"original\"]                          # restore 回 wrapped 后调用",
+      "stats": "1 file changed, +8 lines, -3 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

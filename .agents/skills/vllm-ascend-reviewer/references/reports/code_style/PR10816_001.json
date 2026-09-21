@@ -1,0 +1,67 @@
+{
+  "report_id": "PR10816_001",
+  "pr_number": 10816,
+  "pr_title": "[BugFix][WeightTransfer] Lazy-load weight transfer engines to avoid eager ray import",
+  "pr_status": "merged",
+  "merged_at": "2026-06-23T10:03:26Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/patch/platform/patch_weight_transfer_engine.py:65"
+  ],
+  "landing_sha": "d96af7a",
+  "source_quote": "according to your pr description, it seems like there is no problem with HCCLWeightTransferEngine",
+  "correspondence": [
+    {
+      "review_quote": "Ronald1995 指出根据 PR 描述，HCCLWeightTransferEngine 本身没有问题，不需要改为延迟加载。作者通过 commit `d96af7a`（\"fix: keep HCCL engine eager import, only lazy-load NPU IPC engine\"）将 HCCL 侧恢复为 eager 导入，仅对 NPU IPC 引擎保持延迟加载。",
+      "patch_snippet": "commit `d96af7a`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "d96af7a",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当修复 eager 导入导致的依赖问题时，延迟加载应仅应用于实际有问题的模块（如 NPUIPC 依赖 ray），而不应将无问题的模块（如 HCCL）也改为延迟加载，避免不必要的重构引入风险。",
+    "context": "",
+    "checkpoints": [
+      "确认哪些模块的 eager 导入实际导致了问题",
+      "仅对有问题的模块实施延迟加载",
+      "保持无问题模块的原有导入方式"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/patch/platform/patch_weight_transfer_engine.py",
+      "line": 55,
+      "code": "# （根据评审意见推断）作者最初将两个引擎都改为延迟加载，\n# 但 Ronald1995 指出 HCCL 引擎本身没有问题\n\nimport logging\nfrom typing import Type\n\nfrom vllm.logger import init_logger\n\nlogger = init_logger(__name__)\n\n\n# ❌ 两个引擎都被改为延迟加载\ndef _load_hccl_engine():\n    from vllm_ascend.weight_transfer.hccl_engine import (\n        HCCLWeightTransferEngine,\n    )\n    return HCCLWeightTransferEngine\n\n\ndef _load_npu_ipc_engine():\n    from vllm_ascend.weight_transfer.npu_ipc_engine import (\n        NPUIPCWeightTransferEngine,\n    )\n    return NPUIPCWeightTransferEngine\n\n\n# 注册时使用延迟加载\n_WEIGHT_TRANSFER_ENGINES = {\n    \"hccl\": _load_hccl_engine,\n    \"npu_ipc\": _load_npu_ipc_engine,\n}",
+      "context": "according to your pr description, it seems like there is no problem with HCCLWeightTransferEngine"
+    },
+    "pattern": {
+      "file": "vllm_ascend/patch/platform/patch_weight_transfer_engine.py",
+      "line": 55,
+      "code": "# HCCL 引擎保持 eager 导入（无问题），仅 NPUIPC 引擎改为延迟加载\n\nimport logging\nfrom typing import Type\n\nfrom vllm.logger import init_logger\n\nlogger = init_logger(__name__)\n\n# ✅ HCCL 引擎保持 eager 导入（无 ray 依赖问题）\nfrom vllm_ascend.weight_transfer.hccl_engine import HCCLWeightTransferEngine\n\n\n# ✅ 仅 NPU IPC 引擎延迟加载（依赖 ray）\ndef _load_npu_ipc_engine():\n    from vllm_ascend.weight_transfer.npu_ipc_engine import (\n        NPUIPCWeightTransferEngine,\n    )\n    return NPUIPCWeightTransferEngine\n\n\n# 注册时 HCCL 直接引用，NPU IPC 延迟加载\n_WEIGHT_TRANSFER_ENGINES = {\n    \"hccl\": HCCLWeightTransferEngine,\n    \"npu_ipc\": _load_npu_ipc_engine,\n}",
+      "context": "according to your pr description, it seems like there is no problem with HCCLWeightTransferEngine"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/patch/platform/patch_weight_transfer_engine.py\n+++ b/vllm_ascend/patch/platform/patch_weight_transfer_engine.py\n@@ -1,5 +1,4 @@\n-# （根据评审意见推断）作者最初将两个引擎都改为延迟加载，\n-# 但 Ronald1995 指出 HCCL 引擎本身没有问题\n+# HCCL 引擎保持 eager 导入（无问题），仅 NPUIPC 引擎改为延迟加载\n \n import logging\n from typing import Type\n@@ -8,15 +7,11 @@\n \n logger = init_logger(__name__)\n \n-\n-# ❌ 两个引擎都被改为延迟加载\n-def _load_hccl_engine():\n-    from vllm_ascend.weight_transfer.hccl_engine import (\n-        HCCLWeightTransferEngine,\n-    )\n-    return HCCLWeightTransferEngine\n+# ✅ HCCL 引擎保持 eager 导入（无 ray 依赖问题）\n+from vllm_ascend.weight_transfer.hccl_engine import HCCLWeightTransferEngine\n \n \n+# ✅ 仅 NPU IPC 引擎延迟加载（依赖 ray）\n def _load_npu_ipc_engine():\n     from vllm_ascend.weight_transfer.npu_ipc_engine import (\n         NPUIPCWeightTransferEngine,\n@@ -24,8 +19,8 @@\n     return NPUIPCWeightTransferEngine\n \n \n-# 注册时使用延迟加载\n+# 注册时 HCCL 直接引用，NPU IPC 延迟加载\n _WEIGHT_TRANSFER_ENGINES = {\n-    \"hccl\": _load_hccl_engine,\n+    \"hccl\": HCCLWeightTransferEngine,\n     \"npu_ipc\": _load_npu_ipc_engine,\n }",
+      "stats": "1 file changed, +6 lines, -11 lines",
+      "key_changes": [
+        "移除: # （根据评审意见推断）作者最初将两个引擎都改为延迟加载，",
+        "移除: # 但 Ronald1995 指出 HCCL 引擎本身没有问题",
+        "新增: # HCCL 引擎保持 eager 导入（无问题），仅 NPUIPC 引擎改为延迟加载",
+        "移除: # ❌ 两个引擎都被改为延迟加载",
+        "移除: def _load_hccl_engine():",
+        "移除: from vllm_ascend.weight_transfer.hccl_engine import (",
+        "移除: HCCLWeightTransferEngine,",
+        "移除: )",
+        "移除: return HCCLWeightTransferEngine",
+        "新增: # ✅ HCCL 引擎保持 eager 导入（无 ray 依赖问题）"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

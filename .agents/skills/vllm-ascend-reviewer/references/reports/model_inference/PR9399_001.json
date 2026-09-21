@@ -1,0 +1,84 @@
+{
+  "report_id": "PR9399_001",
+  "pr_number": 9399,
+  "pr_title": "[Misc]main2main 0522",
+  "pr_status": "merged",
+  "merged_at": "2026-05-28T11:40:12Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/models/deepseek_v4.py:101",
+    "vllm_ascend/patch/platform/patch_camem_allocator.py:33",
+    "vllm_ascend/patch/worker/patch_deepseek_compressor.py:18",
+    "vllm_ascend/worker/model_runner_v1.py:1848",
+    "vllm_ascend/worker/model_runner_v1.py:1875"
+  ],
+  "landing_sha": "f6acdac",
+  "source_quote": "let's double check if this is reasonable\nditto\nditto",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao: vllm_ascend/models/deepseek_v4.py:101",
+      "patch_snippet": "评后sha f6acdac 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/patch/platform/patch_camem_allocator.py:33",
+      "patch_snippet": "评后sha f6acdac 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/patch/worker/patch_deepseek_compressor.py:18",
+      "patch_snippet": "评后sha f6acdac 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/worker/model_runner_v1.py:1848",
+      "patch_snippet": "评后sha f6acdac 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/worker/model_runner_v1.py:1875",
+      "patch_snippet": "评后sha f6acdac 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f6acdac",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "```suggestion if not vllm_version_is(\"0.20.2\"):     from vllm.models.deepseek_v4.attention import DeepseekV4IndexerCache  # noqa     from vllm.models.deepseek_v4.compressor import CompressorStateCache",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/models/deepseek_v4.py",
+      "line": 101,
+      "code": "# MengqingCao 指出导入路径需要修正",
+      "context": "let's double check if this is reasonable\nditto\nditto"
+    },
+    "pattern": {
+      "file": "vllm_ascend/models/deepseek_v4.py",
+      "line": 101,
+      "code": "# MengqingCao suggestion:\nif not vllm_version_is(\"0.20.2\"):\n    from vllm.models.deepseek_v4.attention import DeepseekV4IndexerCache  # noqa\n    from vllm.models.deepseek_v4.compressor import CompressorStateCache  # noqa\nelse:\n    from vllm.model_executor.layers.deepseek_compressor ...",
+      "context": "let's double check if this is reasonable\nditto\nditto"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/models/deepseek_v4.py\n+++ b/vllm_ascend/models/deepseek_v4.py\n@@ -1 +1,6 @@\n-# MengqingCao 指出导入路径需要修正\n+# MengqingCao suggestion:\n+if not vllm_version_is(\"0.20.2\"):\n+    from vllm.models.deepseek_v4.attention import DeepseekV4IndexerCache  # noqa\n+    from vllm.models.deepseek_v4.compressor import CompressorStateCache  # noqa\n+else:\n+    from vllm.model_executor.layers.deepseek_compressor ...\n",
+      "stats": "1 file changed, +6 lines, -1 lines",
+      "key_changes": [
+        "-# MengqingCao 指出导入路径需要修正",
+        "+# MengqingCao suggestion:",
+        "+if not vllm_version_is(\"0.20.2\"):",
+        "+    from vllm.models.deepseek_v4.attention import DeepseekV4IndexerCache  # noqa",
+        "+    from vllm.models.deepseek_v4.compressor import CompressorStateCache  # noqa",
+        "+else:",
+        "+    from vllm.model_executor.layers.deepseek_compressor ..."
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

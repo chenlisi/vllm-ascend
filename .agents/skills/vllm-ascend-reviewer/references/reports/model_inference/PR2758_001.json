@@ -1,0 +1,58 @@
+{
+  "report_id": "PR2758_001",
+  "pr_number": 2758,
+  "pr_title": "[fix] prefill unsupport sliding window attention",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/attention/attention_v1.py:313"
+  ],
+  "landing_sha": "685bfd9",
+  "source_quote": "so it's confirmed that this op doesn't work for prefill? can you paste any link or explain more for it?",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/attention/attention_v1.py:313",
+      "patch_snippet": "评后sha 685bfd9 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "685bfd9",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在使用 NPU 硬件算子（如 `npu_fused_infer_attention_score`）前，应确认该算子对目标场景（如 prefill、decode、sliding window 等）的支持情况，避免因算子限制导致功能异常。",
+    "context": "",
+    "checkpoints": [
+      "算子是否支持所有目标场景",
+      "是否有 fallback 路径处理不支持的场景",
+      "是否在代码中注明算子的限制条件"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 290,
+      "code": "# Commit: 685bfd9 (rm ut)\n# 修改描述: wangxiyuan 询问 npu_fused_infer_attention_score 是否不支持 prefill，\n# NSDie 确认该算子不支持 prefill 阶段。移除了 prefill 阶段使用该算子的专用路径。\n# 此 PR 是对 PR #2528 的 fallback。\n\ndef _forward_prefill(\n    self,\n    query: torch.Tensor,\n    key: torch.Tensor,\n    value: torch.Tensor,\n    ...\n) -> torch.Tensor:\n    \"\"\"Prefill forward pass using npu_fused_infer_attention_score.\"\"\"\n    if use_swa:\n        # 使用 npu_fused_infer_attention_score 算子（不支持 prefill）\n        output = npu_fused_infer_attention_score(\n            query, key, value,\n            num_heads=self.num_heads,\n            num_key_value_heads=self.num_kv_heads,\n            scale=self.scale,\n            ...\n        )\n    else:\n        output = general_attention_forward(query, key, value, ...)\n    return output",
+      "context": "Commit: 685bfd9 (rm ut) 修改描述: wangxiyuan 询问 npu_fused_infer_attention_score 是否不支持 prefill， NSDie 确认该算子不支持 prefill 阶段。移除了 prefill 阶段使用该算子的专用路径。"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 290,
+      "code": "# 移除了 prefill 阶段 npu_fused_infer_attention_score 的专用代码路径，\n# 回退到通用 attention 实现。相关 UT 也一并移除。\n\ndef _forward_prefill(\n    self,\n    query: torch.Tensor,\n    key: torch.Tensor,\n    value: torch.Tensor,\n    ...\n) -> torch.Tensor:\n    \"\"\"Prefill forward pass using general attention implementation.\"\"\"\n    # npu_fused_infer_attention_score 不支持 prefill 阶段，\n    # 统一使用通用 attention 实现\n    output = general_attention_forward(query, key, value, ...)\n    return output",
+      "context": "移除了 prefill 阶段 npu_fused_infer_attention_score 的专用代码路径， 回退到通用 attention 实现。相关 UT 也一并移除。 npu_fused_infer_attention_score 不支持 prefill 阶段，"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/attention_v1.py\n+++ b/vllm_ascend/attention/attention_v1.py\n@@ -1,7 +1,5 @@\n-# Commit: 685bfd9 (rm ut)\n-# 修改描述: wangxiyuan 询问 npu_fused_infer_attention_score 是否不支持 prefill，\n-# NSDie 确认该算子不支持 prefill 阶段。移除了 prefill 阶段使用该算子的专用路径。\n-# 此 PR 是对 PR #2528 的 fallback。\n+# 移除了 prefill 阶段 npu_fused_infer_attention_score 的专用代码路径，\n+# 回退到通用 attention 实现。相关 UT 也一并移除。\n \n def _forward_prefill(\n     self,\n@@ -10,16 +8,8 @@\n     value: torch.Tensor,\n     ...\n ) -> torch.Tensor:\n-    \"\"\"Prefill forward pass using npu_fused_infer_attention_score.\"\"\"\n-    if use_swa:\n-        # 使用 npu_fused_infer_attention_score 算子（不支持 prefill）\n-        output = npu_fused_infer_attention_score(\n-            query, key, value,\n-            num_heads=self.num_heads,\n-            num_key_value_heads=self.num_kv_heads,\n-            scale=self.scale,\n-            ...\n-        )\n-    else:\n-        output = general_attention_forward(query, key, value, ...)\n+    \"\"\"Prefill forward pass using general attention implementation.\"\"\"\n+    # npu_fused_infer_attention_score 不支持 prefill 阶段，\n+    # 统一使用通用 attention 实现\n+    output = general_attention_forward(query, key, value, ...)\n     return output\n",
+      "stats": "1 file changed, +6 lines, -16 lines",
+      "key_changes": [
+        "移除: num_heads=self.num_heads,",
+        "移除: output = general_attention_forward(query, key, value, ...)"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "report_id": "PR3833_002",
+  "pr_number": 3833,
+  "pr_title": "[Model] Add LongCat-Flash",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/models/layers/mla.py:90"
+  ],
+  "landing_sha": "f8ae1a3",
+  "source_quote": "Modifying the shared `hf_config` object directly is a dangerous side effect that can lead to unpredictable behavior in other parts of the application. Configuration objects should be treated as immutable within model layers.\n> To fix this, you should set the `self.first_k_dense_replace` attribute based on the condition, without altering `hf_config`.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/models/layers/mla.py:90",
+      "patch_snippet": "评后sha f8ae1a3 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f8ae1a3",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "`hf_config` 等共享配置对象应在模型层中视为不可变，禁止直接修改其属性，避免影响其他使用同一配置的模块。",
+    "context": "",
+    "checkpoints": [
+      "检查模型层代码中是否有对 `hf_config.xxx = yyy` 的直接赋值",
+      "确认配置读取是否使用 `getattr()` 安全访问",
+      "如需模型特定行为，使用实例属性而非修改共享对象"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/models/layers/mla.py",
+      "line": 90,
+      "code": "# vllm_ascend/models/layers/mla.py\nif hf_config.model_type == \"longcat_flash\":\n    self.debug_layer_idx = int(self.prefix.split(\".\")[2])\n    hf_config.first_k_dense_replace = 0  # ← 修改了共享对象！\nelse:\n    self.debug_layer_idx = int(self.prefix.split(\".\")[-2])\nself.first_k_dense_replace = hf_config.first_k_dense_replace",
+      "context": "vllm_ascend/models/layers/mla.py"
+    },
+    "pattern": {
+      "file": "vllm_ascend/models/layers/mla.py",
+      "line": 90,
+      "code": "# vllm_ascend/models/layers/mla.py\n# 整个 if/else 块被移除，不再修改 hf_config",
+      "context": "vllm_ascend/models/layers/mla.py 整个 if/else 块被移除，不再修改 hf_config"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/models/layers/mla.py\n+++ b/vllm_ascend/models/layers/mla.py\n@@ -1,7 +1,2 @@\n # vllm_ascend/models/layers/mla.py\n-if hf_config.model_type == \"longcat_flash\":\n-    self.debug_layer_idx = int(self.prefix.split(\".\")[2])\n-    hf_config.first_k_dense_replace = 0  # ← 修改了共享对象！\n-else:\n-    self.debug_layer_idx = int(self.prefix.split(\".\")[-2])\n-self.first_k_dense_replace = hf_config.first_k_dense_replace\n+# 整个 if/else 块被移除，不再修改 hf_config\n",
+      "stats": "1 file changed, +1 lines, -6 lines",
+      "key_changes": [
+        "移除: self.debug_layer_idx = int(self.prefix.split(\".\")[-2])",
+        "移除: hf_config.first_k_dense_replace = 0  # ← 修改了共享对象！",
+        "移除: self.first_k_dense_replace = hf_config.first_k_dense_replace"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

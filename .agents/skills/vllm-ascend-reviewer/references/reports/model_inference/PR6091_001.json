@@ -1,0 +1,56 @@
+{
+  "report_id": "PR6091_001",
+  "pr_number": 6091,
+  "pr_title": "[Feat] support basic pcp&dcp for qwen3next",
+  "pr_status": "merged",
+  "merged_at": "2026-02-28T13:44:08Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/attention_v1.py:205",
+    "vllm_ascend/attention/utils.py:106"
+  ],
+  "landing_sha": "d612874",
+  "source_quote": "The initialization variables related to PCP are moved to attention_cp.py.",
+  "correspondence": [
+    {
+      "review_quote": "weiguihua2 指出 The initialization variables related to PCP are moved to attention_cp.py.。作者通过 commit `d612874` 进行了修改，2/27 条建议落地。",
+      "patch_snippet": "commit `d612874`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "d612874",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "The initialization variables related to PCP are moved to attention_cp.py.",
+    "context": "",
+    "checkpoints": [
+      "确认模块位置是否与上游项目保持一致",
+      "评估模块组织的合理性"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 205,
+      "code": "",
+      "context": "The initialization variables related to PCP are moved to attention_cp.py."
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 205,
+      "code": "",
+      "context": "The initialization variables related to PCP are moved to attention_cp.py."
+    },
+    "diff": {
+      "unified": "",
+      "stats": "1 file changed, +0 lines, -0 lines",
+      "key_changes": []
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "report_id": "PR6503_001",
+  "pr_number": 6503,
+  "pr_title": "[Nightly][Refactor]Migrate nightly single-node model tests from `.py` to `.yaml`",
+  "pr_status": "merged",
+  "merged_at": "2026-03-03T02:38:14Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    ".github/workflows/_e2e_nightly_single_node.yaml:74"
+  ],
+  "landing_sha": "da61165",
+  "source_quote": "Why need this, any plan to remove?",
+  "correspondence": [
+    {
+      "review_quote": "Yikun 询问某段代码的用途以及是否有移除计划。作者回复该代码正在测试中，将在合入前移除。通过 commit `c49b65b` (sunset) 移除了临时代码，1/1 建议落地。",
+      "patch_snippet": "commit `c49b65b`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "c49b65b",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "PR 合入前必须移除所有临时测试代码和调试配置。CI 配置文件应只包含正式的、经过验证的配置。",
+    "context": "",
+    "checkpoints": [
+      "合入前检查是否包含临时测试代码",
+      "评审人应关注不明用途的配置项",
+      "作者应在合入前明确回复临时代码的处理计划"
+    ],
+    "antipattern": {
+      "file": ".github/workflows/_e2e_nightly_single_node.yaml",
+      "line": 65,
+      "code": "jobs:\n  single-node-test:\n    runs-on: ascend-a3\n    strategy:\n      matrix:\n        model: [Qwen3-32B, DeepSeek-R1-0528-W8A8-EPLB]\n    steps:\n      - uses: actions/checkout@v4\n\n      - name: Setup environment\n        run: |\n          pip install -e .\n          pip install aisbench\n\n      - name: Temporary debug config\n        run: |\n          echo \"debug testing\"\n          export DEBUG_MODE=1\n\n      - name: Run nightly test\n        run: |\n          python tests/e2e/nightly/single_node/scripts/test_single_node.py",
+      "context": "Why need this, any plan to remove?"
+    },
+    "pattern": {
+      "file": ".github/workflows/_e2e_nightly_single_node.yaml",
+      "line": 65,
+      "code": "jobs:\n  single-node-test:\n    runs-on: ascend-a3\n    strategy:\n      matrix:\n        model: [Qwen3-32B, DeepSeek-R1-0528-W8A8-EPLB]\n    steps:\n      - uses: actions/checkout@v4\n\n      - name: Setup environment\n        run: |\n          pip install -e .\n          pip install aisbench\n\n      - name: Run nightly test\n        run: |\n          python tests/e2e/nightly/single_node/scripts/test_single_node.py",
+      "context": "Why need this, any plan to remove?"
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/_e2e_nightly_single_node.yaml\n+++ b/.github/workflows/_e2e_nightly_single_node.yaml\n@@ -65,22 +65,17 @@\n           pip install -e .\n           pip install aisbench\n \n-      - name: Temporary debug config\n-        run: |\n-          echo \"debug testing\"\n-          export DEBUG_MODE=1\n-\n       - name: Run nightly test\n         run: |\n           python tests/e2e/nightly/single_node/scripts/test_single_node.py",
+      "stats": "1 file changed, +0 lines, -5 lines",
+      "key_changes": [
+        "删除了第 15-19 行的代码"
+      ]
+    },
+    "language": "yaml",
+    "_status": "extracted"
+  }
+}

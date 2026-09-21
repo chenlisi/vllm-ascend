@@ -1,0 +1,67 @@
+{
+  "report_id": "PR10191_001",
+  "pr_number": 10191,
+  "pr_title": "[Feature] Auto-compute LOCAL_WORLD_SIZE when static_kernel is enabled",
+  "pr_status": "merged",
+  "merged_at": "2026-06-17T08:03:05Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/compilation/compiler_interface.py:101"
+  ],
+  "landing_sha": "c6864a7",
+  "source_quote": "Why didn't we set this env before?",
+  "correspondence": [
+    {
+      "review_quote": "yiz-liu 询问为什么之前没有设置 `LOCAL_WORLD_SIZE` 环境变量。作者解释说，static kernel 编译一直需要 `LOCAL_WORLD_SIZE` 来指示当前机器上参与编译的进程数。之前用户必须手动设置该环境变量，否则 static 编译不会生效并抛出 UserWarning，这给很多用户带来了困惑。像 torchrun 这样的框架会自动设置该环境变量，本 PR 使 vllm-ascend 也能在 static_kernel 启用时自动从 vllm 的 parallel config 计算 `LOCAL_WORLD_SIZE`，提升了易用性。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "c6864a7",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当某个环境变量的值可以从已有配置中推导出来时，应自动计算并设置该环境变量，而不是要求用户手动配置。特别是对于分布式编译/推理场景中的关键变量（如 `LOCAL_WORLD_SIZE`）。",
+    "context": "",
+    "checkpoints": [
+      "检查是否有需要用户手动设置但可从配置推导的环境变量",
+      "确认自动设置的值是否考虑了 data_parallel_size_local 等因子",
+      "验证是否使用了安全的属性获取方式（`getattr` + 默认值）以避免 `AttributeError`"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/compilation/compiler_interface.py",
+      "line": 101,
+      "code": "# vllm_ascend/compilation/compiler_interface.py\n# compile_model() 函数内，static kernel 编译流程\n\ndef compile_model(model: torch.nn.Module,\n                  vllm_config: VllmConfig,\n                  ...) -> None:\n    \"\"\"Compile model using torchair static kernel.\"\"\"\n    # yiz-liu 评审：\"Why didn't we set this env before?\"\n    # 作者解释：\"Previously, users who use enable_static_kernel had to set\n    # LOCAL_WORLD_SIZE manually, otherwise static compilation would not take\n    # effect and throw a UserWarning. This caused confusion and inconvenience.\"\n\n    if not vllm_config.compilation_config.enable_static_kernel:\n        logger.warning(\"Static kernel is not enabled, skipping compilation.\")\n        return\n\n    # 用户需要手动设置 LOCAL_WORLD_SIZE 环境变量\n    # 如果未设置，torchair 的 Gloo group 初始化会失败\n    # 参考：https://github.com/Ascend/torchair/blob/master/docs/zh/npugraph_ex/\n    #   basic/static_kernel_compile.md#使用约束\n    graph_manager = TorchairGraphManager(...)\n    graph_manager.compile(model, ...)",
+      "context": "Why didn't we set this env before?"
+    },
+    "pattern": {
+      "file": "vllm_ascend/compilation/compiler_interface.py",
+      "line": 101,
+      "code": "# vllm_ascend/compilation/compiler_interface.py\n# compile_model() 函数内，static kernel 编译流程\n\ndef compile_model(model: torch.nn.Module,\n                  vllm_config: VllmConfig,\n                  ...) -> None:\n    \"\"\"Compile model using torchair static kernel.\"\"\"\n    if not vllm_config.compilation_config.enable_static_kernel:\n        logger.warning(\"Static kernel is not enabled, skipping compilation.\")\n        return\n\n    # 当 static_kernel 启用时，自动从 vllm 的 parallel config 计算 LOCAL_WORLD_SIZE\n    # gemini-code-assist[bot] high suggestion：使用 getattr + 默认值安全获取\n    # 防止 data_parallel_size_local 缺失或为 None 时 AttributeError/TypeError\n    # （与 gemini suggestion 逐字匹配）\n    data_parallel_size_local = getattr(\n        vllm_config.parallel_config, \"data_parallel_size_local\", None) or 1\n    actual_local_world_size = (\n        vllm_config.parallel_config.local_world_size * data_parallel_size_local\n    )\n    os.environ[\"LOCAL_WORLD_SIZE\"] = str(actual_local_world_size)\n\n    # 现在 torchair 可以正确读取 LOCAL_WORLD_SIZE 进行 Gloo group 初始化\n    graph_manager = TorchairGraphManager(...)\n    graph_manager.compile(model, ...)",
+      "context": "Why didn't we set this env before?"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/compilation/compiler_interface.py\n+++ b/vllm_ascend/compilation/compiler_interface.py\n@@ -5,18 +5,21 @@\n                   vllm_config: VllmConfig,\n                   ...) -> None:\n     \"\"\"Compile model using torchair static kernel.\"\"\"\n-    # yiz-liu 评审：\"Why didn't we set this env before?\"\n-    # 作者解释：\"Previously, users who use enable_static_kernel had to set\n-    # LOCAL_WORLD_SIZE manually, otherwise static compilation would not take\n-    # effect and throw a UserWarning. This caused confusion and inconvenience.\"\n-\n     if not vllm_config.compilation_config.enable_static_kernel:\n         logger.warning(\"Static kernel is not enabled, skipping compilation.\")\n         return\n \n-    # 用户需要手动设置 LOCAL_WORLD_SIZE 环境变量\n-    # 如果未设置，torchair 的 Gloo group 初始化会失败\n-    # 参考：https://github.com/Ascend/torchair/blob/master/docs/zh/npugraph_ex/\n-    #   basic/static_kernel_compile.md#使用约束\n+    # 当 static_kernel 启用时，自动从 vllm 的 parallel config 计算 LOCAL_WORLD_SIZE\n+    # gemini-code-assist[bot] high suggestion：使用 getattr + 默认值安全获取\n+    # 防止 data_parallel_size_local 缺失或为 None 时 AttributeError/TypeError\n+    # （与 gemini suggestion 逐字匹配）\n+    data_parallel_size_local = getattr(\n+        vllm_config.parallel_config, \"data_parallel_size_local\", None) or 1\n+    actual_local_world_size = (\n+        vllm_config.parallel_config.local_world_size * data_parallel_size_local\n+    )\n+    os.environ[\"LOCAL_WORLD_SIZE\"] = str(actual_local_world_size)\n+\n+    # 现在 torchair 可以正确读取 LOCAL_WORLD_SIZE 进行 Gloo group 初始化\n     graph_manager = TorchairGraphManager(...)\n     graph_manager.compile(model, ...)",
+      "stats": "1 file changed, +12 lines, -9 lines",
+      "key_changes": [
+        "移除: # yiz-liu 评审：\"Why didn't we set this env before?\"",
+        "移除: # 作者解释：\"Previously, users who use enable_static_kernel had to set",
+        "移除: # LOCAL_WORLD_SIZE manually, otherwise static compilation would not take",
+        "移除: # effect and throw a UserWarning. This caused confusion and inconvenience.\"",
+        "移除: # 用户需要手动设置 LOCAL_WORLD_SIZE 环境变量",
+        "移除: # 如果未设置，torchair 的 Gloo group 初始化会失败",
+        "移除: # 参考：https://github.com/Ascend/torchair/blob/master/docs/zh/npugraph_ex/",
+        "移除: #   basic/static_kernel_compile.md#使用约束",
+        "新增: # 当 static_kernel 启用时，自动从 vllm 的 parallel config 计算 LOCAL_WORLD_SIZE",
+        "新增: # gemini-code-assist[bot] high suggestion：使用 getattr + 默认值安全获取"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

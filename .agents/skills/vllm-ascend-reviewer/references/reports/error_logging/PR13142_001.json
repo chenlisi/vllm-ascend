@@ -1,0 +1,61 @@
+{
+  "report_id": "PR13142_001",
+  "pr_number": 13142,
+  "pr_title": "[Performance][MiniMax M3] Optimize index score kernel and TP communication",
+  "pr_status": "merged",
+  "dimension": [
+    "design"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/models/minimax_m3/msa_m3.py:405"
+  ],
+  "landing_sha": "4f2a3bf",
+  "source_quote": "no need try",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/models/minimax_m3/msa_m3.py:405",
+      "patch_snippet": "评后sha 4f2a3bf 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "4f2a3bf",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在模型前向传播路径中，`get_tp_group()` 等分布式基础设施调用在引擎初始化后必然可用，不需要用 try/except 包裹做防御性处理。防御性 try/except 会掩盖真正的初始化错误，增加不必要的复杂度。",
+    "context": "",
+    "checkpoints": [
+      "检查 `get_tp_group()` / `get_pp_group()` 等调用是否被 try/except 包裹",
+      "确认调用点是否在初始化完成后的执行路径（如 forward），若是则 try/except 不必要",
+      "防御性 fallback（如 `tp_group = None`）可能掩盖初始化顺序问题，应移除"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/models/minimax_m3/msa_m3.py",
+      "line": 395,
+      "code": "    def _decode_index_score(\n        self,\n        iq: torch.Tensor,\n        ik: torch.Tensor,\n        index_md: MSAIndexMetadata,\n        num_decode_tokens: int,\n    ) -> torch.Tensor:\n        \"\"\"Compute decode index scores for MiniMax M3 model.\"\"\"\n        if index_md.num_decodes > 0:\n            d = index_md.decode\n            assert d is not None\n            # ❌ 不必要的 try/except：get_tp_group() 在 forward 路径中必然可用\n            try:\n                tp_group = get_tp_group()\n                tp_size = tp_group.world_size\n                tp_rank = tp_group.rank_in_group\n            except AssertionError:\n                tp_group = None\n                tp_size = 1\n                tp_rank = 0\n            decode_iq = iq[:num_decode_tokens]\n            if tp_group is not None and tp_size > 1 and index_md.num_prefills == 0:\n                # TP sharded score computation\n                ...",
+      "context": "❌ 不必要的 try/except：get_tp_group() 在 forward 路径中必然可用 TP sharded score computation"
+    },
+    "pattern": {
+      "file": "vllm_ascend/models/minimax_m3/msa_m3.py",
+      "line": 395,
+      "code": "    def _decode_index_score(\n        self,\n        iq: torch.Tensor,\n        ik: torch.Tensor,\n        index_md: MSAIndexMetadata,\n        num_decode_tokens: int,\n    ) -> torch.Tensor:\n        \"\"\"Compute decode index scores for MiniMax M3 model.\"\"\"\n        if index_md.num_decodes > 0:\n            d = index_md.decode\n            assert d is not None\n            # ✅ 直接调用：引擎初始化后 get_tp_group() 必然可用\n            tp_group = get_tp_group()\n            tp_size = tp_group.world_size\n            tp_rank = tp_group.rank_in_group\n            decode_iq = iq[:num_decode_tokens]\n            if tp_group is not None and tp_size > 1 and index_md.num_prefills == 0:\n                # TP sharded score computation\n                ...",
+      "context": "✅ 直接调用：引擎初始化后 get_tp_group() 必然可用 TP sharded score computation"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/models/minimax_m3/msa_m3.py\n+++ b/vllm_ascend/models/minimax_m3/msa_m3.py\n@@ -9,15 +9,10 @@\n         if index_md.num_decodes > 0:\n             d = index_md.decode\n             assert d is not None\n-            # ❌ 不必要的 try/except：get_tp_group() 在 forward 路径中必然可用\n-            try:\n-                tp_group = get_tp_group()\n-                tp_size = tp_group.world_size\n-                tp_rank = tp_group.rank_in_group\n-            except AssertionError:\n-                tp_group = None\n-                tp_size = 1\n-                tp_rank = 0\n+            # ✅ 直接调用：引擎初始化后 get_tp_group() 必然可用\n+            tp_group = get_tp_group()\n+            tp_size = tp_group.world_size\n+            tp_rank = tp_group.rank_in_group\n             decode_iq = iq[:num_decode_tokens]\n             if tp_group is not None and tp_size > 1 and index_md.num_prefills == 0:\n                 # TP sharded score computation\n",
+      "stats": "1 file changed, +4 lines, -9 lines",
+      "key_changes": [
+        "移除: except AssertionError:",
+        "移除: tp_group = get_tp_group()",
+        "移除: try:",
+        "新增: tp_group = get_tp_group()",
+        "新增: tp_size = tp_group.world_size"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

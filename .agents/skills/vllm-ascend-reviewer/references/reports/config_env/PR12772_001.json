@@ -1,0 +1,57 @@
+{
+  "report_id": "PR12772_001",
+  "pr_number": 12772,
+  "pr_title": "[Core][BugFix][Test] Fix sequence parallelism for both MoE and dense model",
+  "pr_status": "merged",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/compilation/passes/sequence_parallelism.py:22"
+  ],
+  "landing_sha": "b9c124f",
+  "source_quote": "gemini (🤖, :22): This commented-out code is redundant and clutters the codebase. It should be removed to maintain code cleanliness and readability.\n> weiguihua2 (👤, :19): Why not just delete it?",
+  "correspondence": [
+    {
+      "review_quote": "gemini-code-assist[bot]: vllm_ascend/compilation/passes/sequence_parallelism.py:22",
+      "patch_snippet": "评后sha b9c124f 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "b9c124f",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "不要在代码库中保留注释掉的旧实现。注释掉的代码会增加阅读负担、造成混淆，且无法被测试覆盖。旧代码应通过版本控制追溯，而非以注释形式保留在源文件中。",
+    "context": "",
+    "checkpoints": [
+      "检查是否存在以 `#` 注释掉的函数/代码块（非文档说明）",
+      "注释掉的代码已有替代实现时，应删除注释版本",
+      "使用 `git blame` / `git log` 追溯历史，而非保留注释"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/compilation/passes/sequence_parallelism.py",
+      "line": 0,
+      "code": "from vllm.config import VllmConfig\nfrom vllm_ascend.utils import is_moe_model\n\nSP_MIN_TOKEN_NUM_DEFAULT = 1000\n\n\n# def get_sp_min_token_num(config: VllmConfig) -> int:\n#     if is_moe_model(config):\n#         return 1\n#\n#     return SP_MIN_TOKEN_NUM_DEFAULT\n\n\ndef get_sp_min_token_num(config: VllmConfig) -> int:\n    \"\"\"Get the minimum token number for sequence parallelism.\n\n    Returns the configured value from pass_config if set,\n    otherwise returns the default value.\n    \"\"\"\n    configured = config.compilation_config.pass_config.sp_min_token_num\n    if configured is not None:\n        return configured\n    return SP_MIN_TOKEN_NUM_DEFAULT\n\n\ndef apply_sequence_parallelism(...):\n    ...",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/compilation/passes/sequence_parallelism.py",
+      "line": 0,
+      "code": "from vllm.config import VllmConfig\n\nSP_MIN_TOKEN_NUM_DEFAULT = 1000\n\n\ndef get_sp_min_token_num(config: VllmConfig) -> int:\n    \"\"\"Get the minimum token number for sequence parallelism.\n\n    Returns the configured value from pass_config if set,\n    otherwise returns the default value.\n    \"\"\"\n    configured = config.compilation_config.pass_config.sp_min_token_num\n    if configured is not None:\n        return configured\n    return SP_MIN_TOKEN_NUM_DEFAULT\n\n\ndef apply_sequence_parallelism(...):\n    ...",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/compilation/passes/sequence_parallelism.py\n+++ b/vllm_ascend/compilation/passes/sequence_parallelism.py\n@@ -1,14 +1,6 @@\n from vllm.config import VllmConfig\n-from vllm_ascend.utils import is_moe_model\n \n SP_MIN_TOKEN_NUM_DEFAULT = 1000\n-\n-\n-# def get_sp_min_token_num(config: VllmConfig) -> int:\n-#     if is_moe_model(config):\n-#         return 1\n-#\n-#     return SP_MIN_TOKEN_NUM_DEFAULT\n \n \n def get_sp_min_token_num(config: VllmConfig) -> int:",
+      "stats": "1 file changed, +0 lines, -8 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

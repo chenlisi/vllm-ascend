@@ -1,0 +1,61 @@
+{
+  "report_id": "PR4245_001",
+  "pr_number": 4245,
+  "pr_title": "[Feat][BugFix] Support the Qwen3-Next-80B-A3B-Instruct quantization model & Fix the NZ issue",
+  "pr_status": "merged",
+  "merged_at": "2025-11-21T02:42:56Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/linear.py:48",
+    "vllm_ascend/quantization/quant_config.py:226",
+    "tests/e2e/multicard/test_qwen3_next.py:134"
+  ],
+  "landing_sha": "3a8586d",
+  "source_quote": "why conv is not support nz",
+  "correspondence": [
+    {
+      "review_quote": "weijinqian0 提出两个问题：(1) 追问为何 conv 层不支持 NZ 格式，作者解释 Qwen3-Next 模型的精度问题是由 conv 层转换为 NZ 格式导致的；(2) 确认量化配置变更是否支持 EP（Expert Parallelism）场景，作者确认支持。MengqingCao 建议添加 `gold_results` 基准值以确保精度不被破坏。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "b043a16",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "卷积层（conv/conv1d）的权重不应被转换为 FRACTAL_NZ 格式，因为这会导致精度问题。在 `process_weights_after_loading` 中需要添加条件检查跳过卷积层。",
+    "context": "",
+    "checkpoints": [
+      "检查权重格式转换逻辑是否跳过了卷积层",
+      "确认条件匹配是否足够精确（如 `conv1d` 而非 `conv`）",
+      "验证量化方法中是否也需要同样的检查"
+    ],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "class AscendUnquantizedLinearMethod:\n    \"\"\"Linear method for unquantized weights on Ascend NPU.\"\"\"\n\n    def process_weights_after_loading(self, weight, param, loaded_weight=None):\n        weight.data = torch_npu.npu_format_cast(weight.data, 2)  # FRACTAL_NZ\n\n\ndef test_qwen3_next_quantized():\n    result = run_inference(model_name, prompts)\n    assert result is not None",
+      "context": "why conv is not support nz"
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "class AscendUnquantizedLinearMethod:\n    \"\"\"Linear method for unquantized weights on Ascend NPU.\"\"\"\n\n    def process_weights_after_loading(self, weight, param, loaded_weight=None):\n        if \"conv1d\" not in layer.prefix:\n            weight.data = torch_npu.npu_format_cast(weight.data, 2)  # FRACTAL_NZ\n\n\ndef test_qwen3_next_quantized():\n    result = run_inference(model_name, prompts)\n    gold_results = [...]  # 预期精度基准值\n    assert torch.allclose(result, gold_results, atol=1e-3)",
+      "context": "why conv is not support nz"
+    },
+    "diff": {
+      "unified": "--- a/a/file\n+++ b/b/file\n@@ -1,10 +1,12 @@\n     \"\"\"Linear method for unquantized weights on Ascend NPU.\"\"\"\n \n     def process_weights_after_loading(self, weight, param, loaded_weight=None):\n-        weight.data = torch_npu.npu_format_cast(weight.data, 2)  # FRACTAL_NZ\n+        if \"conv1d\" not in layer.prefix:\n+            weight.data = torch_npu.npu_format_cast(weight.data, 2)  # FRACTAL_NZ\n \n \n def test_qwen3_next_quantized():\n     result = run_inference(model_name, prompts)\n-    assert result is not None\n+    gold_results = [...]  # 预期精度基准值\n+    assert torch.allclose(result, gold_results, atol=1e-3)",
+      "stats": "1 file changed, +4 lines, -2 lines",
+      "key_changes": [
+        "修改了第 5-5 行的代码",
+        "修改了第 10-10 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

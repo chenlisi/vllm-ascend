@@ -1,0 +1,55 @@
+{
+  "report_id": "PR9465_001",
+  "pr_number": 9465,
+  "pr_title": "[CI]repair custom ops ci",
+  "pr_status": "merged",
+  "merged_at": "2026-05-25T12:12:00Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/e2e/nightly/single_node/ops/singlecard_ops/test_causal_conv1d_310.py:19"
+  ],
+  "landing_sha": "9abdd6c",
+  "source_quote": "",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao: tests/e2e/nightly/single_node/ops/singlecard_ops/test_causal_conv1d_310.py:19",
+      "patch_snippet": "评后sha 9abdd6c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "9abdd6c",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "```suggestion @pytest.mark.skipif(not is_310p_hw(), reason=\"Tested separately on a 310P machine.\") ```",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "tests/e2e/nightly/single_node/ops/singlecard_ops/test_fused_moe.py",
+      "line": 19,
+      "code": "# 冗余且可能导致维护混乱",
+      "context": ""
+    },
+    "pattern": {
+      "file": "tests/e2e/nightly/single_node/ops/singlecard_ops/test_fused_moe.py",
+      "line": 19,
+      "code": "# 移除冗余的本地 SiluAndMul 定义，直接使用导入的类",
+      "context": ""
+    },
+    "diff": {
+      "unified": "--- a/tests/e2e/nightly/single_node/ops/singlecard_ops/test_fused_moe.py\n+++ b/tests/e2e/nightly/single_node/ops/singlecard_ops/test_fused_moe.py\n@@ -1 +1 @@\n-# 冗余且可能导致维护混乱\n+# 移除冗余的本地 SiluAndMul 定义，直接使用导入的类\n",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "-# 冗余且可能导致维护混乱",
+        "+# 移除冗余的本地 SiluAndMul 定义，直接使用导入的类"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

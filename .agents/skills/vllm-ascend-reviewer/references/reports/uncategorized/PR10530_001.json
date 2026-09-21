@@ -1,0 +1,68 @@
+{
+  "report_id": "PR10530_001",
+  "pr_number": 10530,
+  "pr_title": "[CI]accurcy Test",
+  "pr_status": "merged",
+  "merged_at": "2026-07-08T09:38:55Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    ".github/workflows/scripts/run_selected_tests.sh:153",
+    ".github/workflows/pr_test.yaml:33",
+    ".github/workflows/pr_test.yaml:31"
+  ],
+  "landing_sha": "afe6ea8",
+  "source_quote": "Please use English here.\n`workflow_dispatch` looks useless?\nmove this change to a new workflow `schedule_test_coverage.yaml` to make the func more clear",
+  "correspondence": [
+    {
+      "review_quote": "kunpengW-code 指出脚本中使用了中文而非英文，作者已将中文改为英文。wangxiyuan 质疑 `workflow_dispatch` 触发器的必要性，并建议将 coverage 定时任务从 `pr_test.yaml` 拆分到新的独立 workflow 文件 `schedule_test_coverage.yaml` 中，使功能更加清晰。作者已按建议完成拆分。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "afe6ea8",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "CI 脚本（如 shell 脚本）中的所有注释、日志输出和用户可见字符串应使用英文，确保国际化协作的可读性。",
+    "context": "",
+    "checkpoints": [
+      "检查 CI 脚本中是否存在中文字符",
+      "确保所有注释和输出信息使用英文"
+    ],
+    "antipattern": {
+      "file": ".github/workflows/scripts/run_selected_tests.sh",
+      "line": 140,
+      "code": "#!/bin/bash\n# kunpengW-code 评审: \"Please use English here.\"\n# shiqiangA 回复: \"已修改\"\n\n# ... 前面的脚本逻辑 ...\n\n# 运行选中的测试用例\nrun_test_suite() {\n    local test_file=$1\n    local test_name=$2\n\n    echo \"正在运行测试: ${test_name}\"  # BUG: 中文输出\n    echo \"测试文件: ${test_file}\"       # BUG: 中文注释\n\n    if [ -f \"${test_file}\" ]; then\n        pytest \"${test_file}\" -v --tb=short\n        # 检查测试是否通过\n        if [ $? -eq 0 ]; then\n            echo \"测试通过: ${test_name}\"  # BUG: 中文输出\n        else\n            echo \"测试失败: ${test_name}\"  # BUG: 中文输出\n            return 1\n        fi\n    fi\n}\n\n# ... 后续脚本逻辑 ...",
+      "context": "Please use English here."
+    },
+    "pattern": {
+      "file": ".github/workflows/scripts/run_selected_tests.sh",
+      "line": 140,
+      "code": "#!/bin/bash\n# FIX: 将所有中文内容替换为英文\n\n# ... 前面的脚本逻辑 ...\n\n# Run selected test cases\nrun_test_suite() {\n    local test_file=$1\n    local test_name=$2\n\n    echo \"Running test: ${test_name}\"     # FIX: 英文输出\n    echo \"Test file: ${test_file}\"         # FIX: 英文注释\n\n    if [ -f \"${test_file}\" ]; then\n        pytest \"${test_file}\" -v --tb=short\n        # Check if test passed\n        if [ $? -eq 0 ]; then\n            echo \"Test passed: ${test_name}\"  # FIX: 英文输出\n        else\n            echo \"Test failed: ${test_name}\"  # FIX: 英文输出\n            return 1\n        fi\n    fi\n}\n\n# ... 后续脚本逻辑 ...",
+      "context": "Please use English here."
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/scripts/run_selected_tests.sh\n+++ b/.github/workflows/scripts/run_selected_tests.sh\n@@ -1,24 +1,23 @@\n #!/bin/bash\n-# kunpengW-code 评审: \"Please use English here.\"\n-# shiqiangA 回复: \"已修改\"\n+# FIX: 将所有中文内容替换为英文\n \n # ... 前面的脚本逻辑 ...\n \n-# 运行选中的测试用例\n+# Run selected test cases\n run_test_suite() {\n     local test_file=$1\n     local test_name=$2\n \n-    echo \"正在运行测试: ${test_name}\"  # BUG: 中文输出\n-    echo \"测试文件: ${test_file}\"       # BUG: 中文注释\n+    echo \"Running test: ${test_name}\"     # FIX: 英文输出\n+    echo \"Test file: ${test_file}\"         # FIX: 英文注释\n \n     if [ -f \"${test_file}\" ]; then\n         pytest \"${test_file}\" -v --tb=short\n-        # 检查测试是否通过\n+        # Check if test passed\n         if [ $? -eq 0 ]; then\n-            echo \"测试通过: ${test_name}\"  # BUG: 中文输出\n+            echo \"Test passed: ${test_name}\"  # FIX: 英文输出\n         else\n-            echo \"测试失败: ${test_name}\"  # BUG: 中文输出\n+            echo \"Test failed: ${test_name}\"  # FIX: 英文输出\n             return 1\n         fi\n     fi",
+      "stats": "1 file changed, +7 lines, -8 lines",
+      "key_changes": [
+        "移除: # kunpengW-code 评审: \"Please use English here.\"",
+        "移除: # shiqiangA 回复: \"已修改\"",
+        "新增: # FIX: 将所有中文内容替换为英文",
+        "移除: # 运行选中的测试用例",
+        "新增: # Run selected test cases",
+        "移除: echo \"正在运行测试: ${test_name}\"  # BUG: 中文输出",
+        "移除: echo \"测试文件: ${test_file}\"       # BUG: 中文注释",
+        "新增: echo \"Running test: ${test_name}\"     # FIX: 英文输出",
+        "新增: echo \"Test file: ${test_file}\"         # FIX: 英文注释",
+        "移除: # 检查测试是否通过"
+      ]
+    },
+    "language": "bash",
+    "_status": "extracted"
+  }
+}

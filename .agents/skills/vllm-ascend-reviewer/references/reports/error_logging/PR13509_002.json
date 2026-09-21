@@ -1,0 +1,61 @@
+{
+  "report_id": "PR13509_002",
+  "pr_number": 13509,
+  "pr_title": "[Performance][Ops] Integrate Kimi K3 fused norm gate and attention residual",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/kimi_kda.py:276"
+  ],
+  "landing_sha": "f1acbea",
+  "source_quote": "Ensure that the KDA output norm gate falls back to `self.o_norm` when Triton is not available.\n> ```suggestion\ndef _apply_output_norm_gate(\nself,\ncore_attn_out: torch.Tensor,\noutput_gate: torch.Tensor,\n) -> torch.Tensor:\nif apply_kda_rms_norm_sigmoid_gate is not None:\nreturn apply_kda_rms_norm_sigmoid_gate(\ncore_attn_out,\noutput_gate,\nself.o_norm.weight,\nself.o_norm.eps,\n)\nreturn self.o_norm(core_attn_out, output_gate)",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/ops/kimi_kda.py:276",
+      "patch_snippet": "评后sha f1acbea 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f1acbea",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "当使用 Triton kernel 作为优化路径时，必须在调用处检查函数是否可用（非 None），并在不可用时 fallback 到标准 PyTorch 实现。",
+    "context": "",
+    "checkpoints": [
+      "检查 Triton kernel 函数调用处是否有 None 检查",
+      "确认非 Triton 环境下有正确的 fallback 实现（如 `self.o_norm`）",
+      "确认 fallback 路径的语义与 Triton 路径一致"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/kimi_kda.py",
+      "line": 265,
+      "code": "class KimiKDAModel(nn.Module):\n    \"\"\"Kimi KDA model with fused Triton kernels.\"\"\"\n\n    def __init__(self, config, ...):\n        super().__init__()\n        self.o_norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)\n        self.num_heads = config.num_attention_heads\n        self.head_dim = config.hidden_size // self.num_heads\n        # ...\n\n    def forward(self, hidden_states, ...):\n        # ... attention computation ...\n        core_attn_out = self._compute_attention(...)\n        output_gate = self._compute_gate(...)\n        return self._apply_output_norm_gate(core_attn_out, output_gate)\n\n    def _apply_output_norm_gate(\n        self,\n        core_attn_out: torch.Tensor,\n        output_gate: torch.Tensor,\n    ) -> torch.Tensor:\n        # 直接调用 — Triton 不可用时 apply_kda_rms_norm_sigmoid_gate 为 None，\n        # 会触发 TypeError: 'NoneType' object is not callable\n        return apply_kda_rms_norm_sigmoid_gate(\n            core_attn_out,\n            output_gate,\n            self.o_norm.weight,\n            self.o_norm.eps,\n        )",
+      "context": "... attention computation ... 直接调用 — Triton 不可用时 apply_kda_rms_norm_sigmoid_gate 为 None， 会触发 TypeError: 'NoneType' object is not callable"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/kimi_kda.py",
+      "line": 265,
+      "code": "class KimiKDAModel(nn.Module):\n    \"\"\"Kimi KDA model with fused Triton kernels.\"\"\"\n\n    def __init__(self, config, ...):\n        super().__init__()\n        self.o_norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)\n        self.num_heads = config.num_attention_heads\n        self.head_dim = config.hidden_size // self.num_heads\n        # ...\n\n    def forward(self, hidden_states, ...):\n        # ... attention computation ...\n        core_attn_out = self._compute_attention(...)\n        output_gate = self._compute_gate(...)\n        return self._apply_output_norm_gate(core_attn_out, output_gate)\n\n    def _apply_output_norm_gate(\n        self,\n        core_attn_out: torch.Tensor,\n        output_gate: torch.Tensor,\n    ) -> torch.Tensor:\n        if apply_kda_rms_norm_sigmoid_gate is not None:\n            return apply_kda_rms_norm_sigmoid_gate(\n                core_attn_out,\n                output_gate,\n                self.o_norm.weight,\n                self.o_norm.eps,\n            )\n        # fallback: 使用标准 PyTorch RMSNorm\n        return self.o_norm(core_attn_out, output_gate)",
+      "context": "... attention computation ... fallback: 使用标准 PyTorch RMSNorm"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/kimi_kda.py\n+++ b/vllm_ascend/ops/kimi_kda.py\n@@ -19,11 +19,12 @@\n         core_attn_out: torch.Tensor,\n         output_gate: torch.Tensor,\n     ) -> torch.Tensor:\n-        # 直接调用 — Triton 不可用时 apply_kda_rms_norm_sigmoid_gate 为 None，\n-        # 会触发 TypeError: 'NoneType' object is not callable\n-        return apply_kda_rms_norm_sigmoid_gate(\n-            core_attn_out,\n-            output_gate,\n-            self.o_norm.weight,\n-            self.o_norm.eps,\n-        )\n+        if apply_kda_rms_norm_sigmoid_gate is not None:\n+            return apply_kda_rms_norm_sigmoid_gate(\n+                core_attn_out,\n+                output_gate,\n+                self.o_norm.weight,\n+                self.o_norm.eps,\n+            )\n+        # fallback: 使用标准 PyTorch RMSNorm\n+        return self.o_norm(core_attn_out, output_gate)\n",
+      "stats": "1 file changed, +9 lines, -8 lines",
+      "key_changes": [
+        "移除: )",
+        "移除: output_gate,",
+        "新增: self.o_norm.weight,",
+        "新增: )",
+        "新增: if apply_kda_rms_norm_sigmoid_gate is not None:"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

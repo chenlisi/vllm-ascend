@@ -1,0 +1,71 @@
+{
+  "report_id": "PR5334_001",
+  "pr_number": 5334,
+  "pr_title": "[ReleaseNote] Add release note for v0.13.0rc1",
+  "pr_status": "merged",
+  "merged_at": "",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/user_guide/release_notes.md:9",
+    "docs/source/user_guide/release_notes.md:33",
+    "docs/source/user_guide/release_notes.md:24",
+    "docs/source/user_guide/release_notes.md:28",
+    "docs/source/user_guide/release_notes.md:38",
+    "docs/source/user_guide/release_notes.md:12",
+    "docs/source/user_guide/release_notes.md:49",
+    "docs/source/user_guide/release_notes.md:27",
+    "docs/source/user_guide/release_notes.md:29",
+    "docs/source/user_guide/release_notes.md:8",
+    "docs/source/user_guide/release_notes.md:26"
+  ],
+  "landing_sha": "a67583f",
+  "source_quote": "This should be removed as it will be included in next release",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan 提出了多项修改建议：移除重复内容、补充 NZ 禁用说明、修正 `dump_config_path` 重命名描述、添加已知 issue 链接、补充 PCP/DCP 文档链接等。Yikun 建议重构文档结构，添加分类小节（Features、Performance、Dependencies 等）并添加文档链接。作者通过多次 commit 采纳了大部分建议（除 MagicMTP 因已回退未纳入），14/14 建议全部落地。",
+      "patch_snippet": "",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "a67583f",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "发布说明（Release Notes）应包含清晰的分类结构（Deprecation & Breaking Changes、Dependencies、Features、Performance、Other），所有面向用户的变更都应记录，包括环境变量变更、配置重命名、已知问题等。",
+    "context": "",
+    "checkpoints": [
+      "发布说明是否包含完整的分类结构",
+      "所有面向用户的变更（环境变量、配置重命名）是否都有记录",
+      "已知问题是否已添加并附带 issue 链接",
+      "是否添加了相关功能文档的链接",
+      "文档是否只有一个 H1 标题"
+    ],
+    "antipattern": {
+      "file": "docs/source/user_guide/release_notes.md",
+      "line": 0,
+      "code": "- dump_config 配置变更\n- OOM 修复\n\n- some known issue",
+      "context": "This should be removed as it will be included in next release"
+    },
+    "pattern": {
+      "file": "docs/source/user_guide/release_notes.md",
+      "line": 0,
+      "code": "- `dump_config` in `additional_config` is renamed to `dump_config_path` and the type is changed from `dict` to `string`\n- `VLLM_ASCEND_ENABLE_NZ` is disabled for float weight case, since we notice that the performance is not good in some float case. Feel free to set it to `2` if you make sure it works for your case.\n\n- vLLM version has been upgraded to 0.13.0 and drop 0.12.0 support. [#5146](https://github.com/vllm-project/vllm-ascend/pull/5146)\n- Transformer version has been upgraded >= 4.57.3 [#5250](https://github.com/vllm-project/vllm-ascend/pull/5250)\n\n- Support openPangu Ultra MoE [#4615](https://github.com/vllm-project/vllm-ascend/pull/4615)\n- A new quantization method W4A16 is supported now. [#4541](https://github.com/vllm-project/vllm-ascend/pull/4541)\n- Cross-machine Disaggregated Prefill is supported now. [#5008](https://github.com/vllm-project/vllm-ascend/pull/5008)\n- Add UCMConnector for KV Cache Offloading. [#4411](https://github.com/vllm-project/vllm-ascend/pull/4411)\n- Support async_scheduler and disable_padded_drafter_batch in eagle. [#4893](https://github.com/vllm-project/vllm-ascend/pull/4893)\n- Support pcp + mtp in full graph mode. [#4572](https://github.com/vllm-project/vllm-ascend/pull/4572)\n- Remove the transpose step after attention and switch to transpose_batchmatmul [#5390](https://github.com/vllm-project/vllm-ascend/pull/5390)\n- Enhance all-reduce skipping logic for MoE models in NPUModelRunner [#5329](https://github.com/vllm-project/vllm-ascend/pull/5329)\n\n- Add MagicMTP(block verify) and Triton optimization [#4443](https://github.com/vllm-project/vllm-ascend/pull/4443)\n- Add l2norm triton kernel [#4595](https://github.com/vllm-project/vllm-ascend/pull/4595)\n- Add new pattern for AddRmsnormQuant with SP, which could only take effect in graph mode. [#5077](https://github.com/vllm-project/vllm-ascend/pull/5077)\n- Add async exponential while model executing. [#4501](https://github.com/vllm-project/vllm-ascend/pull/4501)\n- To optimize the performance in small batch size scenario, an attention operator with flash decoding function is offered, please refer to item 22 in [FAQs](https://docs.vllm.ai/projects/ascend/en/latest/faqs.html) to enable it.\n\n- OOM error on VL models is fixed now. We're keeping observing it, if you hit OOM problem again, please submit an issue. [#5136](https://github.com/vllm-project/vllm-ascend/pull/5136)\n- Fixed an accuracy bug of Qwen3-Next-MTP when batched inferring. [#4932](https://github.com/vllm-project/vllm-ascend/pull/4932)\n- Fix npu-cpu offloading interface change bug. [#5290](https://github.com/vllm-project/vllm-ascend/pull/5290)\n- Fix MHA model runtime error in aclgraph mode [#5397](https://github.com/vllm-project/vllm-ascend/pull/5397)\n- Fix unsuitable moe_comm_type under ep=1 scenario [#5388](https://github.com/vllm-project/vllm-ascend/pull/5388)",
+      "context": "This should be removed as it will be included in next release"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/user_guide/release_notes.md\n+++ b/docs/source/user_guide/release_notes.md\n@@ -1,4 +1,26 @@\n-- dump_config 配置变更\n-- OOM 修复\n+- `dump_config` in `additional_config` is renamed to `dump_config_path` and the type is changed from `dict` to `string`\n+- `VLLM_ASCEND_ENABLE_NZ` is disabled for float weight case, since we notice that the performance is not good in some float case. Feel free to set it to `2` if you make sure it works for your case.\n \n-- some known issue\n+- vLLM version has been upgraded to 0.13.0 and drop 0.12.0 support. [#5146](https://github.com/vllm-project/vllm-ascend/pull/5146)\n+- Transformer version has been upgraded >= 4.57.3 [#5250](https://github.com/vllm-project/vllm-ascend/pull/5250)\n+\n+- Support openPangu Ultra MoE [#4615](https://github.com/vllm-project/vllm-ascend/pull/4615)\n+- A new quantization method W4A16 is supported now. [#4541](https://github.com/vllm-project/vllm-ascend/pull/4541)\n+- Cross-machine Disaggregated Prefill is supported now. [#5008](https://github.com/vllm-project/vllm-ascend/pull/5008)\n+- Add UCMConnector for KV Cache Offloading. [#4411](https://github.com/vllm-project/vllm-ascend/pull/4411)\n+- Support async_scheduler and disable_padded_drafter_batch in eagle. [#4893](https://github.com/vllm-project/vllm-ascend/pull/4893)\n+- Support pcp + mtp in full graph mode. [#4572](https://github.com/vllm-project/vllm-ascend/pull/4572)\n+- Remove the transpose step after attention and switch to transpose_batchmatmul [#5390](https://github.com/vllm-project/vllm-ascend/pull/5390)\n+- Enhance all-reduce skipping logic for MoE models in NPUModelRunner [#5329](https://github.com/vllm-project/vllm-ascend/pull/5329)\n+\n+- Add MagicMTP(block verify) and Triton optimization [#4443](https://github.com/vllm-project/vllm-ascend/pull/4443)\n+- Add l2norm triton kernel [#4595](https://github.com/vllm-project/vllm-ascend/pull/4595)\n+- Add new pattern for AddRmsnormQuant with SP, which could only take effect in graph mode. [#5077](https://github.com/vllm-project/vllm-ascend/pull/5077)\n+- Add async exponential while model executing. [#4501](https://github.com/vllm-project/vllm-ascend/pull/4501)\n+- To optimize the performance in small batch size scenario, an attention operator with flash decoding function is offered, please refer to item 22 in [FAQs](https://docs.vllm.ai/projects/ascend/en/latest/faqs.html) to enable it.\n+\n+- OOM error on VL models is fixed now. We're keeping observing it, if you hit OOM problem again, please submit an issue. [#5136](https://github.com/vllm-project/vllm-ascend/pull/5136)\n+- Fixed an accuracy bug of Qwen3-Next-MTP when batched inferring. [#4932](https://github.com/vllm-project/vllm-ascend/pull/4932)\n+- Fix npu-cpu offloading interface change bug. [#5290](https://github.com/vllm-project/vllm-ascend/pull/5290)\n+- Fix MHA model runtime error in aclgraph mode [#5397](https://github.com/vllm-project/vllm-ascend/pull/5397)\n+- Fix unsuitable moe_comm_type under ep=1 scenario [#5388](https://github.com/vllm-project/vllm-ascend/pull/5388)",
+      "stats": "1 file changed, +25 lines, -3 lines",
+      "key_changes": [
+        "修改了第 1-2 行的代码",
+        "修改了第 4-4 行的代码"
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

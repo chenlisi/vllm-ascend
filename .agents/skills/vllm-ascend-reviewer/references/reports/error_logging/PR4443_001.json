@@ -1,0 +1,59 @@
+{
+  "report_id": "PR4443_001",
+  "pr_number": 4443,
+  "pr_title": "Add MagicMTP(block verify) and Triton optimization",
+  "pr_status": "merged",
+  "merged_at": "2025-12-25T01:00:25Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/sample/rejection_sampler.py:13",
+    "vllm_ascend/sample/rejection_sampler.py:845",
+    "vllm_ascend/sample/rejection_sampler.py:248"
+  ],
+  "landing_sha": "0e2d24a",
+  "source_quote": "we can use HAS_TRITON, plz refer to https://github.com/vllm-project/vllm/blob/d9d342d214b8c13f71215318a6d9252cc4a5ca47/vllm/triton_utils/importing.py#L12",
+  "correspondence": [
+    {
+      "review_quote": "1. MengqingCao 建议使用上游 vllm 的 `HAS_TRITON` 而非自定义检测 → 统一使用项目标准的 Triton 可用性检测方式\n2. wangxiyuan 要求添加 e2e ops 测试 → commit `0e2d24a` 包含了 e2e ops test\n3. MengqingCao 要求移除未使用的参数 → 清理函数签名\n4. MengqingCao 要求添加精度测试 → 参考 test_rope.py 添加 rejection_sampler 的精度测试",
+      "patch_snippet": "commit `0e2d24a`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "0e2d24a",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "**检查点**: 检测 Triton 等可选依赖时，应使用上游 vllm 提供的标准标志（如 `HAS_TRITON`），而非自定义 try/except",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "try:\n    import triton\n    TRITON_ASCEND_AVAILABLE = True\nexcept:  # bare except — 会捕获 SystemExit、KeyboardInterrupt 等\n    TRITON_ASCEND_AVAILABLE = False\n\n@triton.jit\ndef greedy_verify_kernel(...):\n    for pos in range(num_draft_tokens):\n        draft_token_id = tl.load(draft_token_ids_ptr + start_idx + pos)\n        target_argmax_id = tl.load(target_argmax_ptr + start_idx + pos)\n        if draft_token_id != target_argmax_id:\n            rejected = True  # 设置标志但继续循环（性能浪费）\n            break\n\ndef some_function(x, y, unused_param):\n    ...",
+      "context": "we can use HAS_TRITON, plz refer to https://github.com/vllm-project/vllm/blob/d9d342d214b8c13f71215318a6d9252cc4a5ca47/vllm/triton_utils/importing.py#L12"
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "from vllm.triton_utils.importing import HAS_TRITON\n\n@triton.jit\ndef greedy_verify_kernel(...):\n    for pos in range(num_draft_tokens):\n        draft_token_id = tl.load(draft_token_ids_ptr + start_idx + pos)\n        target_argmax_id = tl.load(target_argmax_ptr + start_idx + pos)\n        tl.store(\n            output_token_ids_ptr + req_idx * (max_spec_len + 1) + pos,\n            target_argmax_id,\n        )\n        if draft_token_id != target_argmax_id:\n            return\n\n    bonus_token_id = tl.load(bonus_token_ids_ptr + req_idx)\n    tl.store(\n        output_token_ids_ptr + req_idx * (max_spec_len + 1) + num_draft_tokens,\n        bonus_token_id,\n    )\n\ndef some_function(x, y):\n    ...",
+      "context": "we can use HAS_TRITON, plz refer to https://github.com/vllm-project/vllm/blob/d9d342d214b8c13f71215318a6d9252cc4a5ca47/vllm/triton_utils/importing.py#L12"
+    },
+    "diff": {
+      "unified": "--- a/a/file\n+++ b/b/file\n@@ -1,17 +1,22 @@\n-try:\n-    import triton\n-    TRITON_ASCEND_AVAILABLE = True\n-except:  # bare except — 会捕获 SystemExit、KeyboardInterrupt 等\n-    TRITON_ASCEND_AVAILABLE = False\n+from vllm.triton_utils.importing import HAS_TRITON\n \n @triton.jit\n def greedy_verify_kernel(...):\n     for pos in range(num_draft_tokens):\n         draft_token_id = tl.load(draft_token_ids_ptr + start_idx + pos)\n         target_argmax_id = tl.load(target_argmax_ptr + start_idx + pos)\n+        tl.store(\n+            output_token_ids_ptr + req_idx * (max_spec_len + 1) + pos,\n+            target_argmax_id,\n+        )\n         if draft_token_id != target_argmax_id:\n-            rejected = True  # 设置标志但继续循环（性能浪费）\n-            break\n+            return\n \n-def some_function(x, y, unused_param):\n+    bonus_token_id = tl.load(bonus_token_ids_ptr + req_idx)\n+    tl.store(\n+        output_token_ids_ptr + req_idx * (max_spec_len + 1) + num_draft_tokens,\n+        bonus_token_id,\n+    )\n+\n+def some_function(x, y):\n     ...",
+      "stats": "1 file changed, +13 lines, -8 lines",
+      "key_changes": [
+        "修改了第 1-5 行的代码",
+        "在第 8-11 行新增了代码",
+        "修改了第 13-14 行的代码",
+        "修改了第 16-16 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

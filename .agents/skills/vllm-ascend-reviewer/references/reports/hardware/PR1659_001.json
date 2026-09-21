@@ -1,0 +1,62 @@
+{
+  "report_id": "PR1659_001",
+  "pr_number": 1659,
+  "pr_title": "[Feature]cpu offload connector",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/distributed/cpu_offload_connector.py:273"
+  ],
+  "landing_sha": "5b6d1a0",
+  "source_quote": "should consider pp rank",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/distributed/cpu_offload_connector.py:273",
+      "patch_snippet": "评后sha 5b6d1a0 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "5b6d1a0",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在实现分布式功能（如 CPU offload connector）时，必须考虑所有并行维度（TP、PP、DP），不能只关注部分维度。",
+    "context": "",
+    "checkpoints": [
+      "是否考虑了 tensor parallel rank",
+      "是否考虑了 pipeline parallel rank",
+      "是否考虑了 data parallel rank",
+      "多并行维度组合时逻辑是否正确"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/distributed/cpu_offload_connector.py",
+      "line": 260,
+      "code": "from vllm_ascend.distributed.parallel_state import (\n    get_tensor_model_parallel_rank,\n    get_tensor_model_parallel_world_size,\n)\n\nclass CpuOffloadConnector:\n    \"\"\"CPU offload connector for KV cache management.\"\"\"\n\n    def __init__(self, config, ...):\n        self.config = config\n        self.tp_rank = get_tensor_model_parallel_rank()\n        self.tp_size = get_tensor_model_parallel_world_size()\n\n    def get_connector_config(self):\n        \"\"\"Get connector configuration for CPU offload.\"\"\"\n        tp_rank = get_tensor_model_parallel_rank()\n        tp_size = get_tensor_model_parallel_world_size()\n        # 仅考虑了 TP 维度，缺少 PP rank 的处理\n        # 在多并行维度场景下可能导致 cpu offload 配置错误\n        offset = tp_rank * self.config.block_size\n        return {\n            \"rank\": tp_rank,\n            \"world_size\": tp_size,\n            \"offset\": offset,\n        }",
+      "context": "仅考虑了 TP 维度，缺少 PP rank 的处理 在多并行维度场景下可能导致 cpu offload 配置错误"
+    },
+    "pattern": {
+      "file": "vllm_ascend/distributed/cpu_offload_connector.py",
+      "line": 260,
+      "code": "# 添加了 pp rank 的考虑，支持 TP + PP 多并行维度\n\nfrom vllm_ascend.distributed.parallel_state import (\n    get_tensor_model_parallel_rank,\n    get_tensor_model_parallel_world_size,\n    get_pipeline_model_parallel_rank,\n    get_pipeline_model_parallel_world_size,\n)\n\nclass CpuOffloadConnector:\n    \"\"\"CPU offload connector for KV cache management.\"\"\"\n\n    def __init__(self, config, ...):\n        self.config = config\n        self.tp_rank = get_tensor_model_parallel_rank()\n        self.tp_size = get_tensor_model_parallel_world_size()\n        self.pp_rank = get_pipeline_model_parallel_rank()\n        self.pp_size = get_pipeline_model_parallel_world_size()\n\n    def get_connector_config(self):\n        \"\"\"Get connector configuration for CPU offload.\"\"\"\n        tp_rank = get_tensor_model_parallel_rank()\n        tp_size = get_tensor_model_parallel_world_size()\n        pp_rank = get_pipeline_model_parallel_rank()\n        pp_size = get_pipeline_model_parallel_world_size()\n        # 结合 tp_rank, pp_rank 计算全局 rank\n        global_rank = pp_rank * tp_size + tp_rank\n        global_size = pp_size * tp_size\n        offset = global_rank * self.config.block_size\n        return {\n            \"rank\": global_rank,\n            \"world_size\": global_size,\n            \"offset\": offset,\n        }",
+      "context": "添加了 pp rank 的考虑，支持 TP + PP 多并行维度 结合 tp_rank, pp_rank 计算全局 rank"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/distributed/cpu_offload_connector.py\n+++ b/vllm_ascend/distributed/cpu_offload_connector.py\n@@ -1,6 +1,10 @@\n+# 添加了 pp rank 的考虑，支持 TP + PP 多并行维度\n+\n from vllm_ascend.distributed.parallel_state import (\n     get_tensor_model_parallel_rank,\n     get_tensor_model_parallel_world_size,\n+    get_pipeline_model_parallel_rank,\n+    get_pipeline_model_parallel_world_size,\n )\n \n class CpuOffloadConnector:\n@@ -10,16 +14,21 @@\n         self.config = config\n         self.tp_rank = get_tensor_model_parallel_rank()\n         self.tp_size = get_tensor_model_parallel_world_size()\n+        self.pp_rank = get_pipeline_model_parallel_rank()\n+        self.pp_size = get_pipeline_model_parallel_world_size()\n \n     def get_connector_config(self):\n         \"\"\"Get connector configuration for CPU offload.\"\"\"\n         tp_rank = get_tensor_model_parallel_rank()\n         tp_size = get_tensor_model_parallel_world_size()\n-        # 仅考虑了 TP 维度，缺少 PP rank 的处理\n-        # 在多并行维度场景下可能导致 cpu offload 配置错误\n-        offset = tp_rank * self.config.block_size\n+        pp_rank = get_pipeline_model_parallel_rank()\n+        pp_size = get_pipeline_model_parallel_world_size()\n+        # 结合 tp_rank, pp_rank 计算全局 rank\n+        global_rank = pp_rank * tp_size + tp_rank\n+        global_size = pp_size * tp_size\n+        offset = global_rank * self.config.block_size\n         return {\n-            \"rank\": tp_rank,\n-            \"world_size\": tp_size,\n+            \"rank\": global_rank,\n+            \"world_size\": global_size,\n             \"offset\": offset,\n         }\n",
+      "stats": "1 file changed, +14 lines, -5 lines",
+      "key_changes": [
+        "移除: \"world_size\": tp_size,",
+        "移除: \"rank\": tp_rank,",
+        "移除: offset = tp_rank * self.config.block_size",
+        "新增: \"rank\": global_rank,",
+        "新增: \"world_size\": global_size,"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

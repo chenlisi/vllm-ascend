@@ -1,0 +1,59 @@
+{
+  "report_id": "PR12923_001",
+  "pr_number": 12923,
+  "pr_title": "[Refactor][Distributed] Remove all_to_all patch and switch lm-head TP to all_to_all_single",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/ops/vocab_parallel_embedding.py:332"
+  ],
+  "landing_sha": "5b91e35",
+  "source_quote": "To prevent silent failures or cryptic runtime errors when the number of tokens `N` (i.e., `logits.shape[0]`) is not divisible by `world_size`, we should add an explicit assertion. Since `all_to_all_single` requires equal splitting across ranks in SPMD mode, divisibility is a strict prerequisite.",
+  "correspondence": [
+    {
+      "review_quote": "gemini-code-assist[bot]: vllm_ascend/ops/vocab_parallel_embedding.py:332",
+      "patch_snippet": "评后sha 5b91e35 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "5b91e35",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当分布式通信原语（如 `dist.all_to_all_single`）通过 `tensor.view(world_size, -1, dim)` 在 dim 0 上做等分切分时，必须在使用 `view` 之前显式校验 `tensor.shape[0] % world_size == 0`，否则 `view()` 会抛出\"shape '[P, -1, V]' is invalid for input of size N\"这种与根因无关的隐晦错误。建议用 `raise ValueError` 而非 `assert`，以兼容 `python -O` 模式。",
+    "context": "",
+    "checkpoints": [
+      "检查所有调用 `dist.all_to_all_single` / `view(world_size, -1, ...)` 的位置，确认上游对 dim 0 有整除性校验",
+      "优先使用 `raise ValueError(msg)` 而非 `assert`（前者 `python -O` 仍生效）",
+      "校验要放在 `view` / 其他 shape-derived 计算之前，使错误信息最早暴露",
+      "配套单测覆盖\"不整除时抛出特定异常类型\"的场景（如 `test_raises_on_uneven_tokens`）",
+      "对照旧实现的行为差异（如旧的 `torch.tensor_split` 允许不等分块但会静默错误，新的 `view` 会立即报错），明确切换理由"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/vocab_parallel_embedding.py",
+      "line": 320,
+      "code": "import torch\nimport torch.distributed as dist\nfrom vllm.distributed import GroupCoordinator\n\n\ndef lmhead_all_to_all(\n    logits: torch.Tensor,\n    comm_group: GroupCoordinator,\n) -> torch.Tensor:\n    \"\"\"Redistribute logits across TP ranks using all_to_all_single.\n\n    [N, V/P] -> all_to_all -> [N/P, V]\n    \"\"\"\n    world_size = comm_group.world_size\n    if world_size == 1:\n        return logits\n    # ❌ 缺少整除性校验：N % P != 0 时 view() 会抛隐晦的 shape 错误\n    vocab_per_partition = logits.shape[-1]\n    # [N, V/P] -> [P, N/P, V/P]\n    input_ = logits.contiguous().view(world_size, -1, vocab_per_partition)\n    output = torch.empty_like(input_)\n    dist.all_to_all_single(output, input_, group=comm_group.device_group)\n    # [P, N/P, V/P] -> [N/P, P, V/P] -> [N/P, V]\n    return output.permute(1, 0, 2).contiguous().view(-1, world_size * vocab_per_partition)",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/vocab_parallel_embedding.py",
+      "line": 320,
+      "code": "import torch\nimport torch.distributed as dist\nfrom vllm.distributed import GroupCoordinator\n\n\ndef lmhead_all_to_all(\n    logits: torch.Tensor,\n    comm_group: GroupCoordinator,\n) -> torch.Tensor:\n    \"\"\"Redistribute logits across TP ranks using all_to_all_single.\n\n    [N, V/P] -> all_to_all -> [N/P, V]\n\n    Vocab shard dimension (V/P) is guaranteed by pad_vocab_size.\n    Token count (N) is a dynamic request-batch size and is runtime-checked below.\n    \"\"\"\n    world_size = comm_group.world_size\n    if world_size == 1:\n        return logits\n    # all_to_all_single in SPMD mode requires equal split along dim 0:\n    # the view [P, N/P, V/P] below needs N divisible by P.\n    if logits.shape[0] % world_size != 0:\n        raise ValueError(\n            f\"logits.shape[0] ({logits.shape[0]}) must be divisible by world_size \"\n            f\"({world_size}) for lmhead_all_to_all.\"\n        )\n    vocab_per_partition = logits.shape[-1]\n    # [N, V/P] -> [P, N/P, V/P]\n    input_ = logits.contiguous().view(world_size, -1, vocab_per_partition)\n    output = torch.empty_like(input_)\n    dist.all_to_all_single(output, input_, group=comm_group.device_group)\n    # [P, N/P, V/P] -> [N/P, P, V/P] -> [N/P, V]\n    return output.permute(1, 0, 2).contiguous().view(-1, world_size * vocab_per_partition)",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/vocab_parallel_embedding.py\n+++ b/vllm_ascend/ops/vocab_parallel_embedding.py\n@@ -10,11 +10,20 @@\n     \"\"\"Redistribute logits across TP ranks using all_to_all_single.\n \n     [N, V/P] -> all_to_all -> [N/P, V]\n+\n+    Vocab shard dimension (V/P) is guaranteed by pad_vocab_size.\n+    Token count (N) is a dynamic request-batch size and is runtime-checked below.\n     \"\"\"\n     world_size = comm_group.world_size\n     if world_size == 1:\n         return logits\n-    # ❌ 缺少整除性校验：N % P != 0 时 view() 会抛隐晦的 shape 错误\n+    # all_to_all_single in SPMD mode requires equal split along dim 0:\n+    # the view [P, N/P, V/P] below needs N divisible by P.\n+    if logits.shape[0] % world_size != 0:\n+        raise ValueError(\n+            f\"logits.shape[0] ({logits.shape[0]}) must be divisible by world_size \"\n+            f\"({world_size}) for lmhead_all_to_all.\"\n+        )\n     vocab_per_partition = logits.shape[-1]\n     # [N, V/P] -> [P, N/P, V/P]\n     input_ = logits.contiguous().view(world_size, -1, vocab_per_partition)",
+      "stats": "1 file changed, +10 lines, -1 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

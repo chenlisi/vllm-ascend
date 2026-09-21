@@ -1,0 +1,56 @@
+{
+  "report_id": "PR12034_001",
+  "pr_number": 12034,
+  "pr_title": "[BugFix]Fix the issue of DCP and DP services getting stuck",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "tests/e2e/pull_request/four_card/context_parallel/test_accuracy.py:285"
+  ],
+  "landing_sha": "eeb7730",
+  "source_quote": "this case should use DPVllmRunner.",
+  "correspondence": [
+    {
+      "review_quote": "pisceskkk: tests/e2e/pull_request/four_card/context_parallel/test_accuracy.py:285",
+      "patch_snippet": "评后sha eeb7730 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "eeb7730",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "在测试 data parallel (DP) 和 context parallel (CP) 场景时，应使用 `DPVllmRunner` 而非普通的 `VllmRunner`，以确保测试能正确验证多卡并行场景下的行为。",
+    "context": "",
+    "checkpoints": [
+      "检查 context_parallel 目录下的测试是否使用了 `DPVllmRunner`",
+      "确认测试场景与 Runner 类型匹配（DP 场景用 DPVllmRunner）"
+    ],
+    "antipattern": {
+      "file": "tests/e2e/pull_request/four_card/context_parallel/test_accuracy.py",
+      "line": 275,
+      "code": "@pytest.mark.parametrize(\"model_config\", [\n    {\"model\": \"Qwen/Qwen3-30B-A3B\", \"tp\": 2, \"dp\": 2},\n])\ndef test_dcp_dp_accuracy(model_config, request):\n    \"\"\"Test DCP + DP accuracy for context parallel scenarios.\"\"\"\n    model = model_config[\"model\"]\n    tp_size = model_config[\"tp\"]\n    dp_size = model_config[\"dp\"]\n\n    # 错误：DP/CP 场景使用了普通 VllmRunner\n    runner = VllmRunner(\n        model=model,\n        tensor_parallel_size=tp_size,\n        data_parallel_size=dp_size,\n        dtype=\"bfloat16\",\n        max_model_len=4096,\n        trust_remote_code=True,\n    )\n\n    try:\n        outputs = runner.generate(\"Hello, world!\", max_tokens=10)\n        assert len(outputs) > 0\n    finally:\n        runner.shutdown()",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "tests/e2e/pull_request/four_card/context_parallel/test_accuracy.py",
+      "line": 275,
+      "code": "@pytest.mark.parametrize(\"model_config\", [\n    {\"model\": \"Qwen/Qwen3-30B-A3B\", \"tp\": 2, \"dp\": 2},\n])\ndef test_dcp_dp_accuracy(model_config, request):\n    \"\"\"Test DCP + DP accuracy for context parallel scenarios.\"\"\"\n    model = model_config[\"model\"]\n    tp_size = model_config[\"tp\"]\n    dp_size = model_config[\"dp\"]\n\n    # 正确：DP/CP 场景使用 DPVllmRunner\n    runner = DPVllmRunner(\n        model=model,\n        tensor_parallel_size=tp_size,\n        data_parallel_size=dp_size,\n        dtype=\"bfloat16\",\n        max_model_len=4096,\n        trust_remote_code=True,\n    )\n\n    try:\n        outputs = runner.generate(\"Hello, world!\", max_tokens=10)\n        assert len(outputs) > 0\n    finally:\n        runner.shutdown()",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/tests/e2e/pull_request/four_card/context_parallel/test_accuracy.py\n+++ b/tests/e2e/pull_request/four_card/context_parallel/test_accuracy.py\n@@ -7,8 +7,8 @@\n     tp_size = model_config[\"tp\"]\n     dp_size = model_config[\"dp\"]\n \n-    # 错误：DP/CP 场景使用了普通 VllmRunner\n-    runner = VllmRunner(\n+    # 正确：DP/CP 场景使用 DPVllmRunner\n+    runner = DPVllmRunner(\n         model=model,\n         tensor_parallel_size=tp_size,\n         data_parallel_size=dp_size,",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

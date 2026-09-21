@@ -1,0 +1,57 @@
+{
+  "report_id": "PR12292_003",
+  "pr_number": 12292,
+  "pr_title": "[Feature] DyntraLB: Dynamic Intra-decoder Data-parallel Load Balancing",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/core/dyntra_lb_scheduler.py:1202"
+  ],
+  "landing_sha": "2a98206",
+  "source_quote": "`pass` was forgotten here.",
+  "correspondence": [
+    {
+      "review_quote": "wxsIcey: vllm_ascend/core/dyntra_lb_scheduler.py:1202",
+      "patch_snippet": "评后sha 2a98206 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "2a98206",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "Python 中空代码块（如 `if`、`except`、`class` 等后面没有语句）必须包含 `pass` 语句，否则会导致 `IndentationError`。",
+    "context": "",
+    "checkpoints": [
+      "检查 `if`/`elif`/`else`/`except`/`for`/`while`/`class`/`def` 等块是否为空",
+      "空块必须包含 `pass` 语句"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/core/dyntra_lb_scheduler.py",
+      "line": 1190,
+      "code": "    def _handle_lb_pause_check(self, request):\n        \"\"\"Check if request should be paused for load balancing.\"\"\"\n        if not self.lb_enabled:\n            return False\n\n        if self._should_pause_for_lb(request):\n            # Mark request as pending for LB migration\n            self._pending_lb_requests.add(request.request_id)\n            # TODO: implement actual pause logic\n            # ← wxsIcey: pass was forgotten here (空代码块缺少 pass)\n\n        return request.request_id in self._pending_lb_requests\n\n    def _should_pause_for_lb(self, request):\n        \"\"\"Determine if request needs LB pause.\"\"\"\n        if self.dp_size <= 1:\n            return False\n        # ... 其他判断逻辑 ...\n        return False\n\n    def _resume_paused_requests(self):\n        \"\"\"Resume all paused requests after LB completes.\"\"\"\n        for req_id in list(self._pending_lb_requests):\n            self._pending_lb_requests.discard(req_id)",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/core/dyntra_lb_scheduler.py",
+      "line": 1190,
+      "code": "    def _handle_lb_pause_check(self, request):\n        \"\"\"Check if request should be paused for load balancing.\"\"\"\n        if not self.lb_enabled:\n            return False\n\n        if self._should_pause_for_lb(request):\n            # Mark request as pending for LB migration\n            self._pending_lb_requests.add(request.request_id)\n            # TODO: implement actual pause logic\n            pass  # ← 补充了 pass 语句\n\n        return request.request_id in self._pending_lb_requests\n\n    def _should_pause_for_lb(self, request):\n        \"\"\"Determine if request needs LB pause.\"\"\"\n        if self.dp_size <= 1:\n            return False\n        # ... 其他判断逻辑 ...\n        return False\n\n    def _resume_paused_requests(self):\n        \"\"\"Resume all paused requests after LB completes.\"\"\"\n        for req_id in list(self._pending_lb_requests):\n            self._pending_lb_requests.discard(req_id)",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/core/dyntra_lb_scheduler.py\n+++ b/vllm_ascend/core/dyntra_lb_scheduler.py\n@@ -7,7 +7,7 @@\n             # Mark request as pending for LB migration\n             self._pending_lb_requests.add(request.request_id)\n             # TODO: implement actual pause logic\n-            # ← wxsIcey: pass was forgotten here (空代码块缺少 pass)\n+            pass  # ← 补充了 pass 语句\n \n         return request.request_id in self._pending_lb_requests\n ",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "添加 TODO 注释说明",
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

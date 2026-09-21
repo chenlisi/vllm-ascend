@@ -1,0 +1,64 @@
+{
+  "report_id": "PR11287_001",
+  "pr_number": 11287,
+  "pr_title": "[Ascend950][Feature]Add allgatherEP MXFP4 quantization",
+  "pr_status": "merged",
+  "merged_at": "2026-07-06T06:15:31Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/fused_moe/token_dispatcher.py:388"
+  ],
+  "landing_sha": "db7d050",
+  "source_quote": "The modification here will cause quant_mode to fail to obtain the value 1, affecting INT quantization.",
+  "correspondence": [
+    {
+      "review_quote": "kunpengW-code 指出 token_dispatcher.py 中的修改会导致 `quant_mode` 无法获取值 1，影响 INT 量化。作者感谢指正并修复了该逻辑 bug，1/1 建议全部落地。",
+      "patch_snippet": "",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "db7d050",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当多个条件互斥时（如不同的 QuantType），应使用 `elif` 而非连续的 `if`，避免后续条件的 `else` 分支覆盖前面已正确设置的值。",
+    "context": "",
+    "checkpoints": [
+      "多个互斥条件是否使用了 `elif` 而非连续 `if`",
+      "`else` 分支是否会意外覆盖前面分支设置的值",
+      "新增量化类型时是否检查了分支逻辑的完整性"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/fused_moe/token_dispatcher.py",
+      "line": 370,
+      "code": "    def _get_quant_mode(\n        self,\n        token_dispatch_input: TokenDispatchInput,\n        dynamic_scale: Optional[torch.Tensor],\n    ) -> int:\n        \"\"\"Determine the quantization mode for token dispatch.\"\"\"\n        is_mxfp = (\n            token_dispatch_input.quant.quant_type == QuantType.MXFP8\n            or token_dispatch_input.quant.quant_type == QuantType.MXFP4\n        )\n        # BUG: 连续 if 而非 elif，当 quant_type 为 MXFP8 时，\n        # 第一个 if 正确设置 quant_mode，但第二个 if 条件为 False，\n        # 导致 else 分支执行，quant_mode 被错误覆盖为 -1\n        if token_dispatch_input.quant.quant_type == QuantType.MXFP8 and dynamic_scale is None:\n            quant_mode = 3 if is_mxfp else 1\n        if token_dispatch_input.quant.quant_type == QuantType.MXFP4 and dynamic_scale is None:\n            quant_mode = 9 if is_mxfp else 1\n        else:\n            quant_mode = -1\n        return quant_mode",
+      "context": "The modification here will cause quant_mode to fail to obtain the value 1, affecting INT quantization."
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/fused_moe/token_dispatcher.py",
+      "line": 370,
+      "code": "    def _get_quant_mode(\n        self,\n        token_dispatch_input: TokenDispatchInput,\n        dynamic_scale: Optional[torch.Tensor],\n    ) -> int:\n        \"\"\"Determine the quantization mode for token dispatch.\"\"\"\n        is_mxfp = (\n            token_dispatch_input.quant.quant_type == QuantType.MXFP8\n            or token_dispatch_input.quant.quant_type == QuantType.MXFP4\n        )\n        # FIX: 使用 elif 确保各量化类型分支互斥，\n        # else 仅在无匹配量化类型时执行\n        if token_dispatch_input.quant.quant_type == QuantType.MXFP8 and dynamic_scale is None:\n            quant_mode = 3 if is_mxfp else 1\n        elif token_dispatch_input.quant.quant_type == QuantType.MXFP4 and dynamic_scale is None:\n            quant_mode = 9 if is_mxfp else 1\n        else:\n            quant_mode = -1\n        return quant_mode",
+      "context": "The modification here will cause quant_mode to fail to obtain the value 1, affecting INT quantization."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/fused_moe/token_dispatcher.py\n+++ b/vllm_ascend/ops/fused_moe/token_dispatcher.py\n@@ -8,12 +8,11 @@\n             token_dispatch_input.quant.quant_type == QuantType.MXFP8\n             or token_dispatch_input.quant.quant_type == QuantType.MXFP4\n         )\n-        # BUG: 连续 if 而非 elif，当 quant_type 为 MXFP8 时，\n-        # 第一个 if 正确设置 quant_mode，但第二个 if 条件为 False，\n-        # 导致 else 分支执行，quant_mode 被错误覆盖为 -1\n+        # FIX: 使用 elif 确保各量化类型分支互斥，\n+        # else 仅在无匹配量化类型时执行\n         if token_dispatch_input.quant.quant_type == QuantType.MXFP8 and dynamic_scale is None:\n             quant_mode = 3 if is_mxfp else 1\n-        if token_dispatch_input.quant.quant_type == QuantType.MXFP4 and dynamic_scale is None:\n+        elif token_dispatch_input.quant.quant_type == QuantType.MXFP4 and dynamic_scale is None:\n             quant_mode = 9 if is_mxfp else 1\n         else:\n             quant_mode = -1",
+      "stats": "1 file changed, +3 lines, -4 lines",
+      "key_changes": [
+        "移除: # BUG: 连续 if 而非 elif，当 quant_type 为 MXFP8 时，",
+        "移除: # 第一个 if 正确设置 quant_mode，但第二个 if 条件为 False，",
+        "移除: # 导致 else 分支执行，quant_mode 被错误覆盖为 -1",
+        "新增: # FIX: 使用 elif 确保各量化类型分支互斥，",
+        "新增: # else 仅在无匹配量化类型时执行",
+        "移除: if token_dispatch_input.quant.quant_type == QuantType.MXFP4 and dynamic_scale is",
+        "新增: elif token_dispatch_input.quant.quant_type == QuantType.MXFP4 and dynamic_scale "
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

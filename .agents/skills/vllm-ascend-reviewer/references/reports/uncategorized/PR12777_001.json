@@ -1,0 +1,45 @@
+{
+  "report_id": "PR12777_001",
+  "pr_number": 12777,
+  "pr_title": "[BugFix][Refactor] Fix `sp` in dspark",
+  "pr_status": "merged",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "a3bfa9d",
+  "source_quote": "Placing this function in `spec_decode/utils.py` might be more appropriate, **including the previous `patch_tensor_parallel_group` and `_maybe_eager_context`**.\nGood advice!\nThank you!",
+  "correspondence": [],
+  "verification": {
+    "merged": true,
+    "modified_commit": "a3bfa9d",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "llm_base_proposer.py",
+      "line": 0,
+      "code": "# SPDX-License-Identifier: Apache-2.0\nimport copy\nfrom collections.abc import Callable\nfrom contextlib import AbstractContextManager, contextmanager, nullcontext  # ←独占 contextmanager import\nfrom dataclasses import replace                                   # ←独占 replace import\nfrom functools import partial\nfrom typing import Any, cast\n...\nimport vllm.distributed.parallel_state as _ps                    # ←独占 _ps alias import\nfrom vllm.config import CompilationMode, CUDAGraphMode, ...      # ←独占 CompilationMode import\n...\n@contextmanager\ndef patch_tensor_parallel_group(tp_group):                        # ← 第1个：TP组临时替换（33行）\n    \"\"\"Temporarily swap the global TP group for draft-model spec decode.\"\"\"\n    old_tp_group = _ps.get_tp_group()\n    _ps._TP_STATE_PATCHED = True\n    _ps._TP = tp_group\n    try:\n        yield\n    finally:\n        _ps._TP_STATE_PATCHED = False\n        _ps._TP = old_tp_group\n\n@contextmanager\ndef _maybe_eager_context(vllm_config):                            # ← 第2个：切CompilationMode.NONE防fx-graph（23行）\n    \"\"\"TODO: Remove it when the bug of fx-graph is solved\"\"\"\n    target_compilation_config = vllm_config.compilation_config\n    draft_compilation_config = replace(target_compilation_config, mode=CompilationMode.NONE)\n    draft_compilation_config.static_forward_context = target_compilation_config.static_forward_context\n    draft_compilation_config.static_all_moe_layers = target_compilation_config.static_all_moe_layers\n    vllm_config.compilation_config = draft_compilation_config\n    try:\n        yield\n    finally:\n        vllm_config.compilation_config = target_compilation_config\n\n@contextmanager\ndef _disable_flash_comm_v1_context():                             # ← 第3个：MarkovHead关SP flash_comm（本次修复的15行）\n    \"\"\"sp should be disabled when running MarkovHead\"\"\"\n    forward_context = get_forward_context()                       # ←这里用了 get_forward_context\n    _raw_flash_comm_v1 = forward_context.flash_comm_v1_enabled\n    try:\n        forward_context.flash_comm_v1_enabled = False\n        yield\n    finally:\n        forward_context.flash_comm_v1_enabled = _raw_flash_comm_v1",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/spec_decode/llm_base_proposer.py",
+      "line": 0,
+      "code": "# SPDX-License-Identifier: Apache-2.0\nimport copy\nfrom collections.abc import Callable\nfrom contextlib import AbstractContextManager, nullcontext  # 删除独占的 contextmanager\nfrom functools import partial\nfrom typing import Any, cast\n...\n# 删除独占的 replace import\n# 删除独占的 _ps alias import\nfrom vllm.config import CUDAGraphMode, VllmConfig, get_layers_from_vllm_config  # 删除独占的 CompilationMode\n...\nfrom vllm_ascend.spec_decode.utils import (\n    SlidingWindowAdapter,\n    _disable_flash_comm_v1_context,   # 从 utils.py import 搬过去的三个 helper\n    _maybe_eager_context,\n    patch_tensor_parallel_group,\n)\n# 删除 @contextmanager def patch_tensor_parallel_group (33行)\n# 删除 @contextmanager def _maybe_eager_context (23行)\n# 删除 @contextmanager def _disable_flash_comm_v1_context (15行)\n\n# Currently we will fix block size to a small one since `num_reqs` can't be too large\n_PREPARE_INPUTS_BLOCK_SIZE = 4",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/spec_decode/llm_base_proposer.py\n+++ b/vllm_ascend/spec_decode/llm_base_proposer.py\n@@ -1,46 +1,23 @@\n # SPDX-License-Identifier: Apache-2.0\n import copy\n from collections.abc import Callable\n-from contextlib import AbstractContextManager, contextmanager, nullcontext  # ←独占 contextmanager import\n-from dataclasses import replace                                   # ←独占 replace import\n+from contextlib import AbstractContextManager, nullcontext  # 删除独占的 contextmanager\n from functools import partial\n from typing import Any, cast\n ...\n-import vllm.distributed.parallel_state as _ps                    # ←独占 _ps alias import\n-from vllm.config import CompilationMode, CUDAGraphMode, ...      # ←独占 CompilationMode import\n+# 删除独占的 replace import\n+# 删除独占的 _ps alias import\n+from vllm.config import CUDAGraphMode, VllmConfig, get_layers_from_vllm_config  # 删除独占的 CompilationMode\n ...\n-@contextmanager\n-def patch_tensor_parallel_group(tp_group):                        # ← 第1个：TP组临时替换（33行）\n-    \"\"\"Temporarily swap the global TP group for draft-model spec decode.\"\"\"\n-    old_tp_group = _ps.get_tp_group()\n-    _ps._TP_STATE_PATCHED = True\n-    _ps._TP = tp_group\n-    try:\n-        yield\n-    finally:\n-        _ps._TP_STATE_PATCHED = False\n-        _ps._TP = old_tp_group\n+from vllm_ascend.spec_decode.utils import (\n+    SlidingWindowAdapter,\n+    _disable_flash_comm_v1_context,   # 从 utils.py import 搬过去的三个 helper\n+    _maybe_eager_context,\n+    patch_tensor_parallel_group,\n+)\n+# 删除 @contextmanager def patch_tensor_parallel_group (33行)\n+# 删除 @contextmanager def _maybe_eager_context (23行)\n+# 删除 @contextmanager def _disable_flash_comm_v1_context (15行)\n \n-@contextmanager\n-def _maybe_eager_context(vllm_config):                            # ← 第2个：切CompilationMode.NONE防fx-graph（23行）\n-    \"\"\"TODO: Remove it when the bug of fx-graph is solved\"\"\"\n-    target_compilation_config = vllm_config.compilation_config\n-    draft_compilation_config = replace(target_compilation_config, mode=CompilationMode.NONE)\n-    draft_compilation_config.static_forward_context = target_compilation_config.static_forward_context\n-    draft_compilation_config.static_all_moe_layers = target_compilation_config.static_all_moe_layers\n-    vllm_config.compilation_config = draft_compilation_config\n-    try:\n-        yield\n-    finally:\n-        vllm_config.compilation_config = target_compilation_config\n-\n-@contextmanager\n-def _disable_flash_comm_v1_context():                             # ← 第3个：MarkovHead关SP flash_comm（本次修复的15行）\n-    \"\"\"sp should be disabled when running MarkovHead\"\"\"\n-    forward_context = get_forward_context()                       # ←这里用了 get_forward_context\n-    _raw_flash_comm_v1 = forward_context.flash_comm_v1_enabled\n-    try:\n-        forward_context.flash_comm_v1_enabled = False\n-        yield\n-    finally:\n-        forward_context.flash_comm_v1_enabled = _raw_flash_comm_v1\n+# Currently we will fix block size to a small one since `num_reqs` can't be too large\n+_PREPARE_INPUTS_BLOCK_SIZE = 4",
+      "stats": "1 file changed, +15 lines, -38 lines",
+      "key_changes": [
+        "添加注释说明并修改代码逻辑"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "report_id": "PR9280_001",
+  "pr_number": 9280,
+  "pr_title": "[Ascend950] [Feature]EPLB support W8A8_MXFP and W4A4_MXFP",
+  "pr_status": "merged",
+  "merged_at": "2026-05-20T12:05:13Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "blocker",
+  "affected_files": [],
+  "landing_sha": "b678f99",
+  "source_quote": "There are several critical logic errors in this block:\n1. **Incorrect Boolean Logic**: The condition `quant_type == QuantType.MXFP4 or QuantType.MXFP8` is evaluated as `(quant_type == QuantType.MXFP4) or (QuantType.MXFP8)`. Since `QuantType.MXFP8` is a truthy object, this condition will **always be true**, regardless of the value of `quant_type`. This breaks the logic for all other quantization types (like `W8A8`).\n2. **Broken Control Flow**: Using a new `if` statement on line 81 and line 88 instead of `elif` causes the code to fall through to the `else` block on line 90. For example, if `quant_type` is `MXFP4`, it will execute the first block, then check the `if` on line 88, fail, and raise a `ValueError` in the `else` block.\n3. **Undefined Reference**: `QuantType.W4A8MXFP` is referenced on line 88 but is not defined in the `QuantType` enum in `vllm_ascend/quantization/quant_type.py`. This will result in an `AttributeError` at runtime.",
+  "correspondence": [],
+  "verification": {
+    "merged": true,
+    "modified_commit": "b678f99",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "Python 中 `==` 优先级高于 `or`（以及 `and`），因此 `x == A or B` 实际解析为 `(x == A) or (B)`，当右操作数 `B` 是 Enum 成员、非空字符串、非零整数、非空容器、类实例等真值对象时，整个表达式将恒 True / 恒 False（取决于 B 的真值），完全忽略 x 的实际值。代码审查中任何 `x == <LITERAL_A> or <LITERAL_B>` 写法（且 B 不是布尔表达式）必须立即判为 correctness bug 并要求改写为 **元组包含 `x in (A, B, ...)`**（推荐、可读性最好）或 **显式逐对 `x == A or x == B`**（可读性差但等价），禁止存在裸字面量 or 分支。该臭虫在量化类型（QuantType Enum）/设备类型/后端分支中出现频率最高，因为枚举成员都是非空对象（恒 True）。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "# vllm_ascend/eplb/adaptor/vllm_adaptor.py L88-L96\n            elif quant_type == QuantType.MXFP4 or QuantType.MXFP8:\n                # ❌ Python 运算符优先级：(==) > (or)，实际等价于：\n                #   if (quant_type == QuantType.MXFP4) or (QuantType.MXFP8):\n                # 而 QuantType.MXFP8 是 Enum 成员对象（真值）→ 整个条件恒 True。\n                # W8A8 / AUTO / FP8 等所有其他量化类型都会误走进 MXFP4/MXFP8 的 expert_weight_names 分支，\n                # 导致 self.expert_weight_names 写入错误字段名（w13_weight_scale / w2_weight_scale 不应出现），\n                # 后续 weight_loader 根据字段名取不到张量 → KeyError 或加载 silent corruption。\n                self.expert_weight_names = [\n                    \"w13_weight\",\n                    \"w2_weight\",\n                    \"w13_weight_scale\",\n                    \"w2_weight_scale\",\n                ]",
+      "context": "There are several critical logic errors in this block:\n1. **Incorrect Boolean Logic**: The condition `quant_type == QuantType.MXFP4 or QuantType.MXFP8` is evaluated as `(quant_type == QuantType.MXFP4)"
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "# vllm_ascend/eplb/adaptor/vllm_adaptor.py L88-L96\n            elif quant_type in (QuantType.MXFP4, QuantType.MXFP8):\n                # ✅ 与 gemini suggestion 完全一致。\n                # in (A, B) 元组包含判定等价于 `(quant_type == A) or (quant_type == B)`，\n                # 彻底消除了 Python `or` 短路时第二操作数（枚举成员真值）导致恒 True 的优先级臭虫。\n                # 只有 quant_type 实际是 MXFP4 / MXFP8 时才走进这个分支。\n                self.expert_weight_names = [\n                    \"w13_weight\",\n                    \"w2_weight\",\n                    \"w13_weight_scale\",\n                    \"w2_weight_scale\",\n                ]",
+      "context": "There are several critical logic errors in this block:\n1. **Incorrect Boolean Logic**: The condition `quant_type == QuantType.MXFP4 or QuantType.MXFP8` is evaluated as `(quant_type == QuantType.MXFP4)"
+    },
+    "diff": {
+      "unified": "--- a/file\n+++ b/file\n@@ -1,11 +1,9 @@\n # vllm_ascend/eplb/adaptor/vllm_adaptor.py L88-L96\n-            elif quant_type == QuantType.MXFP4 or QuantType.MXFP8:\n-                # ❌ Python 运算符优先级：(==) > (or)，实际等价于：\n-                #   if (quant_type == QuantType.MXFP4) or (QuantType.MXFP8):\n-                # 而 QuantType.MXFP8 是 Enum 成员对象（真值）→ 整个条件恒 True。\n-                # W8A8 / AUTO / FP8 等所有其他量化类型都会误走进 MXFP4/MXFP8 的 expert_weight_names 分支，\n-                # 导致 self.expert_weight_names 写入错误字段名（w13_weight_scale / w2_weight_scale 不应出现），\n-                # 后续 weight_loader 根据字段名取不到张量 → KeyError 或加载 silent corruption。\n+            elif quant_type in (QuantType.MXFP4, QuantType.MXFP8):\n+                # ✅ 与 gemini suggestion 完全一致。\n+                # in (A, B) 元组包含判定等价于 `(quant_type == A) or (quant_type == B)`，\n+                # 彻底消除了 Python `or` 短路时第二操作数（枚举成员真值）导致恒 True 的优先级臭虫。\n+                # 只有 quant_type 实际是 MXFP4 / MXFP8 时才走进这个分支。\n                 self.expert_weight_names = [\n                     \"w13_weight\",\n                     \"w2_weight\",\n",
+      "stats": "1 file changed, +5 lines, -7 lines",
+      "key_changes": [
+        "-            elif quant_type == QuantType.MXFP4 or QuantType.MXFP8:",
+        "-                # ❌ Python 运算符优先级：(==) > (or)，实际等价于：",
+        "-                #   if (quant_type == QuantType.MXFP4) or (QuantType.MXFP8):",
+        "-                # 而 QuantType.MXFP8 是 Enum 成员对象（真值）→ 整个条件恒 True。",
+        "-                # W8A8 / AUTO / FP8 等所有其他量化类型都会误走进 MXFP4/MXFP8 的 expert_weight_names 分支，",
+        "-                # 导致 self.expert_weight_names 写入错误字段名（w13_weight_scale / w2_weight_scale 不应出现），",
+        "-                # 后续 weight_loader 根据字段名取不到张量 → KeyError 或加载 silent corruption。",
+        "+            elif quant_type in (QuantType.MXFP4, QuantType.MXFP8):",
+        "+                # ✅ 与 gemini suggestion 完全一致。",
+        "+                # in (A, B) 元组包含判定等价于 `(quant_type == A) or (quant_type == B)`，",
+        "+                # 彻底消除了 Python `or` 短路时第二操作数（枚举成员真值）导致恒 True 的优先级臭虫。",
+        "+                # 只有 quant_type 实际是 MXFP4 / MXFP8 时才走进这个分支。"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

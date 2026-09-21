@@ -1,0 +1,71 @@
+{
+  "report_id": "PR9064_001",
+  "pr_number": 9064,
+  "pr_title": "[Refactor]: migrate env vars to AscendConfig",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "tests/ut/spec_decode/test_eagle_proposer.py:965",
+    "vllm_ascend/envs.py:74"
+  ],
+  "landing_sha": "b1bfbd1",
+  "source_quote": "",
+  "correspondence": [
+    {
+      "review_quote": "lilinsiman: tests/ut/spec_decode/test_eagle_proposer.py:965(2026-05-13 09:52:36)",
+      "patch_snippet": "评后sha b1bfbd1 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/envs.py:74(2026-05-21 09:02:54)",
+      "patch_snippet": "评后sha b1bfbd1 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "b1bfbd1",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/utils.py",
+      "line": 815,
+      "code": "# gemini-code-assist 标记为 critical\n# envs_ascend 的 import 已在本 PR 中移除，但此处仍引用\n\ndef enable_sp(vllm_config=None, refresh=False):\n    global _ENABLE_SP\n    if vllm_config is None:\n        try:\n            vllm_config = get_current_vllm_config()\n        except AssertionError:\n            vllm_config = None\n\n    additional_config = getattr(vllm_config, \"additional_config\", None) if vllm_config is not None else None\n    refresh = additional_config.get(\"refresh\", False) if additional_config else False\n\n    if _ENABLE_SP is None or refresh:\n        # envs_ascend 已被移除，此处会抛出 NameError\n        _ENABLE_SP = envs_ascend.VLLM_ASCEND_ENABLE_FLASHCOMM1\n\n    return bool(_ENABLE_SP)",
+      "context": ""
+    },
+    "pattern": {
+      "file": "vllm_ascend/utils.py",
+      "line": 815,
+      "code": "# gemini-code-assist suggestion:\n# 使用 additional_config 和 os.getenv 替代已移除的 envs_ascend\n\ndef enable_sp(vllm_config=None, refresh=False):\n    global _ENABLE_SP\n    if vllm_config is None:\n        try:\n            vllm_config = get_current_vllm_config()\n        except AssertionError:\n            vllm_config = None\n\n    additional_config = getattr(vllm_config, \"additional_config\", None) if vllm_config is not None else None\n    refresh = additional_config.get(\"refresh\", False) if additional_config else False\n\n    if _ENABLE_SP is None or refresh:\n        if additional_config is not None and \"enable_flashcomm1\" in additional_config:\n            _ENABLE_SP = bool(additional_config[\"enable_flashcomm1\"])\n        else:\n            try:\n                _ENABLE_SP = get_ascend_config().enable_flashcomm1\n            except RuntimeError:\n                _ENABLE_SP = bool(int(os.getenv(\"VLLM_ASCEND_ENABLE_FLASHCOMM1\", \"0\")))\n\n    return bool(_ENABLE_SP)",
+      "context": ""
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/utils.py\n+++ b/vllm_ascend/utils.py\n@@ -1,5 +1,5 @@\n-# gemini-code-assist 标记为 critical\n-# envs_ascend 的 import 已在本 PR 中移除，但此处仍引用\n+# gemini-code-assist suggestion:\n+# 使用 additional_config 和 os.getenv 替代已移除的 envs_ascend\n \n def enable_sp(vllm_config=None, refresh=False):\n     global _ENABLE_SP\n@@ -13,7 +13,12 @@\n     refresh = additional_config.get(\"refresh\", False) if additional_config else False\n \n     if _ENABLE_SP is None or refresh:\n-        # envs_ascend 已被移除，此处会抛出 NameError\n-        _ENABLE_SP = envs_ascend.VLLM_ASCEND_ENABLE_FLASHCOMM1\n+        if additional_config is not None and \"enable_flashcomm1\" in additional_config:\n+            _ENABLE_SP = bool(additional_config[\"enable_flashcomm1\"])\n+        else:\n+            try:\n+                _ENABLE_SP = get_ascend_config().enable_flashcomm1\n+            except RuntimeError:\n+                _ENABLE_SP = bool(int(os.getenv(\"VLLM_ASCEND_ENABLE_FLASHCOMM1\", \"0\")))\n \n     return bool(_ENABLE_SP)\n",
+      "stats": "1 file changed, +9 lines, -4 lines",
+      "key_changes": [
+        "-# gemini-code-assist 标记为 critical",
+        "-# envs_ascend 的 import 已在本 PR 中移除，但此处仍引用",
+        "+# gemini-code-assist suggestion:",
+        "+# 使用 additional_config 和 os.getenv 替代已移除的 envs_ascend",
+        "-        # envs_ascend 已被移除，此处会抛出 NameError",
+        "-        _ENABLE_SP = envs_ascend.VLLM_ASCEND_ENABLE_FLASHCOMM1",
+        "+        if additional_config is not None and \"enable_flashcomm1\" in additional_config:",
+        "+            _ENABLE_SP = bool(additional_config[\"enable_flashcomm1\"])",
+        "+        else:",
+        "+            try:",
+        "+                _ENABLE_SP = get_ascend_config().enable_flashcomm1",
+        "+            except RuntimeError:",
+        "+                _ENABLE_SP = bool(int(os.getenv(\"VLLM_ASCEND_ENABLE_FLASHCOMM1\", \"0\")))"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

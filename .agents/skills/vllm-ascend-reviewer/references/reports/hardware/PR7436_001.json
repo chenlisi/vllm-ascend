@@ -1,0 +1,55 @@
+{
+  "report_id": "PR7436_001",
+  "pr_number": 7436,
+  "pr_title": "[release] Add GLM5 known issue for 2-node PD mixed deployment",
+  "pr_status": "merged",
+  "merged_at": "2026-03-18T10:01:40Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/user_guide/release_notes.md:54"
+  ],
+  "landing_sha": "333ec5a",
+  "source_quote": "了更准确的 release notes 描述，补充了 prefix cache 在 hybrid model 中最小 token 数与 tp size 的关系说明。",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao: docs/source/user_guide/release_notes.md:54",
+      "patch_snippet": "评后sha 333ec5a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "333ec5a",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "Release notes 中描述已知问题或行为变更时，应提供具体的技术细节（如与 tp size 的关系）和数值示例（如 tp 2 时 block_size 为 2048），帮助用户准确理解影响范围。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "docs/source/user_guide/release_notes.md",
+      "line": 45,
+      "code": "## v0.17.0rc1\n\n### Known Issues\n\n- The minimum number of tokens of prefix cache hit in hybrid model is large now.\n- DeepSeek V3.2 may hang in 2-node PD mixed deployment when concurrency > 8.\n  Fixed in PR #7235 and PR #7290.\n\n### New Features\n\n- Support for Qwen3.5 model family",
+      "context": "了更准确的 release notes 描述，补充了 prefix cache 在 hybrid model 中最小 token 数与 tp size 的关系说明。"
+    },
+    "pattern": {
+      "file": "docs/source/user_guide/release_notes.md",
+      "line": 45,
+      "code": "## v0.17.0rc1\n\n### Known Issues\n\n- The minimum number of tokens of prefix cache hit in hybrid model is large now. The exact number is related to tp size, e.g., with tp 2, the block_size is adjusted to 2048, which means that any prefix shorter than 2048 will never be cached.\n- DeepSeek V3.2 may hang in 2-node PD mixed deployment when concurrency > 8.\n  Fixed in PR #7235 and PR #7290.\n\n### New Features\n\n- Support for Qwen3.5 model family",
+      "context": "了更准确的 release notes 描述，补充了 prefix cache 在 hybrid model 中最小 token 数与 tp size 的关系说明。"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/user_guide/release_notes.md\n+++ b/docs/source/user_guide/release_notes.md\n@@ -2,7 +2,7 @@\n \n ### Known Issues\n \n-- The minimum number of tokens of prefix cache hit in hybrid model is large now.\n+- The minimum number of tokens of prefix cache hit in hybrid model is large now. The exact number is related to tp size, e.g., with tp 2, the block_size is adjusted to 2048, which means that any prefix shorter than 2048 will never be cached.\n - DeepSeek V3.2 may hang in 2-node PD mixed deployment when concurrency > 8.\n   Fixed in PR #7235 and PR #7290.\n \n",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "-- The minimum number of tokens of prefix cache hit in hybrid model is large now.",
+        "+- The minimum number of tokens of prefix cache hit in hybrid model is large now. The exact number is related to tp size, e.g., with tp 2, the block_size is adjusted to 2048, which means that any prefix shorter than 2048 will never be cached."
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

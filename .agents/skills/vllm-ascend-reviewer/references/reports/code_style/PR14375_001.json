@@ -1,0 +1,69 @@
+{
+  "report_id": "PR14375_001",
+  "pr_number": 14375,
+  "pr_title": "[Refactor][DSA][4/N] modularize the indexer/compressor of dsa_v1",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/models/deepseek_v4/compressor.py:141",
+    "vllm_ascend/models/deepseek_v4/indexer.py:288"
+  ],
+  "landing_sha": "8024ef5",
+  "source_quote": "The `cache_config` parameter is typed as `CacheConfig | None = None`, but its attribute `block_size` is accessed directly via `cache_config.block_size` without any safety checks. If `cache_config` is `None`, this will raise an `AttributeError` at runtime. Adding an assertion ensures that `cache_config` is properly provided before it is accessed.\nThe `cache_config` parameter is typed as `CacheConfig | None` but is required to initialize `AscendDeepseekV4IndexerCache` and `Compressor`. If `cache_config` is `None`, it will cause an `AttributeError` later when accessing its attributes. Adding an assertion ensures defensive programming and catches configuration errors early.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/models/deepseek_v4/compressor.py:141",
+      "patch_snippet": "评后sha 8024ef5 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/models/deepseek_v4/indexer.py:288",
+      "patch_snippet": "评后sha 8024ef5 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "8024ef5",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当函数形参声明为 `cache_config: CacheConfig | None = None`（允许 `None`），但函数体内直接 `cache_config.xxx` 访问属性（即隐式假设非 `None`）时，必须在类型层面将该参数改为必填的 `CacheConfig`（或 `CacheConfig` + `*` 强制关键字），并通过 mypy 在所有调用点强制检查；不要用 `# type: ignore[union-attr]` 或运行期 `assert` 来掩盖设计缺陷。",
+    "context": "",
+    "checkpoints": [
+      "检查形参为 `XxxConfig | None = None` 的参数在函数体内是否被直接访问属性",
+      "如果有 `# type: ignore[union-attr]` 注释，说明类型设计与实际使用不一致",
+      "优先将类型改为非 Optional（让 mypy 在调用点强制校验），而不是仅加 `assert`（运行期才暴露）",
+      "修改后调用点若传 `None` 会被 mypy 拒绝，迫使所有调用方修复",
+      "对称结构（如 `Compressor` 与 `Indexer` 同时使用 `cache_config`）要同步修改"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/models/deepseek_v4/compressor.py",
+      "line": 141,
+      "code": "# vllm_ascend/models/deepseek_v4/compressor.py (Compressor.__init__)\ndef __init__(\n    self,\n    compress_ratio: int = 4,\n    head_dim: int = 512,\n    rotate: bool = False,\n    cache_config: CacheConfig | None = None,   # ❌ 类型允许 None\n    quant_config: QuantizationConfig | None = None,\n    prefix: str = \"\",\n):\n    ...\n    if compress_ratio == 4:\n        self.state_cache = AscendCompressorStateCache(\n            ...\n            block_size=DSV4_BLOCK_SIZES[cache_config.block_size][0][2],  # type: ignore[union-attr]\n            # ❌ 直接 .block_size 访问，None 时 AttributeError；只能靠 type: ignore 掩盖\n        )",
+      "context": "vllm_ascend/models/deepseek_v4/compressor.py (Compressor.__init__) ❌ 直接 .block_size 访问，None 时 AttributeError；只能靠 type: ignore 掩盖"
+    },
+    "pattern": {
+      "file": "vllm_ascend/models/deepseek_v4/compressor.py",
+      "line": 141,
+      "code": "# vllm_ascend/models/deepseek_v4/compressor.py (Compressor.__init__)\ndef __init__(\n    self,\n    compress_ratio: int = 4,\n    head_dim: int = 512,\n    rotate: bool = False,\n    *,\n    cache_config: CacheConfig,    # ✅ 必填关键字参数，类型不再允许 None\n    quant_config: QuantizationConfig | None = None,\n    prefix: str = \"\",\n):\n    ...\n    if compress_ratio == 4:\n        self.state_cache = AscendCompressorStateCache(\n            ...\n            block_size=DSV4_BLOCK_SIZES[cache_config.block_size][0][2],   # ✅ 移除 type: ignore\n        )",
+      "context": "vllm_ascend/models/deepseek_v4/compressor.py (Compressor.__init__)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/models/deepseek_v4/compressor.py\n+++ b/vllm_ascend/models/deepseek_v4/compressor.py\n@@ -4,7 +4,8 @@\n     compress_ratio: int = 4,\n     head_dim: int = 512,\n     rotate: bool = False,\n-    cache_config: CacheConfig | None = None,   # ❌ 类型允许 None\n+    *,\n+    cache_config: CacheConfig,    # ✅ 必填关键字参数，类型不再允许 None\n     quant_config: QuantizationConfig | None = None,\n     prefix: str = \"\",\n ):\n@@ -12,6 +13,5 @@\n     if compress_ratio == 4:\n         self.state_cache = AscendCompressorStateCache(\n             ...\n-            block_size=DSV4_BLOCK_SIZES[cache_config.block_size][0][2],  # type: ignore[union-attr]\n-            # ❌ 直接 .block_size 访问，None 时 AttributeError；只能靠 type: ignore 掩盖\n+            block_size=DSV4_BLOCK_SIZES[cache_config.block_size][0][2],   # ✅ 移除 type: ignore\n         )\n",
+      "stats": "1 file changed, +3 lines, -3 lines",
+      "key_changes": [
+        "移除: block_size=DSV4_BLOCK_SIZES[cache_config.block_size][0][2],  # type: ignore[unio",
+        "移除: cache_config: CacheConfig | None = None,   # ❌ 类型允许 None",
+        "新增: cache_config: CacheConfig,    # ✅ 必填关键字参数，类型不再允许 None",
+        "新增: block_size=DSV4_BLOCK_SIZES[cache_config.block_size][0][2],   # ✅ 移除 type: ignor",
+        "新增: *,"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

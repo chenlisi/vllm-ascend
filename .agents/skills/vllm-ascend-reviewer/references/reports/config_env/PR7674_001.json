@@ -1,0 +1,100 @@
+{
+  "report_id": "PR7674_001",
+  "pr_number": 7674,
+  "pr_title": "[Feature][310P] support shared experts path in fused MoE for qwen3.5",
+  "pr_status": "merged",
+  "merged_at": "2026-03-30T06:48:51Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/_310p/fused_moe/fused_moe.py:279"
+  ],
+  "landing_sha": "0d544ea",
+  "source_quote": "检查重新初始化self.runner是否有必要",
+  "correspondence": [
+    {
+      "review_quote": "pu-zhe: vllm_ascend/_310p/fused_moe/fused_moe.py:279",
+      "patch_snippet": "评后sha 0d544ea 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "0d544ea",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "当父类在 `__init__` 中创建了依赖某些字段的组件（如 runner），而子类在后续才设置这些字段时，子类必须重新初始化该组件，以确保组件持有正确的字段引用。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/_310p/fused_moe/fused_moe.py",
+      "line": 260,
+      "code": "# 父类 AscendFuseMoE310 在 __init__ 中调用 _create_runner() 创建 runner\nclass AscendFuseMoE310(nn.Module):\n    def __init__(self, num_experts, hidden_size, intermediate_size, ...):\n        super().__init__()\n        self.num_experts = num_experts\n        self.hidden_size = hidden_size\n        self.intermediate_size = intermediate_size\n        # ... 其他字段初始化 ...\n        self._shared_experts = None       # 父类中未设置\n        self.expert_gate = None           # 父类中未设置\n        self._create_runner()             # 第一次创建 runner，此时 shared-experts/gate 为空\n\n    def _create_runner(self):\n        \"\"\"创建 MoE runner，会将 shared-experts/gate 等字段传入\"\"\"\n        self.runner = AscendMoERunner(\n            shared_experts=self._shared_experts,\n            expert_gate=self.expert_gate,\n            ...\n        )\n\n# 子类 Qwen35SharedExpertsMoE310 设置字段后未重新创建 runner\nclass Qwen35SharedExpertsMoE310(AscendFuseMoE310):\n    def __init__(self, num_experts, hidden_size, intermediate_size, ...):\n        super().__init__(num_experts, hidden_size, intermediate_size, ...)\n        # 父类已创建 runner，但此时 shared-experts/gate 仍为 None\n        self._shared_experts = SharedExperts(...)  # 子类才设置\n        self.expert_gate = ExpertGate(...)         # 子类才设置\n        # ❌ 缺少 self._create_runner() 调用\n        # runner 中引用的仍是 None 值",
+      "context": "检查重新初始化self.runner是否有必要"
+    },
+    "pattern": {
+      "file": "vllm_ascend/_310p/fused_moe/fused_moe.py",
+      "line": 260,
+      "code": "import torch\nimport torch.nn as nn\nimport torch.nn.functional as F\n\nclass AscendFuseMoE310(nn.Module):\n    def __init__(self, num_experts, hidden_size, intermediate_size, ...):\n        super().__init__()\n        self.num_experts = num_experts\n        self.hidden_size = hidden_size\n        self.intermediate_size = intermediate_size\n        # ... 其他字段初始化 ...\n        self._shared_experts = None\n        self.expert_gate = None\n        self._create_runner()\n\n    def _create_runner(self):\n        \"\"\"创建 MoE runner，会将 shared-experts/gate 等字段传入\"\"\"\n        self.runner = AscendMoERunner(\n            shared_experts=self._shared_experts,\n            expert_gate=self.expert_gate,\n            ...\n        )\n\n    @property\n    def is_internal_router(self) -> bool:\n        return False\n\n# 子类设置完字段后重新创建 runner，确保 runner 引用正确的字段\nclass Qwen35SharedExpertsMoE310(AscendFuseMoE310):\n    def __init__(self, num_experts, hidden_size, intermediate_size, ...):\n        super().__init__(num_experts, hidden_size, intermediate_size, ...)\n        # 父类已创建 runner，但 shared-experts/gate 仍为 None\n        self._shared_experts = SharedExperts(...)\n        self.expert_gate = ExpertGate(...)\n        # ✅ 重新创建 runner，使其引用正确的 shared-experts/gate 字段\n        self._create_runner()\n\n    def _shared_experts_part1(self, hidden_states: torch.Tensor):\n        gate_up_out = self._shared_experts.gate_up_proj(hidden_states)\n        if isinstance(gate_up_out, tuple):\n            gate_up_out = gate_up_out[0]\n        return gate_up_out\n\n    def _shared_experts_part2(self, hidden_states: torch.Tensor,\n                               shared_gate_up: torch.Tensor):\n        shared_act = self._shared_experts.act_fn(shared_gate_up)\n        down_out = self._shared_experts.down_proj(shared_act)\n        shared_out = down_out[0] if isinstance(down_out, tuple) else down_out\n        # Qwen3.5/Qwen3-Next shared-expert gate path\n        if hasattr(self._shared_experts, \"expert_gate\") \\\n                and self._shared_experts.expert_gate is not None:\n            gate_out = self._shared_experts.expert_gate(hidden_states)\n            if isinstance(gate_out, tuple):\n                gate_out = gate_out[0]\n            shared_out = F.sigmoid(gate_out) * shared_out\n        return shared_out",
+      "context": "检查重新初始化self.runner是否有必要"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/_310p/fused_moe/fused_moe.py\n+++ b/vllm_ascend/_310p/fused_moe/fused_moe.py\n@@ -1,4 +1,7 @@\n-# 父类 AscendFuseMoE310 在 __init__ 中调用 _create_runner() 创建 runner\n+import torch\n+import torch.nn as nn\n+import torch.nn.functional as F\n+\n class AscendFuseMoE310(nn.Module):\n     def __init__(self, num_experts, hidden_size, intermediate_size, ...):\n         super().__init__()\n@@ -6,9 +9,9 @@\n         self.hidden_size = hidden_size\n         self.intermediate_size = intermediate_size\n         # ... 其他字段初始化 ...\n-        self._shared_experts = None       # 父类中未设置\n-        self.expert_gate = None           # 父类中未设置\n-        self._create_runner()             # 第一次创建 runner，此时 shared-experts/gate 为空\n+        self._shared_experts = None\n+        self.expert_gate = None\n+        self._create_runner()\n \n     def _create_runner(self):\n         \"\"\"创建 MoE runner，会将 shared-experts/gate 等字段传入\"\"\"\n@@ -18,12 +21,36 @@\n             ...\n         )\n \n-# 子类 Qwen35SharedExpertsMoE310 设置字段后未重新创建 runner\n+    @property\n+    def is_internal_router(self) -> bool:\n+        return False\n+\n+# 子类设置完字段后重新创建 runner，确保 runner 引用正确的字段\n class Qwen35SharedExpertsMoE310(AscendFuseMoE310):\n     def __init__(self, num_experts, hidden_size, intermediate_size, ...):\n         super().__init__(num_experts, hidden_size, intermediate_size, ...)\n-        # 父类已创建 runner，但此时 shared-experts/gate 仍为 None\n-        self._shared_experts = SharedExperts(...)  # 子类才设置\n-        self.expert_gate = ExpertGate(...)         # 子类才设置\n-        # ❌ 缺少 self._create_runner() 调用\n-        # runner 中引用的仍是 None 值\n+        # 父类已创建 runner，但 shared-experts/gate 仍为 None\n+        self._shared_experts = SharedExperts(...)\n+        self.expert_gate = ExpertGate(...)\n+        # ✅ 重新创建 runner，使其引用正确的 shared-experts/gate 字段\n+        self._create_runner()\n+\n+    def _shared_experts_part1(self, hidden_states: torch.Tensor):\n+        gate_up_out = self._shared_experts.gate_up_proj(hidden_states)\n+        if isinstance(gate_up_out, tuple):\n+            gate_up_out = gate_up_out[0]\n+        return gate_up_out\n+\n+    def _shared_experts_part2(self, hidden_states: torch.Tensor,\n+                               shared_gate_up: torch.Tensor):\n+        shared_act = self._shared_experts.act_fn(shared_gate_up)\n+        down_out = self._shared_experts.down_proj(shared_act)\n+        shared_out = down_out[0] if isinstance(down_out, tuple) else down_out\n+        # Qwen3.5/Qwen3-Next shared-expert gate path\n+        if hasattr(self._shared_experts, \"expert_gate\") \\\n+                and self._shared_experts.expert_gate is not None:\n+            gate_out = self._shared_experts.expert_gate(hidden_states)\n+            if isinstance(gate_out, tuple):\n+                gate_out = gate_out[0]\n+            shared_out = F.sigmoid(gate_out) * shared_out\n+        return shared_out\n",
+      "stats": "1 file changed, +37 lines, -10 lines",
+      "key_changes": [
+        "-# 父类 AscendFuseMoE310 在 __init__ 中调用 _create_runner() 创建 runner",
+        "+import torch",
+        "+import torch.nn as nn",
+        "+import torch.nn.functional as F",
+        "+",
+        "-        self._shared_experts = None       # 父类中未设置",
+        "-        self.expert_gate = None           # 父类中未设置",
+        "-        self._create_runner()             # 第一次创建 runner，此时 shared-experts/gate 为空",
+        "+        self._shared_experts = None",
+        "+        self.expert_gate = None",
+        "+        self._create_runner()",
+        "-# 子类 Qwen35SharedExpertsMoE310 设置字段后未重新创建 runner",
+        "+    @property",
+        "+    def is_internal_router(self) -> bool:",
+        "+        return False",
+        "+",
+        "+# 子类设置完字段后重新创建 runner，确保 runner 引用正确的字段",
+        "-        # 父类已创建 runner，但此时 shared-experts/gate 仍为 None",
+        "-        self._shared_experts = SharedExperts(...)  # 子类才设置",
+        "-        self.expert_gate = ExpertGate(...)         # 子类才设置",
+        "-        # ❌ 缺少 self._create_runner() 调用",
+        "-        # runner 中引用的仍是 None 值",
+        "+        # 父类已创建 runner，但 shared-experts/gate 仍为 None",
+        "+        self._shared_experts = SharedExperts(...)",
+        "+        self.expert_gate = ExpertGate(...)",
+        "+        # ✅ 重新创建 runner，使其引用正确的 shared-experts/gate 字段",
+        "+        self._create_runner()",
+        "+",
+        "+    def _shared_experts_part1(self, hidden_states: torch.Tensor):",
+        "+        gate_up_out = self._shared_experts.gate_up_proj(hidden_states)",
+        "+        if isinstance(gate_up_out, tuple):",
+        "+            gate_up_out = gate_up_out[0]",
+        "+        return gate_up_out",
+        "+",
+        "+    def _shared_experts_part2(self, hidden_states: torch.Tensor,",
+        "+                               shared_gate_up: torch.Tensor):",
+        "+        shared_act = self._shared_experts.act_fn(shared_gate_up)",
+        "+        down_out = self._shared_experts.down_proj(shared_act)",
+        "+        shared_out = down_out[0] if isinstance(down_out, tuple) else down_out",
+        "+        # Qwen3.5/Qwen3-Next shared-expert gate path",
+        "+        if hasattr(self._shared_experts, \"expert_gate\") \\",
+        "+                and self._shared_experts.expert_gate is not None:",
+        "+            gate_out = self._shared_experts.expert_gate(hidden_states)",
+        "+            if isinstance(gate_out, tuple):",
+        "+                gate_out = gate_out[0]",
+        "+            shared_out = F.sigmoid(gate_out) * shared_out",
+        "+        return shared_out"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

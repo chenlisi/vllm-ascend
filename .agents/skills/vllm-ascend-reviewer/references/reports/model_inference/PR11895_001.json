@@ -1,0 +1,84 @@
+{
+  "report_id": "PR11895_001",
+  "pr_number": 11895,
+  "pr_title": "[Feature][MRV2] Support FullGraph for DFlash",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/worker/v2/spec_decode/dflash/aclgraph.py:50",
+    "vllm_ascend/worker/v2/spec_decode/dflash/aclgraph.py:80",
+    "vllm_ascend/worker/v2/spec_decode/dflash/speculator.py:72",
+    "vllm_ascend/worker/v2/aclgraph_utils.py:42"
+  ],
+  "landing_sha": "9782e5c",
+  "source_quote": "You initialize prefill graph here?\nBut use decodes graph here?\nI think this is my fault. Let me think, should we view it as prefill or decode?\nYou're right. It should indeed be viewed as a decode.\nPrefill is `self.model.precompute_and_store_context_kv`.\nFollowing vllm, this function should be named as `_build_draft_attn_metadatas`.\nI think my old naming `build_draft_attn_metadatas` is out-of-date.\nBut perhaps vllm will be changed again? I think maybe it is necessary to add a comment to mark this.\nChange the name of this function to indicate that the results have been sorted.",
+  "correspondence": [
+    {
+      "review_quote": "drslark: vllm_ascend/worker/v2/spec_decode/dflash/aclgraph.py:50",
+      "patch_snippet": "评后sha 9782e5c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "drslark: vllm_ascend/worker/v2/spec_decode/dflash/aclgraph.py:80",
+      "patch_snippet": "评后sha 9782e5c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "drslark: vllm_ascend/worker/v2/spec_decode/dflash/aclgraph.py:80",
+      "patch_snippet": "评后sha 9782e5c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "drslark: vllm_ascend/worker/v2/spec_decode/dflash/aclgraph.py:80",
+      "patch_snippet": "评后sha 9782e5c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "drslark: vllm_ascend/worker/v2/spec_decode/dflash/speculator.py:72",
+      "patch_snippet": "评后sha 9782e5c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "drslark: vllm_ascend/worker/v2/aclgraph_utils.py:42",
+      "patch_snippet": "评后sha 9782e5c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "9782e5c",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "在 speculative decoding 的 graph 管理中，prefill 和 decode 的命名应准确反映其语义。DFlash 并行 drafting 应视为 decode 路径（多 token 并行生成），prefill 专指 KV cache 预计算（`precompute_and_store_context_kv`）。",
+    "context": "",
+    "checkpoints": [
+      "检查 graph bucket 命名是否准确反映其语义",
+      "确认 prefill/decode 的使用场景与命名一致"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/v2/spec_decode/dflash/speculator.py",
+      "line": 60,
+      "code": "class AscendDFlashSpeculator:\n    \"\"\"DFlash speculator for Ascend NPU with FullGraph support.\"\"\"\n\n    def __init__(self, ...):\n        ...\n        self.draft_attn_layer_names = [...]\n\n    def build_draft_attn_metadatas(self, attn_metadata):\n        \"\"\"Build draft attention metadatas from the full attention metadata.\n\n        Note: This function filters the attention metadata to only include\n        the draft attention layers used by the DFlash speculator.\n        \"\"\"\n        attn_metadata = {\n            name: metadata\n            for name, metadata in attn_metadata.items()\n            if name in self.draft_attn_layer_names\n        }\n        return attn_metadata\n\n    def run_fullgraph(self, ...):\n        \"\"\"Run the full graph for draft token generation.\"\"\"\n        ...\n        draft_attn_metadatas = self.build_draft_attn_metadatas(\n            self.model_state.attn_metadata)\n        ...",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/v2/spec_decode/dflash/speculator.py",
+      "line": 60,
+      "code": "class AscendDFlashSpeculator:\n    \"\"\"DFlash speculator for Ascend NPU with FullGraph support.\"\"\"\n\n    def __init__(self, ...):\n        ...\n        self.draft_attn_layer_names = [...]\n\n    # NOTE: Named to follow vllm upstream convention.\n    # If vllm renames this function, update here accordingly.\n    def _build_draft_attn_metadatas(self, attn_metadata):\n        \"\"\"Build draft attention metadatas from the full attention metadata.\n\n        Note: This function filters the attention metadata to only include\n        the draft attention layers used by the DFlash speculator.\n        \"\"\"\n        attn_metadata = {\n            name: metadata\n            for name, metadata in attn_metadata.items()\n            if name in self.draft_attn_layer_names\n        }\n        return attn_metadata\n\n    def run_fullgraph(self, ...):\n        \"\"\"Run the full graph for draft token generation.\"\"\"\n        ...\n        draft_attn_metadatas = self._build_draft_attn_metadatas(\n            self.model_state.attn_metadata)\n        ...",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/v2/spec_decode/dflash/speculator.py\n+++ b/vllm_ascend/worker/v2/spec_decode/dflash/speculator.py\n@@ -5,7 +5,9 @@\n         ...\n         self.draft_attn_layer_names = [...]\n \n-    def build_draft_attn_metadatas(self, attn_metadata):\n+    # NOTE: Named to follow vllm upstream convention.\n+    # If vllm renames this function, update here accordingly.\n+    def _build_draft_attn_metadatas(self, attn_metadata):\n         \"\"\"Build draft attention metadatas from the full attention metadata.\n \n         Note: This function filters the attention metadata to only include\n@@ -21,6 +23,6 @@\n     def run_fullgraph(self, ...):\n         \"\"\"Run the full graph for draft token generation.\"\"\"\n         ...\n-        draft_attn_metadatas = self.build_draft_attn_metadatas(\n+        draft_attn_metadatas = self._build_draft_attn_metadatas(\n             self.model_state.attn_metadata)\n         ...",
+      "stats": "1 file changed, +4 lines, -2 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

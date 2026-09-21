@@ -1,0 +1,66 @@
+{
+  "report_id": "PR11065_001",
+  "pr_number": 11065,
+  "pr_title": "[BugFix] Avoid allocating KV cache for skipped indexers",
+  "pr_status": "merged",
+  "merged_at": "2026-07-09T01:32:20Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/model_runner_v1.py:3982"
+  ],
+  "landing_sha": "0a622e7",
+  "source_quote": "",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 建议将该辅助函数从 `model_runner_v1.py` 移至 `utils.py`，以提高代码的可复用性和合理性。作者确认已完成修改（\"done!\"），通过 commit `0a622e7` 将函数移至 `utils.py`。",
+      "patch_snippet": "commit `0a622e7`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "0a622e7",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "具有通用性的辅助函数不应定义在特定业务模块（如 model_runner）内部，应移至 `utils.py` 等公共模块，提高代码可复用性。",
+    "context": "",
+    "checkpoints": [
+      "函数是否仅在当前模块使用还是可被其他模块复用",
+      "函数的放置位置是否合理"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 3982,
+      "code": "import torch\nfrom vllm.config import VllmConfig\n# ... 其他 import\n\nclass AscendModelRunner:\n    \"\"\"Model runner for Ascend devices.\"\"\"\n\n    def __init__(self, vllm_config: VllmConfig):\n        self.vllm_config = vllm_config\n        self.use_sparse = getattr(vllm_config, \"use_sparse\", False)\n        # ... 其他初始化\n\n    # ... 其他方法\n\n    def get_kv_cache_spec(self, ...):\n        \"\"\"Get KV cache specification for each layer.\"\"\"\n        # ... 获取 kv_cache_spec 的逻辑\n        for layer_name, kv_cache_spec in kv_cache_specs.items():\n            has_indexer = _sparse_kv_cache_has_indexer(kv_cache_spec)\n            # ... 处理逻辑\n        return kv_cache_specs\n\n\ndef _sparse_kv_cache_has_indexer(kv_cache_spec) -> bool:\n    \"\"\"Check if the kv_cache_spec has an indexer for sparse attention.\n\n    This helper was originally defined inside model_runner_v1.py\n    but should be moved to utils.py for reusability.\n    \"\"\"\n    if not hasattr(kv_cache_spec, \"indexer\"):\n        return False\n    return kv_cache_spec.indexer is not None",
+      "context": "it is more reasonable to move this function to utils.py"
+    },
+    "pattern": {
+      "file": "vllm_ascend/utils.py（新增函数定义）",
+      "line": 3982,
+      "code": "import torch\nfrom typing import Any\n\n\ndef _sparse_kv_cache_has_indexer(kv_cache_spec) -> bool:\n    \"\"\"Check if the kv_cache_spec has an indexer for sparse attention.\n\n    Moved from model_runner_v1.py to utils.py for better reusability.\n    \"\"\"\n    if not hasattr(kv_cache_spec, \"indexer\"):\n        return False\n    return kv_cache_spec.indexer is not None",
+      "context": "it is more reasonable to move this function to utils.py"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/model_runner_v1.py\n+++ b/vllm_ascend/utils.py（新增函数定义）\n@@ -1,31 +1,11 @@\n import torch\n-from vllm.config import VllmConfig\n-# ... 其他 import\n-\n-class AscendModelRunner:\n-    \"\"\"Model runner for Ascend devices.\"\"\"\n-\n-    def __init__(self, vllm_config: VllmConfig):\n-        self.vllm_config = vllm_config\n-        self.use_sparse = getattr(vllm_config, \"use_sparse\", False)\n-        # ... 其他初始化\n-\n-    # ... 其他方法\n-\n-    def get_kv_cache_spec(self, ...):\n-        \"\"\"Get KV cache specification for each layer.\"\"\"\n-        # ... 获取 kv_cache_spec 的逻辑\n-        for layer_name, kv_cache_spec in kv_cache_specs.items():\n-            has_indexer = _sparse_kv_cache_has_indexer(kv_cache_spec)\n-            # ... 处理逻辑\n-        return kv_cache_specs\n+from typing import Any\n \n \n def _sparse_kv_cache_has_indexer(kv_cache_spec) -> bool:\n     \"\"\"Check if the kv_cache_spec has an indexer for sparse attention.\n \n-    This helper was originally defined inside model_runner_v1.py\n-    but should be moved to utils.py for reusability.\n+    Moved from model_runner_v1.py to utils.py for better reusability.\n     \"\"\"\n     if not hasattr(kv_cache_spec, \"indexer\"):\n         return False",
+      "stats": "1 file changed, +2 lines, -22 lines",
+      "key_changes": [
+        "移除: from vllm.config import VllmConfig",
+        "移除: # ... 其他 import",
+        "移除: class AscendModelRunner:",
+        "移除: \"\"\"Model runner for Ascend devices.\"\"\"",
+        "移除: def __init__(self, vllm_config: VllmConfig):",
+        "移除: self.vllm_config = vllm_config",
+        "移除: self.use_sparse = getattr(vllm_config, \"use_sparse\", False)",
+        "移除: # ... 其他初始化",
+        "移除: # ... 其他方法",
+        "移除: def get_kv_cache_spec(self, ...):"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

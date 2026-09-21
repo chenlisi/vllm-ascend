@@ -1,0 +1,66 @@
+{
+  "report_id": "PR10408_001",
+  "pr_number": 10408,
+  "pr_title": "[Performance][310P] Replace l2norm with RMSNorm operator on 310P",
+  "pr_status": "merged",
+  "merged_at": "2026-06-25T01:18:37Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/_310p/ops/fla/l2norm.py:39"
+  ],
+  "landing_sha": "776f68f",
+  "source_quote": "这个公式有问题，eps会被放大dim倍，可能对结果影响不大，但是需要评估一下",
+  "correspondence": [
+    {
+      "review_quote": "Tflowers-0129 指出 `l2norm.py:39` 处 RMSNorm 的 eps 参数会被放大 dim 倍，需要评估影响。作者确认并修复。commit `776f68f` 将 eps 除以 dim 以保持与标准 L2 范式的数学等价，同时添加了 CPU fallback 防止非 NPU 设备崩溃，1/1 建议全部落地。",
+      "patch_snippet": "commit `776f68f`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "776f68f",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当使用 RMSNorm 内核模拟 L2 范数时，由于 RMSNorm 在平方根内对维度 d 做了除法，传入的 eps 需要除以 dim（`eps / dim`）才能与标准 L2 范数数学等价。否则有效 eps 会被放大 dim 倍，导致数值精度差异。同时应添加 CPU fallback 以支持非 NPU 设备。",
+    "context": "",
+    "checkpoints": [
+      "检查 RMSNorm 的 eps 参数是否按 dim 缩放",
+      "检查是否有 CPU fallback 路径"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/_310p/ops/fla/l2norm.py",
+      "line": 39,
+      "code": "import torch\nimport torch_npu\nfrom typing import Optional\n\n# ... 其他代码 ...\n\ndef _l2norm_unit_weight(dim: int, dtype: torch.dtype, device: torch.device) -> torch.Tensor:\n    \"\"\"创建 L2 范数的单位权重向量 (1/sqrt(dim))\"\"\"\n    return torch.full((dim,), 1.0 / (dim ** 0.5), dtype=dtype, device=device)\n\ndef l2norm_310p(x: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:\n    \"\"\"使用 310P NPU RMSNorm 内核实现 L2 范数\"\"\"\n    # 无 CPU fallback — 在非 NPU 设备上会崩溃\n    orig_shape = x.shape\n    dim = x.shape[-1]\n    x_2d = x.reshape(-1, dim).contiguous()\n    weight = _l2norm_unit_weight(dim, x.dtype, x.device)\n    # Tflowers-0129: \"这个公式有问题，eps会被放大dim倍\"\n    # RMSNorm 在平方根内对维度 d 做了除法:\n    #   RMSNorm(x) = x / sqrt(mean(x^2) + eps_rms) * w\n    # 当 w = 1/sqrt(d) 时，等价于:\n    #   x_i / sqrt(sum(x_j^2) + d * eps_rms)\n    # 要使 eps_rms 对应标准 L2 范数的 eps，需要 eps_rms = eps / d\n    # 否则有效 eps = d * eps，对于 d=128, eps=1e-6 → 有效 eps=1.28e-4\n    y, _ = torch_npu.npu_rms_norm(x_2d, weight, eps)\n    return y.reshape(orig_shape)\n\n# ... 其他代码 ...",
+      "context": "这个公式有问题，eps会被放大dim倍，可能对结果影响不大，但是需要评估一下"
+    },
+    "pattern": {
+      "file": "vllm_ascend/_310p/ops/fla/l2norm.py",
+      "line": 39,
+      "code": "import torch\nimport torch_npu\nfrom typing import Optional\n\n# ... 其他代码 ...\n\ndef _l2norm_unit_weight(dim: int, dtype: torch.dtype, device: torch.device) -> torch.Tensor:\n    \"\"\"创建 L2 范数的单位权重向量 (1/sqrt(dim))\"\"\"\n    return torch.full((dim,), 1.0 / (dim ** 0.5), dtype=dtype, device=device)\n\ndef l2norm_310p(x: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:\n    \"\"\"使用 310P NPU RMSNorm 内核实现 L2 范数\"\"\"\n    # 添加 CPU fallback，防止非 NPU 设备崩溃\n    if x.device.type != \"npu\":\n        return torch.nn.functional.normalize(\n            x.to(torch.float32), p=2, dim=-1, eps=eps\n        ).to(x.dtype)\n    orig_shape = x.shape\n    dim = x.shape[-1]\n    x_2d = x.reshape(-1, dim).contiguous()\n    weight = _l2norm_unit_weight(dim, x.dtype, x.device)\n    # eps 除以 dim，保持与标准 L2 范数的数学等价\n    y, _ = torch_npu.npu_rms_norm(x_2d, weight, eps / dim)\n    return y.reshape(orig_shape)\n\n# ... 其他代码 ...",
+      "context": "这个公式有问题，eps会被放大dim倍，可能对结果影响不大，但是需要评估一下"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/_310p/ops/fla/l2norm.py\n+++ b/vllm_ascend/_310p/ops/fla/l2norm.py\n@@ -10,19 +10,17 @@\n \n def l2norm_310p(x: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:\n     \"\"\"使用 310P NPU RMSNorm 内核实现 L2 范数\"\"\"\n-    # 无 CPU fallback — 在非 NPU 设备上会崩溃\n+    # 添加 CPU fallback，防止非 NPU 设备崩溃\n+    if x.device.type != \"npu\":\n+        return torch.nn.functional.normalize(\n+            x.to(torch.float32), p=2, dim=-1, eps=eps\n+        ).to(x.dtype)\n     orig_shape = x.shape\n     dim = x.shape[-1]\n     x_2d = x.reshape(-1, dim).contiguous()\n     weight = _l2norm_unit_weight(dim, x.dtype, x.device)\n-    # Tflowers-0129: \"这个公式有问题，eps会被放大dim倍\"\n-    # RMSNorm 在平方根内对维度 d 做了除法:\n-    #   RMSNorm(x) = x / sqrt(mean(x^2) + eps_rms) * w\n-    # 当 w = 1/sqrt(d) 时，等价于:\n-    #   x_i / sqrt(sum(x_j^2) + d * eps_rms)\n-    # 要使 eps_rms 对应标准 L2 范数的 eps，需要 eps_rms = eps / d\n-    # 否则有效 eps = d * eps，对于 d=128, eps=1e-6 → 有效 eps=1.28e-4\n-    y, _ = torch_npu.npu_rms_norm(x_2d, weight, eps)\n+    # eps 除以 dim，保持与标准 L2 范数的数学等价\n+    y, _ = torch_npu.npu_rms_norm(x_2d, weight, eps / dim)\n     return y.reshape(orig_shape)\n \n # ... 其他代码 ...",
+      "stats": "1 file changed, +7 lines, -9 lines",
+      "key_changes": [
+        "移除: # 无 CPU fallback — 在非 NPU 设备上会崩溃",
+        "新增: # 添加 CPU fallback，防止非 NPU 设备崩溃",
+        "新增: if x.device.type != \"npu\":",
+        "新增: return torch.nn.functional.normalize(",
+        "新增: x.to(torch.float32), p=2, dim=-1, eps=eps",
+        "新增: ).to(x.dtype)",
+        "移除: # Tflowers-0129: \"这个公式有问题，eps会被放大dim倍\"",
+        "移除: # RMSNorm 在平方根内对维度 d 做了除法:",
+        "移除: #   RMSNorm(x) = x / sqrt(mean(x^2) + eps_rms) * w",
+        "移除: # 当 w = 1/sqrt(d) 时，等价于:"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

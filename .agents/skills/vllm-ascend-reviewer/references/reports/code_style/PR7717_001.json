@@ -1,0 +1,60 @@
+{
+  "report_id": "PR7717_001",
+  "pr_number": 7717,
+  "pr_title": "[BugFix][Main][KV Pool]Fix KV transfer Put Logic",
+  "pr_status": "merged",
+  "merged_at": "2026-03-30T00:54:23Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/kv_transfer.py:100"
+  ],
+  "landing_sha": "9bfe11e",
+  "source_quote": "The condition for this if statement can never be satisfied?",
+  "correspondence": [
+    {
+      "review_quote": "LCAIZJ: vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/kv_transfer.py:100",
+      "patch_snippet": "评后sha 9bfe11e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "9bfe11e",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "代码中不应存在永远无法满足的条件判断，这类死代码会增加理解成本并可能导致维护问题。发现后应立即删除或修复。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/kv_transfer.py",
+      "line": 80,
+      "code": "import logging\nfrom typing import List, Optional\n\nlogger = logging.getLogger(__name__)\n\nclass KVCacheStoreSendingThread:\n    \"\"\"KV 缓存存储发送线程，负责将 KV 块传输到远端存储\"\"\"\n\n    def __init__(self, store, tp_size, pp_size):\n        self.store = store\n        self.tp_size = tp_size\n        self.pp_size = pp_size\n\n    def _handle_request(self, request):\n        \"\"\"处理单个 KV 缓存存储请求\"\"\"\n        keys = request.keys\n        starts = request.starts\n        ends = request.ends\n        key_list = request.key_list\n\n        # 查找已存在的 key\n        exists_list = self.store.lookup(keys)\n        missing_indices = [\n            i for i, exists in enumerate(exists_list) if not exists\n        ]\n\n        # ❌ 该条件永远无法满足（LCAIZJ 指出）\n        # 因为 keys 在此处不可能为空列表——上游调用方已保证至少有一个 key\n        if len(keys) == 0 and len(missing_indices) == len(keys):\n            # 死代码：这个分支永远不会执行\n            logger.warning(\"No keys to store, skipping request\")\n            return\n\n        # 过滤出缺失的 key 对应的数据\n        starts = [starts[i] for i in missing_indices]\n        ends = [ends[i] for i in missing_indices]\n        key_list = [key_list[i] for i in missing_indices]\n        keys = [keys[i] for i in missing_indices]\n\n        # 执行实际的 KV 缓存存储操作\n        self.store.put(keys, starts, ends)\n        logger.info(\"Stored %d KV blocks\", len(keys))",
+      "context": "The condition for this if statement can never be satisfied?"
+    },
+    "pattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/kv_transfer.py",
+      "line": 80,
+      "code": "import logging\nfrom typing import List, Optional\n\nlogger = logging.getLogger(__name__)\n\nclass KVCacheStoreSendingThread:\n    \"\"\"KV 缓存存储发送线程，负责将 KV 块传输到远端存储\"\"\"\n\n    def __init__(self, store, tp_size, pp_size):\n        self.store = store\n        self.tp_size = tp_size\n        self.pp_size = pp_size\n\n    def _handle_request(self, request):\n        \"\"\"处理单个 KV 缓存存储请求\"\"\"\n        keys = request.keys\n        starts = request.starts\n        ends = request.ends\n        key_list = request.key_list\n\n        # 查找已存在的 key\n        exists_list = self.store.lookup(keys)\n        missing_indices = [\n            i for i, exists in enumerate(exists_list) if not exists\n        ]\n\n        # ✅ 删除了永远无法满足的条件判断\n\n        # 过滤出缺失的 key 对应的数据\n        starts = [starts[i] for i in missing_indices]\n        ends = [ends[i] for i in missing_indices]\n        key_list = [key_list[i] for i in missing_indices]\n        keys = [keys[i] for i in missing_indices]\n\n        # 执行实际的 KV 缓存存储操作\n        self.store.put(keys, starts, ends)\n        logger.info(\"Stored %d KV blocks\", len(keys))",
+      "context": "The condition for this if statement can never be satisfied?"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/kv_transfer.py\n+++ b/vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/kv_transfer.py\n@@ -24,12 +24,7 @@\n             i for i, exists in enumerate(exists_list) if not exists\n         ]\n \n-        # ❌ 该条件永远无法满足（LCAIZJ 指出）\n-        # 因为 keys 在此处不可能为空列表——上游调用方已保证至少有一个 key\n-        if len(keys) == 0 and len(missing_indices) == len(keys):\n-            # 死代码：这个分支永远不会执行\n-            logger.warning(\"No keys to store, skipping request\")\n-            return\n+        # ✅ 删除了永远无法满足的条件判断\n \n         # 过滤出缺失的 key 对应的数据\n         starts = [starts[i] for i in missing_indices]\n",
+      "stats": "1 file changed, +1 lines, -6 lines",
+      "key_changes": [
+        "-        # ❌ 该条件永远无法满足（LCAIZJ 指出）",
+        "-        # 因为 keys 在此处不可能为空列表——上游调用方已保证至少有一个 key",
+        "-        if len(keys) == 0 and len(missing_indices) == len(keys):",
+        "-            # 死代码：这个分支永远不会执行",
+        "-            logger.warning(\"No keys to store, skipping request\")",
+        "-            return",
+        "+        # ✅ 删除了永远无法满足的条件判断"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

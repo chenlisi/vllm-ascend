@@ -1,0 +1,114 @@
+{
+  "report_id": "PR2309_001",
+  "pr_number": 2309,
+  "pr_title": "[Feat]: Add custom lmhead tensor model parallel",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/model_runner_v1.py:1245",
+    "vllm_ascend/ascend_config.py:59",
+    "tests/ut/test_ascend_config.py:79",
+    "vllm_ascend/distributed/parallel_state.py:22",
+    "vllm_ascend/worker/model_runner_v1.py:2123",
+    "vllm_ascend/platform.py:134",
+    "vllm_ascend/platform.py:136",
+    "vllm_ascend/ops/vocab_parallel_embedding.py:220",
+    "vllm_ascend/utils.py:508",
+    "vllm_ascend/ops/vocab_parallel_embedding.py:37"
+  ],
+  "landing_sha": "e4d6bec",
+  "source_quote": "If compute_logits is not executed in reqs and execute in dummy_run, will this cause reqs to wait without progress?\nJust use `raise` to throw an error here to match the style below.\nPlease add a standalone case to `lmhead_tensor_parallel_size` in pure DP scenario, in which you should ensure `vllm_config.data_parallel_size == world_size`\n`get_lmheadtp_group` -> `get_lmhead_tp_group`\nWhy discard the return value?\n`parallel_config` must not be None, so this check here is meaningless.\nWhy add this `lmhead_tensor_parallel_size` field to `parallel_config`? It's not used in vllm.\nWhy alltoall?\nthis actually doesn't work until this ops support custom way in vLLM. But it's fine to add it here in vLLM Ascend first\n(wangxiyuan 的评论，关于 custom op 注册)",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/worker/model_runner_v1.py:1245",
+      "patch_snippet": "评后sha e4d6bec 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/ascend_config.py:59",
+      "patch_snippet": "评后sha e4d6bec 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "tests/ut/test_ascend_config.py:79",
+      "patch_snippet": "评后sha e4d6bec 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/distributed/parallel_state.py:22",
+      "patch_snippet": "评后sha e4d6bec 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/worker/model_runner_v1.py:2123",
+      "patch_snippet": "评后sha e4d6bec 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/platform.py:134",
+      "patch_snippet": "评后sha e4d6bec 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/platform.py:136",
+      "patch_snippet": "评后sha e4d6bec 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/ops/vocab_parallel_embedding.py:220",
+      "patch_snippet": "评后sha e4d6bec 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/utils.py:508",
+      "patch_snippet": "评后sha e4d6bec 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/ops/vocab_parallel_embedding.py:37",
+      "patch_snippet": "评后sha e4d6bec 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "e4d6bec",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "对于用户配置校验，应使用 `raise` 抛出带有明确信息的异常，而非 `assert`。assert 可能在优化模式（-O）下被跳过，不适合作为配置校验手段。命名应遵循一致的规范（如 TP 而非 tp）。",
+    "context": "",
+    "checkpoints": [
+      "配置校验是否使用 raise 而非 assert",
+      "函数命名是否遵循项目规范（如 `get_lmhead_tp_group` 而非 `get_lmheadtp_group`）",
+      "是否存在无意义的 None 检查",
+      "返回值是否被正确处理"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ascend_config.py",
+      "line": 50,
+      "code": "# 评审人 ApsarasX: \"Just use `raise` to throw an error here\n#   to match the style below.\"\n\nfrom typing import Optional\nfrom dataclasses import dataclass\n\n@dataclass\nclass AscendConfig:\n    \"\"\"Ascend-specific configuration.\"\"\"\n\n    def _validate_lmhead_tp(self, vllm_config):\n        \"\"\"Validate lmhead TP configuration.\"\"\"\n        if self.lmhead_tensor_parallel_size is not None:\n            # 使用 assert 进行配置校验，可能在 -O 模式下被跳过\n            assert vllm_config.parallel_config.tensor_parallel_size == 1\n            assert self.torchair_graph_config.enabled\n            # 下方使用 raise 风格\n            if self.lmhead_tensor_parallel_size > vllm_config.data_parallel_size:\n                raise ValueError(\"lmhead TP size exceeds DP size\")",
+      "context": "评审人 ApsarasX: \"Just use `raise` to throw an error here to match the style below.\" 使用 assert 进行配置校验，可能在 -O 模式下被跳过"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ascend_config.py",
+      "line": 50,
+      "code": "# 使用 raise 替代 assert，匹配下方代码风格\n\nfrom typing import Optional\nfrom dataclasses import dataclass\n\n@dataclass\nclass AscendConfig:\n    \"\"\"Ascend-specific configuration.\"\"\"\n\n    def _validate_lmhead_tp(self, vllm_config):\n        \"\"\"Validate lmhead TP configuration.\"\"\"\n        if self.lmhead_tensor_parallel_size is not None:\n            # 使用 raise 替代 assert\n            if vllm_config.parallel_config.tensor_parallel_size != 1:\n                raise ValueError(\n                    \"lmhead_tensor_parallel_size is only supported \"\n                    \"in the pure DP scenario\")\n            if not self.torchair_graph_config.enabled:\n                raise ValueError(\n                    \"lmhead_tensor_parallel_size is only supported \"\n                    \"in graph mode\")\n            if self.lmhead_tensor_parallel_size > vllm_config.data_parallel_size:\n                raise ValueError(\"lmhead TP size exceeds DP size\")",
+      "context": "使用 raise 替代 assert，匹配下方代码风格 使用 raise 替代 assert"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ascend_config.py\n+++ b/vllm_ascend/ascend_config.py\n@@ -1,5 +1,4 @@\n-# 评审人 ApsarasX: \"Just use `raise` to throw an error here\n-#   to match the style below.\"\n+# 使用 raise 替代 assert，匹配下方代码风格\n \n from typing import Optional\n from dataclasses import dataclass\n@@ -11,9 +10,14 @@\n     def _validate_lmhead_tp(self, vllm_config):\n         \"\"\"Validate lmhead TP configuration.\"\"\"\n         if self.lmhead_tensor_parallel_size is not None:\n-            # 使用 assert 进行配置校验，可能在 -O 模式下被跳过\n-            assert vllm_config.parallel_config.tensor_parallel_size == 1\n-            assert self.torchair_graph_config.enabled\n-            # 下方使用 raise 风格\n+            # 使用 raise 替代 assert\n+            if vllm_config.parallel_config.tensor_parallel_size != 1:\n+                raise ValueError(\n+                    \"lmhead_tensor_parallel_size is only supported \"\n+                    \"in the pure DP scenario\")\n+            if not self.torchair_graph_config.enabled:\n+                raise ValueError(\n+                    \"lmhead_tensor_parallel_size is only supported \"\n+                    \"in graph mode\")\n             if self.lmhead_tensor_parallel_size > vllm_config.data_parallel_size:\n                 raise ValueError(\"lmhead TP size exceeds DP size\")\n",
+      "stats": "1 file changed, +10 lines, -6 lines",
+      "key_changes": [
+        "移除: assert vllm_config.parallel_config.tensor_parallel_size == 1",
+        "新增: \"lmhead_tensor_parallel_size is only supported \"",
+        "新增: \"in graph mode\")"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

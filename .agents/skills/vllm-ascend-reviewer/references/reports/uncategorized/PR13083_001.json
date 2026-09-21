@@ -1,0 +1,58 @@
+{
+  "report_id": "PR13083_001",
+  "pr_number": 13083,
+  "pr_title": "[Test][Worker] Add CPU UT coverage for Kimi K2.5 patch",
+  "pr_status": "merged",
+  "dimension": [
+    "test"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/ut/patch/worker/test_patch_kimi_k25.py:73"
+  ],
+  "landing_sha": "175c2ba",
+  "source_quote": "The `runpy.run_path` call is executed outside of the `try` block. If `runpy.run_path` raises an exception (e.g., due to an import error or execution failure in the patch file), the `finally` block will not be executed, and the global monkeypatches on `MoonViT3dPretrainedModel` and `Learnable2DInterpPosEmbDivided_fixed` will not be restored. This can leak state and cause subsequent tests in the suite to fail. Moving `runpy.run_path` inside the `try` block ensures proper cleanup in all failure scenarios.",
+  "correspondence": [
+    {
+      "review_quote": "tests/ut/patch/worker/test_patch_kimi_k25.py:73",
+      "patch_snippet": "评后sha 175c2ba 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "175c2ba",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当测试通过 monkeypatch 修改了全局/类属性，并依赖 `finally` 还原时，所有可能抛异常的步骤（尤其是执行外部代码的 `runpy.run_path`、动态导入等）必须放在 `try` 块内部。否则一旦该步骤异常，`finally` 不执行，全局 patch 泄漏到后续测试导致连锁失败。",
+    "context": "",
+    "checkpoints": [
+      "检查 `try/finally` 结构中，`try` 之前是否有会抛异常的调用（如 `runpy.run_path`、`importlib`）",
+      "确认 monkeypatch 的还原（`finally`）能覆盖所有\"已 patch 但可能失败\"的路径",
+      "将\"执行被测代码\"的调用移到 `try` 块首行，保证异常也能触发清理"
+    ],
+    "antipattern": {
+      "file": "tests/ut/patch/worker/test_patch_kimi_k25.py",
+      "line": 65,
+      "code": "import runpy\nimport torch\nimport torch.nn as nn\nfrom vllm.model_executor.models.kimi_k25 import (\n    MoonViT3dPretrainedModel,\n    Learnable2DInterpPosEmbDivided_fixed,\n)\n\ndef test_patch_kimi_k25():\n    original_to = MoonViT3dPretrainedModel.to\n    original_forward = Learnable2DInterpPosEmbDivided_fixed.forward\n\n    # ❌ runpy.run_path 在 try 外：若 patch 文件 import 失败，finally 不执行\n    patch_namespace = runpy.run_path(patch_kimi_k25.__file__)\n    try:\n        assert MoonViT3dPretrainedModel.to is patch_namespace[\"_patched_moonvit_to\"]\n\n        vision_tower = MoonViT3dPretrainedModel.__new__(MoonViT3dPretrainedModel)\n        nn.Module.__init__(vision_tower)\n        vision_tower.register_parameter(\n            \"quantized_weight\",\n            nn.Parameter(torch.ones(1, dtype=torch.float32)),\n        )\n\n        assert vision_tower.to(torch.float16) is vision_tower\n        assert vision_tower.to(dtype=torch.bfloat16) is vision_tower\n        assert vision_tower.quantized_weight.dtype == torch.float32\n    finally:\n        MoonViT3dPretrainedModel.to = original_to\n        Learnable2DInterpPosEmbDivided_fixed.forward = original_forward",
+      "context": "❌ runpy.run_path 在 try 外：若 patch 文件 import 失败，finally 不执行"
+    },
+    "pattern": {
+      "file": "tests/ut/patch/worker/test_patch_kimi_k25.py",
+      "line": 65,
+      "code": "import runpy\nimport torch\nimport torch.nn as nn\nfrom vllm.model_executor.models.kimi_k25 import (\n    MoonViT3dPretrainedModel,\n    Learnable2DInterpPosEmbDivided_fixed,\n)\n\ndef test_patch_kimi_k25():\n    original_to = MoonViT3dPretrainedModel.to\n    original_forward = Learnable2DInterpPosEmbDivided_fixed.forward\n\n    # ✅ runpy.run_path 移入 try 块：异常时 finally 也能还原 monkeypatch\n    try:\n        patch_namespace = runpy.run_path(patch_kimi_k25.__file__)\n        assert MoonViT3dPretrainedModel.to is patch_namespace[\"_patched_moonvit_to\"]\n\n        vision_tower = MoonViT3dPretrainedModel.__new__(MoonViT3dPretrainedModel)\n        nn.Module.__init__(vision_tower)\n        vision_tower.register_parameter(\n            \"quantized_weight\",\n            nn.Parameter(torch.ones(1, dtype=torch.float32)),\n        )\n\n        assert vision_tower.to(torch.float16) is vision_tower\n        assert vision_tower.to(dtype=torch.bfloat16) is vision_tower\n        assert vision_tower.quantized_weight.dtype == torch.float32\n    finally:\n        MoonViT3dPretrainedModel.to = original_to\n        Learnable2DInterpPosEmbDivided_fixed.forward = original_forward",
+      "context": "✅ runpy.run_path 移入 try 块：异常时 finally 也能还原 monkeypatch"
+    },
+    "diff": {
+      "unified": "--- a/tests/ut/patch/worker/test_patch_kimi_k25.py\n+++ b/tests/ut/patch/worker/test_patch_kimi_k25.py\n@@ -10,9 +10,9 @@\n     original_to = MoonViT3dPretrainedModel.to\n     original_forward = Learnable2DInterpPosEmbDivided_fixed.forward\n \n-    # ❌ runpy.run_path 在 try 外：若 patch 文件 import 失败，finally 不执行\n-    patch_namespace = runpy.run_path(patch_kimi_k25.__file__)\n+    # ✅ runpy.run_path 移入 try 块：异常时 finally 也能还原 monkeypatch\n     try:\n+        patch_namespace = runpy.run_path(patch_kimi_k25.__file__)\n         assert MoonViT3dPretrainedModel.to is patch_namespace[\"_patched_moonvit_to\"]\n \n         vision_tower = MoonViT3dPretrainedModel.__new__(MoonViT3dPretrainedModel)\n",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "移除: patch_namespace = runpy.run_path(patch_kimi_k25.__file__)",
+        "新增: patch_namespace = runpy.run_path(patch_kimi_k25.__file__)"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

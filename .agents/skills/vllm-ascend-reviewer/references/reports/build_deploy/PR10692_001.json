@@ -1,0 +1,69 @@
+{
+  "report_id": "PR10692_001",
+  "pr_number": 10692,
+  "pr_title": "[CI] to solve cache_csrc mismatch in image building",
+  "pr_status": "merged",
+  "merged_at": "2026-06-22T09:38:18Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    ".github/workflows/push_build_csrc_cache.yaml:64",
+    ".github/workflows/push_build_csrc_cache.yaml:89",
+    ".github/workflows/push_build_csrc_cache.yaml:109"
+  ],
+  "landing_sha": "73d2431",
+  "source_quote": "do we ready for publishing image for A5 now?",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 指出 A5 镜像发布尚未准备好，且 soc_version 配置在两处都是错误的。作者通过 commit `73d2431`（\"delete a5\"）删除了 A5 相关配置，修复了 soc_version 问题，3/3 建议全部落地。",
+      "patch_snippet": "commit `73d2431`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "73d2431",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "CI 构建 workflow 中的 soc_version 参数必须与目标硬件匹配，未准备好的平台不应纳入镜像发布流程。",
+    "context": "",
+    "checkpoints": [
+      "soc_version 参数是否与目标硬件一致",
+      "目标平台是否已准备好发布镜像",
+      "多处相同配置是否保持一致"
+    ],
+    "antipattern": {
+      "file": ".github/workflows/push_build_csrc_cache.yaml",
+      "line": 55,
+      "code": "# push_build_csrc_cache workflow - 构建 csrc 缓存镜像\n\njobs:\n  build-csrc-cache:\n    strategy:\n      matrix:\n        include:\n          - soc_version: \"Ascend310P\"\n            arch: \"aarch64\"\n            # ... 其他配置 ...\n          - soc_version: \"Ascend910B\"\n            arch: \"aarch64\"\n            # ... 其他配置 ...\n          - soc_version: \"Ascend910C_wrong\"  # 错误的 soc_version（第89行附近）\n            arch: \"aarch64\"\n            # ... 其他配置 ...\n\n  publish-a5-image:\n    needs: build-csrc-cache\n    runs-on: ubuntu-latest\n    steps:\n      - name: Build A5 image\n        run: |\n          # A5 镜像构建逻辑（尚未准备好）\n          soc_version: \"Ascend910C_wrong\"  # 同样的 soc_version 错误（第109行附近）\n          # ... 构建步骤 ...",
+      "context": "do we ready for publishing image for A5 now?"
+    },
+    "pattern": {
+      "file": ".github/workflows/push_build_csrc_cache.yaml",
+      "line": 55,
+      "code": "# push_build_csrc_cache workflow - 构建 csrc 缓存镜像\n\njobs:\n  build-csrc-cache:\n    strategy:\n      matrix:\n        include:\n          - soc_version: \"Ascend310P\"\n            arch: \"aarch64\"\n            # ... 其他配置 ...\n          - soc_version: \"Ascend910B\"\n            arch: \"aarch64\"\n            # ... 其他配置 ...\n          # 注: 删除了错误的 soc_version 配置项\n          # 注: 删除了整个 publish-a5-image job（A5 尚未准备好发布镜像）",
+      "context": "do we ready for publishing image for A5 now?"
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/push_build_csrc_cache.yaml\n+++ b/.github/workflows/push_build_csrc_cache.yaml\n@@ -11,16 +11,5 @@\n           - soc_version: \"Ascend910B\"\n             arch: \"aarch64\"\n             # ... 其他配置 ...\n-          - soc_version: \"Ascend910C_wrong\"  # 错误的 soc_version（第89行附近）\n-            arch: \"aarch64\"\n-            # ... 其他配置 ...\n-\n-  publish-a5-image:\n-    needs: build-csrc-cache\n-    runs-on: ubuntu-latest\n-    steps:\n-      - name: Build A5 image\n-        run: |\n-          # A5 镜像构建逻辑（尚未准备好）\n-          soc_version: \"Ascend910C_wrong\"  # 同样的 soc_version 错误（第109行附近）\n-          # ... 构建步骤 ...\n+          # 注: 删除了错误的 soc_version 配置项\n+          # 注: 删除了整个 publish-a5-image job（A5 尚未准备好发布镜像）",
+      "stats": "1 file changed, +2 lines, -13 lines",
+      "key_changes": [
+        "移除: - soc_version: \"Ascend910C_wrong\"  # 错误的 soc_version（第89行附近）",
+        "移除: arch: \"aarch64\"",
+        "移除: # ... 其他配置 ...",
+        "移除: publish-a5-image:",
+        "移除: needs: build-csrc-cache",
+        "移除: runs-on: ubuntu-latest",
+        "移除: steps:",
+        "移除: - name: Build A5 image",
+        "移除: run: |",
+        "移除: # A5 镜像构建逻辑（尚未准备好）"
+      ]
+    },
+    "language": "yaml",
+    "_status": "extracted"
+  }
+}

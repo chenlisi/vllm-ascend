@@ -1,0 +1,45 @@
+{
+  "report_id": "PR12384_001",
+  "pr_number": 0,
+  "pr_title": "",
+  "pr_status": "unknown",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "",
+  "source_quote": "",
+  "correspondence": [],
+  "verification": {
+    "merged": false,
+    "modified_commit": "",
+    "approvals": 0
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "<!-- docs/source/user_guide/feature_guide/kv_pool.md L491-500 -->\n<!-- MemCache 配置参数表格区域 -->\n\n| Parameter | Description |\n| :--- | :--- |\n| `ock.mmc.meta_service_url` | Configure the IP address and port number of the master node. The IP address and port number of the P node and D node can be the same. |\n| `ock.mmc.local_service.config_store_url` | Configure the IP address and port number of the master node. The IP address and port number of the P node and D node can be the same. |\n| `ock.mmc.local_service.world_size` | Total count of local service, including services that will be added in the future. |\n| `ock.mmc.local_service.protocol` | `device_rdma` (...recommended for A2), `device_sdma` (...recommended for A3). Currently does not support heterogeneous protocol setting.|\n| `ock.mmc.local_service.dram.size` | Sets the size of the memory occupied by the master. The configured value is the size of the memory occupied by each card. |\n\n<!-- 问题：第2行参数名应为 ock.mmc.local_service.config_store_url 但描述完全复制上一行 -->\n<!-- 缺失 ock.mmc.meta_service.config_store_url 独立行 -->",
+      "context": "修改前代码 (markdown)"
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "<!-- docs/source/user_guide/feature_guide/kv_pool.md L491-502 -->\n<!-- commit: 8fe9f24 - doc fix -->\n\n| Parameter | Description |\n| :--- | :--- |\n| `ock.mmc.meta_service_url` | Configure the endpoint of MetaService. The P node and D node should be configured with the same MetaService endpoint. |\n| `ock.mmc.meta_service.config_store_url` | Configure the Config Store endpoint used by MetaService. |\n| `ock.mmc.local_service.config_store_url` | Configure the Config Store endpoint used by LocalService. Its value must be the same as `ock.mmc.meta_service.config_store_url` in `mmc-meta.conf`. |\n| `ock.mmc.local_service.world_size` | Maximum number of supported LocalService, including services that will be added in the future. |\n| `ock.mmc.local_service.protocol` | The recommended protocols are `device_rdma` (RDMA over device, supported for A2 and A3 when device RoCE is available, recommended for A2) and `device_sdma` (SDMA over device, supported for A3 when HCCS is available, recommended for A3). For details about other supported protocols, see the [MemCache LocalService configuration file](https://gitcode.com/Ascend/memcache/blob/master/config/mmc-local.conf). |\n| `ock.mmc.local_service.dram.size` | Sets the DRAM capacity provided by the current LocalService. |\n\n<!-- 修正：每行 Parameter 与 Description 语义严格匹配各自服务角色 -->\n<!-- 新增 meta_service.config_store_url 独立行 -->\n<!-- local_service.config_store_url 描述与 gemini suggestion 一字不差 -->",
+      "context": "修改后代码 (markdown)"
+    },
+    "diff": {
+      "unified": "--- a/file\n+++ b/file\n@@ -1,13 +1,15 @@\n-<!-- docs/source/user_guide/feature_guide/kv_pool.md L491-500 -->\n-<!-- MemCache 配置参数表格区域 -->\n+<!-- docs/source/user_guide/feature_guide/kv_pool.md L491-502 -->\n+<!-- commit: 8fe9f24 - doc fix -->\n \n | Parameter | Description |\n | :--- | :--- |\n-| `ock.mmc.meta_service_url` | Configure the IP address and port number of the master node. The IP address and port number of the P node and D node can be the same. |\n-| `ock.mmc.local_service.config_store_url` | Configure the IP address and port number of the master node. The IP address and port number of the P node and D node can be the same. |\n-| `ock.mmc.local_service.world_size` | Total count of local service, including services that will be added in the future. |\n-| `ock.mmc.local_service.protocol` | `device_rdma` (...recommended for A2), `device_sdma` (...recommended for A3). Currently does not support heterogeneous protocol setting.|\n-| `ock.mmc.local_service.dram.size` | Sets the size of the memory occupied by the master. The configured value is the size of the memory occupied by each card. |\n+| `ock.mmc.meta_service_url` | Configure the endpoint of MetaService. The P node and D node should be configured with the same MetaService endpoint. |\n+| `ock.mmc.meta_service.config_store_url` | Configure the Config Store endpoint used by MetaService. |\n+| `ock.mmc.local_service.config_store_url` | Configure the Config Store endpoint used by LocalService. Its value must be the same as `ock.mmc.meta_service.config_store_url` in `mmc-meta.conf`. |\n+| `ock.mmc.local_service.world_size` | Maximum number of supported LocalService, including services that will be added in the future. |\n+| `ock.mmc.local_service.protocol` | The recommended protocols are `device_rdma` (RDMA over device, supported for A2 and A3 when device RoCE is available, recommended for A2) and `device_sdma` (SDMA over device, supported for A3 when HCCS is available, recommended for A3). For details about other supported protocols, see the [MemCache LocalService configuration file](https://gitcode.com/Ascend/memcache/blob/master/config/mmc-local.conf). |\n+| `ock.mmc.local_service.dram.size` | Sets the DRAM capacity provided by the current LocalService. |\n \n-<!-- 问题：第2行参数名应为 ock.mmc.local_service.config_store_url 但描述完全复制上一行 -->\n-<!-- 缺失 ock.mmc.meta_service.config_store_url 独立行 -->\n+<!-- 修正：每行 Parameter 与 Description 语义严格匹配各自服务角色 -->\n+<!-- 新增 meta_service.config_store_url 独立行 -->\n+<!-- local_service.config_store_url 描述与 gemini suggestion 一字不差 -->",
+      "stats": "1 file changed, +11 lines, -9 lines",
+      "key_changes": [
+        "修改代码逻辑"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

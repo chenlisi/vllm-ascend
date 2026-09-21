@@ -15,6 +15,51 @@ description: "Day0 推理流程的 Reviewer 子代理。对 Developer 的适配�
 2. **Developer 的 UT 套件 + 运行结果**。
 3. **Tester 的服务验证报告**。
 
+## 评审工作流（理解驱动）
+
+```
+Step 1: 信息收集（本地 git）
+    ├─ git fetch origin pull/<PR>/head:pr-<PR> → 拉取 PR 分支
+    ├─ git diff main...pr-<PR> → 总 diff
+    ├─ git log main..pr-<PR> --oneline → commit 列表
+    └─ git show <SHA> → 按提交粒度看改动
+    ↓
+Step 2: 逐 commit 拆解
+    └─ 理解每个 commit 的职责，理清改动之间的逻辑关系
+    ↓
+Step 3: 按风险维度扫描（对每个改动块）
+    ├─ 正确性：边界值（0/None/空）、assert vs raise、属性访问安全
+    ├─ 性能：热路径 Python 循环、host-device 往返、kernel 重编译
+    ├─ 一致性：kernel 实现与 reference 是否对齐、新增字段上下游是否都填
+    ├─ 死代码：返回值是否被消费、守卫条件是否互斥
+    └─ 测试覆盖：新增分支是否都有用例、边界配置是否测到
+    ↓
+Step 4: 规则库补充检查（模式类问题）
+    ├─ 命名规范、注释风格、copyright
+    ├─ 配置校验、错误处理模式
+    └─ 使用 search_rules.py 检索相关规则
+    ↓
+Step 5: 优先级分级
+    ├─ 必须修：会导致线上 crash 或功能错误
+    └─ 可选改进：代码质量提升
+    ↓
+Step 6: 输出评审报告
+```
+
+> **核心理念**：先理解代码，再发现问题。规则库是补充，不是主角。
+
+## 规则库支持
+
+本 agent 集成了 **vllm-ascend-reviewer** Skill，提供历史规则和历史报告支持：
+
+- **Skill 位置**：`.agents/skills/vllm-ascend-reviewer/`
+- **规则索引**：`references/_rule_summary.json`（536 条规则，用于 Step 4 补充检查）
+- **规则聚类**：`references/rules_clustered.md`（16 个语义类别）
+- **报告冷库**：`references/reports/`（798 份完整报告，用于查找类似案例）
+- **检索脚本**：`scripts/search_rules.py`
+
+**使用方式**：详见 `.agents/skills/vllm-ascend-reviewer/SKILL.md`。
+
 ## 评审要点
 
 ### A. 覆盖面核对（对照设计）

@@ -1,0 +1,60 @@
+{
+  "report_id": "PR2826_001",
+  "pr_number": 2826,
+  "pr_title": "[CustomOp] Register AscendMultiHeadLatentAttention instead of overwrite forward",
+  "pr_status": "merged",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/models/layers/mla.py:2"
+  ],
+  "landing_sha": "bfcd197",
+  "source_quote": "plz update the copyright header",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/models/layers/mla.py:2",
+      "patch_snippet": "评后sha bfcd197 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "bfcd197",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在创建新文件时，必须使用项目标准的 copyright header，确保版权声明和许可证信息正确。",
+    "context": "",
+    "checkpoints": [
+      "新文件是否包含 copyright header",
+      "header 格式是否符合项目标准",
+      "年份和版权方信息是否正确"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/models/layers/mla.py",
+      "line": 65,
+      "code": "# 评审人: gemini-code-assist[bot] (critical)\n# 尾随逗号导致属性被初始化为 tuple 而非标量值\n# self.hidden_size 变为 (hidden_size,) 而非 hidden_size\n# 导致 forward_oot 中 tp_size 乘法运算 TypeError\n\nclass AscendMultiHeadLatentAttention(nn.Module):\n    \"\"\"Ascend Multi-Head Latent Attention implementation.\"\"\"\n\n    def __init__(\n        self,\n        hidden_size: int,\n        enable_shared_expert_dp: bool,\n        debug_layer_idx: int,\n        first_k_dense_replace: int,\n        tp_size: int,\n        ...\n    ):\n        super().__init__()\n        # 尾随逗号导致属性变为 tuple 类型\n        self.hidden_size = hidden_size,\n        self.enable_shared_expert_dp = enable_shared_expert_dp,\n        self.debug_layer_idx = debug_layer_idx,\n        self.first_k_dense_replace = first_k_dense_replace,\n        self.tp_size = tp_size,\n        # 后续初始化...\n        self.num_heads = hidden_size // self.head_dim",
+      "context": "评审人: gemini-code-assist[bot] (critical) 尾随逗号导致属性被初始化为 tuple 而非标量值 self.hidden_size 变为 (hidden_size,) 而非 hidden_size"
+    },
+    "pattern": {
+      "file": "vllm_ascend/models/layers/mla.py",
+      "line": 65,
+      "code": "# 移除尾随逗号，确保属性为标量类型\n\nclass AscendMultiHeadLatentAttention(nn.Module):\n    \"\"\"Ascend Multi-Head Latent Attention implementation.\"\"\"\n\n    def __init__(\n        self,\n        hidden_size: int,\n        enable_shared_expert_dp: bool,\n        debug_layer_idx: int,\n        first_k_dense_replace: int,\n        tp_size: int,\n        ...\n    ):\n        super().__init__()\n        # 移除尾随逗号，确保属性为标量类型\n        self.hidden_size = hidden_size\n        self.enable_shared_expert_dp = enable_shared_expert_dp\n        self.debug_layer_idx = debug_layer_idx\n        self.first_k_dense_replace = first_k_dense_replace\n        self.tp_size = tp_size\n        # 后续初始化...\n        self.num_heads = hidden_size // self.head_dim",
+      "context": "移除尾随逗号，确保属性为标量类型 移除尾随逗号，确保属性为标量类型 后续初始化..."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/models/layers/mla.py\n+++ b/vllm_ascend/models/layers/mla.py\n@@ -1,7 +1,4 @@\n-# 评审人: gemini-code-assist[bot] (critical)\n-# 尾随逗号导致属性被初始化为 tuple 而非标量值\n-# self.hidden_size 变为 (hidden_size,) 而非 hidden_size\n-# 导致 forward_oot 中 tp_size 乘法运算 TypeError\n+# 移除尾随逗号，确保属性为标量类型\n \n class AscendMultiHeadLatentAttention(nn.Module):\n     \"\"\"Ascend Multi-Head Latent Attention implementation.\"\"\"\n@@ -16,11 +13,11 @@\n         ...\n     ):\n         super().__init__()\n-        # 尾随逗号导致属性变为 tuple 类型\n-        self.hidden_size = hidden_size,\n-        self.enable_shared_expert_dp = enable_shared_expert_dp,\n-        self.debug_layer_idx = debug_layer_idx,\n-        self.first_k_dense_replace = first_k_dense_replace,\n-        self.tp_size = tp_size,\n+        # 移除尾随逗号，确保属性为标量类型\n+        self.hidden_size = hidden_size\n+        self.enable_shared_expert_dp = enable_shared_expert_dp\n+        self.debug_layer_idx = debug_layer_idx\n+        self.first_k_dense_replace = first_k_dense_replace\n+        self.tp_size = tp_size\n         # 后续初始化...\n         self.num_heads = hidden_size // self.head_dim\n",
+      "stats": "1 file changed, +7 lines, -10 lines",
+      "key_changes": [
+        "移除: self.tp_size = tp_size,",
+        "移除: self.enable_shared_expert_dp = enable_shared_expert_dp,",
+        "新增: self.first_k_dense_replace = first_k_dense_replace",
+        "新增: self.debug_layer_idx = debug_layer_idx"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

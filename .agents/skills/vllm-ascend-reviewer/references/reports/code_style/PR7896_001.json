@@ -1,0 +1,110 @@
+{
+  "report_id": "PR7896_001",
+  "pr_number": 7896,
+  "pr_title": "[Feature][PP] Support Dynamic Chunk for Chunked Pipeline Parallelism",
+  "pr_status": "merged",
+  "merged_at": "2026-04-15T04:35:56Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/core/profiling_chunk_predictor.py:72",
+    "vllm_ascend/core/profiling_chunk_predictor.py:129",
+    "vllm_ascend/core/profiling_chunk_predictor.py:135",
+    "vllm_ascend/core/profiling_chunk_predictor.py:158",
+    "vllm_ascend/patch/platform/patch_profiling_chunk.py:1",
+    "vllm_ascend/core/scheduler_profiling_chunk.py:320",
+    "vllm_ascend/core/scheduler_profiling_chunk.py:231"
+  ],
+  "landing_sha": "99e3184",
+  "source_quote": "why we constraint the length of `L` to 8 here?\nIs `num_points < 5` an experience value?\nditto, why when `num_points > 30` means fitted here?\nit seems the post process of a and b could be extract into a function.\nplz add the details of this patch like others in https://github.com/vllm-project/vllm-ascend/blob/main/vllm_ascend/patch/__init__.py\nI think it would be better to use consistent naming conventions for `num_computed_tokens` and `history_len`.\nThis makes the code very clear! 👍",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao: vllm_ascend/core/profiling_chunk_predictor.py:72",
+      "patch_snippet": "评后sha 99e3184 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/core/profiling_chunk_predictor.py:129",
+      "patch_snippet": "评后sha 99e3184 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/core/profiling_chunk_predictor.py:135",
+      "patch_snippet": "评后sha 99e3184 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/core/profiling_chunk_predictor.py:158",
+      "patch_snippet": "评后sha 99e3184 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/patch/platform/patch_profiling_chunk.py:1",
+      "patch_snippet": "评后sha 99e3184 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/core/scheduler_profiling_chunk.py:320",
+      "patch_snippet": "评后sha 99e3184 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/core/scheduler_profiling_chunk.py:231",
+      "patch_snippet": "评后sha 99e3184 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "99e3184",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "代码中的经验值（如 `8`、`5`、`30`）应使用有意义的常量名替代，重复的后处理逻辑应提取为独立函数，以提高代码可读性和可维护性。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/core/profiling_chunk_predictor.py",
+      "line": 60,
+      "code": "# \":72 why we constraint the length of `L` to 8 here?\"\n# \":129 Is `num_points < 5` an experience value?\"\n# \":135 ditto, why when `num_points > 30` means fitted here?\"\n\nclass ProfilingChunkPredictor:\n    \"\"\"Predict optimal chunk size based on profiling data.\"\"\"\n\n    def __init__(self):\n        self._history = []\n        self._fitted = False\n\n    def _fit_latency_model(self, history):\n        \"\"\"Fit quadratic latency model from profiling history.\"\"\"\n        # Line 72: 限制历史数据长度\n        L = min(len(history), 8)  # 魔法数字 8\n        recent = history[-L:]\n\n        seq_lengths = [h.seq_len for h in recent]\n        latencies = [h.latency for h in recent]\n\n        # Line 129: 判断是否有足够数据进行拟合\n        num_points = len(seq_lengths)\n        if num_points < 5:  # 魔法数字 5\n            return default_chunk_size\n\n        # Line 135: 在线校准阶段判断是否已完成拟合\n        if num_points > 30:  # 魔法数字 30\n            self._fitted = True\n\n        # ... 拟合逻辑 ...\n        return coeffs",
+      "context": "why we constraint the length of `L` to 8 here?\nIs `num_points < 5` an experience value?\nditto, why when `num_points > 30` means fitted here?\nit seems the post process of a and b could be extract into "
+    },
+    "pattern": {
+      "file": "vllm_ascend/core/profiling_chunk_predictor.py",
+      "line": 60,
+      "code": "# commit 99e3184 \"create experience value name && extract clamp function\n# && rename some values\"\n# fitting data. For fitting the relationship between sequence length and\n# time, a small amount of data can lead to inaccurate fitting.\"\n\n# Experience value constants for profiling chunk prediction\nMAX_HISTORY_LEN = 8          # Max profiling history samples for fitting\nMIN_FIT_POINTS = 5           # Min data points required for reliable fitting\nMAX_ONLINE_FIT_POINTS = 30   # Max online calibration points before marking fitted\n\nclass ProfilingChunkPredictor:\n    \"\"\"Predict optimal chunk size based on profiling data.\"\"\"\n\n    def __init__(self):\n        self._history = []\n        self._fitted = False\n\n    def _fit_latency_model(self, history):\n        \"\"\"Fit quadratic latency model from profiling history.\"\"\"\n        L = min(len(history), MAX_HISTORY_LEN)\n        recent = history[-L:]\n\n        seq_lengths = [h.seq_len for h in recent]\n        latencies = [h.latency for h in recent]\n\n        num_points = len(seq_lengths)\n        if num_points < MIN_FIT_POINTS:\n            return default_chunk_size\n\n        if num_points > MAX_ONLINE_FIT_POINTS:\n            self._fitted = True\n\n        # ... 拟合逻辑 ...\n        return coeffs",
+      "context": "why we constraint the length of `L` to 8 here?\nIs `num_points < 5` an experience value?\nditto, why when `num_points > 30` means fitted here?\nit seems the post process of a and b could be extract into "
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/core/profiling_chunk_predictor.py\n+++ b/vllm_ascend/core/profiling_chunk_predictor.py\n@@ -1,6 +1,12 @@\n-# \":72 why we constraint the length of `L` to 8 here?\"\n-# \":129 Is `num_points < 5` an experience value?\"\n-# \":135 ditto, why when `num_points > 30` means fitted here?\"\n+# commit 99e3184 \"create experience value name && extract clamp function\n+# && rename some values\"\n+# fitting data. For fitting the relationship between sequence length and\n+# time, a small amount of data can lead to inaccurate fitting.\"\n+\n+# Experience value constants for profiling chunk prediction\n+MAX_HISTORY_LEN = 8          # Max profiling history samples for fitting\n+MIN_FIT_POINTS = 5           # Min data points required for reliable fitting\n+MAX_ONLINE_FIT_POINTS = 30   # Max online calibration points before marking fitted\n \n class ProfilingChunkPredictor:\n     \"\"\"Predict optimal chunk size based on profiling data.\"\"\"\n@@ -11,20 +17,17 @@\n \n     def _fit_latency_model(self, history):\n         \"\"\"Fit quadratic latency model from profiling history.\"\"\"\n-        # Line 72: 限制历史数据长度\n-        L = min(len(history), 8)  # 魔法数字 8\n+        L = min(len(history), MAX_HISTORY_LEN)\n         recent = history[-L:]\n \n         seq_lengths = [h.seq_len for h in recent]\n         latencies = [h.latency for h in recent]\n \n-        # Line 129: 判断是否有足够数据进行拟合\n         num_points = len(seq_lengths)\n-        if num_points < 5:  # 魔法数字 5\n+        if num_points < MIN_FIT_POINTS:\n             return default_chunk_size\n \n-        # Line 135: 在线校准阶段判断是否已完成拟合\n-        if num_points > 30:  # 魔法数字 30\n+        if num_points > MAX_ONLINE_FIT_POINTS:\n             self._fitted = True\n \n         # ... 拟合逻辑 ...\n",
+      "stats": "1 file changed, +12 lines, -9 lines",
+      "key_changes": [
+        "-# \":72 why we constraint the length of `L` to 8 here?\"",
+        "-# \":129 Is `num_points < 5` an experience value?\"",
+        "-# \":135 ditto, why when `num_points > 30` means fitted here?\"",
+        "+# commit 99e3184 \"create experience value name && extract clamp function",
+        "+# && rename some values\"",
+        "+# fitting data. For fitting the relationship between sequence length and",
+        "+# time, a small amount of data can lead to inaccurate fitting.\"",
+        "+",
+        "+# Experience value constants for profiling chunk prediction",
+        "+MAX_HISTORY_LEN = 8          # Max profiling history samples for fitting",
+        "+MIN_FIT_POINTS = 5           # Min data points required for reliable fitting",
+        "+MAX_ONLINE_FIT_POINTS = 30   # Max online calibration points before marking fitted",
+        "-        # Line 72: 限制历史数据长度",
+        "-        L = min(len(history), 8)  # 魔法数字 8",
+        "+        L = min(len(history), MAX_HISTORY_LEN)",
+        "-        # Line 129: 判断是否有足够数据进行拟合",
+        "-        if num_points < 5:  # 魔法数字 5",
+        "+        if num_points < MIN_FIT_POINTS:",
+        "-        # Line 135: 在线校准阶段判断是否已完成拟合",
+        "-        if num_points > 30:  # 魔法数字 30",
+        "+        if num_points > MAX_ONLINE_FIT_POINTS:"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

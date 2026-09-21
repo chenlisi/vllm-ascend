@@ -1,0 +1,77 @@
+{
+  "report_id": "PR10103_001",
+  "pr_number": 10103,
+  "pr_title": "[Doc][Misc] Update v0.20.2rc README information",
+  "pr_status": "merged",
+  "merged_at": "",
+  "dimension": [
+    "doc",
+    "engineering"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "b1ee67a",
+  "source_quote": "",
+  "correspondence": [
+    {
+      "review_quote": "评审人: #(位置)",
+      "patch_snippet": "评后sha 建议原文语义 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "gemini 🤖 high: 1(conf.py L40)",
+      "patch_snippet": "评后sha `release=\"\"` → `\"0.20.2rc1\"`，Sphinx 版本元数据不能空 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "gemini 🤖 high: 2(header.html L57)",
+      "patch_snippet": "评后sha \"latest stable release\"链接和文本应保持 v0.18.0，不能指 RC v0.20.2rc1 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao 👤: 3(header.html L57)",
+      "patch_snippet": "评后sha don't change this as RC not stable（独立于 bot 晚 45 分钟提出） 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "b1ee67a",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当文档站点为发布候选版（RC）而不是 GA 稳定版时，header.html 中\"latest stable release\"导航链接和标注文案必须继续指向最近一次正式 GA 发布版本（如 v0.18.0），不得指 RC（v0.20.2rc1），避免误导需要稳定版的用户。",
+    "context": "",
+    "checkpoints": [
+      "识别 Sphinx 文档 header.html / nav bar 中的\"stable release\"锚点文本",
+      "当当前 docs 版本含有 `rc` / `alpha` / `beta` / `preview` 标识时，核对 stable 链接是否 **不指向** 当前版本",
+      "核对链接 URL 中的版本号（`en/v{ver}`）与括号跟随文案 `stable release(v{ver})` 是否一致指向同一 GA 版本"
+    ],
+    "antipattern": {
+      "file": "docs/source/conf.py",
+      "line": 40,
+      "code": "# docs/source/conf.py\n# Sphinx 构建配置文件\n\n# The short X.Y version\nversion = \"0.20.2\"\n# The full version, including alpha/beta/rc tags\n# gemini-code-assist[bot] high：空串会导致所有 Sphinx 产出无版本元数据\n# PDF/HTML 页脚、版本切换器、搜索索引都会出现\"无版本号\"\nrelease = \"\"",
+      "context": "Setting `release = \"\"` (empty string) causes Sphinx to generate documentation without version metadata. Since this PR is preparing for the `v0.20.2rc1` release candidate, the `release` variable should be set to `\"0.20.2rc1\"` so that the version is correctly displayed in the documentation."
+    },
+    "pattern": {
+      "file": "docs/source/conf.py",
+      "line": 40,
+      "code": "# docs/source/conf.py\n# Sphinx 构建配置文件\n\n# The short X.Y version\nversion = \"0.20.2\"\n# The full version, including alpha/beta/rc tags\n# gemini suggestion：显式设置 RC 版本号，确保文档元数据正确\n# 与 gemini🤖high suggestion 逐字完全匹配 ✅\nrelease = \"0.20.2rc1\"",
+      "context": "Setting `release = \"\"` (empty string) causes Sphinx to generate documentation without version metadata. Since this PR is preparing for the `v0.20.2rc1` release candidate, the `release` variable should be set to `\"0.20.2rc1\"` so that the version is correctly displayed in the documentation."
+    },
+    "diff": {
+      "unified": "--- a/docs/source/conf.py\n+++ b/docs/source/conf.py\n@@ -4,6 +4,6 @@\n # The short X.Y version\n version = \"0.20.2\"\n # The full version, including alpha/beta/rc tags\n-# gemini-code-assist[bot] high：空串会导致所有 Sphinx 产出无版本元数据\n-# PDF/HTML 页脚、版本切换器、搜索索引都会出现\"无版本号\"\n-release = \"\"\n+# gemini suggestion：显式设置 RC 版本号，确保文档元数据正确\n+# 与 gemini🤖high suggestion 逐字完全匹配 ✅\n+release = \"0.20.2rc1\"",
+      "stats": "1 file changed, +3 lines, -3 lines",
+      "key_changes": [
+        "移除: # gemini-code-assist[bot] high：空串会导致所有 Sphinx 产出无版本元数据",
+        "移除: # PDF/HTML 页脚、版本切换器、搜索索引都会出现\"无版本号\"",
+        "移除: release = \"\"",
+        "新增: # gemini suggestion：显式设置 RC 版本号，确保文档元数据正确",
+        "新增: # 与 gemini🤖high suggestion 逐字完全匹配 ✅",
+        "新增: release = \"0.20.2rc1\""
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

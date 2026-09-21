@@ -1,0 +1,81 @@
+{
+  "report_id": "PR9789_001",
+  "pr_number": 9789,
+  "pr_title": "[Misc] Rehash AscendStore grouped keys for DSV4/compress layouts",
+  "pr_status": "merged",
+  "merged_at": "2026-06-05T14:06:27Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py:476",
+    "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py:479"
+  ],
+  "landing_sha": "3297272",
+  "source_quote": "This is a magic number, it's better to define a global variable.\nThanks, updated in 3297272d. I replaced the raw `4` with `_GROUPED_BLOCK_HASH_LENGTH_PREFIX_BYTES`.\n> I kept it as a module-private constant rather than an externally configurable global value, because this framing is only used by the KV Pool internal grouped-key format and both sides should use the same fixed encoding.\nditto\nUpdated this one in the same commit as well. The per-block-hash length prefix now also uses `_GROUPED_BLOCK_HASH_LENGTH_PREFIX_BYTES`, so the grouped-key framing no longer has a raw magic number.",
+  "correspondence": [
+    {
+      "review_quote": "Ronald1995: vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py:476(2026-06-04 10:55:40)",
+      "patch_snippet": "评后sha 3297272 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Ronald1995: vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py:479(2026-06-04 10:55:48)",
+      "patch_snippet": "评后sha 3297272 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "3297272",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "代码中不应直接使用未解释的数字字面量（魔法数字），应将其定义为有意义的命名常量，提高代码可读性和可维护性。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py",
+      "line": 476,
+      "code": "# （根据评审意见推断）直接使用魔法数字 4，含义不明确\n# Ronald1995 评论: \"This is a magic number, it's better to define a global variable.\"\nimport struct\nfrom typing import List, Tuple\n\n# ... 其他模块级常量和辅助函数 ...\n\nBLOCK_HASH_SUFFIX_CHARS = 10  # block hash 日志截断长度\n\n\ndef format_key_for_log(key: object) -> str:\n    \"\"\"Truncate a single key for debug logging.\"\"\"\n    text = str(key)\n    if len(text) > BLOCK_HASH_SUFFIX_CHARS:\n        return text[:BLOCK_HASH_SUFFIX_CHARS] + \"…\"\n    return text\n\n\ndef encode_grouped_key(\n    key_bytes: bytes,\n    hash_bytes: bytes,\n) -> Tuple[bytes, bytes]:\n    \"\"\"Encode a grouped key for AscendStore KV Pool internal format.\n\n    The key_bytes are truncated to a fixed-length prefix,\n    and hash_bytes are similarly truncated per block.\n    \"\"\"\n    # L476: 使用魔法数字 4 截断前缀 — 含义不明确\n    key_bytes = key_bytes[:4]\n\n    # L479: 同样使用魔法数字 4 — 含义不明确\n    hash_prefix = hash_bytes[:4]\n    return key_bytes, hash_prefix",
+      "context": "This is a magic number, it's better to define a global variable.\nThanks, updated in 3297272d. I replaced the raw `4` with `_GROUPED_BLOCK_HASH_LENGTH_PREFIX_BYTES`.\n> I kept it as a module-private con"
+    },
+    "pattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py",
+      "line": 476,
+      "code": "# 定义模块私有常量，消除魔法数字\n# 作者回复: \"I replaced the raw 4 with _GROUPED_BLOCK_HASH_LENGTH_PREFIX_BYTES\"\nimport struct\nfrom typing import List, Tuple\n\n# ... 其他模块级常量和辅助函数 ...\n\nBLOCK_HASH_SUFFIX_CHARS = 10  # block hash 日志截断长度\n\n# 模块私有常量：grouped-key 中 block hash 长度前缀的字节数\n# 用于 KV Pool 内部 grouped-key 格式编码，两端必须使用相同的固定编码\n_GROUPED_BLOCK_HASH_LENGTH_PREFIX_BYTES = 4\n\n\ndef format_key_for_log(key: object) -> str:\n    \"\"\"Truncate a single key for debug logging.\"\"\"\n    text = str(key)\n    if len(text) > BLOCK_HASH_SUFFIX_CHARS:\n        return text[:BLOCK_HASH_SUFFIX_CHARS] + \"…\"\n    return text\n\n\ndef encode_grouped_key(\n    key_bytes: bytes,\n    hash_bytes: bytes,\n) -> Tuple[bytes, bytes]:\n    \"\"\"Encode a grouped key for AscendStore KV Pool internal format.\"\"\"\n    # L476: 使用命名常量替代魔法数字\n    key_bytes = key_bytes[:_GROUPED_BLOCK_HASH_LENGTH_PREFIX_BYTES]\n\n    # L479: 同样使用命名常量替代魔法数字\n    hash_prefix = hash_bytes[:_GROUPED_BLOCK_HASH_LENGTH_PREFIX_BYTES]\n    return key_bytes, hash_prefix",
+      "context": "This is a magic number, it's better to define a global variable.\nThanks, updated in 3297272d. I replaced the raw `4` with `_GROUPED_BLOCK_HASH_LENGTH_PREFIX_BYTES`.\n> I kept it as a module-private con"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py\n+++ b/vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py\n@@ -1,11 +1,15 @@\n-# （根据评审意见推断）直接使用魔法数字 4，含义不明确\n-# Ronald1995 评论: \"This is a magic number, it's better to define a global variable.\"\n+# 定义模块私有常量，消除魔法数字\n+# 作者回复: \"I replaced the raw 4 with _GROUPED_BLOCK_HASH_LENGTH_PREFIX_BYTES\"\n import struct\n from typing import List, Tuple\n \n # ... 其他模块级常量和辅助函数 ...\n \n BLOCK_HASH_SUFFIX_CHARS = 10  # block hash 日志截断长度\n+\n+# 模块私有常量：grouped-key 中 block hash 长度前缀的字节数\n+# 用于 KV Pool 内部 grouped-key 格式编码，两端必须使用相同的固定编码\n+_GROUPED_BLOCK_HASH_LENGTH_PREFIX_BYTES = 4\n \n \n def format_key_for_log(key: object) -> str:\n@@ -20,14 +24,10 @@\n     key_bytes: bytes,\n     hash_bytes: bytes,\n ) -> Tuple[bytes, bytes]:\n-    \"\"\"Encode a grouped key for AscendStore KV Pool internal format.\n+    \"\"\"Encode a grouped key for AscendStore KV Pool internal format.\"\"\"\n+    # L476: 使用命名常量替代魔法数字\n+    key_bytes = key_bytes[:_GROUPED_BLOCK_HASH_LENGTH_PREFIX_BYTES]\n \n-    The key_bytes are truncated to a fixed-length prefix,\n-    and hash_bytes are similarly truncated per block.\n-    \"\"\"\n-    # L476: 使用魔法数字 4 截断前缀 — 含义不明确\n-    key_bytes = key_bytes[:4]\n-\n-    # L479: 同样使用魔法数字 4 — 含义不明确\n-    hash_prefix = hash_bytes[:4]\n+    # L479: 同样使用命名常量替代魔法数字\n+    hash_prefix = hash_bytes[:_GROUPED_BLOCK_HASH_LENGTH_PREFIX_BYTES]\n     return key_bytes, hash_prefix\n",
+      "stats": "1 file changed, +11 lines, -11 lines",
+      "key_changes": [
+        "-# （根据评审意见推断）直接使用魔法数字 4，含义不明确",
+        "-# Ronald1995 评论: \"This is a magic number, it's better to define a global variable.\"",
+        "+# 定义模块私有常量，消除魔法数字",
+        "+# 作者回复: \"I replaced the raw 4 with _GROUPED_BLOCK_HASH_LENGTH_PREFIX_BYTES\"",
+        "+",
+        "+# 模块私有常量：grouped-key 中 block hash 长度前缀的字节数",
+        "+# 用于 KV Pool 内部 grouped-key 格式编码，两端必须使用相同的固定编码",
+        "+_GROUPED_BLOCK_HASH_LENGTH_PREFIX_BYTES = 4",
+        "-    \"\"\"Encode a grouped key for AscendStore KV Pool internal format.",
+        "+    \"\"\"Encode a grouped key for AscendStore KV Pool internal format.\"\"\"",
+        "+    # L476: 使用命名常量替代魔法数字",
+        "+    key_bytes = key_bytes[:_GROUPED_BLOCK_HASH_LENGTH_PREFIX_BYTES]",
+        "-    The key_bytes are truncated to a fixed-length prefix,",
+        "-    and hash_bytes are similarly truncated per block.",
+        "-    \"\"\"",
+        "-    # L476: 使用魔法数字 4 截断前缀 — 含义不明确",
+        "-    key_bytes = key_bytes[:4]",
+        "-",
+        "-    # L479: 同样使用魔法数字 4 — 含义不明确",
+        "-    hash_prefix = hash_bytes[:4]",
+        "+    # L479: 同样使用命名常量替代魔法数字",
+        "+    hash_prefix = hash_bytes[:_GROUPED_BLOCK_HASH_LENGTH_PREFIX_BYTES]"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

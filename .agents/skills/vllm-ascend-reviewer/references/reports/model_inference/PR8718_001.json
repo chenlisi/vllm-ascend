@@ -1,0 +1,66 @@
+{
+  "report_id": "PR8718_001",
+  "pr_number": 8718,
+  "pr_title": "[BugFix] MTP recurrent batch size after lmhead TP logits truncation",
+  "pr_status": "merged",
+  "merged_at": "2026-04-29T06:32:31Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/spec_decode/eagle_proposer.py:943",
+    "vllm_ascend/spec_decode/eagle_proposer.py:947"
+  ],
+  "landing_sha": "a6cc910",
+  "source_quote": "1. The logits are split and then merged only when lmhead_tp_enable() is enabled. As a result, the batch size length becomes the actual length 32. However, when lmhead_tp_enable() is disabled, the batch size uses the length after padding. To decouple the scenarios, a judgment is required. That is, the batch size needs to be modified only when lmhead_tp_enable() is enabled.\n> 2. In addition, detailed comments are added to explain why the batch size needs to be updated.\nMTP or eagle3? They are different method. Please check the case in this bug and for sure it' s needed in both eagle3 and MTP method\n> I encountered this problem in a GLM 5.1 model MTP scene.\nIf only MTP scene, please add method == \"mtp\" in \"if lmhead_tp_enable()\"",
+  "correspondence": [
+    {
+      "review_quote": "lilinsiman: vllm_ascend/spec_decode/eagle_proposer.py:943",
+      "patch_snippet": "评后sha a6cc910 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "lilinsiman: vllm_ascend/spec_decode/eagle_proposer.py:947",
+      "patch_snippet": "评后sha a6cc910 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "lilinsiman: vllm_ascend/spec_decode/eagle_proposer.py:947",
+      "patch_snippet": "评后sha a6cc910 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "a6cc910",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "1. The logits are split and then merged only when lmhead_tp_enable() is enabled. As a result, the batch size length becomes the actual length 32. However, when lmhead_tp_enable() is disabled, the batc",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/spec_decode/eagle_proposer.py",
+      "line": 943,
+      "code": "# vllm_ascend/spec_decode/eagle_proposer.py:943",
+      "context": "1. The logits are split and then merged only when lmhead_tp_enable() is enabled. As a result, the batch size length becomes the actual length 32. However, when lmhead_tp_enable() is disabled, the batc"
+    },
+    "pattern": {
+      "file": "vllm_ascend/spec_decode/eagle_proposer.py",
+      "line": 943,
+      "code": "# 根据评审意见修改后的代码",
+      "context": "1. The logits are split and then merged only when lmhead_tp_enable() is enabled. As a result, the batch size length becomes the actual length 32. However, when lmhead_tp_enable() is disabled, the batc"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/spec_decode/eagle_proposer.py\n+++ b/vllm_ascend/spec_decode/eagle_proposer.py\n@@ -1 +1 @@\n-# vllm_ascend/spec_decode/eagle_proposer.py:943\n+# 根据评审意见修改后的代码\n",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "-# vllm_ascend/spec_decode/eagle_proposer.py:943",
+        "+# 根据评审意见修改后的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

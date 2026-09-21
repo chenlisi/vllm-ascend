@@ -1,0 +1,73 @@
+{
+  "report_id": "PR10935_001",
+  "pr_number": 10935,
+  "pr_title": "[CI] upgrade vllm to 0619",
+  "pr_status": "merged",
+  "merged_at": "2026-07-04T02:57:30Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/ut/patch/platform/test_patch_glm47_tool_call_parser.py:10",
+    "vllm_ascend/patch/platform/patch_profiling_chunk.py:170",
+    "vllm_ascend/spec_decode/ngram_proposer.py:95",
+    "vllm_ascend/spec_decode/ngram_proposer.py:80",
+    "vllm_ascend/worker/encoder_acl_graph.py:283",
+    "vllm_ascend/worker/encoder_acl_graph.py:324"
+  ],
+  "landing_sha": "27f7762",
+  "source_quote": "@QwertyJack plz check if we don't need these patch any more after adapted to b9a7cd464c9ae9b1b450f8982b76d7be4de73724?",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 提出了 6 处代码改进建议：(1) 确认 GLM-4.7 patch 在新版本后是否仍需要；(2) 使用 `throttle_prefills: bool = False` 替代可变参数列表；(3-4) 在 ngram_proposer 中添加 assert 校验；(5-6) 统一 encoder_acl_graph 的方法签名和变量获取方式。QwertyJack 确认了 patch 版本门控策略。作者通过 commit `27f7762` 及后续 commit 落地了这些修改。",
+      "patch_snippet": "commit `27f7762`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "27f7762",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "升级 vLLM 版本时，应检查现有 patch 是否仍需要，统一方法签名风格（使用具名参数替代可变参数列表），并在关键路径添加 assert 校验确保数据完整性。",
+    "context": "",
+    "checkpoints": [
+      "检查现有 patch 在新版本后是否仍需要",
+      "确认是否使用具名参数替代可变参数列表",
+      "验证关键路径是否有 assert 校验",
+      "统一方法签名和变量获取方式"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/patch/platform/patch_profiling_chunk.py",
+      "line": 160,
+      "code": "def _patched_profiling_chunk(\n    self,\n    *args,\n    **kwargs,\n):\n    \"\"\"Patched profiling chunk method with variable args.\"\"\"\n    # 使用可变参数列表处理 throttle_prefills\n    # 调用方需要按位置传递参数，容易出错\n    scheduler_output = args[0] if args else kwargs.get(\"scheduler_output\")\n    throttle_prefills = args[1] if len(args) > 1 else kwargs.get(\n        \"throttle_prefills\", False)\n    # ... processing logic ...",
+      "context": "@QwertyJack plz check if we don't need these patch any more after adapted to b9a7cd464c9ae9b1b450f8982b76d7be4de73724?"
+    },
+    "pattern": {
+      "file": "vllm_ascend/patch/platform/patch_profiling_chunk.py",
+      "line": 160,
+      "code": "def _patched_profiling_chunk(\n    self,\n    scheduler_output,\n    throttle_prefills: bool = False,\n    **kwargs,\n):\n    \"\"\"Patched profiling chunk method with named parameters.\"\"\"\n    # 使用具名参数替代可变参数列表，提高可读性和健壮性\n    # ... processing logic ...",
+      "context": "@QwertyJack plz check if we don't need these patch any more after adapted to b9a7cd464c9ae9b1b450f8982b76d7be4de73724?"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/patch/platform/patch_profiling_chunk.py\n+++ b/vllm_ascend/patch/platform/patch_profiling_chunk.py\n@@ -1,12 +1,9 @@\n def _patched_profiling_chunk(\n     self,\n-    *args,\n+    scheduler_output,\n+    throttle_prefills: bool = False,\n     **kwargs,\n ):\n-    \"\"\"Patched profiling chunk method with variable args.\"\"\"\n-    # 使用可变参数列表处理 throttle_prefills\n-    # 调用方需要按位置传递参数，容易出错\n-    scheduler_output = args[0] if args else kwargs.get(\"scheduler_output\")\n-    throttle_prefills = args[1] if len(args) > 1 else kwargs.get(\n-        \"throttle_prefills\", False)\n+    \"\"\"Patched profiling chunk method with named parameters.\"\"\"\n+    # 使用具名参数替代可变参数列表，提高可读性和健壮性\n     # ... processing logic ...",
+      "stats": "1 file changed, +4 lines, -7 lines",
+      "key_changes": [
+        "移除: *args,",
+        "新增: scheduler_output,",
+        "新增: throttle_prefills: bool = False,",
+        "移除: \"\"\"Patched profiling chunk method with variable args.\"\"\"",
+        "移除: # 使用可变参数列表处理 throttle_prefills",
+        "移除: # 调用方需要按位置传递参数，容易出错",
+        "移除: scheduler_output = args[0] if args else kwargs.get(\"scheduler_output\")",
+        "移除: throttle_prefills = args[1] if len(args) > 1 else kwargs.get(",
+        "移除: \"throttle_prefills\", False)",
+        "新增: \"\"\"Patched profiling chunk method with named parameters.\"\"\""
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

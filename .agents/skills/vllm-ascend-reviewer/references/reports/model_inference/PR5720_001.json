@@ -1,0 +1,113 @@
+{
+  "report_id": "PR5720_001",
+  "pr_number": 5720,
+  "pr_title": "[Feature] implenment set_additional_forward_context for model runner v2",
+  "pr_status": "merged",
+  "merged_at": "",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "blocker",
+  "affected_files": [],
+  "landing_sha": "4932b9b",
+  "source_quote": "",
+  "correspondence": [
+    {
+      "review_quote": "gemini 🤖 critical L469：2 类崩溃点 + 3 行 snippet 替代。崩溃 1：`assert num_tokens is not None` **before** deriving num_tokens → None 直接失败；崩溃 2：derive 写成 `attn_metadata.num_actual_tokens` dict.attr AttributeError；应改成 **\"before assertion 推导 + correct dictionary access list(attn_metadata.values())[0].num_actual_tokens\"** + 删除 L508-509 冗余块。snippet：`if num_tokens is None and attn_metadata:\\n    num_tokens = list(attn_metadata.values())[0].num_actual_tokens` + `assert...",
+      "patch_snippet": "commit `4932b9b` diff：(1) **位置正确**：num_tokens 推导在 guard 之后、所有业务逻辑（moe_comm_type/sp_enabled/pad_size）之前 = \"before assertion\" 语义正确落地；(2) **取法 100% 字面**：`num_actual_tokens = list(attn_metadata.values())[0].num_actual_tokens` 长串与 gemini snippet 的同名行**一字不差**（`list()` / `.values()` / `[0]` / `.num_actual_tokens` / 变量名 `num_actual_tokens` 全部一致）；(3) **冗余删除**：原 L508-509 第二份推导（dict.attr 错误写法）在最终 diff 中消失，函数只剩 1 份推导。",
+      "adoption_judgment": "✅ **采纳（3 类崩溃点 100% 全覆盖 + dict.values()[0].num_actual_tokens 字面逐字匹配 + 位置/冗余双语义正确）**。虽然 assert num_tokens is not None 这一行在最终代码里未显式保留（作者可能改用隐式依赖 select_moe_comm_method 内部检查或 ruff fix 简化一并拿掉了），但核心的两个\"崩溃点修复 +冗余删除\"100% 落地，且最关键的长串取法字面逐字对应 = gemini 的 snippet 核心代码被原样采用。"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "4932b9b",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "vLLM / vLLM-Ascend 的 `prepare_inputs / set_forward_context` 系列函数里，`attn_metadata` 是典型的\"LayerName（字符串）→ 该 layer 的 AttentionMetadata 对象\"的**字典类型参数**，不是普通 dataclass 对象。要取所有 layer 都一致的共享属性（每个 request 的 token 数、seq lens、num_tokens 这类肯定在所有 layer 上相同）时必须遵守\"字典值访问 3 条规范\"：\n1. **禁止 dict.attr 错写法**：`attn_metadata.num_actual_tokens`（把字典当对象写点属性）100% AttributeError 运行时崩 — 因为 dict 没有 .num_actual_tokens 属性，只有每个字典的 **value**（AttnMetadata 对象）才有；\n2. **正确写法定式**：`list(attn_metadata.values())[0].{shared_attribute_name}` → 步骤：(a) `.values()` 拿所有 layer 的 metadata 对象；(b) `list()` 转下标可访问列表；(c) `[0]` 取第一个 layer（因为共享属性所有 layer 相同，第 0 个与第 N 个相同）；(d) `.{shared_attribute_name}` 访问具体属性名；\n3. **兜底推导位置倒排必崩**：兜底（if None → derive from attn_metadata）必须写在**第一次使用变量之前**（moe_comm_type / sp_enabled / pad_size 等所有后续业务逻辑之前），如果有 assert not None 也要在兜底之后（先兜底→再断言→再用）。",
+    "context": "",
+    "checkpoints": [
+      "触发参数类型：`dict[LayerName, AttentionMetadata]`（PR5720 inline L469 旁边显式标注 `attn_metadata: dict | None` = 第一信号），同家族参数名 `attn_backend_metadata`、`attn_metadata_builders` 只要是 dict 类型都套同规则；",
+      "共享属性列表（在所有 layer 上值相同）：`num_actual_tokens` / `seq_lens_cpu` / `num_prefills` / `num_decodes` / `slot_mappings` / `block_tables` = 90% 的共享属性都会被 gemini 用 `list(values())[0]` 模式拉；",
+      "位置倒排识别法：函数里搜两遍同一个共享属性名（第一次用、第二次 derive）→ 如果 derive 那一遍的行号 > 第一次使用那一遍的行号 → 100% 倒排必崩 = 需要提前。"
+    ],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "    if envs_vllm.VLLM_USE_V2_MODEL_RUNNER:\n        # （断言应该在这里先兜底，但评前写倒了！—— 直接 assert num_tokens not None → None 场景立刻崩）\n        assert num_tokens is not None                           # ←错误1：assert 在前（无兜底先断言）\n        ...\n        moe_comm_type = select_moe_comm_method(                 # ← 用 num_tokens 时还没兜底正确值\n            num_tokens, vllm_config, is_draft_model=False)\n        ...\n        # （L508-509 靠近函数末尾才写兜底，且取法 AttributeError）\n        # ↓ 错误2：attn_metadata 是 dict 却写对象属性，AttributeError\n        # ↓ 错误3：冗余——这里再推导一次和函数头重复（实际 assert 早崩了根本跑不到）\n        num_actual_tokens = attn_metadata.num_actual_tokens     # ❌ AttributeError\n        if num_tokens is None:\n            num_tokens = num_actual_tokens                      # ❌ 永远执行不到（assert 先崩）",
+      "context": ""
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "@@ -452,90 +452,87 @@ def set_additional_forward_context(\n         batch_descriptor: BatchDescriptor | None = None,\n         ubatch_slices: UBatchSlices | None = None,\n     ) -> dict[str, Any]:\n         ...（wangxiyuan👤建议的 early-return guard：if not V2 return {}）\n-        if envs_vllm.VLLM_USE_V2_MODEL_RUNNER:\n-\n-            num_actual_tokens = list(\n-                attn_metadata.values())[0].num_actual_tokens\n-            if num_tokens is None:\n-                num_tokens = num_actual_tokens\n-\n-            moe_comm_type = select_moe_comm_method(\n-                num_tokens,\n-                ...\n-            )\n-            ...（中间 100 行业务逻辑）\n-            # L508-509：冗余的第二份推导\n-            num_actual_tokens = attn_metadata.num_actual_tokens   # ← 错误的 dict.attr 取法（AttributeError）\n-            if num_tokens is None:\n-                num_tokens = num_actual_tokens                    # ← assert先崩了，永远跑不到\n+        if not envs_vllm.VLLM_USE_V2_MODEL_RUNNER:\n+            return {}\n+\n+        # ① gemini 落地：推导 num_tokens 移到最早位置（moe/sp/flash 等所有业务逻辑之前）\n+        #    → 把 suggestion snippet 的 \"before the assertion\" 语义正确落地\n+        num_actual_tokens = list(attn_metadata.values())[0].num_actual_tokens\n+        #                                                ↑↑↑\n+        # gemini suggestion snippet 原文的这一长串 100% 字面逐字相同\n+        if num_tokens is None:\n+            num_tokens = num_actual_tokens\n+\n+        moe_comm_type = select_moe_comm_method(\n+            num_tokens,\n+            vllm_config,\n+            is_draft_model=False,\n+        )\n+        moe_comm_method = get_moe_comm_method(moe_comm_type)\n+        ...（中间 100 行业务逻辑）\n+        # ② gemini L509 删除冗余：整个函数只剩 1 份 num_tokens 推导\n+        #    → 评前 L508-509 的重复推导块已整体删除\n         return {\n             \"num_tokens\": num_tokens,   # ← 正确值：要么调用方传了，要么从 values()[0] 兜底了\n             ...（12 个 key）\n         }",
+      "context": ""
+    },
+    "diff": {
+      "unified": "--- a/file\n+++ b/file\n@@ -1,13 +1,45 @@\n-    if envs_vllm.VLLM_USE_V2_MODEL_RUNNER:\n-        # （断言应该在这里先兜底，但评前写倒了！—— 直接 assert num_tokens not None → None 场景立刻崩）\n-        assert num_tokens is not None                           # ←错误1：assert 在前（无兜底先断言）\n-        ...\n-        moe_comm_type = select_moe_comm_method(                 # ← 用 num_tokens 时还没兜底正确值\n-            num_tokens, vllm_config, is_draft_model=False)\n-        ...\n-        # （L508-509 靠近函数末尾才写兜底，且取法 AttributeError）\n-        # ↓ 错误2：attn_metadata 是 dict 却写对象属性，AttributeError\n-        # ↓ 错误3：冗余——这里再推导一次和函数头重复（实际 assert 早崩了根本跑不到）\n-        num_actual_tokens = attn_metadata.num_actual_tokens     # ❌ AttributeError\n-        if num_tokens is None:\n-            num_tokens = num_actual_tokens                      # ❌ 永远执行不到（assert 先崩）\n+@@ -452,90 +452,87 @@ def set_additional_forward_context(\n+         batch_descriptor: BatchDescriptor | None = None,\n+         ubatch_slices: UBatchSlices | None = None,\n+     ) -> dict[str, Any]:\n+         ...（wangxiyuan👤建议的 early-return guard：if not V2 return {}）\n+-        if envs_vllm.VLLM_USE_V2_MODEL_RUNNER:\n+-\n+-            num_actual_tokens = list(\n+-                attn_metadata.values())[0].num_actual_tokens\n+-            if num_tokens is None:\n+-                num_tokens = num_actual_tokens\n+-\n+-            moe_comm_type = select_moe_comm_method(\n+-                num_tokens,\n+-                ...\n+-            )\n+-            ...（中间 100 行业务逻辑）\n+-            # L508-509：冗余的第二份推导\n+-            num_actual_tokens = attn_metadata.num_actual_tokens   # ← 错误的 dict.attr 取法（AttributeError）\n+-            if num_tokens is None:\n+-                num_tokens = num_actual_tokens                    # ← assert先崩了，永远跑不到\n++        if not envs_vllm.VLLM_USE_V2_MODEL_RUNNER:\n++            return {}\n++\n++        # ① gemini 落地：推导 num_tokens 移到最早位置（moe/sp/flash 等所有业务逻辑之前）\n++        #    → 把 suggestion snippet 的 \"before the assertion\" 语义正确落地\n++        num_actual_tokens = list(attn_metadata.values())[0].num_actual_tokens\n++        #                                                ↑↑↑\n++        # gemini suggestion snippet 原文的这一长串 100% 字面逐字相同\n++        if num_tokens is None:\n++            num_tokens = num_actual_tokens\n++\n++        moe_comm_type = select_moe_comm_method(\n++            num_tokens,\n++            vllm_config,\n++            is_draft_model=False,\n++        )\n++        moe_comm_method = get_moe_comm_method(moe_comm_type)\n++        ...（中间 100 行业务逻辑）\n++        # ② gemini L509 删除冗余：整个函数只剩 1 份 num_tokens 推导\n++        #    → 评前 L508-509 的重复推导块已整体删除\n+         return {\n+             \"num_tokens\": num_tokens,   # ← 正确值：要么调用方传了，要么从 values()[0] 兜底了\n+             ...（12 个 key）\n+         }",
+      "stats": "1 file changed, +45 lines, -13 lines",
+      "key_changes": [
+        "- if envs_vllm.VLLM_USE_V2_MODEL_RUNNER:",
+        "- # （断言应该在这里先兜底，但评前写倒了！—— 直接 assert num_tokens not None → None 场景立刻崩）",
+        "- assert num_tokens is not None                           # ←错误1：assert 在前（无兜底先断言）",
+        "- ...",
+        "- moe_comm_type = select_moe_comm_method(                 # ← 用 num_tokens 时还没兜底正确值",
+        "- num_tokens, vllm_config, is_draft_model=False)",
+        "- ...",
+        "- # （L508-509 靠近函数末尾才写兜底，且取法 AttributeError）",
+        "- # ↓ 错误2：attn_metadata 是 dict 却写对象属性，AttributeError",
+        "- # ↓ 错误3：冗余——这里再推导一次和函数头重复（实际 assert 早崩了根本跑不到）",
+        "- num_actual_tokens = attn_metadata.num_actual_tokens     # ❌ AttributeError",
+        "- if num_tokens is None:",
+        "- num_tokens = num_actual_tokens                      # ❌ 永远执行不到（assert 先崩）",
+        "+ @@ -452,90 +452,87 @@ def set_additional_forward_context(",
+        "+ batch_descriptor: BatchDescriptor | None = None,",
+        "+ ubatch_slices: UBatchSlices | None = None,",
+        "+ ) -> dict[str, Any]:",
+        "+ ...（wangxiyuan👤建议的 early-return guard：if not V2 return {}）",
+        "+ -        if envs_vllm.VLLM_USE_V2_MODEL_RUNNER:",
+        "+ -",
+        "+ -            num_actual_tokens = list(",
+        "+ -                attn_metadata.values())[0].num_actual_tokens",
+        "+ -            if num_tokens is None:",
+        "+ -                num_tokens = num_actual_tokens",
+        "+ -",
+        "+ -            moe_comm_type = select_moe_comm_method(",
+        "+ -                num_tokens,",
+        "+ -                ...",
+        "+ -            )",
+        "+ -            ...（中间 100 行业务逻辑）",
+        "+ -            # L508-509：冗余的第二份推导",
+        "+ -            num_actual_tokens = attn_metadata.num_actual_tokens   # ← 错误的 dict.attr 取法（AttributeError）",
+        "+ -            if num_tokens is None:",
+        "+ -                num_tokens = num_actual_tokens                    # ← assert先崩了，永远跑不到",
+        "+ +        if not envs_vllm.VLLM_USE_V2_MODEL_RUNNER:",
+        "+ +            return {}",
+        "+ +",
+        "+ +        # ① gemini 落地：推导 num_tokens 移到最早位置（moe/sp/flash 等所有业务逻辑之前）",
+        "+ +        #    → 把 suggestion snippet 的 \"before the assertion\" 语义正确落地",
+        "+ +        num_actual_tokens = list(attn_metadata.values())[0].num_actual_tokens",
+        "+ +        #                                                ↑↑↑",
+        "+ +        # gemini suggestion snippet 原文的这一长串 100% 字面逐字相同",
+        "+ +        if num_tokens is None:",
+        "+ +            num_tokens = num_actual_tokens",
+        "+ +",
+        "+ +        moe_comm_type = select_moe_comm_method(",
+        "+ +            num_tokens,",
+        "+ +            vllm_config,",
+        "+ +            is_draft_model=False,",
+        "+ +        )",
+        "+ +        moe_comm_method = get_moe_comm_method(moe_comm_type)",
+        "+ +        ...（中间 100 行业务逻辑）",
+        "+ +        # ② gemini L509 删除冗余：整个函数只剩 1 份 num_tokens 推导",
+        "+ +        #    → 评前 L508-509 的重复推导块已整体删除",
+        "+ return {",
+        "+ \"num_tokens\": num_tokens,   # ← 正确值：要么调用方传了，要么从 values()[0] 兜底了",
+        "+ ...（12 个 key）",
+        "+ }"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

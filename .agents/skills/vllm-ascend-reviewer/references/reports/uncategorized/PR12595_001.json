@@ -1,0 +1,45 @@
+{
+  "report_id": "PR12595_001",
+  "pr_number": 0,
+  "pr_title": "",
+  "pr_status": "unknown",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "",
+  "source_quote": "",
+  "correspondence": [],
+  "verification": {
+    "merged": false,
+    "modified_commit": "",
+    "approvals": 0
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "pcp_manager.py",
+      "line": 0,
+      "code": "# vllm_ascend/worker/v2/pcp_manager.py — AscendPCPManager.partition_batch()\n# commit fdde5af → f262da5 版本（评论前状态）\n\nclass AscendPCPManager(PCPManager):\n    \"\"\"Ascend-specific PCP manager for MRv2 context parallelism.\"\"\"\n\n    def partition_batch(self, input_batch: AscendInputBatch) -> AscendInputBatch:\n        # Step 1: 调用父类做 head/tail split，得到 local_batch\n        local_batch = super().partition_batch(input_batch)\n\n        # Step 2: 从 req_states 重新索引 request-level metadata（gemini critical 修复）\n        local_batch.num_computed_tokens_np = self.req_states.num_computed_tokens_np[\n            local_batch.idx_mapping_np]\n        local_batch.prefill_len_np = self.req_states.prefill_len.np[\n            local_batch.idx_mapping_np]\n        local_batch.is_prefilling_np = (\n            local_batch.num_computed_tokens_np < local_batch.prefill_len_np)\n\n        # Step 3: 计算 local_seq_lens_np\n        local_seq_lens_np = (\n            local_batch.num_computed_tokens_np + local_batch.num_scheduled_tokens)\n        local_batch.seq_lens_np = local_seq_lens_np\n\n        # Step 4: 构造 KV block 映射表\n        local_block_table_raw = self.req_states.block_table[\n            local_batch.idx_mapping_np]\n        local_block_table = build_local_block_table(  # helper\n            local_block_table_raw,\n            local_seq_lens_np,\n            local_batch.num_reqs,\n            local_batch.num_scheduled_tokens,     # 第4个参数（block 数）\n            local_batch.num_scheduled_tokens,     # ❌ 第5个参数（query tokens，重复=含draft）\n        )\n        local_batch.block_table = local_block_table\n        return local_batch",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/v2/pcp_manager.py",
+      "line": 0,
+      "code": "# vllm_ascend/worker/v2/pcp_manager.py — AscendPCPManager.partition_batch()\n# commit 3d7c564 版本（修复后）\n\nclass AscendPCPManager(PCPManager):\n    \"\"\"Ascend-specific PCP manager for MRv2 context parallelism.\"\"\"\n\n    def partition_batch(self, input_batch: AscendInputBatch) -> AscendInputBatch:\n        # Step 1: 调用父类做 head/tail split，得到 local_batch\n        local_batch = super().partition_batch(input_batch)\n\n        # Step 2: 从 req_states 重新索引 request-level metadata\n        local_batch.num_computed_tokens_np = self.req_states.num_computed_tokens_np[\n            local_batch.idx_mapping_np]\n        local_batch.prefill_len_np = self.req_states.prefill_len.np[\n            local_batch.idx_mapping_np]\n        local_batch.is_prefilling_np = (\n            local_batch.num_computed_tokens_np < local_batch.prefill_len_np)\n\n        # Step 3: 计算 local_seq_lens_np\n        local_seq_lens_np = (\n            local_batch.num_computed_tokens_np + local_batch.num_scheduled_tokens)\n        local_batch.seq_lens_np = local_seq_lens_np\n\n        # Step 4: 构造 KV block 映射表\n        local_block_table_raw = self.req_states.block_table[\n            local_batch.idx_mapping_np]\n        local_block_table = build_local_block_table(\n            local_block_table_raw,\n            local_seq_lens_np,\n            local_batch.num_reqs,\n            local_batch.num_scheduled_tokens,\n            # ✅ 减去每 request 上的 draft tokens 份额，避免 KV 预算多算：\n            local_batch.num_scheduled_tokens\n            - (\n                local_batch.num_draft_tokens_per_req\n                if local_batch.num_draft_tokens_per_req is not None\n                else 0\n            ),\n        )\n        local_batch.block_table = local_block_table\n        return local_batch",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/v2/pcp_manager.py\n+++ b/vllm_ascend/worker/v2/pcp_manager.py\n@@ -1,5 +1,5 @@\n # vllm_ascend/worker/v2/pcp_manager.py — AscendPCPManager.partition_batch()\n-# commit fdde5af → f262da5 版本（评论前状态）\n+# commit 3d7c564 版本（修复后）\n \n class AscendPCPManager(PCPManager):\n     \"\"\"Ascend-specific PCP manager for MRv2 context parallelism.\"\"\"\n@@ -8,7 +8,7 @@\n         # Step 1: 调用父类做 head/tail split，得到 local_batch\n         local_batch = super().partition_batch(input_batch)\n \n-        # Step 2: 从 req_states 重新索引 request-level metadata（gemini critical 修复）\n+        # Step 2: 从 req_states 重新索引 request-level metadata\n         local_batch.num_computed_tokens_np = self.req_states.num_computed_tokens_np[\n             local_batch.idx_mapping_np]\n         local_batch.prefill_len_np = self.req_states.prefill_len.np[\n@@ -24,12 +24,18 @@\n         # Step 4: 构造 KV block 映射表\n         local_block_table_raw = self.req_states.block_table[\n             local_batch.idx_mapping_np]\n-        local_block_table = build_local_block_table(  # helper\n+        local_block_table = build_local_block_table(\n             local_block_table_raw,\n             local_seq_lens_np,\n             local_batch.num_reqs,\n-            local_batch.num_scheduled_tokens,     # 第4个参数（block 数）\n-            local_batch.num_scheduled_tokens,     # ❌ 第5个参数（query tokens，重复=含draft）\n+            local_batch.num_scheduled_tokens,\n+            # ✅ 减去每 request 上的 draft tokens 份额，避免 KV 预算多算：\n+            local_batch.num_scheduled_tokens\n+            - (\n+                local_batch.num_draft_tokens_per_req\n+                if local_batch.num_draft_tokens_per_req is not None\n+                else 0\n+            ),\n         )\n         local_batch.block_table = local_block_table\n         return local_batch",
+      "stats": "1 file changed, +11 lines, -5 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

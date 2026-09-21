@@ -1,0 +1,59 @@
+{
+  "report_id": "PR11980_001",
+  "pr_number": 11980,
+  "pr_title": "[Feature][Attention] Support compact KV gather for SFA DCP prefill",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/attention/context_parallel/sfa_cp.py:1018-1020"
+  ],
+  "landing_sha": "b9ebfe7",
+  "source_quote": "**P2 Handle packed KV in compact prefill gather**\n> For sparse-C8 SFA, the cache layout has `kv_cache[0]` as a packed KV tensor and no standalone RoPE cache; `kv_cache[1]` is the indexer cache when present, or absent on packed-only layers. In prefill/mixed DCP batches this new gather treats `kv_cache[1]` as `key_rope`, which either raises on packed-only layers or all-gathers unrelated indexer data before the quantized sparse-attention path ignores it; the compact gather should gather the packed KV tensor directly for this layout.",
+  "correspondence": [
+    {
+      "review_quote": "chatgpt-codex-connector[bot]: vllm_ascend/attention/context_parallel/sfa_cp.py:1018-1020",
+      "patch_snippet": "评后sha b9ebfe7 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "b9ebfe7",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "当 compact KV all-gather 同时服务于 sparse-C8（packed KV，nope/rope/quantization 打包在 `kv_cache[0]`，`kv_cache[1]` 为 indexer）与传统 layout（`kv_cache[0]` 为 nope KV、`kv_cache[1]` 为 key_rope）时，必须按 `use_sparse_c8_sfa` 等 layout 标志分支处理 gather 输入与 `split_sizes`，不能统一假设 `kv_cache[1]` 为 key_rope，否则在 packed-only layer 上会抛错或 all-gather 无关的 indexer 数据。",
+    "context": "",
+    "checkpoints": [
+      "检查 KV gather 逻辑是否按 cache layout（packed vs nope/rope 分离）分支处理",
+      "确认 sparse-C8 / packed KV 分支只 gather `kv_cache[0]`，`split_sizes` 仅含 packed 维度",
+      "确认非 packed 分支仍校验 `len(kv_cache) >= 2` 并拼接 nope/rope",
+      "验证 gather 输入 shape / dtype 校验在两个分支下都成立",
+      "补充单元测试覆盖 packed-only layer 的 gather 输入与 `split_sizes`"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/context_parallel/sfa_cp.py",
+      "line": 1005,
+      "code": "    def _record_dcp_kv_gather_context(self, kv_cache, attn_metadata):\n        \"\"\"Record the compact KV gather context for DCP prefill.\"\"\"\n        ...\n        valid_block_ids = attn_metadata.dcp_context.kv_gather_block_ids\n        block_table = attn_metadata.dcp_context.kv_gather_block_table\n        assert valid_block_ids is not None and block_table is not None\n\n        kv = torch.index_select(kv_cache[0], 0, valid_block_ids)\n        if len(kv_cache) < 2:\n            raise RuntimeError(\n                \"DCP SFA KV all-gather requires nope and rope KV caches.\")\n        # 错误：对 sparse-C8 layout，kv_cache[1] 是 indexer cache 而非 key_rope\n        key_rope = torch.index_select(kv_cache[1], 0, valid_block_ids)\n        if kv.shape[:-1] != key_rope.shape[:-1] or kv.dtype != key_rope.dtype:\n            raise RuntimeError(\n                \"Cannot fuse DCP KV gather for KV/nope and KV/rope caches with \"\n                f\"shapes {tuple(kv.shape)} / {tuple(key_rope.shape)} and \"\n                f\"dtypes {kv.dtype} / {key_rope.dtype}.\")\n        fused_kv = torch.cat([kv, key_rope], dim=-1).contiguous()\n        attn_metadata.dcp_context.gather_context = self._start_dcp_gather(\n            fused_kv,\n            dim=0,\n            split_sizes=(kv.shape[-1], key_rope.shape[-1]),\n        )",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/context_parallel/sfa_cp.py",
+      "line": 1005,
+      "code": "    def _record_dcp_kv_gather_context(self, kv_cache, attn_metadata):\n        \"\"\"Record the compact KV gather context for DCP prefill.\"\"\"\n        ...\n        valid_block_ids = attn_metadata.dcp_context.kv_gather_block_ids\n        block_table = attn_metadata.dcp_context.kv_gather_block_table\n        assert valid_block_ids is not None and block_table is not None\n\n        kv = torch.index_select(kv_cache[0], 0, valid_block_ids)\n        if self.use_sparse_c8_sfa:\n            # Sparse C8 stores nope, rope, and quantization data in one\n            # packed SFA KV cache. The remaining cache entries belong to\n            # the indexer and must not participate in the DCP SFA KV\n            # all-gather.\n            gather_input = kv.contiguous()\n            split_sizes = (kv.shape[-1],)\n        else:\n            if len(kv_cache) < 2:\n                raise RuntimeError(\n                    \"DCP SFA KV all-gather requires nope and rope KV caches.\")\n            key_rope = torch.index_select(kv_cache[1], 0, valid_block_ids)\n            if kv.shape[:-1] != key_rope.shape[:-1] or \\\n               kv.dtype != key_rope.dtype:\n                raise RuntimeError(\n                    \"Cannot fuse DCP KV gather for KV/nope and KV/rope \"\n                    f\"caches with shapes {tuple(kv.shape)} / \"\n                    f\"{tuple(key_rope.shape)} and dtypes {kv.dtype} / \"\n                    f\"{key_rope.dtype}.\")\n            gather_input = torch.cat([kv, key_rope], dim=-1).contiguous()\n            split_sizes = (kv.shape[-1], key_rope.shape[-1])\n        attn_metadata.dcp_context.gather_context = self._start_dcp_gather(\n            gather_input,\n            dim=0,\n            split_sizes=split_sizes,\n        )",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/context_parallel/sfa_cp.py\n+++ b/vllm_ascend/attention/context_parallel/sfa_cp.py\n@@ -6,19 +6,29 @@\n         assert valid_block_ids is not None and block_table is not None\n \n         kv = torch.index_select(kv_cache[0], 0, valid_block_ids)\n-        if len(kv_cache) < 2:\n-            raise RuntimeError(\n-                \"DCP SFA KV all-gather requires nope and rope KV caches.\")\n-        # 错误：对 sparse-C8 layout，kv_cache[1] 是 indexer cache 而非 key_rope\n-        key_rope = torch.index_select(kv_cache[1], 0, valid_block_ids)\n-        if kv.shape[:-1] != key_rope.shape[:-1] or kv.dtype != key_rope.dtype:\n-            raise RuntimeError(\n-                \"Cannot fuse DCP KV gather for KV/nope and KV/rope caches with \"\n-                f\"shapes {tuple(kv.shape)} / {tuple(key_rope.shape)} and \"\n-                f\"dtypes {kv.dtype} / {key_rope.dtype}.\")\n-        fused_kv = torch.cat([kv, key_rope], dim=-1).contiguous()\n+        if self.use_sparse_c8_sfa:\n+            # Sparse C8 stores nope, rope, and quantization data in one\n+            # packed SFA KV cache. The remaining cache entries belong to\n+            # the indexer and must not participate in the DCP SFA KV\n+            # all-gather.\n+            gather_input = kv.contiguous()\n+            split_sizes = (kv.shape[-1],)\n+        else:\n+            if len(kv_cache) < 2:\n+                raise RuntimeError(\n+                    \"DCP SFA KV all-gather requires nope and rope KV caches.\")\n+            key_rope = torch.index_select(kv_cache[1], 0, valid_block_ids)\n+            if kv.shape[:-1] != key_rope.shape[:-1] or \\\n+               kv.dtype != key_rope.dtype:\n+                raise RuntimeError(\n+                    \"Cannot fuse DCP KV gather for KV/nope and KV/rope \"\n+                    f\"caches with shapes {tuple(kv.shape)} / \"\n+                    f\"{tuple(key_rope.shape)} and dtypes {kv.dtype} / \"\n+                    f\"{key_rope.dtype}.\")\n+            gather_input = torch.cat([kv, key_rope], dim=-1).contiguous()\n+            split_sizes = (kv.shape[-1], key_rope.shape[-1])\n         attn_metadata.dcp_context.gather_context = self._start_dcp_gather(\n-            fused_kv,\n+            gather_input,\n             dim=0,\n-            split_sizes=(kv.shape[-1], key_rope.shape[-1]),\n+            split_sizes=split_sizes,\n         )",
+      "stats": "1 file changed, +23 lines, -13 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

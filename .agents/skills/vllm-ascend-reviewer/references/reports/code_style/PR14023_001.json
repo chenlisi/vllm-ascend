@@ -1,0 +1,61 @@
+{
+  "report_id": "PR14023_001",
+  "pr_number": 14023,
+  "pr_title": "[Feature][MRV2] Support basic GQA prefill context parallelism",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/v2/model_runner.py:129"
+  ],
+  "landing_sha": "c4596bf",
+  "source_quote": "Do we support DCP in MRV2 now?",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/worker/v2/model_runner.py:129",
+      "patch_snippet": "评后sha c4596bf 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "c4596bf",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "错误信息应精确反映当前不支持的功能，而非笼统地禁止一组功能。当部分功能已支持时，应更新错误信息。",
+    "context": "",
+    "checkpoints": [
+      "识别错误信息中是否笼统禁止了多个功能",
+      "确认哪些功能已支持、哪些未支持",
+      "更新错误信息只禁止真正不支持的功能"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/v2/model_runner.py",
+      "line": 129,
+      "code": "# vllm_ascend/worker/v2/model_runner.py\n# NPUModelRunner.__init__ 方法内，约第 124-135 行\nclass NPUModelRunner(GPUModelRunner):\n    \"\"\"Model runner for Ascend NPUs.\"\"\"\n\n    execute_model_state: ExecuteModelState | None\n\n    def __init__(self, vllm_config: VllmConfig, device: torch.device):\n        # Ascend-specific configurations\n        self.ascend_config = get_ascend_config()\n        # FusedMoE can be constructed by the parent initializer and reads this\n        # capacity while setting up MC2 communication.\n        set_potential_max_tokens(vllm_config)\n        parallel_config = vllm_config.parallel_config\n        # ❌ PCP 和 DCP 都被笼统禁止，但 PCP 已在此 PR 中实现支持\n        if parallel_config.prefill_context_parallel_size > 1 or \\\n           parallel_config.decode_context_parallel_size > 1:\n            raise NotImplementedError(\n                \"Context parallelism is not supported by Ascend NPU model runner v2.\"\n            )\n\n        with torch_cuda_wrapper():\n            super().__init__(vllm_config, device)",
+      "context": "vllm_ascend/worker/v2/model_runner.py NPUModelRunner.__init__ 方法内，约第 124-135 行 Ascend-specific configurations"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/v2/model_runner.py",
+      "line": 129,
+      "code": "# vllm_ascend/worker/v2/model_runner.py\nclass NPUModelRunner(GPUModelRunner):\n    \"\"\"Model runner for Ascend NPUs.\"\"\"\n\n    execute_model_state: ExecuteModelState | None\n\n    def __init__(self, vllm_config: VllmConfig, device: torch.device):\n        # Ascend-specific configurations\n        self.ascend_config = get_ascend_config()\n        # FusedMoE can be constructed by the parent initializer and reads this\n        # capacity while setting up MC2 communication.\n        set_potential_max_tokens(vllm_config)\n        parallel_config = vllm_config.parallel_config\n        # ✅ 只禁止 DCP（确实不支持），PCP 已在此 PR 中实现\n        if parallel_config.decode_context_parallel_size > 1:\n            raise NotImplementedError(\n                \"Decode Context parallelism is not supported by Ascend NPU model runner v2.\"\n            )\n\n        with torch_cuda_wrapper():\n            super().__init__(vllm_config, device)",
+      "context": "vllm_ascend/worker/v2/model_runner.py Ascend-specific configurations FusedMoE can be constructed by the parent initializer and reads this"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/v2/model_runner.py\n+++ b/vllm_ascend/worker/v2/model_runner.py\n@@ -1,5 +1,4 @@\n # vllm_ascend/worker/v2/model_runner.py\n-# NPUModelRunner.__init__ 方法内，约第 124-135 行\n class NPUModelRunner(GPUModelRunner):\n     \"\"\"Model runner for Ascend NPUs.\"\"\"\n \n@@ -12,11 +11,10 @@\n         # capacity while setting up MC2 communication.\n         set_potential_max_tokens(vllm_config)\n         parallel_config = vllm_config.parallel_config\n-        # ❌ PCP 和 DCP 都被笼统禁止，但 PCP 已在此 PR 中实现支持\n-        if parallel_config.prefill_context_parallel_size > 1 or \\\n-           parallel_config.decode_context_parallel_size > 1:\n+        # ✅ 只禁止 DCP（确实不支持），PCP 已在此 PR 中实现\n+        if parallel_config.decode_context_parallel_size > 1:\n             raise NotImplementedError(\n-                \"Context parallelism is not supported by Ascend NPU model runner v2.\"\n+                \"Decode Context parallelism is not supported by Ascend NPU model runner v2.\"\n             )\n \n         with torch_cuda_wrapper():\n",
+      "stats": "1 file changed, +3 lines, -5 lines",
+      "key_changes": [
+        "移除: parallel_config.decode_context_parallel_size > 1:",
+        "移除: \"Context parallelism is not supported by Ascend NPU model runner v2.\"",
+        "移除: if parallel_config.prefill_context_parallel_size > 1 or \\",
+        "新增: \"Decode Context parallelism is not supported by Ascend NPU model runner v2.\"",
+        "新增: if parallel_config.decode_context_parallel_size > 1:"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

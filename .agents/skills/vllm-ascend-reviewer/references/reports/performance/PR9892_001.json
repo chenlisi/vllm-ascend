@@ -1,0 +1,68 @@
+{
+  "report_id": "PR9892_001",
+  "pr_number": 9892,
+  "pr_title": "[Performance](dsa_cp): recompute local_seq_lens for cpu to remove D2H",
+  "pr_status": "merged",
+  "merged_at": "2026-06-10T07:35:29Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/context_parallel/dsa_cp.py:693",
+    "vllm_ascend/attention/context_parallel/dsa_cp.py:300"
+  ],
+  "landing_sha": "61a9f77",
+  "source_quote": "why do we cat a 0 here?\nwhy not just maintain one `seq_lens_cpu`? This is confusing.",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao: vllm_ascend/attention/context_parallel/dsa_cp.py:693(2026-06-02 12:57:14)",
+      "patch_snippet": "评后sha 61a9f77 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/attention/context_parallel/dsa_cp.py:300(2026-06-02 12:59:13)",
+      "patch_snippet": "评后sha 61a9f77 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "61a9f77",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当代码中出现非直觉的 tensor 操作（如拼接零值、填充等）时，应添加注释说明操作的目的和原因，提高代码可读性。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/attention/context_parallel/dsa_cp.py",
+      "line": 685,
+      "code": "def _build_local_query_lens_cpu(\n    self,\n    common_attn_metadata: CommonAttentionMetadata,\n    num_reqs: int,\n    local_rank: int,\n    cp_size: int,\n) -> torch.Tensor:\n    \"\"\"Compute local query lengths on CPU to avoid D2H sync.\"\"\"\n    query_start_loc_cpu = common_attn_metadata.query_start_loc_cpu[:num_reqs + 1]\n    local_query_lens = query_start_loc_cpu[1:] - query_start_loc_cpu[:-1]\n\n    # Pad a zero to align with CPU-side sequence length computation\n    # (the extra element corresponds to the sentinel entry in seq_lens)\n    local_seq_lens = torch.cat(\n        [local_query_lens, torch.tensor([0], device=local_query_lens.device)]\n    )\n    return local_seq_lens",
+      "context": "why do we cat a 0 here?\nwhy not just maintain one `seq_lens_cpu`? This is confusing."
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/context_parallel/dsa_cp.py",
+      "line": 685,
+      "code": "def _build_local_query_lens_cpu(\n    self,\n    common_attn_metadata: CommonAttentionMetadata,\n    num_reqs: int,\n    local_rank: int,\n    cp_size: int,\n) -> torch.Tensor:\n    \"\"\"Compute local query lengths on CPU to avoid D2H sync.\"\"\"\n    query_start_loc_cpu = common_attn_metadata.query_start_loc_cpu[:num_reqs + 1]\n    local_query_lens = query_start_loc_cpu[1:] - query_start_loc_cpu[:-1]\n\n    # Pad 0 to align with CPU-side seq length computation:\n    # the extra element corresponds to the sentinel entry in seq_lens,\n    # ensuring local_seq_lens has the same length as the device-side tensor.\n    # Use new_zeros(1) to avoid allocating a new 1-element tensor from Python list\n    # and to ensure dtype/device match. (Copilot suggestion)\n    local_seq_lens = torch.cat(\n        [local_query_lens, local_query_lens.new_zeros(1)]\n    )\n    return local_seq_lens",
+      "context": "why do we cat a 0 here?\nwhy not just maintain one `seq_lens_cpu`? This is confusing."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/context_parallel/dsa_cp.py\n+++ b/vllm_ascend/attention/context_parallel/dsa_cp.py\n@@ -9,9 +9,12 @@\n     query_start_loc_cpu = common_attn_metadata.query_start_loc_cpu[:num_reqs + 1]\n     local_query_lens = query_start_loc_cpu[1:] - query_start_loc_cpu[:-1]\n \n-    # Pad a zero to align with CPU-side sequence length computation\n-    # (the extra element corresponds to the sentinel entry in seq_lens)\n+    # Pad 0 to align with CPU-side seq length computation:\n+    # the extra element corresponds to the sentinel entry in seq_lens,\n+    # ensuring local_seq_lens has the same length as the device-side tensor.\n+    # Use new_zeros(1) to avoid allocating a new 1-element tensor from Python list\n+    # and to ensure dtype/device match. (Copilot suggestion)\n     local_seq_lens = torch.cat(\n-        [local_query_lens, torch.tensor([0], device=local_query_lens.device)]\n+        [local_query_lens, local_query_lens.new_zeros(1)]\n     )\n     return local_seq_lens\n",
+      "stats": "1 file changed, +6 lines, -3 lines",
+      "key_changes": [
+        "-    # Pad a zero to align with CPU-side sequence length computation",
+        "-    # (the extra element corresponds to the sentinel entry in seq_lens)",
+        "+    # Pad 0 to align with CPU-side seq length computation:",
+        "+    # the extra element corresponds to the sentinel entry in seq_lens,",
+        "+    # ensuring local_seq_lens has the same length as the device-side tensor.",
+        "+    # Use new_zeros(1) to avoid allocating a new 1-element tensor from Python list",
+        "+    # and to ensure dtype/device match. (Copilot suggestion)",
+        "-        [local_query_lens, torch.tensor([0], device=local_query_lens.device)]",
+        "+        [local_query_lens, local_query_lens.new_zeros(1)]"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

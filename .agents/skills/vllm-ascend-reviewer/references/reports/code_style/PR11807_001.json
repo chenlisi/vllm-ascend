@@ -1,0 +1,56 @@
+{
+  "report_id": "PR11807_001",
+  "pr_number": 11807,
+  "pr_title": "[BugFix] Fix small chunk problem for pcp+qwen3.5",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/ops/triton/fla/chunk.py:19"
+  ],
+  "landing_sha": "56f9164",
+  "source_quote": "Useless, remove it.",
+  "correspondence": [
+    {
+      "review_quote": "weiguihua2: vllm_ascend/ops/triton/fla/chunk.py:19",
+      "patch_snippet": "评后sha 56f9164 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "56f9164",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在修复 bug 或重构代码时，应检查并移除不再有用的代码行，避免遗留无用逻辑增加维护负担和混淆。",
+    "context": "",
+    "checkpoints": [
+      "检查修复后的代码中是否残留不再需要的行",
+      "确认每行代码都有明确的用途"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/triton/fla/chunk.py",
+      "line": 1,
+      "code": "import torch\nimport triton\nimport triton.language as tl\n\nfrom vllm_ascend.ops.triton.fla.utils import (\n    LOGITS_SOFT_CAP,\n    compute_cumsum,\n    prepare_chunk_inputs,\n)\n\n# 根据评审意见推断：L19 处存在一行无用代码（如多余的 import 或变量赋值）\n# 评审人 weiguihua2 标记为 \"Useless, remove it.\"\nuseless_import_or_line = None  # 此行被标记为无用\n\n@triton.jit\ndef chunk_recurrent_kernel(\n    q, k, v, beta, o, h0,\n    s_qh, s_qt, s_qd,\n    s_kh, s_kt, s_kd,\n    s_vh, s_vt, s_vd,\n    T, H, BT, BD, BV,\n    USE_OFFSET: tl.constexpr,\n):\n    \"\"\"Forward chunk kernel for PCP + Qwen3.5 small chunk handling.\"\"\"\n    ...",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/triton/fla/chunk.py",
+      "line": 1,
+      "code": "import torch\nimport triton\nimport triton.language as tl\n\nfrom vllm_ascend.ops.triton.fla.utils import (\n    LOGITS_SOFT_CAP,\n    compute_cumsum,\n    prepare_chunk_inputs,\n)\n\n# 无用的代码行已移除\n\n@triton.jit\ndef chunk_recurrent_kernel(\n    q, k, v, beta, o, h0,\n    s_qh, s_qt, s_qd,\n    s_kh, s_kt, s_kd,\n    s_vh, s_vt, s_vd,\n    T, H, BT, BD, BV,\n    USE_OFFSET: tl.constexpr,\n):\n    \"\"\"Forward chunk kernel for PCP + Qwen3.5 small chunk handling.\"\"\"\n    ...",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/triton/fla/chunk.py\n+++ b/vllm_ascend/ops/triton/fla/chunk.py\n@@ -8,9 +8,7 @@\n     prepare_chunk_inputs,\n )\n \n-# 根据评审意见推断：L19 处存在一行无用代码（如多余的 import 或变量赋值）\n-# 评审人 weiguihua2 标记为 \"Useless, remove it.\"\n-useless_import_or_line = None  # 此行被标记为无用\n+# 无用的代码行已移除\n \n @triton.jit\n def chunk_recurrent_kernel(",
+      "stats": "1 file changed, +1 lines, -3 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

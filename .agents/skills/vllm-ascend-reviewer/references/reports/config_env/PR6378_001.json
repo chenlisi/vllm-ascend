@@ -1,0 +1,63 @@
+{
+  "report_id": "PR6378_001",
+  "pr_number": 6378,
+  "pr_title": "[CI] Add DeepSeek-V3.2 large EP nightly ci",
+  "pr_status": "merged",
+  "merged_at": "2026-03-04T03:38:34Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/e2e/nightly/multi_node/config/DeepSeek-V3_2-W8A8-A3-EP.yaml:47",
+    "tests/e2e/nightly/multi_node/config/DeepSeek-V3_2-W8A8-A3-EP.yaml:94",
+    "tests/e2e/nightly/multi_node/config/DeepSeek-V3_2-W8A8-A3-EP.yaml:154",
+    "tests/e2e/nightly/multi_node/config/DeepSeek-V3_2-W8A8-A3-EP.yaml:203"
+  ],
+  "landing_sha": "79bdc42",
+  "source_quote": "set to 16384",
+  "correspondence": [
+    {
+      "review_quote": "starmountain1997 指出需要将 max-model-len 设置为 16384，并删除冗余配置项。作者通过 commit `79bdc42` 添加了 DeepSeek-V3.2-W8A8 大 EP 测试配置，4/4 建议通过后续 sha 落地。",
+      "patch_snippet": "commit `79bdc42`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "79bdc42",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "CI 测试配置中的 max-model-len 等参数应根据实际测试需求设置合理值，避免过大导致资源浪费或过小导致测试不充分。冗余参数应及时清理。",
+    "context": "",
+    "checkpoints": [
+      "max-model-len 应根据模型和硬件规格设置合理值",
+      "配置文件中不应存在冗余或重复的参数",
+      "新增 CI 配置应经过评审人确认参数值"
+    ],
+    "antipattern": {
+      "file": "tests/e2e/nightly/multi_node/config/DeepSeek-V3_2-W8A8-A3-EP.yaml",
+      "line": 125,
+      "code": "server_cmd:\n  - vllm serve\n  - /models/DeepSeek-V3.2-W8A8\n  - --tensor-parallel-size 16\n  - --pipeline-parallel-size 2\n  - --max-model-len 68000          # 值过大（starmountain1997: set to 16384）\n  - --max-num-batched-tokens 12\n  - --quantization ascend           # line 130 首次定义\n  - --max-num-seqs 28               # line 131 首次定义\n  - --compilation-config '{\"cudagraph_mode\":\"FULL_DECODE_ONLY\"}'\n  - --trust-remote-code\n  - --gpu-memory-utilization 0.95\n  - --quantization ascend           # line 140 重复定义（gemini: duplicated）\n  - --max-num-seqs 4                # line 136 重复定义，值被覆盖\n  - --no-enable-prefix-caching\n  - --async-scheduling",
+      "context": "set to 16384"
+    },
+    "pattern": {
+      "file": "tests/e2e/nightly/multi_node/config/DeepSeek-V3_2-W8A8-A3-EP.yaml",
+      "line": 125,
+      "code": "server_cmd:\n  - vllm serve\n  - /models/DeepSeek-V3.2-W8A8\n  - --tensor-parallel-size 16\n  - --pipeline-parallel-size 2\n  - --max-model-len 16384           # 设置为 16384\n  - --max-num-batched-tokens 12\n  - --quantization ascend\n  - --max-num-seqs 28               # 保留 28，移除重复的 4\n  - --compilation-config '{\"cudagraph_mode\":\"FULL_DECODE_ONLY\", \"cudagraph_capture_sizes\":[3, 6, 9, 12]}'\n  - --trust-remote-code\n  - --gpu-memory-utilization 0.95\n  - --no-enable-prefix-caching\n  - --async-scheduling",
+      "context": "set to 16384"
+    },
+    "diff": {
+      "unified": "--- a/tests/e2e/nightly/multi_node/config/DeepSeek-V3_2-W8A8-A3-EP.yaml\n+++ b/tests/e2e/nightly/multi_node/config/DeepSeek-V3_2-W8A8-A3-EP.yaml\n@@ -125,16 +125,14 @@\n   - /models/DeepSeek-V3.2-W8A8\n   - --tensor-parallel-size 16\n   - --pipeline-parallel-size 2\n-  - --max-model-len 68000          # 值过大（starmountain1997: set to 16384）\n+  - --max-model-len 16384           # 设置为 16384\n   - --max-num-batched-tokens 12\n-  - --quantization ascend           # line 130 首次定义\n-  - --max-num-seqs 28               # line 131 首次定义\n-  - --compilation-config '{\"cudagraph_mode\":\"FULL_DECODE_ONLY\"}'\n+  - --quantization ascend\n+  - --max-num-seqs 28               # 保留 28，移除重复的 4\n+  - --compilation-config '{\"cudagraph_mode\":\"FULL_DECODE_ONLY\", \"cudagraph_capture_sizes\":[3, 6, 9, 12]}'\n   - --trust-remote-code\n   - --gpu-memory-utilization 0.95\n-  - --quantization ascend           # line 140 重复定义（gemini: duplicated）\n-  - --max-num-seqs 4                # line 136 重复定义，值被覆盖\n   - --no-enable-prefix-caching\n   - --async-scheduling",
+      "stats": "1 file changed, +4 lines, -6 lines",
+      "key_changes": [
+        "修改了第 6-6 行的代码",
+        "修改了第 8-10 行的代码",
+        "删除了第 13-14 行的代码"
+      ]
+    },
+    "language": "yaml",
+    "_status": "extracted"
+  }
+}

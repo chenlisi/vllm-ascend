@@ -1,0 +1,63 @@
+{
+  "report_id": "PR2198_001",
+  "pr_number": 2198,
+  "pr_title": "[main][prefill optimization] Optimize parallel strategies to reduce communication overhead",
+  "pr_status": "merged",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/models/deepseek_v2.py:615",
+    "vllm_ascend/ops/fused_moe.py:1108"
+  ],
+  "landing_sha": "b00fa60",
+  "source_quote": "In the case of severe load imbalance between DPs, the DP domain may become stuck？\nThis line change appears to be unrelated to the purpose of this PR.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/models/deepseek_v2.py:615",
+      "patch_snippet": "评后sha b00fa60 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/ops/fused_moe.py:1108",
+      "patch_snippet": "评后sha b00fa60 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "b00fa60",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "每个 PR 应专注于单一目标。如果某行修改与 PR 的核心目的无关，应将其移除或在独立 PR 中处理，避免引入不相关的变更。",
+    "context": "",
+    "checkpoints": [
+      "每处代码修改是否与 PR 标题和描述一致",
+      "是否存在与 PR 目标无关的附带修改",
+      "性能优化是否考虑了边界情况（如负载不均）"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/models/deepseek_v2.py",
+      "line": 600,
+      "code": "# 评审人 momo609: \"In the case of severe load imbalance between DPs,\n#   the DP domain may become stuck？\"\n\nfrom typing import Optional, Dict\nimport torch\nimport torch.nn as nn\n\nfrom vllm.config import VllmConfig\nfrom vllm.model_executor.layers.fused_moe import FusedMoE\n\nclass DeepSeekV2MoE(nn.Module):\n    \"\"\"DeepSeek V2 MoE layer with shared expert DP optimization.\"\"\"\n\n    def __init__(self, config, vllm_config, ...):\n        super().__init__()\n        additional_config = vllm_config.additional_config\n        # hardcode: 直接硬编码 enable_shared_expert_dp\n        self.enable_shared_expert_dp = True\n        self.torchair_graph_config = vllm_config.torchair_graph_config\n\n    def forward(self, hidden_states, ...):\n        # DP 域内 all_gather 操作\n        if self.enable_shared_expert_dp:\n            # 在 DP 域内的所有 TP 之间做 all_gather\n            # 不同 DP 域互不影响\n            hidden_states = dist.all_gather(hidden_states, group=dp_group)\n        return self.experts(hidden_states)",
+      "context": "评审人 momo609: \"In the case of severe load imbalance between DPs, the DP domain may become stuck？\" hardcode: 直接硬编码 enable_shared_expert_dp"
+    },
+    "pattern": {
+      "file": "vllm_ascend/models/deepseek_v2.py",
+      "line": 600,
+      "code": "# commit b00fa60 \"fix hardcode issue\" 修复了 hardcode 问题\n# 作者解释: \"Here the DP domain will not block, this is all_gather of all TPs\n#  within the DP domain, and different DP domains will not affect each other.\"\n\nfrom typing import Optional, Dict\nimport torch\nimport torch.nn as nn\n\nfrom vllm.config import VllmConfig\nfrom vllm.model_executor.layers.fused_moe import FusedMoE\n\nclass DeepSeekV2MoE(nn.Module):\n    \"\"\"DeepSeek V2 MoE layer with shared expert DP optimization.\"\"\"\n\n    def __init__(self, config, vllm_config, ...):\n        super().__init__()\n        additional_config = vllm_config.additional_config\n        # 修复 hardcode，从配置中读取并添加前置条件检查\n        self.enable_shared_expert_dp = additional_config.get(\n            \"enable_shared_expert_dp\", True\n        ) and not self.torchair_graph_config.enabled \\\n          and vllm_config.parallel_config.enable_expert_parallel\n        self.torchair_graph_config = vllm_config.torchair_graph_config\n\n    def forward(self, hidden_states, ...):\n        # DP 域内 all_gather 操作\n        if self.enable_shared_expert_dp:\n            hidden_states = dist.all_gather(hidden_states, group=dp_group)\n        return self.experts(hidden_states)",
+      "context": "commit b00fa60 \"fix hardcode issue\" 修复了 hardcode 问题 作者解释: \"Here the DP domain will not block, this is all_gather of all TPs within the DP domain, and different DP domains will not affect each other.\""
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/models/deepseek_v2.py\n+++ b/vllm_ascend/models/deepseek_v2.py\n@@ -1,5 +1,6 @@\n-# 评审人 momo609: \"In the case of severe load imbalance between DPs,\n-#   the DP domain may become stuck？\"\n+# commit b00fa60 \"fix hardcode issue\" 修复了 hardcode 问题\n+# 作者解释: \"Here the DP domain will not block, this is all_gather of all TPs\n+#  within the DP domain, and different DP domains will not affect each other.\"\n \n from typing import Optional, Dict\n import torch\n@@ -14,14 +15,15 @@\n     def __init__(self, config, vllm_config, ...):\n         super().__init__()\n         additional_config = vllm_config.additional_config\n-        # hardcode: 直接硬编码 enable_shared_expert_dp\n-        self.enable_shared_expert_dp = True\n+        # 修复 hardcode，从配置中读取并添加前置条件检查\n+        self.enable_shared_expert_dp = additional_config.get(\n+            \"enable_shared_expert_dp\", True\n+        ) and not self.torchair_graph_config.enabled \\\n+          and vllm_config.parallel_config.enable_expert_parallel\n         self.torchair_graph_config = vllm_config.torchair_graph_config\n \n     def forward(self, hidden_states, ...):\n         # DP 域内 all_gather 操作\n         if self.enable_shared_expert_dp:\n-            # 在 DP 域内的所有 TP 之间做 all_gather\n-            # 不同 DP 域互不影响\n             hidden_states = dist.all_gather(hidden_states, group=dp_group)\n         return self.experts(hidden_states)\n",
+      "stats": "1 file changed, +8 lines, -6 lines",
+      "key_changes": [
+        "新增: and vllm_config.parallel_config.enable_expert_parallel"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "report_id": "PR10041_001",
+  "pr_number": 10041,
+  "pr_title": "[Bugfix][DSV4] Enhance QLI workspace size calculation for ASCEND 950",
+  "pr_status": "merged",
+  "merged_at": "2026-06-13T09:33:45Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "csrc/attention/quant_lightning_indexer/op_host/quant_lightning_indexer_tiling.cpp:879"
+  ],
+  "landing_sha": "b6678f3",
+  "source_quote": "Could we move these ASCEND950-specific constants to the workspace-size constant block above and name them with platform-specific uppercase names, e.g. `ASCEND950_S1_BASE_SIZE` and `ASCEND950_S2_BASE_SIZE`? Keeping all workspace-size constants together would make this formula easier to scan and avoid mixing constant declarations with branch logic.",
+  "correspondence": [
+    {
+      "review_quote": "maoxx241 建议将 ASCEND950 特定的常量从分支逻辑中提取出来，移到上方的 workspace-size 常量块中，并使用平台特定的大写命名（如 `ASCEND950_S1_BASE_SIZE`、`ASCEND950_S2_BASE_SIZE`）。这样做可以让所有 workspace 相关的常量集中在一起，使公式更易扫描，避免常量声明与分支逻辑混杂。作者在 commit `b6678f3` 中采纳了该建议，修改了 +4/-2 行。",
+      "patch_snippet": "commit `b6678f3`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "b6678f3",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "平台特定的常量（如 ASCEND950 的 workspace 大小参数）应从分支逻辑中提取出来，集中定义在统一的常量块中，并使用平台前缀的大写命名（如 `ASCEND950_S1_BASE_SIZE`），避免在分支中直接使用魔法数字。",
+    "context": "",
+    "checkpoints": [
+      "检查分支逻辑中是否存在散落的魔法数字",
+      "确认平台特定常量是否集中定义在统一的常量块中",
+      "验证常量命名是否包含平台前缀和大写格式",
+      "确认所有 workspace 相关常量是否便于集中查看"
+    ],
+    "antipattern": {
+      "file": "csrc/attention/quant_lightning_indexer/op_host/quant_lightning_indexer_tiling.cpp",
+      "line": 879,
+      "code": "// csrc/attention/quant_lightning_indexer/op_host/quant_lightning_indexer_tiling.cpp\n\n// Workspace size constants\nconstexpr uint32_t ASCEND910B_S1_BASE_SIZE = 1024 * 128;\nconstexpr uint32_t ASCEND910B_S2_BASE_SIZE = 1024 * 64;\n// ... 其他平台的常量定义 ...\n\n// gemini-code-assist[bot] 指出：uint32_t 在序列长度超过 300K 时可能溢出\n// 例如 seq_len=12M, 24 AIC cores 时 workspace 需要 ~4.6 GB，超过 uint32_t 上限 4 GB\nuint32_t workspaceSize = ascendcPlatform.GetLibApiWorkSpaceSize();\n\n// ASCEND950 特定的常量直接嵌入在分支逻辑中（maoxx241 评审：常量与分支逻辑混杂）\nif (soc_version == \"ASCEND950\") {\n    // 魔法数字 1024*256 和 1024*128 散落在分支中，未使用命名常量\n    workspaceSize = 1024 * 256 + 1024 * 128;\n} else if (soc_version == \"ASCEND910B\") {\n    workspaceSize = ASCEND910B_S1_BASE_SIZE + ASCEND910B_S2_BASE_SIZE;\n}",
+      "context": "nit: Could we move these ASCEND950-specific constants to the workspace-size constant block above and name them with platform-specific uppercase names, e.g. `ASCEND950_S1_BASE_SIZE` and `ASCEND950_S2_BASE_SIZE`? Keeping all workspace-size constants together would make this formula easier to scan and avoid mixing constant declarations with branch logic."
+    },
+    "pattern": {
+      "file": "csrc/attention/quant_lightning_indexer/op_host/quant_lightning_indexer_tiling.cpp",
+      "line": 879,
+      "code": "// csrc/attention/quant_lightning_indexer/op_host/quant_lightning_indexer_tiling.cpp\n\n// Workspace size constants（所有平台常量集中定义）\nconstexpr size_t ASCEND910B_S1_BASE_SIZE = 1024 * 128;\nconstexpr size_t ASCEND910B_S2_BASE_SIZE = 1024 * 64;\n// gemini-code-assist[bot] suggestion：使用 size_t 防止溢出（64-bit 平台上为 64 位）\nconstexpr size_t ASCEND950_S1_BASE_SIZE = 1024 * 256;   // maoxx241 建议的命名\nconstexpr size_t ASCEND950_S2_BASE_SIZE = 1024 * 128;   // 从分支逻辑中提取到常量块\n\n// 类型从 uint32_t 改为 size_t，防止大序列长度下溢出\nsize_t workspaceSize = ascendcPlatform.GetLibApiWorkSpaceSize();\n\n// 分支逻辑中使用命名常量，不再散落魔法数字（+4/-2 行）\nif (soc_version == \"ASCEND950\") {\n    workspaceSize = ASCEND950_S1_BASE_SIZE + ASCEND950_S2_BASE_SIZE;\n} else if (soc_version == \"ASCEND910B\") {\n    workspaceSize = ASCEND910B_S1_BASE_SIZE + ASCEND910B_S2_BASE_SIZE;\n}",
+      "context": "nit: Could we move these ASCEND950-specific constants to the workspace-size constant block above and name them with platform-specific uppercase names, e.g. `ASCEND950_S1_BASE_SIZE` and `ASCEND950_S2_BASE_SIZE`? Keeping all workspace-size constants together would make this formula easier to scan and avoid mixing constant declarations with branch logic."
+    },
+    "diff": {
+      "unified": "--- a/csrc/attention/quant_lightning_indexer/op_host/quant_lightning_indexer_tiling.cpp\n+++ b/csrc/attention/quant_lightning_indexer/op_host/quant_lightning_indexer_tiling.cpp\n@@ -1,18 +1,18 @@\n // csrc/attention/quant_lightning_indexer/op_host/quant_lightning_indexer_tiling.cpp\n \n-// Workspace size constants\n-constexpr uint32_t ASCEND910B_S1_BASE_SIZE = 1024 * 128;\n-constexpr uint32_t ASCEND910B_S2_BASE_SIZE = 1024 * 64;\n-// ... 其他平台的常量定义 ...\n+// Workspace size constants（所有平台常量集中定义）\n+constexpr size_t ASCEND910B_S1_BASE_SIZE = 1024 * 128;\n+constexpr size_t ASCEND910B_S2_BASE_SIZE = 1024 * 64;\n+// gemini-code-assist[bot] suggestion：使用 size_t 防止溢出（64-bit 平台上为 64 位）\n+constexpr size_t ASCEND950_S1_BASE_SIZE = 1024 * 256;   // maoxx241 建议的命名\n+constexpr size_t ASCEND950_S2_BASE_SIZE = 1024 * 128;   // 从分支逻辑中提取到常量块\n \n-// gemini-code-assist[bot] 指出：uint32_t 在序列长度超过 300K 时可能溢出\n-// 例如 seq_len=12M, 24 AIC cores 时 workspace 需要 ~4.6 GB，超过 uint32_t 上限 4 GB\n-uint32_t workspaceSize = ascendcPlatform.GetLibApiWorkSpaceSize();\n+// 类型从 uint32_t 改为 size_t，防止大序列长度下溢出\n+size_t workspaceSize = ascendcPlatform.GetLibApiWorkSpaceSize();\n \n-// ASCEND950 特定的常量直接嵌入在分支逻辑中（maoxx241 评审：常量与分支逻辑混杂）\n+// 分支逻辑中使用命名常量，不再散落魔法数字（+4/-2 行）\n if (soc_version == \"ASCEND950\") {\n-    // 魔法数字 1024*256 和 1024*128 散落在分支中，未使用命名常量\n-    workspaceSize = 1024 * 256 + 1024 * 128;\n+    workspaceSize = ASCEND950_S1_BASE_SIZE + ASCEND950_S2_BASE_SIZE;\n } else if (soc_version == \"ASCEND910B\") {\n     workspaceSize = ASCEND910B_S1_BASE_SIZE + ASCEND910B_S2_BASE_SIZE;\n }",
+      "stats": "1 file changed, +10 lines, -10 lines",
+      "key_changes": [
+        "移除: // Workspace size constants",
+        "移除: constexpr uint32_t ASCEND910B_S1_BASE_SIZE = 1024 * 128;",
+        "移除: constexpr uint32_t ASCEND910B_S2_BASE_SIZE = 1024 * 64;",
+        "移除: // ... 其他平台的常量定义 ...",
+        "新增: // Workspace size constants（所有平台常量集中定义）",
+        "新增: constexpr size_t ASCEND910B_S1_BASE_SIZE = 1024 * 128;",
+        "新增: constexpr size_t ASCEND910B_S2_BASE_SIZE = 1024 * 64;",
+        "新增: // gemini-code-assist[bot] suggestion：使用 size_t 防止溢出（64-bit 平台上为 64 位）",
+        "新增: constexpr size_t ASCEND950_S1_BASE_SIZE = 1024 * 256;   // maoxx241 建议的命名",
+        "新增: constexpr size_t ASCEND950_S2_BASE_SIZE = 1024 * 128;   // 从分支逻辑中提取到常量块"
+      ]
+    },
+    "language": "cpp",
+    "_status": "extracted"
+  }
+}

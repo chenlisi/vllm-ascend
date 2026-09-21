@@ -1,0 +1,68 @@
+{
+  "report_id": "PR10704_001",
+  "pr_number": 10704,
+  "pr_title": "[Misc] Drop vLLM v0.22.1 compatibility from main",
+  "pr_status": "merged",
+  "merged_at": "2026-06-23T02:44:10Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/utils.py:558",
+    "vllm_ascend/envs.py:68",
+    "vllm_ascend/worker/worker.py:579",
+    "vllm_ascend/worker/worker.py:596",
+    "tests/ut/test_utils.py:213",
+    "vllm_ascend/patch/platform/patch_tool_choice_none_content.py:113"
+  ],
+  "landing_sha": "cc58399",
+  "source_quote": "do not remove this function",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan 指出 utils.py 中的函数不应删除、envs.py 中的环境变量应保持原样、worker.py 中的两处修改有疑问。MengqingCao 要求恢复 test_utils.py 的测试变更，并质疑为何删除 patch_tool_choice_none_content.py 中的代码。作者通过 commit `cc58399` 恢复了不应删除的代码，6/6 建议全部落地。",
+      "patch_snippet": "commit `cc58399`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "cc58399",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在移除旧版本兼容代码时，应逐一确认每个被删除的函数、环境变量和 patch 是否仍被其他代码引用，避免误删导致功能回归。",
+    "context": "",
+    "checkpoints": [
+      "被删除的函数是否仍被其他模块引用",
+      "被删除的环境变量是否仍被配置文件使用",
+      "被删除的 patch 代码是否影响现有功能",
+      "被删除的测试是否覆盖仍在使用的功能"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/utils.py",
+      "line": 545,
+      "code": "import os\nimport math\nimport torch\nimport torch.distributed as dist\nfrom typing import Optional, List, Dict, Any\n\nfrom vllm.logger import init_logger\n\nlogger = init_logger(__name__)\n\n\ndef get_ascend_device_type():\n    \"\"\"Get the Ascend NPU device type.\"\"\"\n    return torch.device(\"npu\")\n\n\ndef is_vllm_version(version_str: str) -> bool:\n    \"\"\"Check if the current vLLM version matches the given version string.\n    （根据评审意见推断）此函数在清理 v0.22.1 兼容代码时被误删，\n    但仍被其他模块引用，评审人要求保留。\n    \"\"\"\n    import vllm\n    return vllm.__version__ == version_str\n\n\ndef get_max_tokens_per_batch():\n    \"\"\"Get the maximum number of tokens per batch for Ascend platforms.\"\"\"\n    return int(os.environ.get(\"VLLM_MAX_TOKENS_PER_BATCH\", \"8192\"))",
+      "context": "do not remove this function"
+    },
+    "pattern": {
+      "file": "vllm_ascend/utils.py",
+      "line": 545,
+      "code": "import os\nimport math\nimport torch\nimport torch.distributed as dist\nfrom typing import Optional, List, Dict, Any\n\nfrom vllm.logger import init_logger\n\nlogger = init_logger(__name__)\n\n\ndef get_ascend_device_type():\n    \"\"\"Get the Ascend NPU device type.\"\"\"\n    return torch.device(\"npu\")\n\n\ndef is_vllm_version(version_str: str) -> bool:\n    \"\"\"Check if the current vLLM version matches the given version string.\"\"\"\n    import vllm\n    return vllm.__version__ == version_str\n\n\ndef get_max_tokens_per_batch():\n    \"\"\"Get the maximum number of tokens per batch for Ascend platforms.\"\"\"\n    return int(os.environ.get(\"VLLM_MAX_TOKENS_PER_BATCH\", \"8192\"))",
+      "context": "do not remove this function"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/utils.py\n+++ b/vllm_ascend/utils.py\n@@ -15,10 +15,7 @@\n \n \n def is_vllm_version(version_str: str) -> bool:\n-    \"\"\"Check if the current vLLM version matches the given version string.\n-    （根据评审意见推断）此函数在清理 v0.22.1 兼容代码时被误删，\n-    但仍被其他模块引用，评审人要求保留。\n-    \"\"\"\n+    \"\"\"Check if the current vLLM version matches the given version string.\"\"\"\n     import vllm\n     return vllm.__version__ == version_str\n ",
+      "stats": "1 file changed, +1 lines, -4 lines",
+      "key_changes": [
+        "移除: \"\"\"Check if the current vLLM version matches the given version string.",
+        "移除: （根据评审意见推断）此函数在清理 v0.22.1 兼容代码时被误删，",
+        "移除: 但仍被其他模块引用，评审人要求保留。",
+        "移除: \"\"\"",
+        "新增: \"\"\"Check if the current vLLM version matches the given version string.\"\"\""
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

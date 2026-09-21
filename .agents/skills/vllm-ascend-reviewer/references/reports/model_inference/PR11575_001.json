@@ -1,0 +1,62 @@
+{
+  "report_id": "PR11575_001",
+  "pr_number": 11575,
+  "pr_title": "[feature] Support Gemma4 ModelSlim quantization",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/quantization/modelslim_config.py:382"
+  ],
+  "landing_sha": "79d92d9",
+  "source_quote": "How about `_is_missing_v_shard`\n看一下上游这个逻辑的取名",
+  "correspondence": [
+    {
+      "review_quote": "realliujiaxu: vllm_ascend/quantization/modelslim_config.py:382",
+      "patch_snippet": "评后sha 79d92d9 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Tflowers-0129: vllm_ascend/quantization/modelslim_config.py:382",
+      "patch_snippet": "评后sha 79d92d9 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "79d92d9",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在处理特定模型架构（如 Gemma4）的量化配置时，辅助函数的命名应当与上游代码保持一致，以提高代码的可读性和可维护性。特别是涉及 k_eq_v 等特殊布局时，函数名应准确反映其语义（如 `_is_missing_v_shard` 而非 `_is_missing_k_eq_v_shard`）。",
+    "context": "",
+    "checkpoints": [
+      "检查新增辅助函数的命名是否与上游代码一致",
+      "确认函数名是否准确描述了其功能语义",
+      "在引入模型特定逻辑时，参考上游实现进行命名"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/quantization/modelslim_config.py",
+      "line": 370,
+      "code": "def _is_missing_k_eq_v_shard(\n    layer_name: str,\n    missing_shards: list[str],\n    quant_config: dict,\n) -> bool:\n    \"\"\"Check if the missing shard is a k_eq_v v_proj shard.\n\n    In Gemma4, some attention layers use k_eq_v layout where\n    v_proj shares weights with k_proj. The v_proj quantization\n    entry is omitted from the checkpoint.\n    \"\"\"\n    if \"v_proj\" not in missing_shards:\n        return False\n    # Check if this is a k_eq_v layer\n    remaining = [s for s in missing_shards if s != \"v_proj\"]\n    if not remaining:\n        return False\n    return \"q_proj\" in quant_config.get(layer_name, {}) and \\\n           \"k_proj\" in quant_config.get(layer_name, {})\n\n\ndef get_linear_quant_type(\n    quant_config: ModelSlimConfig,\n    layer_name: str,\n    shard_name: str,\n    missing_shards: list[str],\n) -> str | None:\n    \"\"\"Determine the quant type for a linear layer shard.\"\"\"\n    if shard_name in missing_shards:\n        if _is_missing_k_eq_v_shard(layer_name, missing_shards,\n                                     quant_config):\n            return None  # skip missing v_proj in k_eq_v layout\n        raise KeyError(\n            f\"Missing quant config for {layer_name}.{shard_name}\"\n        )\n    ...",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/quantization/modelslim_config.py",
+      "line": 382,
+      "code": "def _is_missing_v_shard(\n    layer_name: str,\n    missing_shards: list[str],\n    quant_config: dict,\n) -> bool:\n    \"\"\"Check if the missing shard is a v_proj shard in Gemma4 k_eq_v layout.\n\n    Upstream Gemma4 handles this by detecting attention_k_eq_v full-attention\n    layers and reusing k_proj as v_proj during weight loading.\n    Only the missing v_proj entry in Gemma4 k_eq_v layout is skipped\n    when q_proj and k_proj exist; other missing shards still fail as before.\n    \"\"\"\n    if \"v_proj\" not in missing_shards:\n        return False\n    # Check if this is a k_eq_v layer\n    remaining = [s for s in missing_shards if s != \"v_proj\"]\n    if not remaining:\n        return False\n    return \"q_proj\" in quant_config.get(layer_name, {}) and \\\n           \"k_proj\" in quant_config.get(layer_name, {})\n\n\ndef get_linear_quant_type(\n    quant_config: ModelSlimConfig,\n    layer_name: str,\n    shard_name: str,\n    missing_shards: list[str],\n) -> str | None:\n    \"\"\"Determine the quant type for a linear layer shard.\"\"\"\n    if shard_name in missing_shards:\n        if _is_missing_v_shard(layer_name, missing_shards,\n                                quant_config):\n            return None  # skip missing v_proj in k_eq_v layout\n        raise KeyError(\n            f\"Missing quant config for {layer_name}.{shard_name}\"\n        )\n    ...",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/quantization/modelslim_config.py\n+++ b/vllm_ascend/quantization/modelslim_config.py\n@@ -1,13 +1,14 @@\n-def _is_missing_k_eq_v_shard(\n+def _is_missing_v_shard(\n     layer_name: str,\n     missing_shards: list[str],\n     quant_config: dict,\n ) -> bool:\n-    \"\"\"Check if the missing shard is a k_eq_v v_proj shard.\n+    \"\"\"Check if the missing shard is a v_proj shard in Gemma4 k_eq_v layout.\n \n-    In Gemma4, some attention layers use k_eq_v layout where\n-    v_proj shares weights with k_proj. The v_proj quantization\n-    entry is omitted from the checkpoint.\n+    Upstream Gemma4 handles this by detecting attention_k_eq_v full-attention\n+    layers and reusing k_proj as v_proj during weight loading.\n+    Only the missing v_proj entry in Gemma4 k_eq_v layout is skipped\n+    when q_proj and k_proj exist; other missing shards still fail as before.\n     \"\"\"\n     if \"v_proj\" not in missing_shards:\n         return False\n@@ -27,8 +28,8 @@\n ) -> str | None:\n     \"\"\"Determine the quant type for a linear layer shard.\"\"\"\n     if shard_name in missing_shards:\n-        if _is_missing_k_eq_v_shard(layer_name, missing_shards,\n-                                     quant_config):\n+        if _is_missing_v_shard(layer_name, missing_shards,\n+                                quant_config):\n             return None  # skip missing v_proj in k_eq_v layout\n         raise KeyError(\n             f\"Missing quant config for {layer_name}.{shard_name}\"",
+      "stats": "1 file changed, +8 lines, -7 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

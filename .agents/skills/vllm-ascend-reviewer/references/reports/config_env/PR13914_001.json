@@ -1,0 +1,58 @@
+{
+  "report_id": "PR13914_001",
+  "pr_number": 13914,
+  "pr_title": "[TEST]Modification of Test Cases for minimax2.7",
+  "pr_status": "merged",
+  "dimension": [
+    "test"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/e2e/weekly/multi_node/external_dp/config/Minimax_m2.7_in198_prefix99.yaml:90"
+  ],
+  "landing_sha": "196a699",
+  "source_quote": "While correcting `-max-num-seqs` to `--max-num-seqs` is correct, the preceding argument `-max-num-batched-tokens` (on line 88) still has a single dash. It should be updated to `--max-num-batched-tokens` to prevent command-line parsing errors.",
+  "correspondence": [
+    {
+      "review_quote": "tests/e2e/weekly/multi_node/external_dp/config/Minimax_m2.7_in198_prefix99.yaml:90",
+      "patch_snippet": "评后sha 196a699 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "196a699",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "E2E 测试 YAML 配置中的 vLLM CLI 参数（如 `--max-num-seqs`、`--max-num-batched-tokens`、`--speculative-config` 等）必须使用双横线 `--` 前缀，单横线 `-` 会导致 argparse 解析失败。",
+    "context": "",
+    "checkpoints": [
+      "检查 YAML 配置中所有形如 `-max-*`、`-speculative-*`、`-enable-*` 等 vLLM CLI 参数是否漏掉一个 `-`",
+      "注意同一文件内多次出现的相同参数要保持一致（不要部分修改、部分遗漏）",
+      "重点关注 review 修改后是否引入新的不一致（例如已修复 `--max-num-seqs` 但同行的 `-max-num-batched-tokens` 未修复）"
+    ],
+    "antipattern": {
+      "file": "tests/e2e/weekly/multi_node/external_dp/config/Minimax_m2.7_in198_prefix99.yaml",
+      "line": 90,
+      "code": "# tests/e2e/weekly/multi_node/external_dp/config/Minimax_m2.7_in198_prefix99.yaml\n# 3 个 node 的 server_cmd_template 中都有同样问题（约第 88、141、196 行）\n\n  # node_index: 0 (prefiller) 的 server_cmd_template\n  - node_index: 0\n    envs:\n      <<: *env_prefill\n    server_cmd_template:\n      - --host\n      - \"0.0.0.0\"\n      - --port\n      - $SERVER_PORT\n      - --data-parallel-size\n      - ${DP_SIZE}\n      - --tensor-parallel-size\n      - ${TP_SIZE}\n      - --enable-expert-parallel\n      - --served-model-name\n      - \"minimax\"\n      - --max-model-len\n      - \"204800\"\n      - -max-num-batched-tokens   # ❌ 单横线，CLI 解析会失败\n      - \"32768\"\n      - --max-num-seqs\n      - \"16\"\n      - --trust-remote-code\n      - --gpu-memory-utilization\n      - \"0.7\"",
+      "context": "tests/e2e/weekly/multi_node/external_dp/config/Minimax_m2.7_in198_prefix99.yaml 3 个 node 的 server_cmd_template 中都有同样问题（约第 88、141、196 行） node_index: 0 (prefiller) 的 server_cmd_template"
+    },
+    "pattern": {
+      "file": "tests/e2e/weekly/multi_node/external_dp/config/Minimax_m2.7_in198_prefix99.yaml",
+      "line": 90,
+      "code": "# tests/e2e/weekly/multi_node/external_dp/config/Minimax_m2.7_in198_prefix99.yaml\n  # node_index: 0 (prefiller) 的 server_cmd_template\n  - node_index: 0\n    envs:\n      <<: *env_prefill\n    server_cmd_template:\n      - --host\n      - \"0.0.0.0\"\n      - --port\n      - $SERVER_PORT\n      - --data-parallel-size\n      - ${DP_SIZE}\n      - --tensor-parallel-size\n      - ${TP_SIZE}\n      - --enable-expert-parallel\n      - --served-model-name\n      - \"minimax\"\n      - --max-model-len\n      - \"204800\"\n      - --max-num-batched-tokens   # ✅ 双横线，正确 CLI 前缀\n      - \"32768\"\n      - --max-num-seqs\n      - \"16\"\n      - --trust-remote-code\n      - --gpu-memory-utilization\n      - \"0.7\"",
+      "context": "tests/e2e/weekly/multi_node/external_dp/config/Minimax_m2.7_in198_prefix99.yaml node_index: 0 (prefiller) 的 server_cmd_template"
+    },
+    "diff": {
+      "unified": "--- a/tests/e2e/weekly/multi_node/external_dp/config/Minimax_m2.7_in198_prefix99.yaml\n+++ b/tests/e2e/weekly/multi_node/external_dp/config/Minimax_m2.7_in198_prefix99.yaml\n@@ -1,6 +1,4 @@\n # tests/e2e/weekly/multi_node/external_dp/config/Minimax_m2.7_in198_prefix99.yaml\n-# 3 个 node 的 server_cmd_template 中都有同样问题（约第 88、141、196 行）\n-\n   # node_index: 0 (prefiller) 的 server_cmd_template\n   - node_index: 0\n     envs:\n@@ -19,7 +17,7 @@\n       - \"minimax\"\n       - --max-model-len\n       - \"204800\"\n-      - -max-num-batched-tokens   # ❌ 单横线，CLI 解析会失败\n+      - --max-num-batched-tokens   # ✅ 双横线，正确 CLI 前缀\n       - \"32768\"\n       - --max-num-seqs\n       - \"16\"\n",
+      "stats": "1 file changed, +1 lines, -3 lines",
+      "key_changes": [
+        "移除: - -max-num-batched-tokens   # ❌ 单横线，CLI 解析会失败",
+        "新增: - --max-num-batched-tokens   # ✅ 双横线，正确 CLI 前缀"
+      ]
+    },
+    "language": "yaml",
+    "_status": "processed"
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "report_id": "PR8680_001",
+  "pr_number": 8680,
+  "pr_title": "[CI] Add nightly case:GLM-5_1-W8A8;GLM-5.1-W8A8;Qwen3.5-397B-w8a8;Qwen3.5-397B-w4a8;deepseekv3.2",
+  "pr_status": "merged",
+  "merged_at": "2026-05-06T09:32:38Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/e2e/nightly/multi_node/config/GLM5_1-W8A8-A2-dual-nodes.yaml:6"
+  ],
+  "landing_sha": "1a6574a",
+  "source_quote": "plz add VLLM_USE_MODELSCOPE: true",
+  "correspondence": [
+    {
+      "review_quote": "zhangxinyuehfad: tests/e2e/nightly/multi_node/config/GLM5_1-W8A8-A2-dual-nodes.yaml:6",
+      "patch_snippet": "评后sha 1a6574a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "1a6574a",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "plz add VLLM_USE_MODELSCOPE: true",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "tests/e2e/nightly/multi_node/config/GLM5_1-W8A8-A2-dual-nodes.yaml",
+      "line": 6,
+      "code": "# tests/e2e/nightly/multi_node/config/GLM5_1-W8A8-A2-dual-nodes.yaml:6",
+      "context": "plz add VLLM_USE_MODELSCOPE: true"
+    },
+    "pattern": {
+      "file": "tests/e2e/nightly/multi_node/config/GLM5_1-W8A8-A2-dual-nodes.yaml",
+      "line": 6,
+      "code": "# 根据评审意见修改后的代码",
+      "context": "plz add VLLM_USE_MODELSCOPE: true"
+    },
+    "diff": {
+      "unified": "--- a/tests/e2e/nightly/multi_node/config/GLM5_1-W8A8-A2-dual-nodes.yaml\n+++ b/tests/e2e/nightly/multi_node/config/GLM5_1-W8A8-A2-dual-nodes.yaml\n@@ -1 +1 @@\n-# tests/e2e/nightly/multi_node/config/GLM5_1-W8A8-A2-dual-nodes.yaml:6\n+# 根据评审意见修改后的代码\n",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "-# tests/e2e/nightly/multi_node/config/GLM5_1-W8A8-A2-dual-nodes.yaml:6",
+        "+# 根据评审意见修改后的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

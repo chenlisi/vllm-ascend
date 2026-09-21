@@ -1,0 +1,87 @@
+{
+  "report_id": "PR2616_001",
+  "pr_number": 2616,
+  "pr_title": "[Feat] Add custom Embedding tensor model parallel",
+  "pr_status": "merged",
+  "dimension": [
+    "design"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/vocab_parallel_embedding.py:172",
+    "vllm_ascend/ops/vocab_parallel_embedding.py:167",
+    "vllm_ascend/distributed/parallel_state.py:166",
+    "vllm_ascend/distributed/parallel_state.py:284",
+    "docs/source/user_guide/configuration/additional_config.md:30"
+  ],
+  "landing_sha": "fbb52ff",
+  "source_quote": "fix\ncustom ops doesn't work with torchair. you can just skip this check\nThese TP communication groups may be consolidated, given their group creation logic is similar.\nseems duplicated with L271-L275\nchange to a better name\nIs the name `finegrained_tp_config` feasible?",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/ops/vocab_parallel_embedding.py:172",
+      "patch_snippet": "评后sha fbb52ff 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/ops/vocab_parallel_embedding.py:167",
+      "patch_snippet": "评后sha fbb52ff 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/distributed/parallel_state.py:166",
+      "patch_snippet": "评后sha fbb52ff 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/distributed/parallel_state.py:284",
+      "patch_snippet": "评后sha fbb52ff 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "docs/source/user_guide/configuration/additional_config.md:30",
+      "patch_snippet": "评后sha fbb52ff 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "docs/source/user_guide/configuration/additional_config.md:30",
+      "patch_snippet": "评后sha fbb52ff 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "fbb52ff",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当多个 TP 通信组的创建逻辑相似时，应提取公共逻辑进行复用，避免代码重复，提高可维护性。",
+    "context": "",
+    "checkpoints": [
+      "是否存在重复的通信组创建逻辑",
+      "是否可以提取公共函数或基类",
+      "新增通信组是否与现有模式一致"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/vocab_parallel_embedding.py",
+      "line": 155,
+      "code": "# 评审人 zzhx1: \"fix\"\n# 评审人 wangxiyuan: \"custom ops doesn't work with torchair.\n#   you can just skip this check\"\n\nfrom typing import Optional, List\nimport torch\nimport torch.distributed as dist\n\nfrom vllm_ascend.distributed.parallel_state import get_lmhead_tp_group\n\nclass CustomParallelEmbedding:\n    \"\"\"Custom parallel embedding with tensor parallelism.\"\"\"\n\n    def _get_local_batch_slice(self, tensor, batch_sizes, local_batch_size, rank):\n        \"\"\"Extract local batch portion from gathered tensor.\"\"\"\n        # 错误的 slice 逻辑：end_idx 不是累积偏移\n        end_idx = batch_sizes[rank]\n        start_idx = end_idx - local_batch_size\n        return tensor[start_idx:end_idx]\n\n    def _forward_embed_tp(self, input_):\n        \"\"\"Forward with embedding tensor parallelism.\"\"\"\n        # 错误地使用了 lmhead_tp_group 而非 emtp_group\n        group = get_lmhead_tp_group()\n        gathered = dist.all_gather(input_, group=group)\n        return gathered",
+      "context": "评审人 zzhx1: \"fix\" 评审人 wangxiyuan: \"custom ops doesn't work with torchair. you can just skip this check\""
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/vocab_parallel_embedding.py",
+      "line": 155,
+      "code": "# 修复 batch slice 逻辑，使用正确的累积偏移\n# 跳过 torchair 兼容性检查\n\nfrom typing import Optional, List\nimport torch\nimport torch.distributed as dist\n\nfrom vllm_ascend.distributed.parallel_state import get_emtp_group\n\nclass CustomParallelEmbedding:\n    \"\"\"Custom parallel embedding with tensor parallelism.\"\"\"\n\n    def _get_local_batch_slice(self, tensor, batch_sizes,\n                               local_batch_size, rank):\n        \"\"\"Extract local batch portion from gathered tensor.\"\"\"\n        # 修复：使用累积偏移计算正确的 start_idx\n        start_idx = sum(batch_sizes[:rank])\n        end_idx = start_idx + local_batch_size\n        return tensor[start_idx:end_idx]\n\n    def _forward_embed_tp(self, input_):\n        \"\"\"Forward with embedding tensor parallelism.\"\"\"\n        # 修复：使用正确的 emtp_group\n        group = get_emtp_group()\n        gathered = dist.all_gather(input_, group=group)\n        return gathered",
+      "context": "修复 batch slice 逻辑，使用正确的累积偏移 跳过 torchair 兼容性检查 修复：使用累积偏移计算正确的 start_idx"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/vocab_parallel_embedding.py\n+++ b/vllm_ascend/ops/vocab_parallel_embedding.py\n@@ -1,26 +1,26 @@\n-# 评审人 zzhx1: \"fix\"\n-# 评审人 wangxiyuan: \"custom ops doesn't work with torchair.\n-#   you can just skip this check\"\n+# 修复 batch slice 逻辑，使用正确的累积偏移\n+# 跳过 torchair 兼容性检查\n \n from typing import Optional, List\n import torch\n import torch.distributed as dist\n \n-from vllm_ascend.distributed.parallel_state import get_lmhead_tp_group\n+from vllm_ascend.distributed.parallel_state import get_emtp_group\n \n class CustomParallelEmbedding:\n     \"\"\"Custom parallel embedding with tensor parallelism.\"\"\"\n \n-    def _get_local_batch_slice(self, tensor, batch_sizes, local_batch_size, rank):\n+    def _get_local_batch_slice(self, tensor, batch_sizes,\n+                               local_batch_size, rank):\n         \"\"\"Extract local batch portion from gathered tensor.\"\"\"\n-        # 错误的 slice 逻辑：end_idx 不是累积偏移\n-        end_idx = batch_sizes[rank]\n-        start_idx = end_idx - local_batch_size\n+        # 修复：使用累积偏移计算正确的 start_idx\n+        start_idx = sum(batch_sizes[:rank])\n+        end_idx = start_idx + local_batch_size\n         return tensor[start_idx:end_idx]\n \n     def _forward_embed_tp(self, input_):\n         \"\"\"Forward with embedding tensor parallelism.\"\"\"\n-        # 错误地使用了 lmhead_tp_group 而非 emtp_group\n-        group = get_lmhead_tp_group()\n+        # 修复：使用正确的 emtp_group\n+        group = get_emtp_group()\n         gathered = dist.all_gather(input_, group=group)\n         return gathered\n",
+      "stats": "1 file changed, +10 lines, -10 lines",
+      "key_changes": [
+        "移除: def _get_local_batch_slice(self, tensor, batch_sizes, local_batch_size, rank):",
+        "新增: from vllm_ascend.distributed.parallel_state import get_emtp_group"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

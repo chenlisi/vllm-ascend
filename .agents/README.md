@@ -19,6 +19,12 @@ Note: Please copy the skills directory `.agents/skills` to `.claude/skills` if y
     - [File layout](#file-layout-1)
     - [Quick start](#quick-start-2)
     - [Key guidelines](#key-guidelines)
+  - [vLLM Ascend AI Reviewer Skill](#vllm-ascend-ai-reviewer-skill)
+    - [What it does](#what-it-does-3)
+    - [File layout](#file-layout-2)
+    - [Quick start](#quick-start-3)
+    - [Rule statistics](#rule-statistics)
+    - [Dimension distribution](#dimension-distribution)
 
 
 ## vLLM Ascend Model Adapter Skill
@@ -105,3 +111,51 @@ This skill guides you through a structured workflow to:
 - Focus on user-facing impact and include context for practical usage.
 - Verify details by checking linked PRs (use GitHub API for descriptions if needed).
 - Keep notes concise and avoid unnecessary technical details.
+
+## vLLM Ascend AI Reviewer Skill
+
+Code review skill with 536 historical review rules extracted from 532 PRs.
+
+### What it does
+
+This skill provides rule-based code review support:
+
+1. **Rule matching**: Automatically identify potential issues based on 536 historical review rules.
+2. **Rule retrieval**: Quickly find relevant rules by dimension, keyword, or PR number.
+3. **Review report generation**: Output structured review comments with issue description, severity, and fix suggestions.
+
+### File layout
+
+| File | Purpose |
+| ---- | ------- |
+| `SKILL.md` | Skill definition, constraints, and review workflow |
+| `references/rules_clustered.md` | 536 rules clustered by semantic (16 categories) |
+| `references/rules_summary.md` | 536 rules grouped by dimension |
+| `references/_rule_summary.json` | Rule index data (JSON format, supports programmatic retrieval) |
+
+### Quick start
+
+1. Open a conversation with the AI agent in the vllm-ascend project.
+2. Invoke the skill (e.g. `/vllm-ascend-reviewer`).
+3. Provide the PR number or diff.
+4. Follow the review workflow to generate a review report.
+
+### Rule statistics
+
+| Metric | Count |
+|--------|-------|
+| Unique rules | 536 |
+| Source PRs | 532 |
+| Dimensions | 6 |
+| Semantic categories | 16 |
+
+### Dimension distribution
+
+| Dimension | Rules | Description |
+|-----------|-------|-------------|
+| correctness | 310 | Logic errors, type errors, boundary conditions |
+| doc | 85 | Comments, tutorials, deployment docs |
+| engineering | 68 | Naming, code style, architecture conventions |
+| performance | 52 | Memory, computation, synchronization |
+| design | 22 | Interface, abstraction, module division |
+| test | 10 | Coverage, test quality |

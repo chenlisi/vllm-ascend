@@ -1,0 +1,86 @@
+{
+  "report_id": "PR7134_001",
+  "pr_number": 7134,
+  "pr_title": "[310P][Bugfix]: fix ngram graph replay accuracy error",
+  "pr_status": "merged",
+  "merged_at": "2026-03-12T09:08:09Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/_310p/model_runner_310p.py:163",
+    "vllm_ascend/_310p/model_runner_310p.py:64",
+    "vllm_ascend/_310p/model_runner_310p.py:44",
+    "vllm_ascend/_310p/model_runner_310p.py:62",
+    "vllm_ascend/_310p/model_runner_310p.py:81",
+    "vllm_ascend/_310p/model_runner_310p.py:90",
+    "vllm_ascend/_310p/model_runner_310p.py:122"
+  ],
+  "landing_sha": "c02495f",
+  "source_quote": "此处应注释为什么要增加额外的上下文管理器，910B上不存在self.graph_uniform_decode_query_len和self.uniform_decode_query_len不相等的情况？为什么910B上不需要做临时修改呢？",
+  "correspondence": [
+    {
+      "review_quote": "pu-zhe 提出了7条详细意见，涉及命名规范、注释完整性、逻辑清晰度、变量名一致性等方面。主要问题包括：1) 上下文管理器命名不符合自注释原则；2) 缺少注释说明为何需要临时修改；3) 逻辑可以更简化；4) fullgraph 开启条件不明确；5) force_uniform_decode 的配置逻辑需确认；6) 变量名与实际用途不符。作者通过 commit `c02495f` 进行了 cleancode 重构，7/7 建议全部落地。",
+      "patch_snippet": "commit `c02495f`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "c02495f",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 310P 平台特定的代码中，当行为与 910B 不同时，必须添加注释说明差异原因。上下文管理器等辅助工具的命名应使用动宾短语，体现其实际用途。变量名必须与实际用途一致，避免使用含义模糊的名称。临时性修改需添加 TODO 说明何时可以移除。",
+    "context": "",
+    "checkpoints": [
+      "检查 310P 特定代码是否有注释说明与 910B 的差异",
+      "确认上下文管理器命名是否使用动宾短语",
+      "验证变量名是否与实际用途一致",
+      "检查临时性修改是否有 TODO 标注移除时间",
+      "确认 fullgraph 的开启/关闭条件是否清晰",
+      "验证 force_uniform_decode 的配置逻辑是否正确"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/_310p/model_runner_310p.py",
+      "line": 55,
+      "code": "from contextlib import contextmanager\n\n\nclass NPUModelRunner310(NPUModelRunner):\n\n    def __init__(self, vllm_config, ...):\n        super().__init__(vllm_config, ...)\n        self._need_patch_uniform_decode = (\n            self.graph_uniform_decode_query_len != self.uniform_decode_query_len\n        )\n\n    @contextmanager\n    def _patch_uniform_decode(self):\n        old = self.uniform_decode_query_len\n        self.uniform_decode_query_len = self.cudagraph_dispatcher.uniform_decode_query_len\n        try:\n            yield\n        finally:\n            self.uniform_decode_query_len = old\n\n    def _dummy_run(self, num_tokens, ...):\n        if self._need_patch_uniform_decode:\n            with self._patch_uniform_decode():\n                self._check_and_update_cudagraph_mode(...)\n                return super()._dummy_run(num_tokens=num_tokens, ...)\n        else:\n            self._check_and_update_cudagraph_mode(...)\n            return super()._dummy_run(num_tokens=num_tokens, ...)",
+      "context": "此处应注释为什么要增加额外的上下文管理器，910B上不存在self.graph_uniform_decode_query_len和self.uniform_decode_query_len不相等的情况..."
+    },
+    "pattern": {
+      "file": "vllm_ascend/_310p/model_runner_310p.py",
+      "line": 55,
+      "code": "from contextlib import contextmanager, nullcontext\n\n\nclass NPUModelRunner310(NPUModelRunner):\n\n    def __init__(self, vllm_config, ...):\n        super().__init__(vllm_config, ...)\n        if (self.speculative_config is not None\n                and self.speculative_config.method == \"ngram\"):\n            self.cudagraph_dispatcher.uniform_decode_query_len = 1\n\n    @contextmanager\n    def temporary_modify_uniform_decode_query_len(self):\n        \"\"\"Temporarily modify uniform_decode_query_len for ngram graph on 310P.\n\n        310P requires uniform_decode_query_len=1 for ngram graph capture/replay,\n        because the graph replay accuracy depends on this value being consistent.\n        910B does not have this restriction.\n        TODO: Remove this when upstream fixes the graph replay accuracy issue.\n        \"\"\"\n        if not (self.speculative_config is not None\n                and self.speculative_config.method == \"ngram\"):\n            yield\n            return\n        original = self.uniform_decode_query_len\n        self.uniform_decode_query_len = self.cudagraph_dispatcher.uniform_decode_query_len\n        try:\n            yield\n        finally:\n            self.uniform_decode_query_len = original\n\n    def _dummy_run(self, num_tokens, ...):\n        should_patch = (\n            self.speculative_config is not None\n            and self.speculative_config.method == \"ngram\"\n        )\n        context = (\n            self.temporary_modify_uniform_decode_query_len()\n            if should_patch\n            else nullcontext()\n        )\n        with context:\n            self._check_and_update_cudagraph_mode(...)\n            return super()._dummy_run(num_tokens=num_tokens, ...)",
+      "context": "此处应注释为什么要增加额外的上下文管理器，910B上不存在self.graph_uniform_decode_query_len和self.uniform_decode_query_len不相等的情况..."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/_310p/model_runner_310p.py\n+++ b/vllm_ascend/_310p/model_runner_310p.py\n@@ -55,28 +55,44 @@\n-from contextlib import contextmanager\n+from contextlib import contextmanager, nullcontext\n \n \n class NPUModelRunner310(NPUModelRunner):\n \n     def __init__(self, vllm_config, ...):\n         super().__init__(vllm_config, ...)\n-        self._need_patch_uniform_decode = (\n-            self.graph_uniform_decode_query_len != self.uniform_decode_query_len\n-        )\n+        if (self.speculative_config is not None\n+                and self.speculative_config.method == \"ngram\"):\n+            self.cudagraph_dispatcher.uniform_decode_query_len = 1\n \n     @contextmanager\n-    def _patch_uniform_decode(self):\n-        old = self.uniform_decode_query_len\n+    def temporary_modify_uniform_decode_query_len(self):\n+        \"\"\"Temporarily modify uniform_decode_query_len for ngram graph on 310P.\n+\n+        310P requires uniform_decode_query_len=1 for ngram graph capture/replay,\n+        because the graph replay accuracy depends on this value being consistent.\n+        910B does not have this restriction.\n+        TODO: Remove this when upstream fixes the graph replay accuracy issue.\n+        \"\"\"\n+        if not (self.speculative_config is not None\n+                and self.speculative_config.method == \"ngram\"):\n+            yield\n+            return\n+        original = self.uniform_decode_query_len\n         self.uniform_decode_query_len = self.cudagraph_dispatcher.uniform_decode_query_len\n         try:\n             yield\n         finally:\n-            self.uniform_decode_query_len = old\n+            self.uniform_decode_query_len = original\n \n     def _dummy_run(self, num_tokens, ...):\n-        if self._need_patch_uniform_decode:\n-            with self._patch_uniform_decode():\n-                self._check_and_update_cudagraph_mode(...)\n-                return super()._dummy_run(num_tokens=num_tokens, ...)\n-        else:\n+        should_patch = (\n+            self.speculative_config is not None\n+            and self.speculative_config.method == \"ngram\"\n+        )\n+        context = (\n+            self.temporary_modify_uniform_decode_query_len()\n+            if should_patch\n+            else nullcontext()\n+        )\n+        with context:\n             self._check_and_update_cudagraph_mode(...)\n             return super()._dummy_run(num_tokens=num_tokens, ...)",
+      "stats": "1 file changed, +27 lines, -12 lines",
+      "key_changes": [
+        "- from contextlib import contextmanager",
+        "+ from contextlib import contextmanager, nullcontext",
+        "- self._need_patch_uniform_decode = (",
+        "- self.graph_uniform_decode_query_len != self.uniform_decode_query_len",
+        "- )",
+        "+ if (self.speculative_config is not None",
+        "+ and self.speculative_config.method == \"ngram\"):",
+        "+ self.cudagraph_dispatcher.uniform_decode_query_len = 1",
+        "- def _patch_uniform_decode(self):",
+        "- old = self.uniform_decode_query_len",
+        "+ def temporary_modify_uniform_decode_query_len(self):",
+        "+ \"\"\"Temporarily modify uniform_decode_query_len for ngram graph on 310P.",
+        "+ ",
+        "+ 310P requires uniform_decode_query_len=1 for ngram graph capture/replay,",
+        "+ because the graph replay accuracy depends on this value being consistent.",
+        "+ 910B does not have this restriction.",
+        "+ TODO: Remove this when upstream fixes the graph replay accuracy issue.",
+        "+ \"\"\"",
+        "+ if not (self.speculative_config is not None",
+        "+ and self.speculative_config.method == \"ngram\"):"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

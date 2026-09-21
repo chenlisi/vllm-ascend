@@ -1,0 +1,70 @@
+{
+  "report_id": "PR9382_001",
+  "pr_number": 9382,
+  "pr_title": "[Ascend950] [Feature] Support custom op for GDN on Ascend 950",
+  "pr_status": "merged",
+  "merged_at": "2026-06-02T06:26:14Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "blocker",
+  "affected_files": [
+    "vllm_ascend/ops/gdn.py:661",
+    "vllm_ascend/utils.py:350",
+    "vllm_ascend/device/device_op.py:358"
+  ],
+  "landing_sha": "85f30df",
+  "source_quote": "move this to device_op\nneed reconsider this.\nmerge solve_tril_16x16_kernel in A3 and A5.",
+  "correspondence": [
+    {
+      "review_quote": "weijinqian0: vllm_ascend/ops/gdn.py:661",
+      "patch_snippet": "评后sha 85f30df 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "weijinqian0: vllm_ascend/utils.py:350",
+      "patch_snippet": "评后sha 85f30df 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "weijinqian0: vllm_ascend/device/device_op.py:358",
+      "patch_snippet": "评后sha 85f30df 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "85f30df",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "move this to device_op",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/ops/gdn.py",
+      "line": 661,
+      "code": "// 文件: csrc/attention/recurrent_gated_delta_rule/op_kernel/arch35/recurrent_gated_delta_rule.h\n            int32_t seq0 = seq1;\n            seq1 += seqLen;\n            if (seqLen > static_cast<int32_t>(MAX_MTP)) {\n                return;  // 危险: 会导致整个 block 提前退出\n            }\n            if (seq0 < 0 || seq1 > static_cast<int32_t>(T_)) {\n                return;  // 跳过后续 batch\n            }",
+      "context": "move this to device_op\nneed reconsider this.\nmerge solve_tril_16x16_kernel in A3 and A5."
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/gdn.py",
+      "line": 661,
+      "code": "// 文件: csrc/attention/recurrent_gated_delta_rule/op_kernel/arch35/recurrent_gated_delta_rule.h\n// gemini-code-assist suggestion:\n            int32_t seq0 = seq1;\n            seq1 += seqLen;\n            if (seqLen > static_cast<int32_t>(MAX_MTP)) {\n                continue;\n            }\n            if (seq0 < 0 || seq1 > static_cast<int32_t>(T_)) {\n                continue;\n            }",
+      "context": "move this to device_op\nneed reconsider this.\nmerge solve_tril_16x16_kernel in A3 and A5."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/gdn.py\n+++ b/vllm_ascend/ops/gdn.py\n@@ -1,9 +1,10 @@\n // 文件: csrc/attention/recurrent_gated_delta_rule/op_kernel/arch35/recurrent_gated_delta_rule.h\n+// gemini-code-assist suggestion:\n             int32_t seq0 = seq1;\n             seq1 += seqLen;\n             if (seqLen > static_cast<int32_t>(MAX_MTP)) {\n-                return;  // 危险: 会导致整个 block 提前退出\n+                continue;\n             }\n             if (seq0 < 0 || seq1 > static_cast<int32_t>(T_)) {\n-                return;  // 跳过后续 batch\n+                continue;\n             }\n",
+      "stats": "1 file changed, +3 lines, -2 lines",
+      "key_changes": [
+        "+// gemini-code-assist suggestion:",
+        "-                return;  // 危险: 会导致整个 block 提前退出",
+        "+                continue;",
+        "-                return;  // 跳过后续 batch",
+        "+                continue;"
+      ]
+    },
+    "language": "c",
+    "_status": "pending_llm_extract"
+  }
+}

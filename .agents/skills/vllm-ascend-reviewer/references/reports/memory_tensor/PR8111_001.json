@@ -1,0 +1,78 @@
+{
+  "report_id": "PR8111_001",
+  "pr_number": 8111,
+  "pr_title": "[BugFix] Fix the graph capturing OOM in model_runner_v2",
+  "pr_status": "merged",
+  "merged_at": "2026-04-22T02:08:50Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/worker/v2/utils.py:50"
+  ],
+  "landing_sha": "83f598a",
+  "source_quote": "@contextmanager\ndef torch_npu_graph_wrapper(*args, **kwargs):\n# MRV2-specific cleanup hook: intentionally reuse the graph context\n# manager's exit to weak-ref graph workspaces after each capture,\n# without adding another upstream monkey patch.\ntry:\nwith torch.npu.graph(*args, **kwargs):\nyield\nfinally:\nweak_ref_workspaces(get_graph_params())\nweak_ref_workspaces(get_draft_graph_params())\nThis is a reasonable MRV2-specific hotfix, but since it is effectively using the graph context manager as a capture-end cleanup hook rather than introducing a new graph abstraction, please add a clarifying comment and move the cleanup into finally so it still runs if capture fails.\nIndeed.",
+  "correspondence": [
+    {
+      "review_quote": "yiz-liu: vllm_ascend/worker/v2/utils.py:50",
+      "patch_snippet": "评后sha 83f598a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "yiz-liu: vllm_ascend/worker/v2/utils.py:50",
+      "patch_snippet": "评后sha 83f598a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "83f598a",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在上下文管理器（context manager）中，资源清理逻辑（如内存释放、workspace 回收）必须放在 `try...finally` 块的 `finally` 部分，确保即使操作过程中抛出异常，清理逻辑也能被执行，防止资源泄漏导致 OOM。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/worker/v2/utils.py",
+      "line": 40,
+      "code": "# gemini-code-assist 和 yiz-liu 均指出应使用 try-finally\n# yiz-liu: \"move the cleanup into finally so it still runs if capture fails\"\n\nfrom contextlib import contextmanager\nimport torch\nfrom vllm_ascend.worker.v2.graph_utils import (\n    get_graph_params,\n    get_draft_graph_params,\n    weak_ref_workspaces,\n)\n\n\n@contextmanager\ndef torch_npu_graph_wrapper(*args, **kwargs):\n    \"\"\"Wrapper for torch.npu.graph that cleans up workspaces.\"\"\"\n    with torch.npu.graph(*args, **kwargs):\n        yield\n    # cleanup 在 yield 之后，但如果 capture 抛异常则不会执行\n    weak_ref_workspaces(get_graph_params())\n    weak_ref_workspaces(get_draft_graph_params())",
+      "context": "@contextmanager\ndef torch_npu_graph_wrapper(*args, **kwargs):\n# MRV2-specific cleanup hook: intentionally reuse the graph context\n# manager's exit to weak-ref graph workspaces after each capture,\n# wi"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/v2/utils.py",
+      "line": 40,
+      "code": "# commit 83f598a \"[BugFix] Fix the graph capturing OOM in model_runner_v2\"\n# (+16/-1) 添加 try-finally 和澄清注释\n# yiz-liu suggestion 直接采纳\n\nfrom contextlib import contextmanager\nimport torch\nfrom vllm_ascend.worker.v2.graph_utils import (\n    get_graph_params,\n    get_draft_graph_params,\n    weak_ref_workspaces,\n)\n\n\n@contextmanager\ndef torch_npu_graph_wrapper(*args, **kwargs):\n    # MRV2-specific cleanup hook: intentionally reuse the graph context\n    # manager's exit to weak-ref graph workspaces after each capture,\n    # without adding another upstream monkey patch.\n    try:\n        with torch.npu.graph(*args, **kwargs):\n            yield\n    finally:\n        weak_ref_workspaces(get_graph_params())\n        weak_ref_workspaces(get_draft_graph_params())",
+      "context": "@contextmanager\ndef torch_npu_graph_wrapper(*args, **kwargs):\n# MRV2-specific cleanup hook: intentionally reuse the graph context\n# manager's exit to weak-ref graph workspaces after each capture,\n# wi"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/v2/utils.py\n+++ b/vllm_ascend/worker/v2/utils.py\n@@ -1,5 +1,6 @@\n-# gemini-code-assist 和 yiz-liu 均指出应使用 try-finally\n-# yiz-liu: \"move the cleanup into finally so it still runs if capture fails\"\n+# commit 83f598a \"[BugFix] Fix the graph capturing OOM in model_runner_v2\"\n+# (+16/-1) 添加 try-finally 和澄清注释\n+# yiz-liu suggestion 直接采纳\n \n from contextlib import contextmanager\n import torch\n@@ -12,9 +13,12 @@\n \n @contextmanager\n def torch_npu_graph_wrapper(*args, **kwargs):\n-    \"\"\"Wrapper for torch.npu.graph that cleans up workspaces.\"\"\"\n-    with torch.npu.graph(*args, **kwargs):\n-        yield\n-    # cleanup 在 yield 之后，但如果 capture 抛异常则不会执行\n-    weak_ref_workspaces(get_graph_params())\n-    weak_ref_workspaces(get_draft_graph_params())\n+    # MRV2-specific cleanup hook: intentionally reuse the graph context\n+    # manager's exit to weak-ref graph workspaces after each capture,\n+    # without adding another upstream monkey patch.\n+    try:\n+        with torch.npu.graph(*args, **kwargs):\n+            yield\n+    finally:\n+        weak_ref_workspaces(get_graph_params())\n+        weak_ref_workspaces(get_draft_graph_params())\n",
+      "stats": "1 file changed, +12 lines, -8 lines",
+      "key_changes": [
+        "-# gemini-code-assist 和 yiz-liu 均指出应使用 try-finally",
+        "-# yiz-liu: \"move the cleanup into finally so it still runs if capture fails\"",
+        "+# commit 83f598a \"[BugFix] Fix the graph capturing OOM in model_runner_v2\"",
+        "+# (+16/-1) 添加 try-finally 和澄清注释",
+        "+# yiz-liu suggestion 直接采纳",
+        "-    \"\"\"Wrapper for torch.npu.graph that cleans up workspaces.\"\"\"",
+        "-    with torch.npu.graph(*args, **kwargs):",
+        "-        yield",
+        "-    # cleanup 在 yield 之后，但如果 capture 抛异常则不会执行",
+        "-    weak_ref_workspaces(get_graph_params())",
+        "-    weak_ref_workspaces(get_draft_graph_params())",
+        "+    # MRV2-specific cleanup hook: intentionally reuse the graph context",
+        "+    # manager's exit to weak-ref graph workspaces after each capture,",
+        "+    # without adding another upstream monkey patch.",
+        "+    try:",
+        "+        with torch.npu.graph(*args, **kwargs):",
+        "+            yield",
+        "+    finally:",
+        "+        weak_ref_workspaces(get_graph_params())",
+        "+        weak_ref_workspaces(get_draft_graph_params())"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

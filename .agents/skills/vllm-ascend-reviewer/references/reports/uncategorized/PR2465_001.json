@@ -1,0 +1,72 @@
+{
+  "report_id": "PR2465_001",
+  "pr_number": 2465,
+  "pr_title": "[Refactor][WIP] Refactor mla_v1 by moving all MLA preprocessing ops into mla_v1 attention impl",
+  "pr_status": "merged",
+  "dimension": [
+    "design"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/mla_v1.py:428",
+    "vllm_ascend/attention/mla_v1.py:433",
+    "vllm_ascend/ascend_config.py:54"
+  ],
+  "landing_sha": "2cf8e28",
+  "source_quote": "you could use python dataclass instead of NamedTuple\nPrefillMLAPreprocessResult and DecodeMLAPreprocessResult has some common fields, you could extract a base class\nCan the variable be unified into one like 'enable_prefetch'?",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/attention/mla_v1.py:428",
+      "patch_snippet": "评后sha 2cf8e28 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/attention/mla_v1.py:433",
+      "patch_snippet": "评后sha 2cf8e28 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/ascend_config.py:54",
+      "patch_snippet": "评后sha 2cf8e28 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "2cf8e28",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当多个返回值结构存在公共字段时，应使用 Python dataclass 替代 NamedTuple，并提取公共基类以减少代码重复，提高可维护性。",
+    "context": "",
+    "checkpoints": [
+      "多个结果类是否存在重复字段",
+      "是否使用 dataclass 替代 NamedTuple",
+      "公共字段是否提取到基类"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/mla_v1.py",
+      "line": 420,
+      "code": "# 评审人 Ronald1995: \"you could use python dataclass instead of NamedTuple\"\n# 评审人 Ronald1995: \"PrefillMLAPreprocessResult and DecodeMLAPreprocessResult\n#   has some common fields, you could extract a base class\"\n\nfrom typing import NamedTuple, Optional\nimport torch\n\nclass PrefillMLAPreprocessResult(NamedTuple):\n    \"\"\"Prefill MLA preprocess result.\"\"\"\n    query: torch.Tensor\n    key: torch.Tensor\n    value: torch.Tensor\n    attn_mask: Optional[torch.Tensor]\n    seq_len: int\n\nclass DecodeMLAPreprocessResult(NamedTuple):\n    \"\"\"Decode MLA preprocess result.\"\"\"\n    query: torch.Tensor\n    key: torch.Tensor\n    value: torch.Tensor\n    attn_mask: Optional[torch.Tensor]\n    # 两个类存在重复字段（query, key, value, attn_mask）\n    # 未提取公共基类",
+      "context": "评审人 Ronald1995: \"you could use python dataclass instead of NamedTuple\" 评审人 Ronald1995: \"PrefillMLAPreprocessResult and DecodeMLAPreprocessResult has some common fields, you could extract a base class\""
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/mla_v1.py",
+      "line": 420,
+      "code": "# 使用 dataclass 替代 NamedTuple，提取公共基类\n\nfrom dataclasses import dataclass\nfrom typing import Optional\nimport torch\n\n@dataclass\nclass BaseMLAPreprocessResult:\n    \"\"\"Base class with common fields for MLA preprocess results.\"\"\"\n    query: torch.Tensor\n    key: torch.Tensor\n    value: torch.Tensor\n    attn_mask: Optional[torch.Tensor]\n\n@dataclass\nclass PrefillMLAPreprocessResult(BaseMLAPreprocessResult):\n    \"\"\"Prefill MLA preprocess result.\"\"\"\n    seq_len: int\n\n@dataclass\nclass DecodeMLAPreprocessResult(BaseMLAPreprocessResult):\n    \"\"\"Decode MLA preprocess result.\"\"\"\n    # 继承公共字段，不再重复定义\n    pass",
+      "context": "使用 dataclass 替代 NamedTuple，提取公共基类 继承公共字段，不再重复定义"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/mla_v1.py\n+++ b/vllm_ascend/attention/mla_v1.py\n@@ -1,23 +1,24 @@\n-# 评审人 Ronald1995: \"you could use python dataclass instead of NamedTuple\"\n-# 评审人 Ronald1995: \"PrefillMLAPreprocessResult and DecodeMLAPreprocessResult\n-#   has some common fields, you could extract a base class\"\n+# 使用 dataclass 替代 NamedTuple，提取公共基类\n \n-from typing import NamedTuple, Optional\n+from dataclasses import dataclass\n+from typing import Optional\n import torch\n \n-class PrefillMLAPreprocessResult(NamedTuple):\n-    \"\"\"Prefill MLA preprocess result.\"\"\"\n+@dataclass\n+class BaseMLAPreprocessResult:\n+    \"\"\"Base class with common fields for MLA preprocess results.\"\"\"\n     query: torch.Tensor\n     key: torch.Tensor\n     value: torch.Tensor\n     attn_mask: Optional[torch.Tensor]\n+\n+@dataclass\n+class PrefillMLAPreprocessResult(BaseMLAPreprocessResult):\n+    \"\"\"Prefill MLA preprocess result.\"\"\"\n     seq_len: int\n \n-class DecodeMLAPreprocessResult(NamedTuple):\n+@dataclass\n+class DecodeMLAPreprocessResult(BaseMLAPreprocessResult):\n     \"\"\"Decode MLA preprocess result.\"\"\"\n-    query: torch.Tensor\n-    key: torch.Tensor\n-    value: torch.Tensor\n-    attn_mask: Optional[torch.Tensor]\n-    # 两个类存在重复字段（query, key, value, attn_mask）\n-    # 未提取公共基类\n+    # 继承公共字段，不再重复定义\n+    pass\n",
+      "stats": "1 file changed, +14 lines, -13 lines",
+      "key_changes": [
+        "移除: class DecodeMLAPreprocessResult(NamedTuple):",
+        "新增: \"\"\"Base class with common fields for MLA preprocess results.\"\"\"",
+        "新增: class DecodeMLAPreprocessResult(BaseMLAPreprocessResult):",
+        "新增: from typing import Optional"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

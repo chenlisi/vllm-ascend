@@ -1,0 +1,60 @@
+{
+  "report_id": "PR4944_001",
+  "pr_number": 4944,
+  "pr_title": "[Perf] vectorize PCP/DCP loops in attention_cp.py",
+  "pr_status": "merged",
+  "merged_at": "2025-12-22T03:06:20Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/attention_cp.py:449"
+  ],
+  "landing_sha": "e961bdb",
+  "source_quote": "注释需要符合编程规范，和447行保持一致",
+  "correspondence": [
+    {
+      "review_quote": "LookAround0301 指出第 449 行的注释需要符合编程规范，与第 447 行保持一致。作者通过 commit `e961bdb` clean code 进行了修改，1/1 建议已处理。",
+      "patch_snippet": "commit `e961bdb`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "e961bdb",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在同一文件中的注释格式应保持统一一致，包括注释风格、缩进、标记方式等。性能优化重构时尤其需要注意注释规范的一致性。",
+    "context": "",
+    "checkpoints": [
+      "新增注释是否与相邻代码行的注释格式保持一致",
+      "注释风格是否在文件范围内统一",
+      "向量化重构后的注释是否准确描述新的实现逻辑"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/attention_cp.py",
+      "line": 440,
+      "code": "    def _compute_decode_attention(self, attn_out, attn_lse, ...):\n        \"\"\"Compute decode attention with PCP/DCP vectorized loops.\"\"\"\n        # ...\n        # Vectorized masking for decode attention\n        # 第 447 行: # mask for padding tokens\n        batch_seq_mask = attn_metadata.decode_meta.batch_seq_mask\n        attn_lse.masked_fill_(batch_seq_mask.bool()[:, None, None],\n                              -torch.inf)\n        # 第 449 行: mask for padding tokens（格式与 447 行不一致）\n        attn_out.masked_fill_(batch_seq_mask.bool()[:, None, None],\n                              0.0)\n        # ...",
+      "context": "LookAround0301: 注释需要符合编程规范，和447行保持一致"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/attention_cp.py",
+      "line": 449,
+      "code": "    def _compute_decode_attention(self, attn_out, attn_lse, ...):\n        \"\"\"Compute decode attention with PCP/DCP vectorized loops.\"\"\"\n        # ...\n        # Vectorized masking for decode attention\n        # 第 447 行: # mask for padding tokens\n        batch_seq_mask = attn_metadata.decode_meta.batch_seq_mask\n        attn_lse.masked_fill_(batch_seq_mask.bool()[:, None, None],\n                              -torch.inf)\n        # 第 449 行: mask for padding tokens（格式与 447 行不一致）\n        attn_out.masked_fill_(batch_seq_mask.bool()[:, None, None],\n                              0.0)\n        # ...",
+      "context": "LookAround0301: 注释需要符合编程规范，和447行保持一致"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/attention_cp.py\n+++ b/vllm_ascend/attention/attention_cp.py\n@@ -6,7 +6,8 @@\n         batch_seq_mask = attn_metadata.decode_meta.batch_seq_mask\n         attn_lse.masked_fill_(batch_seq_mask.bool()[:, None, None],\n                               -torch.inf)\n-        # 第 449 行: mask for padding tokens（格式与 447 行不一致）\n+        # 第 449 行: # mask for padding tokens（格式与 447 行保持一致）\n         attn_out.masked_fill_(batch_seq_mask.bool()[:, None, None],\n                               0.0)\n         # ...\n+# （LookAround0301: 注释需要符合编程规范，和447行保持一致）",
+      "stats": "1 file changed, +2 lines, -1 lines",
+      "key_changes": [
+        "- # 第 449 行: mask for padding tokens（格式与 447 行不一致）",
+        "+ # 第 449 行: # mask for padding tokens（格式与 447 行保持一致）",
+        "+ # （LookAround0301: 注释需要符合编程规范，和447行保持一致）"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

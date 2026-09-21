@@ -1,0 +1,67 @@
+{
+  "report_id": "PR4399_001",
+  "pr_number": 4399,
+  "pr_title": "[Doc] Refactor the DeepSeek-V3.1 tutorial.",
+  "pr_status": "merged",
+  "merged_at": "2025-12-02T10:46:30Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/DeepSeek-V3.1.md:157",
+    "docs/source/tutorials/DeepSeek-V3.1.md:116",
+    "docs/source/tutorials/DeepSeek-V3.1.md:28",
+    "docs/source/tutorials/DeepSeek-V3.1.md:135",
+    "docs/source/tutorials/DeepSeek-V3.1.md:171",
+    "docs/source/tutorials/DeepSeek-V3.1.md:152",
+    "docs/source/tutorials/DeepSeek-V3.1.md:39",
+    "docs/source/tutorials/DeepSeek-V3.1.md:82",
+    "docs/source/tutorials/DeepSeek-V3.1.md:84",
+    "docs/source/tutorials/DeepSeek-V3.1.md:27"
+  ],
+  "landing_sha": "fed65de",
+  "source_quote": "A2 is 32GB?",
+  "correspondence": [
+    {
+      "review_quote": "1. menogrey 指出硬件规格疑问（A2 是否 32GB）→ 需确认并修正文档中的硬件描述\n2. menogrey 要求为 jemalloc 添加说明 → 作者添加了性能优化说明\n3. menogrey 指出模型权重缺少下载链接 → 作者说明 MTP 权重未上传，提供了量化方法\n4. menogrey 指出 `vllm-ascend/xxx` 命名会被 vllm 当作远程模型搜索 → 作者改为本地路径\n5. menogrey 质疑 `VLLM_ASCEND_ENABLE_MLAPO=1` 在 DeepSeek-V3.1 中的必要性 → 待确认\n6. menogrey 指出 ascend ",
+      "patch_snippet": "",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "fed65de",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "**检查点**: 使用 `xxx/xxx` 格式的模型名称时，vllm 会尝试从 huggingface 或 modelscope 搜索，如果实际是本地模型需使用本地路径",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "def run_command(visible_devices. dp_rank, vllm_engine_port):\n    ...\n\nvisiable_devices = \",\".join(...)\n\n--served-model-name deepseek_v3    # Node 1 用 deepseek_v3\n--served-model-name deepseek_v3.1  # Node 0 用 deepseek_v3.1\n\npython launch_dp_program.py --dp-address 141.xx.xx.4  # 应指向 141.xx.xx.3\n\n--model vllm-ascend/DeepSeek-V3.1",
+      "context": "A2 is 32GB?"
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "def run_command(visible_devices, dp_rank, vllm_engine_port):\n    command = [\n        \"bash\",\n        \"./run_dp_template.sh\",\n        visible_devices,\n        str(vllm_engine_port),\n        str(dp_size),\n        str(dp_rank),\n        dp_address,\n        dp_rpc_port,\n        str(tp_size),\n    ]\n    subprocess.run(command, check=True)\n\nif __name__ == \"__main__\":\n    visible_devices = \",\".join(str(x) for x in range(i * tp_size, (i + 1) * tp_size))\n\n--served-model-name deepseek_v3.1\n\npython launch_dp_program.py --dp-size 32 --tp-size 1 --dp-size-local 16 \\\n    --dp-rank-start 16 --dp-address 141.xx.xx.3 --dp-rpc-port 12321 --vllm-start-port 7100\n\n--model /path/to/DeepSeek-V3.1\n\nLD_PRELOAD=/usr/lib/libjemalloc.so",
+      "context": "A2 is 32GB?"
+    },
+    "diff": {
+      "unified": "--- a/a/file\n+++ b/b/file\n@@ -1,11 +1,25 @@\n-def run_command(visible_devices. dp_rank, vllm_engine_port):\n-    ...\n+def run_command(visible_devices, dp_rank, vllm_engine_port):\n+    command = [\n+        \"bash\",\n+        \"./run_dp_template.sh\",\n+        visible_devices,\n+        str(vllm_engine_port),\n+        str(dp_size),\n+        str(dp_rank),\n+        dp_address,\n+        dp_rpc_port,\n+        str(tp_size),\n+    ]\n+    subprocess.run(command, check=True)\n \n-visiable_devices = \",\".join(...)\n+if __name__ == \"__main__\":\n+    visible_devices = \",\".join(str(x) for x in range(i * tp_size, (i + 1) * tp_size))\n \n---served-model-name deepseek_v3    # Node 1 用 deepseek_v3\n---served-model-name deepseek_v3.1  # Node 0 用 deepseek_v3.1\n+--served-model-name deepseek_v3.1\n \n-python launch_dp_program.py --dp-address 141.xx.xx.4  # 应指向 141.xx.xx.3\n+python launch_dp_program.py --dp-size 32 --tp-size 1 --dp-size-local 16 \\\n+    --dp-rank-start 16 --dp-address 141.xx.xx.3 --dp-rpc-port 12321 --vllm-start-port 7100\n \n---model vllm-ascend/DeepSeek-V3.1\n+--model /path/to/DeepSeek-V3.1\n+\n+LD_PRELOAD=/usr/lib/libjemalloc.so",
+      "stats": "1 file changed, +21 lines, -7 lines",
+      "key_changes": [
+        "修改了第 1-2 行的代码",
+        "修改了第 4-4 行的代码",
+        "修改了第 6-7 行的代码",
+        "修改了第 9-9 行的代码",
+        "修改了第 11-11 行的代码"
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

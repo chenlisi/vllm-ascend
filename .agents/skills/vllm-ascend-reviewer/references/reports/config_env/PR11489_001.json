@@ -1,0 +1,56 @@
+{
+  "report_id": "PR11489_001",
+  "pr_number": 11489,
+  "pr_title": "[Test] Added test cases for the precision and performance of qwen3",
+  "pr_status": "merged",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "important",
+  "affected_files": [
+    ".github/workflows/configs/weekly_config.yaml:1"
+  ],
+  "landing_sha": "b97f48c",
+  "source_quote": "not necessary to change this.",
+  "correspondence": [
+    {
+      "review_quote": "jiangyunfan1: .github/workflows/configs/weekly_config.yaml:1",
+      "patch_snippet": "评后sha b97f48c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "b97f48c",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在 PR 中不应修改与本次变更无关的 CI 配置文件，尤其是 `.github/workflows/configs/` 下的配置文件。如果修改不是功能所必需的，应当避免。",
+    "context": "",
+    "checkpoints": [
+      "检查 PR 的 diff 是否包含对 CI 配置文件的非必要修改",
+      "确认 workflow 配置文件的修改是否有明确的功能需求支撑"
+    ],
+    "antipattern": {
+      "file": ".github/workflows/configs/weekly_config.yaml",
+      "line": 1,
+      "code": "# 在添加 Qwen3 测试用例的 PR 中，作者额外修改了 weekly_config.yaml\n# 该修改与本次 PR 功能（添加 Qwen3 精度和性能测试用例）无关\n# 原始配置内容被更改（具体改动内容已在后续 commit 中还原）\n# 评审人 jiangyunfan1 指出 \"not necessary to change this.\"\n#\n# 示例：作者在 weekly_config.yaml 中添加了新的配置条目\n# 或修改了已有的测试调度参数，但这些修改并非 PR 功能所需\nname: weekly test config\non:\n  schedule:\n    - cron: '0 0 * * 0'\njobs:\n  weekly-e2e:\n    strategy:\n      matrix:\n        model: [Qwen3-8B, Qwen3-14B, Qwen3-32B]\n    # ... 作者在此处添加了与 PR 功能无关的配置变更",
+      "context": "修改前代码 (yaml)"
+    },
+    "pattern": {
+      "file": ".github/workflows/configs/weekly_config.yaml",
+      "line": 1,
+      "code": "# commit b97f48c \"weekly 配置修改\" 还原了对该文件的不必要修改\n# 保持原有配置不变，仅保留功能所需的测试用例文件变更\n# （新增的测试用例放在独立的 YAML 配置文件中，\n#  如 tests/e2e/weekly/single_node/configs/Qwen3-8B-w8a8sc-310p.yaml 等）\n#\n# 还原后恢复原始配置：\nname: weekly test config\non:\n  schedule:\n    - cron: '0 0 * * 0'\njobs:\n  weekly-e2e:\n    strategy:\n      matrix:\n        model: [Qwen2-7B, Qwen2-72B]\n    # ... 原始配置已恢复，未添加无关变更",
+      "context": "修改后代码 (yaml)"
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/configs/weekly_config.yaml\n+++ b/.github/workflows/configs/weekly_config.yaml\n@@ -1,10 +1,9 @@\n-# 在添加 Qwen3 测试用例的 PR 中，作者额外修改了 weekly_config.yaml\n-# 该修改与本次 PR 功能（添加 Qwen3 精度和性能测试用例）无关\n-# 原始配置内容被更改（具体改动内容已在后续 commit 中还原）\n-# 评审人 jiangyunfan1 指出 \"not necessary to change this.\"\n+# commit b97f48c \"weekly 配置修改\" 还原了对该文件的不必要修改\n+# 保持原有配置不变，仅保留功能所需的测试用例文件变更\n+# （新增的测试用例放在独立的 YAML 配置文件中，\n+#  如 tests/e2e/weekly/single_node/configs/Qwen3-8B-w8a8sc-310p.yaml 等）\n #\n-# 示例：作者在 weekly_config.yaml 中添加了新的配置条目\n-# 或修改了已有的测试调度参数，但这些修改并非 PR 功能所需\n+# 还原后恢复原始配置：\n name: weekly test config\n on:\n   schedule:\n@@ -13,5 +12,5 @@\n   weekly-e2e:\n     strategy:\n       matrix:\n-        model: [Qwen3-8B, Qwen3-14B, Qwen3-32B]\n-    # ... 作者在此处添加了与 PR 功能无关的配置变更\n+        model: [Qwen2-7B, Qwen2-72B]\n+    # ... 原始配置已恢复，未添加无关变更",
+      "stats": "1 file changed, +7 lines, -8 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "yaml",
+    "_status": "pending_llm_extract"
+  }
+}

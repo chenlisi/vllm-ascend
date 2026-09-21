@@ -1,0 +1,63 @@
+{
+  "report_id": "PR2921_001",
+  "pr_number": 2921,
+  "pr_title": "[Release] Add release note for v0.10.2rc1",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/conf.py:76",
+    "docs/source/community/versioning_policy.md:45"
+  ],
+  "landing_sha": "d4bdd24",
+  "source_quote": "Yes, the v should remove\nalso this",
+  "correspondence": [
+    {
+      "review_quote": "docs/source/conf.py:76",
+      "patch_snippet": "评后sha d4bdd24 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "docs/source/community/versioning_policy.md:45",
+      "patch_snippet": "评后sha d4bdd24 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "d4bdd24",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在文档配置中指定 pip 安装版本号时，不应使用 `v` 前缀（如 `v0.10.2`），因为 pip 版本标准格式不包含该前缀，错误的前缀会导致安装命令失败。",
+    "context": "",
+    "checkpoints": [
+      "pip 版本号是否使用标准格式（无 v 前缀）",
+      "markdown 表格格式是否正确",
+      "文档中的版本引用是否一致"
+    ],
+    "antipattern": {
+      "file": "docs/source/conf.py",
+      "line": 70,
+      "code": "# 评审人: gemini-code-assist[bot] 🔴 high, Yikun 👤 确认\n# Commit: d4bdd24 (fix typo)\n# pip 版本号不应有 v 前缀，否则 pip install 命令会失败\n\nhtml_context = {\n    'release_note': 'v0.10.2rc1',\n    'pip_vllm_ascend_version': \"0.10.2\",  # 无 v 前缀（正确）\n    'pip_vllm_version': \"v0.10.2\",  # 错误：有 v 前缀\n    # ... 其他配置 ...\n}\n\n# 在文档模板中使用：\n# pip install vllm=={{ pip_vllm_version }}",
+      "context": "评审人: gemini-code-assist[bot] 🔴 high, Yikun 👤 确认 Commit: d4bdd24 (fix typo) pip 版本号不应有 v 前缀，否则 pip install 命令会失败"
+    },
+    "pattern": {
+      "file": "docs/source/conf.py",
+      "line": 70,
+      "code": "# 移除 v 前缀，保持与 pip_vllm_ascend_version 格式一致\n\nhtml_context = {\n    'release_note': 'v0.10.2rc1',\n    'pip_vllm_ascend_version': \"0.10.2\",  # 无 v 前缀（正确）\n    'pip_vllm_version': \"0.10.2\",  # 正确：移除 v 前缀\n    # ... 其他配置 ...\n}\n\n# 在文档模板中使用：\n# pip install vllm=={{ pip_vllm_version }}",
+      "context": "移除 v 前缀，保持与 pip_vllm_ascend_version 格式一致 ... 其他配置 ... 在文档模板中使用："
+    },
+    "diff": {
+      "unified": "--- a/docs/source/conf.py\n+++ b/docs/source/conf.py\n@@ -1,11 +1,9 @@\n-# 评审人: gemini-code-assist[bot] 🔴 high, Yikun 👤 确认\n-# Commit: d4bdd24 (fix typo)\n-# pip 版本号不应有 v 前缀，否则 pip install 命令会失败\n+# 移除 v 前缀，保持与 pip_vllm_ascend_version 格式一致\n \n html_context = {\n     'release_note': 'v0.10.2rc1',\n     'pip_vllm_ascend_version': \"0.10.2\",  # 无 v 前缀（正确）\n-    'pip_vllm_version': \"v0.10.2\",  # 错误：有 v 前缀\n+    'pip_vllm_version': \"0.10.2\",  # 正确：移除 v 前缀\n     # ... 其他配置 ...\n }\n \n",
+      "stats": "1 file changed, +2 lines, -4 lines",
+      "key_changes": [
+        "新增: 'pip_vllm_version': \"0.10.2\",  # 正确：移除 v 前缀"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

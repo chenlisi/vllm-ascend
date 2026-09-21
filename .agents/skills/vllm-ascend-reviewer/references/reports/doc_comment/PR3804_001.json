@@ -1,0 +1,76 @@
+{
+  "report_id": "PR3804_001",
+  "pr_number": 3804,
+  "pr_title": "[Kernel] add custom op GmmSwigluQuantWeightNzTensorList",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "csrc/cmake/config.cmake:11",
+    "csrc/torch_binding.cpp:574",
+    "csrc/build_aclnn.sh:8",
+    "csrc/build_aclnn.sh:6"
+  ],
+  "landing_sha": "9b9dd79",
+  "source_quote": "Please use English for all comments in the code.\nI noticed this PR introduces the `EXEC_NPU_CMD` macro and its dependencies, which adds a significant amount of code (~10k+ lines). Could we instead follow the pattern from **PR #3226** for registering the custom op? This should help keep the adaptation layer much smaller.\n> Looking ahead, if we want to use helper macros like this from op-plugin within `vllm-ascend`, the best long-term path would be to promote `torch_npu` to expose these interfaces publicly.\nI see the new custom operator is compiled into a separate `.run` installer. This approach seems to complicate the build process and will likely cause problems for users who want to build a Python wheel (`.whl`) package, as the operator won't be included.\n> **Suggestion:** Could we compile this operator directly into the main `vllm-ascend` shared library?\nSOC_VERSION: Enum(\"310\", \"910b\", \"910c\", \"950\")",
+  "correspondence": [
+    {
+      "review_quote": "SlightwindSec: csrc/cmake/config.cmake:11(2025-11-11 12:26:54)",
+      "patch_snippet": "评后sha 9b9dd79 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "SlightwindSec: csrc/torch_binding.cpp:574(2025-11-11 13:21:00)",
+      "patch_snippet": "评后sha 9b9dd79 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "SlightwindSec: csrc/build_aclnn.sh:8(2025-11-11 13:33:26)",
+      "patch_snippet": "评后sha 9b9dd79 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wangxiyuan: csrc/build_aclnn.sh:6(2025-11-20 06:29:08)",
+      "patch_snippet": "评后sha 9b9dd79 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "9b9dd79",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "代码中所有注释应使用英文。自定义算子的构建应尽可能简化，优先编译到主共享库中，避免独立的安装包导致打包问题。",
+    "context": "",
+    "checkpoints": [
+      "代码注释是否全部使用英文",
+      "自定义算子是否编译到主共享库中（而非独立 .run 包）",
+      "构建脚本是否支持 whl 打包",
+      "SOC_VERSION 是否使用了正确的枚举值"
+    ],
+    "antipattern": {
+      "file": "csrc/cmake/config.cmake",
+      "line": 11,
+      "code": "# csrc/cmake/config.cmake:1-15\n# 自定义算子构建配置\n# 此文件用于配置 GmmSwigluQuantWeightNzTensorList 算子的编译选项\n# 包括源文件路径、编译标志和链接库设置\n\n# 自定义算子源码目录\nset(CUSTOM_OP_DIR \"${CMAKE_CURRENT_SOURCE_DIR}\")\n\n# 编译选项\nset(CMAKE_CXX_STANDARD 17)\nset(CMAKE_CXX_STANDARD_REQUIRED ON)\n\n# 链接库配置\n# 需要链接 ACL 和 torch_npu 相关库\nfind_package(Torch REQUIRED)",
+      "context": "csrc/cmake/config.cmake:1-15 自定义算子构建配置 此文件用于配置 GmmSwigluQuantWeightNzTensorList 算子的编译选项"
+    },
+    "pattern": {
+      "file": "csrc/cmake/config.cmake",
+      "line": 11,
+      "code": "# csrc/cmake/config.cmake:1-15\n# Custom operator build configuration\n# This file configures compilation options for\n# GmmSwigluQuantWeightNzTensorList operator\n# Including source paths, compile flags and linked libraries\n\n# Custom operator source directory\nset(CUSTOM_OP_DIR \"${CMAKE_CURRENT_SOURCE_DIR}\")\n\n# Compile options\nset(CMAKE_CXX_STANDARD 17)\nset(CMAKE_CXX_STANDARD_REQUIRED ON)\n\n# Linked library configuration\n# Requires ACL and torch_npu related libraries\nfind_package(Torch REQUIRED)",
+      "context": "csrc/cmake/config.cmake:1-15 Custom operator build configuration This file configures compilation options for"
+    },
+    "diff": {
+      "unified": "--- a/csrc/cmake/config.cmake\n+++ b/csrc/cmake/config.cmake\n@@ -1,15 +1,16 @@\n # csrc/cmake/config.cmake:1-15\n-# 自定义算子构建配置\n-# 此文件用于配置 GmmSwigluQuantWeightNzTensorList 算子的编译选项\n-# 包括源文件路径、编译标志和链接库设置\n+# Custom operator build configuration\n+# This file configures compilation options for\n+# GmmSwigluQuantWeightNzTensorList operator\n+# Including source paths, compile flags and linked libraries\n \n-# 自定义算子源码目录\n+# Custom operator source directory\n set(CUSTOM_OP_DIR \"${CMAKE_CURRENT_SOURCE_DIR}\")\n \n-# 编译选项\n+# Compile options\n set(CMAKE_CXX_STANDARD 17)\n set(CMAKE_CXX_STANDARD_REQUIRED ON)\n \n-# 链接库配置\n-# 需要链接 ACL 和 torch_npu 相关库\n+# Linked library configuration\n+# Requires ACL and torch_npu related libraries\n find_package(Torch REQUIRED)\n",
+      "stats": "1 file changed, +8 lines, -7 lines",
+      "key_changes": [
+        "代码结构或逻辑调整"
+      ]
+    },
+    "language": "cmake",
+    "_status": "processed"
+  }
+}

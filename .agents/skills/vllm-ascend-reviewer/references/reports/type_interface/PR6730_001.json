@@ -1,0 +1,59 @@
+{
+  "report_id": "PR6730_001",
+  "pr_number": 6730,
+  "pr_title": "[OPS]add split_qkv_rmsnorm_mrope ops",
+  "pr_status": "merged",
+  "merged_at": "2026-03-06T02:07:59Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/triton/linearnorm/split_qkv_rmsnorm_mrope.py:260"
+  ],
+  "landing_sha": "9930d8f",
+  "source_quote": "Why do we need `to(tl.bfloat16)` here? 1. Do we only supports bfloat16? 2. Normally `tl.store` will automatically do dtype transformation for you.",
+  "correspondence": [
+    {
+      "review_quote": "whx-sjtu 质疑为何需要显式调用 `.to(tl.bfloat16)`，指出两个问题：(1) 是否仅支持 bfloat16？(2) `tl.store` 通常会自动进行 dtype 转换。作者接受建议，在 commit `9930d8f` 中移除了 `.to(torch.bfloat16)` 并验证了精度，1/1 建议全部落地。",
+      "patch_snippet": "commit `9930d8f`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "9930d8f",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在 Triton kernel 中，`tl.store` 会自动进行 dtype 转换，不需要在存储前显式调用 `.to(tl.bfloat16)` 等硬编码类型转换。硬编码 dtype 会导致算子仅支持特定数据类型，降低通用性。",
+    "context": "",
+    "checkpoints": [
+      "Triton kernel 中 `tl.store` 前不应有显式的 `.to(tl.xxx)` 类型转换",
+      "算子应支持多种输入 dtype，而非仅支持 bfloat16",
+      "依赖 Triton 内置的自动 dtype 转换机制"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/triton/linearnorm/split_qkv_rmsnorm_mrope.py",
+      "line": 245,
+      "code": "@triton.jit\ndef split_qkv_rmsnorm_mrope_kernel(\n    qkv_ptr, q_weight_ptr, q_bias_ptr, k_weight_ptr, k_bias_ptr,\n    cos_ptr, sin_ptr, output_q_ptr, output_k_ptr, output_v_ptr,\n    num_q_heads, num_kv_heads, head_size, eps,\n    mrope_section_ptr, rope_dim, BLOCK_SIZE: tl.constexpr,\n):\n    \"\"\"Triton kernel for split_qkv_rmsnorm_mrope fused operation.\"\"\"\n    normalized_q = rmsnorm(q_data, q_weight, eps)\n    q_rotated = apply_rope(normalized_q, cos, sin, mrope_section)\n\n    result = q_rotated.to(tl.bfloat16)\n    tl.store(output_q_ptr + offsets, result)\n\n    normalized_k = rmsnorm(k_data, k_weight, eps)\n    k_rotated = apply_rope(normalized_k, cos, sin, mrope_section)\n    result_k = k_rotated.to(tl.bfloat16)\n    tl.store(output_k_ptr + offsets, result_k)",
+      "context": "Why do we need `to(tl.bfloat16)` here? 1. Do we only supports bfloat16? 2. Normally `tl.store` will automatically do dtype transformation for you."
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/triton/linearnorm/split_qkv_rmsnorm_mrope.py",
+      "line": 245,
+      "code": "@triton.jit\ndef split_qkv_rmsnorm_mrope_kernel(\n    qkv_ptr, q_weight_ptr, q_bias_ptr, k_weight_ptr, k_bias_ptr,\n    cos_ptr, sin_ptr, output_q_ptr, output_k_ptr, output_v_ptr,\n    num_q_heads, num_kv_heads, head_size, eps,\n    mrope_section_ptr, rope_dim, BLOCK_SIZE: tl.constexpr,\n):\n    \"\"\"Triton kernel for split_qkv_rmsnorm_mrope fused operation.\"\"\"\n    normalized_q = rmsnorm(q_data, q_weight, eps)\n    q_rotated = apply_rope(normalized_q, cos, sin, mrope_section)\n\n    tl.store(output_q_ptr + offsets, q_rotated)\n\n    normalized_k = rmsnorm(k_data, k_weight, eps)\n    k_rotated = apply_rope(normalized_k, cos, sin, mrope_section)\n    tl.store(output_k_ptr + offsets, k_rotated)",
+      "context": "Why do we need `to(tl.bfloat16)` here? 1. Do we only supports bfloat16? 2. Normally `tl.store` will automatically do dtype transformation for you."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/triton/linearnorm/split_qkv_rmsnorm_mrope.py\n+++ b/vllm_ascend/ops/triton/linearnorm/split_qkv_rmsnorm_mrope.py\n@@ -245,18 +245,16 @@\n     normalized_q = rmsnorm(q_data, q_weight, eps)\n     q_rotated = apply_rope(normalized_q, cos, sin, mrope_section)\n \n-    result = q_rotated.to(tl.bfloat16)\n-    tl.store(output_q_ptr + offsets, result)\n+    tl.store(output_q_ptr + offsets, q_rotated)\n \n     normalized_k = rmsnorm(k_data, k_weight, eps)\n     k_rotated = apply_rope(normalized_k, cos, sin, mrope_section)\n-    result_k = k_rotated.to(tl.bfloat16)\n-    tl.store(output_k_ptr + offsets, result_k)\n+    tl.store(output_k_ptr + offsets, k_rotated)",
+      "stats": "1 file changed, +2 lines, -4 lines",
+      "key_changes": [
+        "修改了第 12-13 行的代码",
+        "修改了第 17-18 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

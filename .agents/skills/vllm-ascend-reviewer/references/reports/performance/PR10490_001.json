@@ -1,0 +1,65 @@
+{
+  "report_id": "PR10490_001",
+  "pr_number": 10490,
+  "pr_title": "[Test]update upstream workflow",
+  "pr_status": "merged",
+  "merged_at": "2026-06-18T08:02:45Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    ".github/workflows/schedule_vllm_e2e_test.yaml:148"
+  ],
+  "landing_sha": "c1fd52c",
+  "source_quote": "是不是粒度太大，有so就认为cache hit吗",
+  "correspondence": [
+    {
+      "review_quote": "Tflowers-0129 质疑缓存粒度是否太大——仅凭 .so 文件就认为 cache hit 可能不够精确。tfhddd 解释说增量编译加速目前不可行，因此采用 C++ 相关代码的 hash 作为 cache key，只要 C++ 代码未变就复用上次构建产物以提升 CI 速度。该讨论确认了当前缓存策略的合理性。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "c1fd52c",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "CI 缓存的 cache key 需要选择合适的文件粒度。粒度太粗（如仅用 .so 文件）可能导致缓存命中不准确；粒度太细则缓存命中率低。使用 C++ 源代码文件的 hash 作为 cache key 是一种平衡方案。",
+    "context": "",
+    "checkpoints": [
+      "检查 CI workflow 中 cache key 的文件匹配范围是否合理",
+      "确认缓存 key 是否能准确反映需要重新编译的变更",
+      "评估缓存策略对 CI 速度的实际影响"
+    ],
+    "antipattern": {
+      "file": ".github/workflows/schedule_vllm_e2e_test.yaml",
+      "line": 135,
+      "code": "# Tflowers-0129 质疑: \"是不是粒度太大，有so就认为cache hit吗\"\n# 仅用 .so 文件 hash 作为 cache key，粒度太粗，可能导致缓存命中不准确\n\nname: Schedule vLLM E2E Test\n\non:\n  schedule:\n    - cron: '0 0 * * *'\n  workflow_dispatch:\n\njobs:\n  build-and-test:\n    runs-on: ${{ matrix.os }}\n    strategy:\n      matrix:\n        os: [linux-amd64-a3-1]\n    steps:\n      - uses: actions/checkout@v4\n\n      - name: Cache C++ artifacts\n        uses: actions/cache@v4\n        with:\n          path: |\n            build/\n            lib/\n          # 粒度太粗：仅用 .so 文件 hash，无法精确反映 C++ 源码变更\n          cache-key: cpp-artifacts-${{ hashFiles('**/*.so') }}\n          restore-keys: |\n            cpp-artifacts-\n\n      - name: Build C++ extensions\n        run: |\n          python setup.py build_ext --inplace",
+      "context": "是不是粒度太大，有so就认为cache hit吗"
+    },
+    "pattern": {
+      "file": ".github/workflows/schedule_vllm_e2e_test.yaml",
+      "line": 135,
+      "code": "# tfhddd 解释: 增量编译加速目前不可行，因此使用 C++ 相关代码的 hash 作为 cache key\n# 只要 C++ 代码未变化，就使用上次构建的产物，提升 CI 速度\n\nname: Schedule vLLM E2E Test\n\non:\n  schedule:\n    - cron: '0 0 * * *'\n  workflow_dispatch:\n\njobs:\n  build-and-test:\n    runs-on: ${{ matrix.os }}\n    strategy:\n      matrix:\n        os: [linux-amd64-a3-1]\n    steps:\n      - uses: actions/checkout@v4\n\n      - name: Cache C++ artifacts\n        uses: actions/cache@v4\n        with:\n          path: |\n            build/\n            lib/\n          # 使用 C++ 源代码文件 hash 作为 cache key，粒度更精确\n          cache-key: cpp-artifacts-${{ hashFiles('**/*.cpp', '**/*.h', '**/*.hpp', '**/CMakeLists.txt') }}\n          restore-keys: |\n            cpp-artifacts-\n\n      - name: Build C++ extensions\n        run: |\n          python setup.py build_ext --inplace",
+      "context": "是不是粒度太大，有so就认为cache hit吗"
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/schedule_vllm_e2e_test.yaml\n+++ b/.github/workflows/schedule_vllm_e2e_test.yaml\n@@ -1,5 +1,5 @@\n-# Tflowers-0129 质疑: \"是不是粒度太大，有so就认为cache hit吗\"\n-# 仅用 .so 文件 hash 作为 cache key，粒度太粗，可能导致缓存命中不准确\n+# tfhddd 解释: 增量编译加速目前不可行，因此使用 C++ 相关代码的 hash 作为 cache key\n+# 只要 C++ 代码未变化，就使用上次构建的产物，提升 CI 速度\n \n name: Schedule vLLM E2E Test\n \n@@ -23,8 +23,8 @@\n           path: |\n             build/\n             lib/\n-          # 粒度太粗：仅用 .so 文件 hash，无法精确反映 C++ 源码变更\n-          cache-key: cpp-artifacts-${{ hashFiles('**/*.so') }}\n+          # 使用 C++ 源代码文件 hash 作为 cache key，粒度更精确\n+          cache-key: cpp-artifacts-${{ hashFiles('**/*.cpp', '**/*.h', '**/*.hpp', '**/CMakeLists.txt') }}\n           restore-keys: |\n             cpp-artifacts-\n ",
+      "stats": "1 file changed, +4 lines, -4 lines",
+      "key_changes": [
+        "移除: # Tflowers-0129 质疑: \"是不是粒度太大，有so就认为cache hit吗\"",
+        "移除: # 仅用 .so 文件 hash 作为 cache key，粒度太粗，可能导致缓存命中不准确",
+        "新增: # tfhddd 解释: 增量编译加速目前不可行，因此使用 C++ 相关代码的 hash 作为 cache key",
+        "新增: # 只要 C++ 代码未变化，就使用上次构建的产物，提升 CI 速度",
+        "移除: # 粒度太粗：仅用 .so 文件 hash，无法精确反映 C++ 源码变更",
+        "移除: cache-key: cpp-artifacts-${{ hashFiles('**/*.so') }}",
+        "新增: # 使用 C++ 源代码文件 hash 作为 cache key，粒度更精确",
+        "新增: cache-key: cpp-artifacts-${{ hashFiles('**/*.cpp', '**/*.h', '**/*.hpp', '**/CMa"
+      ]
+    },
+    "language": "yaml",
+    "_status": "extracted"
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "report_id": "PR13047_001",
+  "pr_number": 13047,
+  "pr_title": "[BugFix] Fix 4k input bug in dspark",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/patch/platform/patch_kv_cache_coordinator.py:50"
+  ],
+  "landing_sha": "4e45bf1",
+  "source_quote": "If `_swa._inflight_token_budget` is `None` (e.g., in mock/test environments or before the scheduler is initialized), `token_budget` will remain `None` and fall back to `max_model_len`. In v0.25.1, the original fallback was `max_num_batched_tokens`. Falling back to `max_num_batched_tokens` when the inflight budget is unavailable is much safer and prevents potential out-of-memory or allocation issues.",
+  "correspondence": [
+    {
+      "review_quote": "gemini-code-assist[bot]: vllm_ascend/patch/platform/patch_kv_cache_coordinator.py:50",
+      "patch_snippet": "评后sha 4e45bf1 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "4e45bf1",
+    "approvals": 4
+  },
+  "rule": {
+    "description": "当为 KV 缓存、block table、或 token 预分配预算选择 fallback 链时，最末一级\"实在拿不到\"之前，必须经过一次\"批处理/单次调度维度的有界上限\"（典型如 `max_num_batched_tokens`、`max_num_seqs * max_num_batched_tokens`），禁止直接落到模型级 `max_model_len` / `max_position_embeddings` 等\"单请求上下文长度\"——后者通常大 1~3 个数量级，极易触发 OOM / host 分配失败 / 潜在越界写。",
+    "context": "",
+    "checkpoints": [
+      "检查所有形如 `x if x is not None else max_model_len` 的三元 fallback",
+      "中间是否有 `max_num_batched_tokens`（或 `max_num_seqs * max_num_batched_tokens`）这种\"批量处理上限\"的中间 fallback",
+      "若是多版本分支（vllm_version_is / feature flag），对每一个分支独立做上述检查",
+      "若 fallback 需要跨模块读取模块级全局变量（如 `_swa._inflight_token_budget`），评估是否可以直接删除该全局链路，改用最接近的安全上限常量，减少脆弱性"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/patch/platform/patch_kv_cache_coordinator.py",
+      "line": 50,
+      "code": "from vllm.utils import vllm_version_is\n\n\ndef _select_kv_token_budget(max_in_flight_tokens, max_model_len,\n                            max_num_batched_tokens):\n    \"\"\"Select the token budget for KV cache coordination.\n\n    For vLLM v0.25.1, the budget is inferred from the scheduler's\n    in-flight token count; if unavailable, the fallback is the global\n    max_model_len, which can be dangerously large.\n    \"\"\"\n    if vllm_version_is(\"0.25.1\"):\n        token_budget = max_in_flight_tokens           # 第1级：可能是 None\n        if token_budget is None:\n            from vllm_ascend.patch.platform import patch_swa_inflight_free as _swa\n            token_budget = _swa._inflight_token_budget  # 第2级：可能仍是 None\n    else:\n        token_budget = max_in_flight_tokens\n    return token_budget if token_budget is not None else max_model_len\n    #                                                ↑↑ 两级都 None 时落到 max_model_len (如 8M)，极易 OOM\n\n\ndef _publish_kv_connector_output(connector_output, token_budget):\n    \"\"\"Propagate KV connector output with the resolved budget.\"\"\"\n    ...",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/patch/platform/patch_kv_cache_coordinator.py",
+      "line": 50,
+      "code": "from vllm.utils import vllm_version_is\n\n\ndef _select_kv_token_budget(max_in_flight_tokens, max_model_len,\n                            max_num_batched_tokens):\n    \"\"\"Select the token budget for KV cache coordination.\n\n    For vLLM v0.25.1, use the per-batch token upper bound directly\n    to avoid falling back to the dangerously large max_model_len.\n    \"\"\"\n    if vllm_version_is(\"0.25.1\"):\n        token_budget = max_num_batched_tokens       # 直接用 per-batch 上限（如 24576）\n    else:\n        token_budget = max_in_flight_tokens\n    return token_budget if token_budget is not None else max_model_len\n\n\ndef _publish_kv_connector_output(connector_output, token_budget):\n    \"\"\"Propagate KV connector output with the resolved budget.\"\"\"\n    ...",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/patch/platform/patch_kv_cache_coordinator.py\n+++ b/vllm_ascend/patch/platform/patch_kv_cache_coordinator.py\n@@ -5,19 +5,14 @@\n                             max_num_batched_tokens):\n     \"\"\"Select the token budget for KV cache coordination.\n \n-    For vLLM v0.25.1, the budget is inferred from the scheduler's\n-    in-flight token count; if unavailable, the fallback is the global\n-    max_model_len, which can be dangerously large.\n+    For vLLM v0.25.1, use the per-batch token upper bound directly\n+    to avoid falling back to the dangerously large max_model_len.\n     \"\"\"\n     if vllm_version_is(\"0.25.1\"):\n-        token_budget = max_in_flight_tokens           # 第1级：可能是 None\n-        if token_budget is None:\n-            from vllm_ascend.patch.platform import patch_swa_inflight_free as _swa\n-            token_budget = _swa._inflight_token_budget  # 第2级：可能仍是 None\n+        token_budget = max_num_batched_tokens       # 直接用 per-batch 上限（如 24576）\n     else:\n         token_budget = max_in_flight_tokens\n     return token_budget if token_budget is not None else max_model_len\n-    #                                                ↑↑ 两级都 None 时落到 max_model_len (如 8M)，极易 OOM\n \n \n def _publish_kv_connector_output(connector_output, token_budget):",
+      "stats": "1 file changed, +3 lines, -8 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

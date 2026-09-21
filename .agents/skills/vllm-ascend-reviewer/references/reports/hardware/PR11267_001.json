@@ -1,0 +1,70 @@
+{
+  "report_id": "PR11267_001",
+  "pr_number": 11267,
+  "pr_title": "[Feature][MRV2] Support DFlash",
+  "pr_status": "merged",
+  "merged_at": "2026-07-06T08:57:27Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/v2/spec_decode/__init__.py:31",
+    "vllm_ascend/attention/attention_v1.py:1370",
+    "vllm_ascend/ops/rotary_embedding.py:245",
+    "vllm_ascend/worker/v2/spec_decode/dflash/speculator.py:176",
+    "vllm_ascend/worker/v2/spec_decode/dflash/speculator.py:65",
+    "tests/e2e/pull_request/one_card/model_runner_v2/test_basic.py:147"
+  ],
+  "landing_sha": "e81075f",
+  "source_quote": "Move to utils.",
+  "correspondence": [
+    {
+      "review_quote": "drslark 指出：应将代码移至 utils、解释 slot_mapping 类型转换原因、为 rotary_embedding 中的 guard 添加说明、重命名 `dflash_speculator` 为 `vllm_dflash_speculator`、补充注释至与 vLLM 侧等量、确认 ascend 的 BlockTables patch、添加 e2e 测试。作者通过 commit `e81075f` 完成了所有修改，11/11 建议全部落地。",
+      "patch_snippet": "commit `e81075f`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "e81075f",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在 vllm-ascend 中实现的 vLLM 模块功能应使用 `vllm_` 前缀命名以标识其来源。代码注释应至少与上游 vLLM 侧等量。Ascend NPU 算子对数据类型有特定要求（如 slot_mapping 需要 torch.int32），类型转换处应添加说明注释。",
+    "context": "",
+    "checkpoints": [
+      "vLLM 模块功能是否使用了 `vllm_` 前缀命名",
+      "注释量是否达到上游 vLLM 侧的同等水平",
+      "slot_mapping 等关键数据类型是否正确转换为 Ascend NPU 要求的类型",
+      "类型转换处是否有注释说明原因",
+      "是否添加了必要的 e2e 测试"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 31,
+      "code": "import torch\nfrom vllm.attention.backends.abstract import AttentionMetadata\n\nclass AscendAttentionBackend:\n    \"\"\"Attention backend for Ascend NPU.\"\"\"\n\n    @staticmethod\n    def reshape_and_cache(\n        key: torch.Tensor,\n        value: torch.Tensor,\n        key_cache: torch.Tensor,\n        value_cache: torch.Tensor,\n        attn_metadata: AttentionMetadata,\n    ) -> None:\n        \"\"\"Reshape and cache KV tensors.\"\"\"\n        # 上游 vLLM 传递 slot_mapping 为 torch.int64\n        # Ascend NPU 的 reshape_and_cache 算子要求 torch.int32\n        slot_mapping = attn_metadata.slot_mapping\n\n        torch.ops._C_ascend.reshape_and_cache(\n            key, value, key_cache, value_cache, slot_mapping\n        )",
+      "context": "Move to utils."
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 31,
+      "code": "import torch\nfrom vllm.attention.backends.abstract import AttentionMetadata\n\nclass AscendAttentionBackend:\n    \"\"\"Attention backend for Ascend NPU.\"\"\"\n\n    @staticmethod\n    def reshape_and_cache(\n        key: torch.Tensor,\n        value: torch.Tensor,\n        key_cache: torch.Tensor,\n        value_cache: torch.Tensor,\n        attn_metadata: AttentionMetadata,\n    ) -> None:\n        \"\"\"Reshape and cache KV tensors.\"\"\"\n        # Ascend NPU 的 reshape_and_cache 算子要求 slot_mapping 为 int32\n        # 上游 vLLM 默认传递 torch.int64，需要显式转换\n        slot_mapping = attn_metadata.slot_mapping.to(torch.int32)\n\n        torch.ops._C_ascend.reshape_and_cache(\n            key, value, key_cache, value_cache, slot_mapping\n        )",
+      "context": "Move to utils."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/attention_v1.py\n+++ b/vllm_ascend/attention/attention_v1.py\n@@ -13,9 +13,9 @@\n         attn_metadata: AttentionMetadata,\n     ) -> None:\n         \"\"\"Reshape and cache KV tensors.\"\"\"\n-        # 上游 vLLM 传递 slot_mapping 为 torch.int64\n-        # Ascend NPU 的 reshape_and_cache 算子要求 torch.int32\n-        slot_mapping = attn_metadata.slot_mapping\n+        # Ascend NPU 的 reshape_and_cache 算子要求 slot_mapping 为 int32\n+        # 上游 vLLM 默认传递 torch.int64，需要显式转换\n+        slot_mapping = attn_metadata.slot_mapping.to(torch.int32)\n \n         torch.ops._C_ascend.reshape_and_cache(\n             key, value, key_cache, value_cache, slot_mapping",
+      "stats": "1 file changed, +3 lines, -3 lines",
+      "key_changes": [
+        "移除: # 上游 vLLM 传递 slot_mapping 为 torch.int64",
+        "移除: # Ascend NPU 的 reshape_and_cache 算子要求 torch.int32",
+        "移除: slot_mapping = attn_metadata.slot_mapping",
+        "新增: # Ascend NPU 的 reshape_and_cache 算子要求 slot_mapping 为 int32",
+        "新增: # 上游 vLLM 默认传递 torch.int64，需要显式转换",
+        "新增: slot_mapping = attn_metadata.slot_mapping.to(torch.int32)"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

@@ -1,0 +1,91 @@
+{
+  "report_id": "PR2913_001",
+  "pr_number": 2913,
+  "pr_title": "[Feat] A Connector that supports Mooncake store",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/distributed/mooncake/config_data.py:20",
+    "vllm_ascend/distributed/mooncake/config_data.py:137",
+    "vllm_ascend/distributed/mooncake/config_data.py:319",
+    "vllm_ascend/distributed/mooncake/config_data.py:426",
+    "examples/disaggregated_prefill_v1/mooncake_connector_store_deployment_guide.md:11",
+    "examples/disaggregated_prefill_v1/mooncake_connector_store_deployment_guide.md:12"
+  ],
+  "landing_sha": "97f3ae4",
+  "source_quote": "The place of docstring in dataclass field is not correct, docstring should under the field, and you miss the docstring of model_name\ntoken_bytes may not be assigned here\nit's good to add docstring of field, not just comment.\nit's good to add docstring of all dataclass filed.\ndouble check the origin link is correct.\nremove this one",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/distributed/mooncake/config_data.py:20",
+      "patch_snippet": "评后sha 97f3ae4 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/distributed/mooncake/config_data.py:137",
+      "patch_snippet": "评后sha 97f3ae4 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/distributed/mooncake/config_data.py:319",
+      "patch_snippet": "评后sha 97f3ae4 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/distributed/mooncake/config_data.py:426",
+      "patch_snippet": "评后sha 97f3ae4 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "examples/disaggregated_prefill_v1/mooncake_connector_store_deployment_guide.md:11",
+      "patch_snippet": "评后sha 97f3ae4 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "examples/disaggregated_prefill_v1/mooncake_connector_store_deployment_guide.md:12",
+      "patch_snippet": "评后sha 97f3ae4 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "97f3ae4",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "dataclass 字段的 docstring 必须放在字段定义行的正下方，使用三引号格式，而不是使用行内注释。所有 dataclass 字段都应有 docstring。",
+    "context": "",
+    "checkpoints": [
+      "dataclass 字段的 docstring 应放在字段下方，使用 `\"\"\"...\"\"\"` 格式",
+      "不要使用 `#` 注释代替 docstring",
+      "所有 dataclass 字段都应有 docstring 说明"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/distributed/mooncake/config_data.py",
+      "line": 20,
+      "code": "# vllm_ascend/distributed/mooncake/config_data.py\n@dataclass\nclass MooncakeConfig:\n    # model_name 缺少 docstring\n    model_name: str\n    \"\"\"Some docstring misplaced correctly\"\"\"  # ❌ docstring 位置不对\n    token_bytes: int = 1024  # 可能不应在此处赋值",
+      "context": "vllm_ascend/distributed/mooncake/config_data.py model_name 缺少 docstring"
+    },
+    "pattern": {
+      "file": "vllm_ascend/distributed/mooncake/config_data.py",
+      "line": 20,
+      "code": "# vllm_ascend/distributed/mooncake/config_data.py\n@dataclass\nclass MooncakeConfig:\n    model_name: str\n    \"\"\"The name of the model.\"\"\"  # ✅ docstring 放在字段下方\n    token_bytes: int = 0  # ✅ 修正赋值\n    \"\"\"Number of token bytes.\"\"\"  # ✅ 所有 dataclass 字段都有 docstring",
+      "context": "vllm_ascend/distributed/mooncake/config_data.py"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/distributed/mooncake/config_data.py\n+++ b/vllm_ascend/distributed/mooncake/config_data.py\n@@ -1,7 +1,7 @@\n # vllm_ascend/distributed/mooncake/config_data.py\n @dataclass\n class MooncakeConfig:\n-    # model_name 缺少 docstring\n     model_name: str\n-    \"\"\"Some docstring misplaced correctly\"\"\"  # ❌ docstring 位置不对\n-    token_bytes: int = 1024  # 可能不应在此处赋值\n+    \"\"\"The name of the model.\"\"\"  # ✅ docstring 放在字段下方\n+    token_bytes: int = 0  # ✅ 修正赋值\n+    \"\"\"Number of token bytes.\"\"\"  # ✅ 所有 dataclass 字段都有 docstring\n",
+      "stats": "1 file changed, +3 lines, -3 lines",
+      "key_changes": [
+        "移除: token_bytes: int = 1024  # 可能不应在此处赋值",
+        "移除: \"\"\"Some docstring misplaced correctly\"\"\"  # ❌ docstring 位置不对",
+        "新增: \"\"\"Number of token bytes.\"\"\"  # ✅ 所有 dataclass 字段都有 docstring",
+        "新增: \"\"\"The name of the model.\"\"\"  # ✅ docstring 放在字段下方",
+        "新增: token_bytes: int = 0  # ✅ 修正赋值"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

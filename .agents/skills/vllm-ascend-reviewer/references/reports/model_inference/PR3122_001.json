@@ -1,0 +1,153 @@
+{
+  "report_id": "PR3122_001",
+  "pr_number": 3122,
+  "pr_title": "[Model] Support pooling models",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/attention_v1.py:126",
+    "vllm_ascend/worker/model_runner_v1.py:2643",
+    "vllm_ascend/worker/model_runner_v1.py:319",
+    "tests/e2e/singlecard/pooling/test_embedding.py:28",
+    "vllm_ascend/attention/attention_mask.py:75",
+    "vllm_ascend/patch/worker/patch_roberta.py:49",
+    "vllm_ascend/patch/__init__.py:110",
+    "vllm_ascend/attention/attention_mask.py:20",
+    "vllm_ascend/worker/model_runner_v1.py:2070",
+    "vllm_ascend/attention/attention_v1.py:1053",
+    "vllm_ascend/worker/model_runner_v1.py:4103",
+    "docs/source/user_guide/support_matrix/supported_models.md:52",
+    "vllm_ascend/worker/model_runner_v1.py:2071"
+  ],
+  "landing_sha": "ea6c1f2",
+  "source_quote": "I think `EncoderOnly` is an `AttentionType` instead of `AscendAttentionState`, why we put it here?\nlet's make attention spec in model_runner_v1.py#L3287\nI guess you want to make sure `forward_encoder` will be stepped into when the attn type is `ENCODE_ONLY`. However I think it has no relation to `AscendAttentionState`, which mainly refers to the requests state (whether it is chunked) in current batch. I recomand to include `forward_encoder` into each `_forward_xxx`(`_forward_prefill_no_cache`, `_forward_prefill_cache_hit`, `_forward_decode_only` and `_forward_v1_style`), so that it could be compatible with different schedulers and batch states\nI get your point, but I think it still not quite like a state. It is unique that no decode phase for encoder-only model, which has no autoregression process.\n> The `AscendAttentionState` actually just used to adapt `AscendScheduler`, a v0 style scheduler, which process prefill and decode req seperately. If you ensure this pr not support `AscendScheduler`, I think we should move the current `_forward_encoder` into `_forward_v1_style`\nOkay, then let's keep aligh with vllm first\nthis logic will make an all-zeros matrix for the other type models, too. I think it is a bug?\nCI failed may due to the download conflict while downloading. Plz help to take a look @Potabk\nThis couldn't be removed as this is required by `torch_npu.npu_fusion_attention`\nThanks for this cleanup!\nplz don't remove the reason and plan of this patch, thus we could remove it in the future\nwhy we need a full-zeros mask? this seems weird\nActually I'm confused about this change. Alough there is only prefill in encoder-only scenario, it is not recommanded to set attn_state accordding to model type\nRemoving this seems a bug, this will make no attention operators could use for encoder-only\nQQ: why specifying `num_tokens` to 2 here?\nThanks for the details, I got your point now\nwe need to remove the issue link here, let's do this after CI passes\n(post-merge comment: 关于冗余判断逻辑的后续清理建议)",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao: vllm_ascend/attention/attention_v1.py:126(2025-10-13 02:42:08)",
+      "patch_snippet": "评后sha ea6c1f2 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/worker/model_runner_v1.py:2643(2025-10-13 02:50:05)",
+      "patch_snippet": "评后sha ea6c1f2 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/attention/attention_v1.py:126(2025-10-13 03:06:38)",
+      "patch_snippet": "评后sha ea6c1f2 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/attention/attention_v1.py:126(2025-10-13 07:35:47)",
+      "patch_snippet": "评后sha ea6c1f2 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/worker/model_runner_v1.py:2643(2025-10-13 07:59:18)",
+      "patch_snippet": "评后sha ea6c1f2 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/worker/model_runner_v1.py:319(2025-10-14 13:44:01)",
+      "patch_snippet": "评后sha ea6c1f2 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: tests/e2e/singlecard/pooling/test_embedding.py:28(2025-10-24 06:16:55)",
+      "patch_snippet": "评后sha ea6c1f2 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/attention/attention_mask.py:75(2025-10-24 06:18:56)",
+      "patch_snippet": "评后sha ea6c1f2 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/patch/worker/patch_roberta.py:49(2025-10-24 06:26:26)",
+      "patch_snippet": "评后sha ea6c1f2 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/patch/__init__.py:110(2025-10-24 06:27:26)",
+      "patch_snippet": "评后sha ea6c1f2 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/attention/attention_mask.py:20(2025-10-24 06:36:25)",
+      "patch_snippet": "评后sha ea6c1f2 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/worker/model_runner_v1.py:2070(2025-10-24 06:45:57)",
+      "patch_snippet": "评后sha ea6c1f2 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/attention/attention_v1.py:1053(2025-10-24 06:47:24)",
+      "patch_snippet": "评后sha ea6c1f2 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/worker/model_runner_v1.py:4103(2025-11-30 09:47:24)",
+      "patch_snippet": "评后sha ea6c1f2 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/worker/model_runner_v1.py:4103(2025-12-02 09:01:41)",
+      "patch_snippet": "评后sha ea6c1f2 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: docs/source/user_guide/support_matrix/supported_models.md:52(2025-12-02 13:30:00)",
+      "patch_snippet": "评后sha ea6c1f2 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/worker/model_runner_v1.py:2071(2025-12-11 14:26:01)",
+      "patch_snippet": "评后sha ea6c1f2 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "ea6c1f2",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在添加 pooling 模型支持时，应正确使用 `AttentionType`（如 ENCODER_ONLY）来标识模型类型，而非将其混入 `AscendAttentionState`（用于描述请求的调度状态）。encoder-only 模型的 forward 逻辑应合并到现有的 `_forward_v1_style` 中，以保持与不同调度器和批次状态的兼容性。",
+    "context": "",
+    "checkpoints": [
+      "是否混淆了 `AttentionType` 和 `AscendAttentionState` 的概念",
+      "pooling 模型的 mask 是否正确设置为全零矩阵（非 causal）",
+      "是否保持了与 vllm 上游的一致性",
+      "删除代码时是否保留了 patch 的原因和计划说明",
+      "文档中是否在 CI 通过后清理了 issue 链接"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 120,
+      "code": "# 评审人: MengqingCao 👤 (2025-10-13)\n# Commit: ea6c1f2, 64b829d, 8a443a6 等多次修改\n# 错误地将 EncoderOnly 混入 AscendAttentionState\n\nclass AscendAttentionState:\n    PrefillNoCache = \"prefill_no_cache\"\n    PrefillCacheHit = \"prefill_cache_hit\"\n    DecodeOnly = \"decode_only\"\n    ChunkedPrefill = \"chunked_prefill\"\n    EncoderOnly = \"encoder_only\"  # 混淆了 AttentionType 和 AscendAttentionState\n\n# model_runner_v1.py - 根据模型类型设置 attn_state（不推荐）\nif is_encoder_only:\n    attn_state = AscendAttentionState.EncoderOnly",
+      "context": "评审人: MengqingCao 👤 (2025-10-13) Commit: ea6c1f2, 64b829d, 8a443a6 等多次修改 错误地将 EncoderOnly 混入 AscendAttentionState"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 120,
+      "code": "# 移除 AscendAttentionState.EncoderOnly 状态\n# 保持与 vllm 上游一致，使用 AttentionType.ENCODER_ONLY 标识模型类型\n# 将 _forward_encoder 逻辑合并到 _forward_v1_style 中\n\nclass AscendAttentionState:\n    PrefillNoCache = \"prefill_no_cache\"\n    PrefillCacheHit = \"prefill_cache_hit\"\n    DecodeOnly = \"decode_only\"\n    ChunkedPrefill = \"chunked_prefill\"\n    # EncoderOnly 已移除\n\n# model_runner_v1.py - pooling 模型使用 is_causal_pooling 标识\nattn_metadata.is_causal_pooling = not is_causal\n# 非 causal pooling 使每个 query 关注所有 token",
+      "context": "移除 AscendAttentionState.EncoderOnly 状态 保持与 vllm 上游一致，使用 AttentionType.ENCODER_ONLY 标识模型类型 将 _forward_encoder 逻辑合并到 _forward_v1_style 中"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/attention_v1.py\n+++ b/vllm_ascend/attention/attention_v1.py\n@@ -1,14 +1,14 @@\n-# 评审人: MengqingCao 👤 (2025-10-13)\n-# Commit: ea6c1f2, 64b829d, 8a443a6 等多次修改\n-# 错误地将 EncoderOnly 混入 AscendAttentionState\n+# 移除 AscendAttentionState.EncoderOnly 状态\n+# 保持与 vllm 上游一致，使用 AttentionType.ENCODER_ONLY 标识模型类型\n+# 将 _forward_encoder 逻辑合并到 _forward_v1_style 中\n \n class AscendAttentionState:\n     PrefillNoCache = \"prefill_no_cache\"\n     PrefillCacheHit = \"prefill_cache_hit\"\n     DecodeOnly = \"decode_only\"\n     ChunkedPrefill = \"chunked_prefill\"\n-    EncoderOnly = \"encoder_only\"  # 混淆了 AttentionType 和 AscendAttentionState\n+    # EncoderOnly 已移除\n \n-# model_runner_v1.py - 根据模型类型设置 attn_state（不推荐）\n-if is_encoder_only:\n-    attn_state = AscendAttentionState.EncoderOnly\n+# model_runner_v1.py - pooling 模型使用 is_causal_pooling 标识\n+attn_metadata.is_causal_pooling = not is_causal\n+# 非 causal pooling 使每个 query 关注所有 token\n",
+      "stats": "1 file changed, +7 lines, -7 lines",
+      "key_changes": [
+        "移除: attn_state = AscendAttentionState.EncoderOnly",
+        "移除: EncoderOnly = \"encoder_only\"  # 混淆了 AttentionType 和 AscendAttentionState",
+        "新增: attn_metadata.is_causal_pooling = not is_causal"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "report_id": "PR10476_001",
+  "pr_number": 10476,
+  "pr_title": "[Misc] Main2main upgrade vllm to v0.22.1",
+  "pr_status": "merged",
+  "merged_at": "2026-06-16T04:46:49Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/patch/__init__.py:350"
+  ],
+  "landing_sha": "2662092",
+  "source_quote": "we should check if these patches still needed in vllm >= 0.22.1",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 指出 `patch/__init__.py:350` 处需要检查这些 patch 在 vllm >= 0.22.1 中是否仍然需要。作者通过 commit `2662092` 清理了旧版本兼容代码，1/1 建议全部落地。",
+      "patch_snippet": "commit `2662092`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "2662092",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在升级 vLLM 版本时，必须逐一检查现有的兼容性 patch 是否在新版本中仍然需要。已在上游修复的 patch 应及时移除，避免维护冗余代码。",
+    "context": "",
+    "checkpoints": [
+      "检查每个 patch 在新版本中是否仍然需要",
+      "检查测试 skip 条件是否已更新为新版本号",
+      "检查 `scheduler_block_size` 等新参数是否需要条件传递"
+    ],
+    "antipattern": {
+      "file": "tests/ut/patch/platform/test_patch_tool_choice_none_content.py",
+      "line": 48,
+      "code": "import pytest\nfrom vllm_ascend.utils import vllm_version_is\n\n\nclass TestPatchToolChoiceNoneContent:\n    \"\"\"Test patch for tool choice with none content in OpenAI serving.\"\"\"\n\n    @pytest.mark.skipif(\n        # gemini-code-assist: skip 条件引用 v0.21.0，但 reason 提到 v0.22.1\n        # 存在矛盾：版本号需要更新为 v0.22.1\n        not vllm_version_is(\"0.21.0\"),\n        reason=\"OpenAIServing._parse_tool_calls_from_content exists only in v0.22.1\"\n    )\n    def test_parse_tool_calls_from_content(self):\n        \"\"\"Test that _parse_tool_calls_from_content is correctly patched.\"\"\"\n        from vllm.entrypoints.openai.serving_chat import OpenAIServingChat\n        assert hasattr(OpenAIServingChat, \"_parse_tool_calls_from_content\")",
+      "context": "we should check if these patches still needed in vllm >= 0.22.1"
+    },
+    "pattern": {
+      "file": "tests/ut/patch/platform/test_patch_tool_choice_none_content.py",
+      "line": 48,
+      "code": "import pytest\nfrom vllm_ascend.utils import vllm_version_is\n\n\nclass TestPatchToolChoiceNoneContent:\n    \"\"\"Test patch for tool choice with none content in OpenAI serving.\"\"\"\n\n    @pytest.mark.skipif(\n        # 更新 skip 条件为 v0.22.1，与 reason 描述一致\n        not vllm_version_is(\"0.22.1\"),\n        reason=\"OpenAIServing._parse_tool_calls_from_content exists only in v0.22.1\"\n    )\n    def test_parse_tool_calls_from_content(self):\n        \"\"\"Test that _parse_tool_calls_from_content is correctly patched.\"\"\"\n        from vllm.entrypoints.openai.serving_chat import OpenAIServingChat\n        assert hasattr(OpenAIServingChat, \"_parse_tool_calls_from_content\")",
+      "context": "we should check if these patches still needed in vllm >= 0.22.1"
+    },
+    "diff": {
+      "unified": "--- a/tests/ut/patch/platform/test_patch_tool_choice_none_content.py\n+++ b/tests/ut/patch/platform/test_patch_tool_choice_none_content.py\n@@ -6,9 +6,8 @@\n     \"\"\"Test patch for tool choice with none content in OpenAI serving.\"\"\"\n \n     @pytest.mark.skipif(\n-        # gemini-code-assist: skip 条件引用 v0.21.0，但 reason 提到 v0.22.1\n-        # 存在矛盾：版本号需要更新为 v0.22.1\n-        not vllm_version_is(\"0.21.0\"),\n+        # 更新 skip 条件为 v0.22.1，与 reason 描述一致\n+        not vllm_version_is(\"0.22.1\"),\n         reason=\"OpenAIServing._parse_tool_calls_from_content exists only in v0.22.1\"\n     )\n     def test_parse_tool_calls_from_content(self):",
+      "stats": "1 file changed, +2 lines, -3 lines",
+      "key_changes": [
+        "移除: # gemini-code-assist: skip 条件引用 v0.21.0，但 reason 提到 v0.22.1",
+        "移除: # 存在矛盾：版本号需要更新为 v0.22.1",
+        "移除: not vllm_version_is(\"0.21.0\"),",
+        "新增: # 更新 skip 条件为 v0.22.1，与 reason 描述一致",
+        "新增: not vllm_version_is(\"0.22.1\"),"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

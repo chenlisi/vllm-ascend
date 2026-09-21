@@ -1,0 +1,65 @@
+{
+  "report_id": "PR10588_001",
+  "pr_number": 10588,
+  "pr_title": "[Doc][Misc] Improve readability and fix typos in documentation",
+  "pr_status": "merged",
+  "merged_at": "2026-06-18T01:17:30Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/models/GLM5.md:661"
+  ],
+  "landing_sha": "122248a",
+  "source_quote": "统一写成prefill吧，别写pre-fill了",
+  "correspondence": [
+    {
+      "review_quote": "Tflowers-0129 指出文档中 \"pre-fill\" 的写法应统一为 \"prefill\"，保持项目文档术语的一致性。作者已确认并修改为 \"prefill\"。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "122248a",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "项目文档中关于 prefill 阶段的描述应统一使用 \"prefill\" 写法，不使用 \"pre-fill\"、\"pre fill\" 等其他变体，以保持文档术语的一致性。",
+    "context": "",
+    "checkpoints": [
+      "检查文档中是否存在 \"pre-fill\" 的写法",
+      "搜索所有文档文件确认术语统一",
+      "新增文档时应直接使用 \"prefill\""
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/GLM5.md",
+      "line": 661,
+      "code": "<!-- 文件: docs/source/tutorials/models/GLM5.md:661 -->\n<!-- （根据评审意见推断） -->\n<!-- Prefill-Decode Disaggregation 的说明中使用了 \"pre-fill\" 写法 -->\n\n## Prefill-Decode Disaggregation\n\nThe GLM-5 model supports Prefill-Decode Disaggregation deployment,\nwhere the pre-fill stage and decode stage are deployed on separate nodes.\nThe pre-fill stage handles prompt processing and computes the KV cache,\nwhile the decode stage generates tokens autoregressively.\n\nTo deploy with disaggregation, configure the pre-fill node with:",
+      "context": "统一写成prefill吧，别写pre-fill了"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/GLM5.md",
+      "line": 661,
+      "code": "<!-- 文件: docs/source/tutorials/models/GLM5.md:661 -->\n<!-- （根据评审意见推断） -->\n<!-- 统一使用 \"prefill\" 写法，与项目文档术语保持一致 -->\n\n## Prefill-Decode Disaggregation\n\nThe GLM-5 model supports Prefill-Decode Disaggregation deployment,\nwhere the prefill stage and decode stage are deployed on separate nodes.\nThe prefill stage handles prompt processing and computes the KV cache,\nwhile the decode stage generates tokens autoregressively.\n\nTo deploy with disaggregation, configure the prefill node with:",
+      "context": "统一写成prefill吧，别写pre-fill了"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/GLM5.md\n+++ b/docs/source/tutorials/models/GLM5.md\n@@ -1,12 +1,12 @@\n <!-- 文件: docs/source/tutorials/models/GLM5.md:661 -->\n <!-- （根据评审意见推断） -->\n-<!-- Prefill-Decode Disaggregation 的说明中使用了 \"pre-fill\" 写法 -->\n+<!-- 统一使用 \"prefill\" 写法，与项目文档术语保持一致 -->\n \n ## Prefill-Decode Disaggregation\n \n The GLM-5 model supports Prefill-Decode Disaggregation deployment,\n-where the pre-fill stage and decode stage are deployed on separate nodes.\n-The pre-fill stage handles prompt processing and computes the KV cache,\n+where the prefill stage and decode stage are deployed on separate nodes.\n+The prefill stage handles prompt processing and computes the KV cache,\n while the decode stage generates tokens autoregressively.\n \n-To deploy with disaggregation, configure the pre-fill node with:\n+To deploy with disaggregation, configure the prefill node with:",
+      "stats": "1 file changed, +4 lines, -4 lines",
+      "key_changes": [
+        "移除: <!-- Prefill-Decode Disaggregation 的说明中使用了 \"pre-fill\" 写法 -->",
+        "新增: <!-- 统一使用 \"prefill\" 写法，与项目文档术语保持一致 -->",
+        "移除: where the pre-fill stage and decode stage are deployed on separate nodes.",
+        "移除: The pre-fill stage handles prompt processing and computes the KV cache,",
+        "新增: where the prefill stage and decode stage are deployed on separate nodes.",
+        "新增: The prefill stage handles prompt processing and computes the KV cache,",
+        "移除: To deploy with disaggregation, configure the pre-fill node with:",
+        "新增: To deploy with disaggregation, configure the prefill node with:"
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

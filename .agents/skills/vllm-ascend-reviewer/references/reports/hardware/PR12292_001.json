@@ -1,0 +1,57 @@
+{
+  "report_id": "PR12292_001",
+  "pr_number": 12292,
+  "pr_title": "[Feature] DyntraLB: Dynamic Intra-decoder Data-parallel Load Balancing",
+  "pr_status": "merged",
+  "dimension": [
+    "design"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/core/dyntra_lb_scheduler.py:89"
+  ],
+  "landing_sha": "2a98206",
+  "source_quote": "should call super().__init__ to avoid duplication",
+  "correspondence": [
+    {
+      "review_quote": "DavidJiang9: vllm_ascend/core/dyntra_lb_scheduler.py:89",
+      "patch_snippet": "评后sha 2a98206 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "2a98206",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "子类的 `__init__` 方法应调用 `super().__init__()` 来初始化父类状态，避免手动复制父类初始化逻辑导致的代码重复和维护问题。",
+    "context": "",
+    "checkpoints": [
+      "检查子类 `__init__` 是否调用了 `super().__init__()`",
+      "避免在子类中手动复制父类的初始化逻辑",
+      "仅在子类中添加子类特有的初始化代码"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/core/dyntra_lb_scheduler.py",
+      "line": 75,
+      "code": "import logging\nfrom typing import Optional\n\nfrom vllm.core.scheduler import Scheduler\nfrom vllm.config import SchedulerConfig, CacheConfig\n\nlogger = logging.getLogger(__name__)\n\n\nclass DyntraLBScheduler(Scheduler):\n    \"\"\"Dynamic Intra-decoder Data-parallel Load Balancing Scheduler.\"\"\"\n\n    def __init__(\n        self,\n        scheduler_config: SchedulerConfig,\n        cache_config: CacheConfig,\n        # ... 其他参数 ...\n    ) -> None:\n        # 手动复制父类初始化逻辑，未调用 super().__init__()\n        self.scheduler_config = scheduler_config\n        self.cache_config = cache_config\n        self.policy = Policy.get_policy(scheduler_config.policy_cls)\n        self.running: list = []\n        self.waiting: list = []\n        self.swapped: list = []\n        self.num_seq_group = 0\n        # ... 大量重复的父类初始化代码 ...\n\n        # 子类特有的初始化\n        self.dp_group = ...\n        self.dp_size = ...\n        self.lb_pending = False",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/core/dyntra_lb_scheduler.py",
+      "line": 75,
+      "code": "import logging\nfrom typing import Optional\n\nfrom vllm.core.scheduler import Scheduler\nfrom vllm.config import SchedulerConfig, CacheConfig\n\nlogger = logging.getLogger(__name__)\n\n\nclass DyntraLBScheduler(Scheduler):\n    \"\"\"Dynamic Intra-decoder Data-parallel Load Balancing Scheduler.\"\"\"\n\n    def __init__(\n        self,\n        scheduler_config: SchedulerConfig,\n        cache_config: CacheConfig,\n        # ... 其他参数 ...\n    ) -> None:\n        # ✅ 调用父类初始化，避免重复\n        super().__init__(\n            scheduler_config=scheduler_config,\n            cache_config=cache_config,\n            # ... 传递其他参数 ...\n        )\n\n        # 仅添加子类特有的初始化\n        self.dp_group = ...\n        self.dp_size = ...\n        self.lb_pending = False",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/core/dyntra_lb_scheduler.py\n+++ b/vllm_ascend/core/dyntra_lb_scheduler.py\n@@ -16,17 +16,14 @@\n         cache_config: CacheConfig,\n         # ... 其他参数 ...\n     ) -> None:\n-        # 手动复制父类初始化逻辑，未调用 super().__init__()\n-        self.scheduler_config = scheduler_config\n-        self.cache_config = cache_config\n-        self.policy = Policy.get_policy(scheduler_config.policy_cls)\n-        self.running: list = []\n-        self.waiting: list = []\n-        self.swapped: list = []\n-        self.num_seq_group = 0\n-        # ... 大量重复的父类初始化代码 ...\n+        # ✅ 调用父类初始化，避免重复\n+        super().__init__(\n+            scheduler_config=scheduler_config,\n+            cache_config=cache_config,\n+            # ... 传递其他参数 ...\n+        )\n \n-        # 子类特有的初始化\n+        # 仅添加子类特有的初始化\n         self.dp_group = ...\n         self.dp_size = ...\n         self.lb_pending = False",
+      "stats": "1 file changed, +7 lines, -10 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

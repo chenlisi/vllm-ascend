@@ -1,0 +1,67 @@
+{
+  "report_id": "PR10580_001",
+  "pr_number": 10580,
+  "pr_title": "[BugFix](pcp): align decode classification with vLLM reorder logic",
+  "pr_status": "merged",
+  "merged_at": "2026-06-24T07:12:27Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/utils.py:274"
+  ],
+  "landing_sha": "f369985",
+  "source_quote": "move to pcp_utils",
+  "correspondence": [
+    {
+      "review_quote": "weiguihua2 指出 `attention/utils.py` 中的 PCP 相关函数应移至 `pcp_utils` 模块，以保持代码组织的模块化——PCP 相关逻辑应统一放在 PCP 专用模块中，而非散落在通用的 attention utils 中。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f369985",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "PCP（Prefill-Chunked-Prefill / Pipeline Context Parallel）相关的工具函数应统一放在 `pcp_utils` 模块中，而非散落在 `attention/utils.py` 等通用模块中，以保持代码组织的清晰和模块化。",
+    "context": "",
+    "checkpoints": [
+      "检查 `attention/utils.py` 中是否包含 PCP 相关的函数",
+      "确认 PCP 代码是否已统一放在 `pcp_utils` 中",
+      "新增 PCP 功能时应直接添加到 `pcp_utils` 而非 `attention/utils.py`"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/utils.py",
+      "line": 274,
+      "code": "# （根据评审意见推断）\n# PCP 相关的 decode classification 函数放在 attention/utils.py 中\nimport numpy as np\nfrom typing import Tuple\n\ndef split_decodes_and_prefills(\n    common_attn_metadata,\n    decode_threshold: int,\n    require_uniform: bool = False,\n    treat_short_extends_as_decodes: bool = False,\n) -> Tuple[int, int, int, int]:\n    \"\"\"Split requests into decode and prefill categories.\"\"\"\n    num_reqs = ...\n    # PCP 专用函数不应放在通用 attention utils 中\n    ...\n\ndef classify_decode_request_mask(\n    num_scheduled_tokens: np.ndarray,\n    num_computed_tokens: np.ndarray,\n    num_prompt_tokens: np.ndarray,\n    decode_threshold: int,\n) -> np.ndarray:\n    # 未处理 PyTorch Tensor 输入的情况\n    has_context = num_computed_tokens > 0\n    done_prefilling = num_computed_tokens >= num_prompt_tokens\n    is_below_threshold = num_scheduled_tokens <= decode_threshold\n    return has_context & is_below_threshold & done_prefilling",
+      "context": "move to pcp_utils"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/utils.py",
+      "line": 274,
+      "code": "# PCP 相关函数已移除，保持 attention/utils.py 职责单一\n\n# PCP 相关的 decode classification 函数统一放在 pcp_utils 中\nimport numpy as np\nimport torch\n\ndef classify_decode_request_mask(\n    num_scheduled_tokens: np.ndarray,\n    num_computed_tokens: np.ndarray,\n    num_prompt_tokens: np.ndarray,\n    decode_threshold: int,\n) -> np.ndarray:\n    \"\"\"Return a per-request mask for true decode requests.\n\n    Matches vLLM ``reorder_batch_to_split_decodes_and_prefills``:\n    decode = has context, scheduled tokens <= threshold, and prompt finished.\n    \"\"\"\n    # 添加 Tensor → numpy 转换，确保类型安全\n    if isinstance(num_scheduled_tokens, torch.Tensor):\n        num_scheduled_tokens = num_scheduled_tokens.cpu().numpy()\n    if isinstance(num_computed_tokens, torch.Tensor):\n        num_computed_tokens = num_computed_tokens.cpu().numpy()\n    if isinstance(num_prompt_tokens, torch.Tensor):\n        num_prompt_tokens = num_prompt_tokens.cpu().numpy()\n\n    has_context = num_computed_tokens > 0\n    done_prefilling = num_computed_tokens >= num_prompt_tokens\n    is_below_threshold = num_scheduled_tokens <= decode_threshold\n    return has_context & is_below_threshold & done_prefilling",
+      "context": "move to pcp_utils"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/utils.py\n+++ b/vllm_ascend/attention/utils.py\n@@ -1,18 +1,8 @@\n-# （根据评审意见推断）\n-# PCP 相关的 decode classification 函数放在 attention/utils.py 中\n+# PCP 相关函数已移除，保持 attention/utils.py 职责单一\n+\n+# PCP 相关的 decode classification 函数统一放在 pcp_utils 中\n import numpy as np\n-from typing import Tuple\n-\n-def split_decodes_and_prefills(\n-    common_attn_metadata,\n-    decode_threshold: int,\n-    require_uniform: bool = False,\n-    treat_short_extends_as_decodes: bool = False,\n-) -> Tuple[int, int, int, int]:\n-    \"\"\"Split requests into decode and prefill categories.\"\"\"\n-    num_reqs = ...\n-    # PCP 专用函数不应放在通用 attention utils 中\n-    ...\n+import torch\n \n def classify_decode_request_mask(\n     num_scheduled_tokens: np.ndarray,\n@@ -20,7 +10,19 @@\n     num_prompt_tokens: np.ndarray,\n     decode_threshold: int,\n ) -> np.ndarray:\n-    # 未处理 PyTorch Tensor 输入的情况\n+    \"\"\"Return a per-request mask for true decode requests.\n+\n+    Matches vLLM ``reorder_batch_to_split_decodes_and_prefills``:\n+    decode = has context, scheduled tokens <= threshold, and prompt finished.\n+    \"\"\"\n+    # 添加 Tensor → numpy 转换，确保类型安全\n+    if isinstance(num_scheduled_tokens, torch.Tensor):\n+        num_scheduled_tokens = num_scheduled_tokens.cpu().numpy()\n+    if isinstance(num_computed_tokens, torch.Tensor):\n+        num_computed_tokens = num_computed_tokens.cpu().numpy()\n+    if isinstance(num_prompt_tokens, torch.Tensor):\n+        num_prompt_tokens = num_prompt_tokens.cpu().numpy()\n+\n     has_context = num_computed_tokens > 0\n     done_prefilling = num_computed_tokens >= num_prompt_tokens\n     is_below_threshold = num_scheduled_tokens <= decode_threshold",
+      "stats": "1 file changed, +17 lines, -15 lines",
+      "key_changes": [
+        "移除: # （根据评审意见推断）",
+        "移除: # PCP 相关的 decode classification 函数放在 attention/utils.py 中",
+        "新增: # PCP 相关函数已移除，保持 attention/utils.py 职责单一",
+        "新增: # PCP 相关的 decode classification 函数统一放在 pcp_utils 中",
+        "移除: from typing import Tuple",
+        "移除: def split_decodes_and_prefills(",
+        "移除: common_attn_metadata,",
+        "移除: decode_threshold: int,",
+        "移除: require_uniform: bool = False,",
+        "移除: treat_short_extends_as_decodes: bool = False,"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

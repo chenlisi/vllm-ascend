@@ -1,0 +1,144 @@
+{
+  "report_id": "PR3516_001",
+  "pr_number": 3516,
+  "pr_title": "[Doc]Add tutorial document for qwen-VL-Dense",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/single_npu_qwen2.5_vl_7B.md:1",
+    "docs/source/tutorials/single_npu_qwen3_vl.md:50",
+    "docs/source/tutorials/index.md:8",
+    "docs/source/tutorials/Qwen-VL-Dense.md:13",
+    "docs/source/tutorials/Qwen-VL-Dense.md:17",
+    "docs/source/tutorials/Qwen-VL-Dense.md:135",
+    "docs/source/tutorials/Qwen3-VL-8B.md:1",
+    "docs/source/tutorials/Qwen-VL-Dense.md:577",
+    "docs/source/tutorials/index.md:7",
+    "docs/source/tutorials/Qwen-VL-Dense.md:501",
+    "docs/source/tutorials/Qwen-VL-Dense.md:130",
+    "docs/source/tutorials/Qwen-VL-Dense.md:15"
+  ],
+  "landing_sha": "f67787a",
+  "source_quote": "There is already a doc for Qwen2.5-VL 7B, why adding this again here? and if you want to change some content of it, you should modify the original one, instead of create a now doc\nThis is done in vllm settingup period. Thus I think we could just remove it\nThe file name can be `docs/source/tutorials/Qwen3-VL.md`, just like `DeepSeek-V3.2-Exp`\ndo not forget to update supported_models.md\nwe should provide model weights in `Environment Preparation`\nDo we have quantized version？It's better to use quantized weights as development example\nname to `Qwen3-VL-8B`, remove `Single NPU`\nCould you please add the result of performance here like accuracy evaluation? BTW, I think that we can add the link to our related CI about Qwen3-VL, which shows that we continue monitor the model and always ensure its perf and correctness.\nI think that we can gather all guides about Qwen3-VL in this markdown file including single and multi-card. If so, we can remove `-8B`. But for now, let's add the smaller models first, like `2B`, `4B` and `8B`.\nWould be better if you could try the real datasets instead of random datasets. Like:\nvllm bench serve --backend openai-chat --model Qwen/Qwen3-VL-8B-Instruct --endpoint /v1/chat/completions --dataset-name hf --dataset-path lmarena-ai/VisionArena-Chat --hf-split train --num-prompts 1000\nJust a reminder. We should make sure the parameters consistent with our CI.\nThank you for your advise, we have to check:\n1. Whether performance data can be presented needs to be discussed.\n2. What models will our CI execute?\n3. Use real datasets is a good idea, but whether to use real datasets, i think it depends on question 1.\n+1 Gather all in one doc, it's OK.\nPlease add a multi card example tab here `Qwen3-VL-32B-Instruct`\nWhy 4 NPUs? I guess 2 NPU is enough, is there any bug here?",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao: docs/source/tutorials/single_npu_qwen2.5_vl_7B.md:1(2025-10-28 03:23:46)",
+      "patch_snippet": "评后sha f67787a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: docs/source/tutorials/single_npu_qwen3_vl.md:50(2025-10-31 01:29:15)",
+      "patch_snippet": "评后sha f67787a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "1092626063: docs/source/tutorials/index.md:8(2025-11-17 02:20:31)",
+      "patch_snippet": "评后sha f67787a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "1092626063: docs/source/tutorials/Qwen-VL-Dense.md:13(2025-11-17 02:28:12)",
+      "patch_snippet": "评后sha f67787a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "1092626063: docs/source/tutorials/Qwen-VL-Dense.md:17(2025-11-17 02:39:07)",
+      "patch_snippet": "评后sha f67787a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "1092626063: docs/source/tutorials/Qwen-VL-Dense.md:135(2025-11-17 02:40:45)",
+      "patch_snippet": "评后sha f67787a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wangxiyuan: docs/source/tutorials/Qwen3-VL-8B.md:1(2025-11-20 12:25:04)",
+      "patch_snippet": "评后sha f67787a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "gcanlin: docs/source/tutorials/Qwen-VL-Dense.md:577(2025-11-21 02:15:24)",
+      "patch_snippet": "评后sha f67787a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "gcanlin: docs/source/tutorials/index.md:7(2025-11-21 02:28:13)",
+      "patch_snippet": "评后sha f67787a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "gcanlin: docs/source/tutorials/Qwen-VL-Dense.md:577(2025-11-21 02:43:21)",
+      "patch_snippet": "评后sha f67787a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "gcanlin: docs/source/tutorials/Qwen-VL-Dense.md:501(2025-11-21 02:44:48)",
+      "patch_snippet": "评后sha f67787a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "1092626063: docs/source/tutorials/Qwen-VL-Dense.md:577(2025-11-22 07:06:33)",
+      "patch_snippet": "评后sha f67787a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Yikun: docs/source/tutorials/index.md:7(2025-11-23 12:28:33)",
+      "patch_snippet": "评后sha f67787a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Yikun: docs/source/tutorials/Qwen-VL-Dense.md:130(2025-12-03 07:19:23)",
+      "patch_snippet": "评后sha f67787a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Yikun: docs/source/tutorials/Qwen-VL-Dense.md:15(2025-12-03 07:20:12)",
+      "patch_snippet": "评后sha f67787a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f67787a",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "教程文档应遵循统一的文件命名规范（如以模型名命名），不应重复创建已有内容。环境准备部分应包含模型权重信息，性能测试应使用真实数据集并与 CI 参数保持一致。",
+    "context": "",
+    "checkpoints": [
+      "文件命名是否遵循统一规范（如 `Qwen3-VL.md` 格式）",
+      "是否避免了重复创建已有文档",
+      "环境准备部分是否包含模型权重说明",
+      "是否更新了 supported_models.md",
+      "性能测试是否使用真实数据集而非随机数据",
+      "文档参数是否与 CI 参数保持一致",
+      "多卡示例中 NPU 数量是否合理"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/single_npu_qwen2.5_vl_7B.md",
+      "line": 1,
+      "code": "<!-- docs/source/tutorials/index.md:1-15 -->\n# Tutorials\n\n## Models\n\n```{toctree}\n:maxdepth: 1\n\nDeepSeek-V3.2-Exp\nsingle_npu_qwen3_vl_8B.md\nsingle_npu_qwen2.5_vl_7B.md",
+      "context": "Tutorials Models"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/single_npu_qwen2.5_vl_7B.md",
+      "line": 1,
+      "code": "<!-- docs/source/tutorials/index.md:1-15 -->\n# Tutorials\n\n## Models\n\n```{toctree}\n:maxdepth: 1\n\nDeepSeek-V3.2-Exp\nQwen-VL-Dense",
+      "context": "Tutorials Models"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/single_npu_qwen2.5_vl_7B.md\n+++ b/docs/source/tutorials/single_npu_qwen2.5_vl_7B.md\n@@ -7,5 +7,4 @@\n :maxdepth: 1\n \n DeepSeek-V3.2-Exp\n-single_npu_qwen3_vl_8B.md\n-single_npu_qwen2.5_vl_7B.md\n+Qwen-VL-Dense\n",
+      "stats": "1 file changed, +1 lines, -2 lines",
+      "key_changes": [
+        "移除: single_npu_qwen2.5_vl_7B.md",
+        "移除: single_npu_qwen3_vl_8B.md",
+        "新增: Qwen-VL-Dense"
+      ]
+    },
+    "language": "markdown",
+    "_status": "processed"
+  }
+}

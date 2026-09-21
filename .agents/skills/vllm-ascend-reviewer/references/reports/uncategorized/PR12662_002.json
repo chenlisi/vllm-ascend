@@ -1,0 +1,45 @@
+{
+  "report_id": "PR12662_002",
+  "pr_number": 12662,
+  "pr_title": "[feature] Support dspark speculative method and synchronize reorder batch threshold calculation with vLLM",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "2017599",
+  "source_quote": "Since `reduce` is **no longer needed** if we simplify the threshold calculation, we can **remove it from the imports**.",
+  "correspondence": [],
+  "verification": {
+    "merged": true,
+    "modified_commit": "2017599",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 0,
+      "code": "import os\nimport time\nfrom contextlib import contextmanager, nullcontext\nfrom copy import copy, deepcopy\nfrom dataclasses import dataclass, replace\nfrom functools import partial, reduce       # ← 错：reduce 在 0578e0a 删 calculate_reorder_batch_threshold 后已不再使用，残留死 import\nfrom multiprocessing import Manager\nfrom typing import TYPE_CHECKING, Any, NamedTuple, TypeAlias\n\nimport torch\nimport torch.nn as nn\nfrom vllm.config import VllmConfig\n\n# 0578e0a 已经删除了 calculate_reorder_batch_threshold 方法\n# 该方法曾是唯一引用 functools.reduce 的地方\n# 删除后 reduce 成为死 import → flake8 F401 告警",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 0,
+      "code": "import os\nimport time\nfrom contextlib import contextmanager, nullcontext\nfrom copy import copy, deepcopy\nfrom dataclasses import dataclass, replace\nfrom functools import partial               # ✅ 只保留仍在使用的 partial；reduce 精确删除\nfrom multiprocessing import Manager\nfrom typing import TYPE_CHECKING, Any, NamedTuple, TypeAlias\n\nimport torch\nimport torch.nn as nn\nfrom vllm.config import VllmConfig\n\n# 与 gemini suggestion snippet `from functools import partial` 逐字字面完全一致\n# 净统计：model_runner_v1.py +1/-1（仅改该行，其他 import 不动，diff 最小化）",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/model_runner_v1.py\n+++ b/vllm_ascend/worker/model_runner_v1.py\n@@ -3,7 +3,7 @@\n from contextlib import contextmanager, nullcontext\n from copy import copy, deepcopy\n from dataclasses import dataclass, replace\n-from functools import partial, reduce       # ← 错：reduce 在 0578e0a 删 calculate_reorder_batch_threshold 后已不再使用，残留死 import\n+from functools import partial               # ✅ 只保留仍在使用的 partial；reduce 精确删除\n from multiprocessing import Manager\n from typing import TYPE_CHECKING, Any, NamedTuple, TypeAlias\n \n@@ -11,6 +11,5 @@\n import torch.nn as nn\n from vllm.config import VllmConfig\n \n-# 0578e0a 已经删除了 calculate_reorder_batch_threshold 方法\n-# 该方法曾是唯一引用 functools.reduce 的地方\n-# 删除后 reduce 成为死 import → flake8 F401 告警\n+# 与 gemini suggestion snippet `from functools import partial` 逐字字面完全一致\n+# 净统计：model_runner_v1.py +1/-1（仅改该行，其他 import 不动，diff 最小化）",
+      "stats": "1 file changed, +3 lines, -4 lines",
+      "key_changes": [
+        "添加注释说明并修改代码逻辑"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

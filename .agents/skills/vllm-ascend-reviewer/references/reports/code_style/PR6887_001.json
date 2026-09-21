@@ -1,0 +1,72 @@
+{
+  "report_id": "PR6887_001",
+  "pr_number": 6887,
+  "pr_title": "[KVCache]Qwen3.5 supports contiguous tensor hybrid-attn kv-cache",
+  "pr_status": "merged",
+  "merged_at": "2026-03-04T12:40:39Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/patch/platform/patch_mamba_config.py:41",
+    "vllm_ascend/worker/model_runner_v1.py:2524",
+    "vllm_ascend/patch/platform/patch_mamba_config.py:60",
+    "vllm_ascend/worker/model_runner_v1.py:2525",
+    "vllm_ascend/worker/model_runner_v1.py:2539",
+    "vllm_ascend/worker/model_runner_v1.py:2537",
+    "vllm_ascend/worker/model_runner_v1.py:2653",
+    "vllm_ascend/worker/model_runner_v1.py:2526",
+    "vllm_ascend/worker/model_runner_v1.py:2674",
+    "vllm_ascend/worker/model_runner_v1.py:2715"
+  ],
+  "landing_sha": "fdbbc4d",
+  "source_quote": "ssm is aligned with k, let's change the name to make it more clear\n```suggestion\nattn_single_token_k_page_size = attn_head_size * attn_num_kv_heads * get_dtype_size(kv_cache_dtype)\n```",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 提出 8 条意见，涵盖变量命名优化、断言条件修正、通用化内存对齐方法、错误信息修正、简化变量赋值与提前退出、冗余代码检查等方面。Angazenn 提出 1 条关于冗余张量操作的意见。作者对大部分建议予以采纳：变量名已修改、断言已修正、内存对齐已通用化、冗余检查已删除、相关代码已简化。对于位置 9 的冗余张量操作，作者解释了需要保留的原因（两个断言检查 KV 张量是否为空），10/10 建议全部处理。",
+      "patch_snippet": "",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "fdbbc4d",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "变量名应清晰反映其语义含义和与其他变量的关系。例如，当 ssm 与 k 对齐时，变量名应体现这种对齐关系。",
+    "context": "",
+    "checkpoints": [
+      "变量名应体现其在计算中的角色（如 `attn_single_token_k_page_size` 而非 `ssm_page_size`）",
+      "当变量表示某种对齐关系时，命名应明确标识"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/patch/platform/patch_mamba_config.py",
+      "line": 41,
+      "code": "# vllm_ascend/patch/platform/patch_mamba_config.py\nimport numpy as np\nfrom vllm.config import VllmConfig\nfrom vllm.utils import get_dtype_size\n\ndef patch_mamba_config(vllm_config: VllmConfig):\n    \"\"\"Patch mamba config for hybrid attention models on Ascend.\"\"\"\n    model_config = vllm_config.model_config\n    cache_config = vllm_config.cache_config\n    kv_cache_dtype = cache_config.cache_dtype\n\n    attn_head_size = model_config.get_head_size()\n    attn_num_kv_heads = model_config.get_num_kv_heads(\n        vllm_config.parallel_config)\n\n    ssm_page_size = attn_head_size * attn_num_kv_heads * get_dtype_size(\n        kv_cache_dtype)\n\n    # 后续计算 conv_block_page_size 和对齐逻辑...\n    conv_block_page_size = ...  # 基于 ssm_state_size 计算\n    block_alignment = max(ssm_page_size, conv_block_page_size)\n    ...",
+      "context": "ssm is aligned with k, let's change the name to make it more clear\n```suggestion\nattn_single_token_k_page_size = attn_head_size * attn_num_kv_heads * get_dtype_size(kv_cache_dtype)\n```"
+    },
+    "pattern": {
+      "file": "vllm_ascend/patch/platform/patch_mamba_config.py",
+      "line": 41,
+      "code": "# vllm_ascend/patch/platform/patch_mamba_config.py\nimport numpy as np\nfrom vllm.config import VllmConfig\nfrom vllm.utils import get_dtype_size\n\ndef patch_mamba_config(vllm_config: VllmConfig):\n    \"\"\"Patch mamba config for hybrid attention models on Ascend.\"\"\"\n    model_config = vllm_config.model_config\n    cache_config = vllm_config.cache_config\n    kv_cache_dtype = cache_config.cache_dtype\n\n    attn_head_size = model_config.get_head_size()\n    attn_num_kv_heads = model_config.get_num_kv_heads(\n        vllm_config.parallel_config)\n\n    # ❌ 变量名 ssm_page_size 未体现与 k 的对齐语义\n    ssm_page_size = attn_head_size * attn_num_kv_heads * get_dtype_size(\n        kv_cache_dtype)\n\n    # 后续计算 conv_block_page_size 和对齐逻辑...\n    conv_block_page_size = ...  # 基于 ssm_state_size 计算\n    block_alignment = max(ssm_page_size, conv_block_page_size)\n    ...",
+      "context": "ssm is aligned with k, let's change the name to make it more clear\n```suggestion\nattn_single_token_k_page_size = attn_head_size * attn_num_kv_heads * get_dtype_size(kv_cache_dtype)\n```"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/patch/platform/patch_mamba_config.py\n+++ b/vllm_ascend/patch/platform/patch_mamba_config.py\n@@ -13,10 +13,11 @@\n     attn_num_kv_heads = model_config.get_num_kv_heads(\n         vllm_config.parallel_config)\n \n-    ssm_page_size = attn_head_size * attn_num_kv_heads * get_dtype_size(\n-        kv_cache_dtype)\n+    attn_single_token_k_page_size = attn_head_size * attn_num_kv_heads * (\n+        get_dtype_size(kv_cache_dtype))\n \n     # 后续计算 conv_block_page_size 和对齐逻辑...\n     conv_block_page_size = ...  # 基于 ssm_state_size 计算\n-    block_alignment = max(ssm_page_size, conv_block_page_size)\n+    block_alignment = max(attn_single_token_k_page_size,\n+                          conv_block_page_size)\n     ...",
+      "stats": "1 file changed, +4 lines, -3 lines",
+      "key_changes": [
+        "- ssm_page_size = attn_head_size * attn_num_kv_heads * get_dtype_size(",
+        "- kv_cache_dtype)",
+        "+ attn_single_token_k_page_size = attn_head_size * attn_num_kv_heads * (",
+        "+ get_dtype_size(kv_cache_dtype))",
+        "- block_alignment = max(ssm_page_size, conv_block_page_size)",
+        "+ block_alignment = max(attn_single_token_k_page_size,",
+        "+ conv_block_page_size)"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "report_id": "PR9995_001",
+  "pr_number": 9995,
+  "pr_title": "[Doc][Model] Add DeepSeek-V4 Flash and Pro documentation",
+  "pr_status": "merged",
+  "merged_at": "2026-06-04T08:18:45Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "docs/source/tutorials/models/DeepSeek-V4-Flash.md:217"
+  ],
+  "landing_sha": "2baf2ac",
+  "source_quote": "We should inform the user that the Prefill node is best used only with mtp1, while the decode node can use mtp1 or 3, etc.",
+  "correspondence": [
+    {
+      "review_quote": "nwpu-zxr: docs/source/tutorials/models/DeepSeek-V4-Flash.md:217(2026-06-17 11:50:06)",
+      "patch_snippet": "评后sha 2baf2ac 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "2baf2ac",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 P-D 分离部署的文档中，应明确说明 Prefill 节点和 Decode 节点在 MTP（Multi-Token Prediction）配置上的差异和最佳实践。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/DeepSeek-V4-Flash.md",
+      "line": 210,
+      "code": "## 5. P-D 分离部署\n\n### 5.1 配置说明\n\nPrefill node:\n  num_speculative_tokens: 3\n  max_num_seqs: 256\n  enable_chunked_prefill: true\n\nDecode node:\n  num_speculative_tokens: 3\n  max_num_seqs: 256\n  enable_chunked_prefill: false",
+      "context": "We should inform the user that the Prefill node is best used only with mtp1, while the decode node can use mtp1 or 3, etc."
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/DeepSeek-V4-Flash.md",
+      "line": 210,
+      "code": "## 5. P-D 分离部署\n\n### 5.1 配置说明\n\n<!-- nwpu-zxr: \"We should inform the user that the Prefill node is best -->\n<!-- used only with mtp1, while the decode node can use mtp1 or 3, etc.\" -->\n\nPrefill node:\n  # Prefill 节点建议仅使用 mtp1（num_speculative_tokens: 1），\n  # 因为预填充阶段的 speculative decoding 收益有限，\n  # 较高的 MTP 配置可能不会带来收益甚至可能导致问题。\n  num_speculative_tokens: 1\n  max_num_seqs: 256\n  enable_chunked_prefill: true\n\nDecode node:\n  # Decode 节点可以使用 mtp1 或 mtp3 等，根据性能需求选择。\n  # mtp3 在 decode 阶段可以获得更高的吞吐。\n  num_speculative_tokens: 3\n  max_num_seqs: 256\n  enable_chunked_prefill: false",
+      "context": "We should inform the user that the Prefill node is best used only with mtp1, while the decode node can use mtp1 or 3, etc."
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/DeepSeek-V4-Flash.md\n+++ b/docs/source/tutorials/models/DeepSeek-V4-Flash.md\n@@ -2,12 +2,20 @@\n \n ### 5.1 配置说明\n \n+<!-- nwpu-zxr: \"We should inform the user that the Prefill node is best -->\n+<!-- used only with mtp1, while the decode node can use mtp1 or 3, etc.\" -->\n+\n Prefill node:\n-  num_speculative_tokens: 3\n+  # Prefill 节点建议仅使用 mtp1（num_speculative_tokens: 1），\n+  # 因为预填充阶段的 speculative decoding 收益有限，\n+  # 较高的 MTP 配置可能不会带来收益甚至可能导致问题。\n+  num_speculative_tokens: 1\n   max_num_seqs: 256\n   enable_chunked_prefill: true\n \n Decode node:\n+  # Decode 节点可以使用 mtp1 或 mtp3 等，根据性能需求选择。\n+  # mtp3 在 decode 阶段可以获得更高的吞吐。\n   num_speculative_tokens: 3\n   max_num_seqs: 256\n   enable_chunked_prefill: false\n",
+      "stats": "1 file changed, +9 lines, -1 lines",
+      "key_changes": [
+        "+<!-- nwpu-zxr: \"We should inform the user that the Prefill node is best -->",
+        "+<!-- used only with mtp1, while the decode node can use mtp1 or 3, etc.\" -->",
+        "+",
+        "-  num_speculative_tokens: 3",
+        "+  # Prefill 节点建议仅使用 mtp1（num_speculative_tokens: 1），",
+        "+  # 因为预填充阶段的 speculative decoding 收益有限，",
+        "+  # 较高的 MTP 配置可能不会带来收益甚至可能导致问题。",
+        "+  num_speculative_tokens: 1",
+        "+  # Decode 节点可以使用 mtp1 或 mtp3 等，根据性能需求选择。",
+        "+  # mtp3 在 decode 阶段可以获得更高的吞吐。"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

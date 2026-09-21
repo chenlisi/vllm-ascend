@@ -1,0 +1,67 @@
+{
+  "report_id": "PR4606_001",
+  "pr_number": 4606,
+  "pr_title": "[Kernel] add custom op MatmulAllreduceAddRmsnorm",
+  "pr_status": "merged",
+  "merged_at": "2025-12-10T01:05:33Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "csrc/matmul_allreduce_add_rmsnorm/op_host/matmul_allreduce_add_rmsnorm_proto.cpp:33",
+    "csrc/matmul_allreduce_add_rmsnorm/op_host/matmul_allreduce_add_rmsnorm_proto.cpp:54",
+    "csrc/matmul_allreduce_add_rmsnorm/op_host/matmul_allreduce_add_rmsnorm_proto.cpp:47",
+    "csrc/matmul_allreduce_add_rmsnorm/op_kernel/matmul_allreduce_add_rmsnorm_aic_kernel.h:205",
+    "csrc/matmul_allreduce_add_rmsnorm/op_kernel/matmul_allreduce_add_rmsnorm_aic_kernel.h:132",
+    "csrc/matmul_allreduce_add_rmsnorm/op_kernel/matmul_allreduce_add_rmsnorm_aic_kernel.h:338"
+  ],
+  "landing_sha": "abfe66a",
+  "source_quote": "It is recommended to add comments for m/n to improve readability.",
+  "correspondence": [
+    {
+      "review_quote": "Sparkheart 指出需要为 m/n 参数添加注释、提取公共逻辑、处理默认分支、消除命名空间污染、规范成员变量命名。作者通过 commit `abfe66a` 修改，6/6 建议全部落地。",
+      "patch_snippet": "commit `abfe66a`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "abfe66a",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "自定义算子的 C++ 内核代码应包含充分的注释，避免命名空间污染，成员变量遵循小写+下划线命名规范。",
+    "context": "",
+    "checkpoints": [
+      "关键参数（如 m/n）是否有注释说明",
+      "核心处理逻辑是否有注释",
+      "是否存在全局常量和成员变量同名",
+      "成员变量是否使用小写+下划线命名",
+      "重复逻辑是否提取为公共函数",
+      "分支逻辑是否处理了默认情况"
+    ],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "// 文件: csrc/matmul_allreduce_add_rmsnorm/op_host/matmul_allreduce_add_rmsnorm_proto.cpp\n// 行号: ~20-45 (commit abfe66a 之前)\n// （pr/ 数据不足，以下为根据评审意见和代码结构推断的上下文）\n\n\nascend::ascendc::proto::Status MatmulAllreduceAddRmsnormProto(\n    const aclrtStream stream,\n    const void* x,\n    const void* weight,\n    void* output,\n    int32_t m,          // 缺少注释说明\n    int32_t n,          // 缺少注释说明\n    const std::string& groupType,\n    // ... other parameters ...\n) {\n    // ... tiling setup ...\n    auto tiling = GetTilingData(m, n, groupType);\n    // ... kernel launch ...\n    return ascend::ascendc::proto::Status::SUCCESS;\n}",
+      "context": "Sparkheart: It is recommended to add comments for m/n to improve readability."
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "// 文件: csrc/matmul_allreduce_add_rmsnorm/op_host/matmul_allreduce_add_rmsnorm_proto.cpp\n// 行号: ~20-45 (commit abfe66a)\n// （pr/ 数据不足，以下为根据评审意见和代码结构推断的上下文）\n\n\nascend::ascendc::proto::Status MatmulAllreduceAddRmsnormProto(\n    const aclrtStream stream,\n    const void* x,\n    const void* weight,\n    void* output,\n    int32_t m,          // m: 矩阵行数（batch size * seq_len）\n    int32_t n,          // n: 矩阵列数（hidden size）\n    const std::string& groupType,\n    // ... other parameters ...\n) {\n    // ... tiling setup ...\n    auto tiling = GetTilingData(m, n, groupType);\n    // ... kernel launch ...\n    return ascend::ascendc::proto::Status::SUCCESS;\n}",
+      "context": "Sparkheart: It is recommended to add comments for m/n to improve readability."
+    },
+    "diff": {
+      "unified": "--- a/a/file\n+++ b/b/file\n@@ -1,20 +1,20 @@\n // 文件: csrc/matmul_allreduce_add_rmsnorm/op_host/matmul_allreduce_add_rmsnorm_proto.cpp\n-// 行号: ~20-45 (commit abfe66a 之前)\n+// 行号: ~20-45 (commit abfe66a)\n // （pr/ 数据不足，以下为根据评审意见和代码结构推断的上下文）\n \n \n@@ -1,20 +1,20 @@\n     const void* x,\n     const void* weight,\n     void* output,\n-    int32_t m,          // 缺少注释说明\n-    int32_t n,          // 缺少注释说明\n+    int32_t m,          // m: 矩阵行数（batch size * seq_len）\n+    int32_t n,          // n: 矩阵列数（hidden size）\n     const std::string& groupType,\n     // ... other parameters ...\n ) {",
+      "stats": "1 file changed, +3 lines, -3 lines",
+      "key_changes": [
+        "修改了第 2-2 行的代码",
+        "修改了第 11-12 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

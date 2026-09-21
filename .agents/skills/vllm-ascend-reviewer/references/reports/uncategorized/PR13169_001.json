@@ -1,0 +1,61 @@
+{
+  "report_id": "PR13169_001",
+  "pr_number": 13169,
+  "pr_title": "[v0.23.0][Performance] Reuse grouped block hashes across AscendStore operations",
+  "pr_status": "merged",
+  "dimension": [
+    "design"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py:620"
+  ],
+  "landing_sha": "42986a4",
+  "source_quote": "Using strict identity comparison (`is not`) on `block_hashes` is extremely fragile. If the list of block hashes is copied, sliced, or converted to another sequence type (e.g., `tuple`) during request processing, this check will raise a `ValueError` and crash the request, even if the contents are identical. Since the cache is already request-scoped and instantiated fresh per request, this strict identity check is unnecessary. Consider relaxing it to a length/content comparison or removing it entirely.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py:620",
+      "patch_snippet": "评后sha 42986a4 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "42986a4",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "不要用 `is`/`is not` 对 list、tuple 等序列对象做内容等价性判断；身份比较仅在对象同一性确实重要时使用，且应确保对象不会被复制/切片。",
+    "context": "",
+    "checkpoints": [
+      "检查是否存在 `obj is not self._obj` 这类对序列的身份比较",
+      "评估该对象在生命周期内是否可能被复制、切片或类型转换",
+      "若仅需保证内容一致，改用长度/内容比较；若身份比较本身不必要，应从设计上消除该检查"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py",
+      "line": 610,
+      "code": "class RequestGroupedBlockHashCache:\n    \"\"\"Cache grouped block hashes for one request.\"\"\"\n\n    def __init__(self, block_hashes, hash_block_size):\n        self._block_hashes = block_hashes\n        self._hash_block_size = hash_block_size\n        self._grouped_hashes: dict[int, Sequence[BlockHash | str]] = {}\n\n    def get(self, block_hashes, group_block_size, hash_block_size):\n        # ❌ 脆弱的身份比较：若 block_hashes 被复制/切片，is not 会误判为跨请求\n        if block_hashes is not self._block_hashes or hash_block_size != self._hash_block_size:\n            raise ValueError(\"RequestGroupedBlockHashCache cannot be shared across requests\")\n        if group_block_size == hash_block_size:\n            return block_hashes\n        assert group_block_size % hash_block_size == 0\n        grouped_hashes = self._grouped_hashes.get(group_block_size)\n        if grouped_hashes is None:\n            grouped_hashes = _LazyGroupedBlockHashList(\n                block_hashes, group_block_size // hash_block_size, memoize=True)\n            self._grouped_hashes[group_block_size] = grouped_hashes\n        return grouped_hashes",
+      "context": "❌ 脆弱的身份比较：若 block_hashes 被复制/切片，is not 会误判为跨请求"
+    },
+    "pattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py",
+      "line": 610,
+      "code": "# ✅ ponytail: each operation owns a fresh dict, so block size is the only cache key.\nGroupedBlockHashCache = dict[int, Sequence[BlockHash | str]]\n\n\ndef get_block_hashes(block_hashes, group_block_size, hash_block_size,\n                     grouped_hash_cache: GroupedBlockHashCache | None = None):\n    \"\"\"Get grouped block hashes, optionally caching by group_block_size.\"\"\"\n    if group_block_size == hash_block_size:\n        return block_hashes\n    assert group_block_size % hash_block_size == 0\n    if grouped_hash_cache is None:\n        return _LazyGroupedBlockHashList(block_hashes, group_block_size // hash_block_size)\n    if group_block_size not in grouped_hash_cache:\n        grouped_hash_cache[group_block_size] = _LazyGroupedBlockHashList(\n            block_hashes, group_block_size // hash_block_size)\n    return grouped_hash_cache[group_block_size]",
+      "context": "✅ ponytail: each operation owns a fresh dict, so block size is the only cache key."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py\n+++ b/vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py\n@@ -1,21 +1,16 @@\n-class RequestGroupedBlockHashCache:\n-    \"\"\"Cache grouped block hashes for one request.\"\"\"\n+# ✅ ponytail: each operation owns a fresh dict, so block size is the only cache key.\n+GroupedBlockHashCache = dict[int, Sequence[BlockHash | str]]\n \n-    def __init__(self, block_hashes, hash_block_size):\n-        self._block_hashes = block_hashes\n-        self._hash_block_size = hash_block_size\n-        self._grouped_hashes: dict[int, Sequence[BlockHash | str]] = {}\n \n-    def get(self, block_hashes, group_block_size, hash_block_size):\n-        # ❌ 脆弱的身份比较：若 block_hashes 被复制/切片，is not 会误判为跨请求\n-        if block_hashes is not self._block_hashes or hash_block_size != self._hash_block_size:\n-            raise ValueError(\"RequestGroupedBlockHashCache cannot be shared across requests\")\n-        if group_block_size == hash_block_size:\n-            return block_hashes\n-        assert group_block_size % hash_block_size == 0\n-        grouped_hashes = self._grouped_hashes.get(group_block_size)\n-        if grouped_hashes is None:\n-            grouped_hashes = _LazyGroupedBlockHashList(\n-                block_hashes, group_block_size // hash_block_size, memoize=True)\n-            self._grouped_hashes[group_block_size] = grouped_hashes\n-        return grouped_hashes\n+def get_block_hashes(block_hashes, group_block_size, hash_block_size,\n+                     grouped_hash_cache: GroupedBlockHashCache | None = None):\n+    \"\"\"Get grouped block hashes, optionally caching by group_block_size.\"\"\"\n+    if group_block_size == hash_block_size:\n+        return block_hashes\n+    assert group_block_size % hash_block_size == 0\n+    if grouped_hash_cache is None:\n+        return _LazyGroupedBlockHashList(block_hashes, group_block_size // hash_block_size)\n+    if group_block_size not in grouped_hash_cache:\n+        grouped_hash_cache[group_block_size] = _LazyGroupedBlockHashList(\n+            block_hashes, group_block_size // hash_block_size)\n+    return grouped_hash_cache[group_block_size]\n",
+      "stats": "1 file changed, +14 lines, -19 lines",
+      "key_changes": [
+        "移除: if block_hashes is not self._block_hashes or hash_block_size != self._hash_block",
+        "移除: self._block_hashes = block_hashes",
+        "新增: def get_block_hashes(block_hashes, group_block_size, hash_block_size,",
+        "新增: if group_block_size not in grouped_hash_cache:",
+        "新增: if grouped_hash_cache is None:"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

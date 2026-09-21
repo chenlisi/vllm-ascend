@@ -1,0 +1,58 @@
+{
+  "report_id": "PR12491_003",
+  "pr_number": 12491,
+  "pr_title": "[Doc] add deepseek-v4-flash-dspark cookbook",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "docs/source/tutorials/models/DeepSeek-V4-Flash.md:198"
+  ],
+  "landing_sha": "6bbc129",
+  "source_quote": "![high](https://www.gstatic.com/codereviewagent/high-priority.svg)\n> The `LD_PRELOAD` environment variable is exported twice with `libjemalloc.so.2`. The first export on line 195 is redundant and can be removed, keeping only the more generic `$(uname -m)` version on line 198.\nfixed",
+  "correspondence": [
+    {
+      "review_quote": "gemini-code-assist[bot]: docs/source/tutorials/models/DeepSeek-V4-Flash.md:198(2026-07-21 08:45:30)",
+      "patch_snippet": "评后sha 6bbc129 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "6bbc129",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "文档/脚本中同一环境变量不应被重复 export，冗余的设置会造成混淆且可能覆盖正确的值。应只保留一次设置。",
+    "context": "",
+    "checkpoints": [
+      "检查脚本中是否存在同一环境变量被多次 export",
+      "确认多次设置是否必要（如累加 PATH 时多次 export 是合理的）",
+      "对于固定值的环境变量，只保留一次 export",
+      "优先保留更通用/更健壮的版本（如使用 `$(uname -m)` 而非硬编码架构）"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/DeepSeek-V4-Flash.md",
+      "line": 0,
+      "code": "### Online Inference Script\n\n```bash\n    #!/bin/bash\n    # Environment variables for DeepSeek-V4-Flash-DSpark\n\n    export HCCL_BUFFSIZE=1024\n    export TASK_QUEUE_ENABLE=1\n    export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libjemalloc.so.2\n    # ↑ L195: 第一次 export LD_PRELOAD（硬编码 aarch64，冗余）\n    export LD_PRELOAD=/usr/lib/$(uname -m)-linux-gnu/libjemalloc.so.2:$LD_PRELOAD\n    # ↑ L198: 第二次 export LD_PRELOAD（通用 uname -m 版本）\n\n    vllm serve /root/.cache/modelscope/hub/models/UploadWeight/DeepSeek-V4-Flash-DSpark-w4a8-test \\\n        --max-model-len 800000 \\\n        ...",
+      "context": "修改前代码 (markdown)"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/DeepSeek-V4-Flash.md",
+      "line": 0,
+      "code": "### Online Inference Script\n\n```bash\n    #!/bin/bash\n    # Environment variables for DeepSeek-V4-Flash-DSpark\n\n    export HCCL_BUFFSIZE=1024\n    export TASK_QUEUE_ENABLE=1\n    export LD_PRELOAD=/usr/lib/$(uname -m)-linux-gnu/libjemalloc.so.2:$LD_PRELOAD\n    # ↑ 只保留一次通用版本 export，删除冗余的硬编码版本\n\n    vllm serve /root/.cache/modelscope/hub/models/UploadWeight/DeepSeek-V4-Flash-DSpark-w4a8-test \\\n        --max-model-len 800000 \\\n        ...",
+      "context": "修改后代码 (markdown)"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/DeepSeek-V4-Flash.md\n+++ b/docs/source/tutorials/models/DeepSeek-V4-Flash.md\n@@ -6,10 +6,8 @@\n \n     export HCCL_BUFFSIZE=1024\n     export TASK_QUEUE_ENABLE=1\n-    export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libjemalloc.so.2\n-    # ↑ L195: 第一次 export LD_PRELOAD（硬编码 aarch64，冗余）\n     export LD_PRELOAD=/usr/lib/$(uname -m)-linux-gnu/libjemalloc.so.2:$LD_PRELOAD\n-    # ↑ L198: 第二次 export LD_PRELOAD（通用 uname -m 版本）\n+    # ↑ 只保留一次通用版本 export，删除冗余的硬编码版本\n \n     vllm serve /root/.cache/modelscope/hub/models/UploadWeight/DeepSeek-V4-Flash-DSpark-w4a8-test \\\n         --max-model-len 800000 \\",
+      "stats": "1 file changed, +1 lines, -3 lines",
+      "key_changes": [
+        "修改代码逻辑"
+      ]
+    },
+    "language": "bash",
+    "_status": "pending_llm_extract"
+  }
+}

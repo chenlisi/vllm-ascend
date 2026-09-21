@@ -1,0 +1,71 @@
+{
+  "report_id": "PR10567_001",
+  "pr_number": 10567,
+  "pr_title": "[BugFix]Reduce the number of stages captured(#9962)",
+  "pr_status": "merged",
+  "merged_at": "2026-06-17T09:14:09Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    ".gitignore:225",
+    "vllm_ascend/platform.py:137",
+    "vllm_ascend/platform.py:142",
+    "vllm_ascend/platform.py:75",
+    "vllm_ascend/platform.py:611"
+  ],
+  "landing_sha": "0d92b7d",
+  "source_quote": "Remove this.\nSet a global variable.\n@zhiyu-wa PTAL.\n```suggestion\nMAX_CAPTURE_SIZES_FOR_950 = 4\n```\n```suggestion\ndef prune_capture_sizes_for_950(vllm_config):\n```\nAdd logger.warning here.",
+  "correspondence": [
+    {
+      "review_quote": "yiz-liu 提出 6 条意见：(1) 移除 `.gitignore` 中不必要的条目；(2) 将 magic number 提取为全局常量 `MAX_CAPTURE_SIZES_FOR_950 = 4`；(3) 将函数重命名为 `prune_capture_sizes_for_950` 以更清晰表达意图；(4) 在 capture sizes 被裁剪时添加 `logger.warning` 日志。作者均已采纳并在后续 commit 中完成修改。",
+      "patch_snippet": "",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "0d92b7d",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "代码中的 magic number（如 `4`）应定义为具有描述性名称的全局常量（如 `MAX_CAPTURE_SIZES_FOR_950 = 4`），以提高代码可读性和可维护性。",
+    "context": "",
+    "checkpoints": [
+      "检查代码中是否存在未命名的 magic number",
+      "确认常量命名是否清晰表达了用途（如包含设备型号 `950`）",
+      "常量应定义在模块级别，便于复用"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/platform.py",
+      "line": 75,
+      "code": "# 硬编码的 magic number，未定义为全局常量\nimport logging\nfrom vllm.config import VllmConfig\n\nlogger = logging.getLogger(__name__)\n\n# Ascend 950 设备的 cudagraph capture sizes 裁剪逻辑\n# magic number 4 直接写在函数内部，含义不明确\ndef update_aclgraph_sizes(vllm_config):\n    original_sizes = vllm_config.compilation_config.cudagraph_capture_sizes\n    max_num_batch_sizes = 4  # magic number：含义不明确\n    step = (len(original_sizes) - 1) / (max_num_batch_sizes - 1)\n    ...",
+      "context": "Remove this."
+    },
+    "pattern": {
+      "file": "vllm_ascend/platform.py",
+      "line": 75,
+      "code": "# yiz-liu suggestion: 定义为全局常量，命名清晰\nimport logging\nfrom vllm.config import VllmConfig\n\nlogger = logging.getLogger(__name__)\n\n# Ascend 950 设备最大 cudagraph capture sizes 数量\n# 减少 capture 阶段数以降低 graph compilation 开销\nMAX_CAPTURE_SIZES_FOR_950 = 4",
+      "context": "Remove this."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/platform.py\n+++ b/vllm_ascend/platform.py\n@@ -1,13 +1,9 @@\n-# 硬编码的 magic number，未定义为全局常量\n+# yiz-liu suggestion: 定义为全局常量，命名清晰\n import logging\n from vllm.config import VllmConfig\n \n logger = logging.getLogger(__name__)\n \n-# Ascend 950 设备的 cudagraph capture sizes 裁剪逻辑\n-# magic number 4 直接写在函数内部，含义不明确\n-def update_aclgraph_sizes(vllm_config):\n-    original_sizes = vllm_config.compilation_config.cudagraph_capture_sizes\n-    max_num_batch_sizes = 4  # magic number：含义不明确\n-    step = (len(original_sizes) - 1) / (max_num_batch_sizes - 1)\n-    ...\n+# Ascend 950 设备最大 cudagraph capture sizes 数量\n+# 减少 capture 阶段数以降低 graph compilation 开销\n+MAX_CAPTURE_SIZES_FOR_950 = 4",
+      "stats": "1 file changed, +4 lines, -8 lines",
+      "key_changes": [
+        "移除: # 硬编码的 magic number，未定义为全局常量",
+        "新增: # yiz-liu suggestion: 定义为全局常量，命名清晰",
+        "移除: # Ascend 950 设备的 cudagraph capture sizes 裁剪逻辑",
+        "移除: # magic number 4 直接写在函数内部，含义不明确",
+        "移除: def update_aclgraph_sizes(vllm_config):",
+        "移除: original_sizes = vllm_config.compilation_config.cudagraph_capture_sizes",
+        "移除: max_num_batch_sizes = 4  # magic number：含义不明确",
+        "移除: step = (len(original_sizes) - 1) / (max_num_batch_sizes - 1)",
+        "移除: ...",
+        "新增: # Ascend 950 设备最大 cudagraph capture sizes 数量"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

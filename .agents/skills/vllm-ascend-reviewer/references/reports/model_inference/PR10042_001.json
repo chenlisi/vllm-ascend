@@ -1,0 +1,68 @@
+{
+  "report_id": "PR10042_001",
+  "pr_number": 10042,
+  "pr_title": "[Feature] Virtual Width Network Eagle3",
+  "pr_status": "merged",
+  "merged_at": "2026-06-23T09:38:44Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/models/llama_eagle3_vwn.py:134",
+    "vllm_ascend/models/llama_eagle3_vwn.py:40",
+    "vllm_ascend/spec_decode/llm_base_proposer.py:619",
+    "vllm_ascend/models/llama_eagle3_vwn.py:78",
+    "tests/e2e/pull_request/two_card/spec_decode/test_spec_decode.py:424"
+  ],
+  "landing_sha": "89bba25",
+  "source_quote": "Please add ut for this new file",
+  "correspondence": [
+    {
+      "review_quote": "本 PR 共收到 3 位人工评审人的 5 条意见：\n\n1. **dsxsteven** 要求为新文件添加 UT 测试 → 作者已添加 UT 和 E2E 测试\n2. **dsxsteven** 指出 `vwn_m = 0` 时会导致 ZeroDivisionError，缺少参数校验 → 作者解释参数来自权重配置文件，不太会出现错误值\n3. **dsxsteven** 指出 `llm_base_proposer.py` 中缩进不一致 → 作者已修复\n4. **realliujiaxu** 发现 `downward_and_forgot` 前缀应该是 `downward_and_forgot_aft",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "89bba25",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "每个新增的模型实现文件都应配套相应的单元测试（UT），确保模型的基本功能正确性。",
+    "context": "",
+    "checkpoints": [
+      "检查新增模型文件是否有对应的测试文件",
+      "确认测试覆盖了模型的关键路径（前向传播、权重加载等）",
+      "验证测试是否在 CI 中运行"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/models/llama_eagle3_vwn.py",
+      "line": 218,
+      "code": "# vllm_ascend/models/llama_eagle3_vwn.py\n\nself.downward_and_forgot = ReplicatedLinear(\n    input_size=hidden_size,\n    output_size=downward_output_size,\n    bias=False,\n    params_dtype=vllm_config.model_config.dtype,\n    quant_config=quant_config,\n    prefix=maybe_prefix(prefix, \"downward_and_forgot\"),\n    return_bias=False,\n)\n\n# ... 中间有其他层的定义（如 attention 层）...\n\nself.downward_and_forgot_after_attn = ReplicatedLinear(\n    input_size=downward_input_size,\n    output_size=downard_output_size,\n    bias=False,\n    params_dtype=vllm_config.model_config.dtype,\n    quant_config=quant_config,\n    prefix=maybe_prefix(prefix, \"downward_and_forgot\"),  # ← 前缀与 line 218 重复\n    return_bias=False,\n)",
+      "context": "Please add ut for this new file"
+    },
+    "pattern": {
+      "file": "vllm_ascend/models/llama_eagle3_vwn.py",
+      "line": 218,
+      "code": "# vllm_ascend/models/llama_eagle3_vwn.py\n\nself.downward_and_forgot = ReplicatedLinear(\n    input_size=hidden_size,\n    output_size=downward_output_size,\n    bias=False,\n    params_dtype=vllm_config.model_config.dtype,\n    quant_config=quant_config,\n    prefix=maybe_prefix(prefix, \"downward_and_forgot\"),\n    return_bias=False,\n)\n\n# ... 中间有其他层的定义 ...\n\n# gemini-code-assist[bot] suggestion + realliujiaxu 评审\n# 作者：\"thus it actually has no functional error by using two 'downward_and_forgot'.\n#         But for better understanding, I will use 'downward_and_forgot_after_attn' instead.\"\nself.downward_and_forgot_after_attn = ReplicatedLinear(\n    input_size=downward_input_size,\n    output_size=downard_output_size,\n    bias=False,\n    params_dtype=vllm_config.model_config.dtype,\n    quant_config=quant_config,\n    prefix=maybe_prefix(prefix, \"downward_and_forgot_after_attn\"),  # ← 前缀与属性名一致\n    return_bias=False,\n)",
+      "context": "Please add ut for this new file"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/models/llama_eagle3_vwn.py\n+++ b/vllm_ascend/models/llama_eagle3_vwn.py\n@@ -10,14 +10,17 @@\n     return_bias=False,\n )\n \n-# ... 中间有其他层的定义（如 attention 层）...\n+# ... 中间有其他层的定义 ...\n \n+# gemini-code-assist[bot] suggestion + realliujiaxu 评审\n+# 作者：\"thus it actually has no functional error by using two 'downward_and_forgot'.\n+#         But for better understanding, I will use 'downward_and_forgot_after_attn' instead.\"\n self.downward_and_forgot_after_attn = ReplicatedLinear(\n     input_size=downward_input_size,\n     output_size=downard_output_size,\n     bias=False,\n     params_dtype=vllm_config.model_config.dtype,\n     quant_config=quant_config,\n-    prefix=maybe_prefix(prefix, \"downward_and_forgot\"),  # ← 前缀与 line 218 重复\n+    prefix=maybe_prefix(prefix, \"downward_and_forgot_after_attn\"),  # ← 前缀与属性名一致\n     return_bias=False,\n )",
+      "stats": "1 file changed, +5 lines, -2 lines",
+      "key_changes": [
+        "移除: # ... 中间有其他层的定义（如 attention 层）...",
+        "新增: # ... 中间有其他层的定义 ...",
+        "新增: # gemini-code-assist[bot] suggestion + realliujiaxu 评审",
+        "新增: # 作者：\"thus it actually has no functional error by using two 'downward_and_forgot",
+        "新增: #         But for better understanding, I will use 'downward_and_forgot_after_at",
+        "移除: prefix=maybe_prefix(prefix, \"downward_and_forgot\"),  # ← 前缀与 line 218 重复",
+        "新增: prefix=maybe_prefix(prefix, \"downward_and_forgot_after_attn\"),  # ← 前缀与属性名一致"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

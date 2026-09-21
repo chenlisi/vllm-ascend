@@ -1,0 +1,72 @@
+{
+  "report_id": "PR10727_001",
+  "pr_number": 10727,
+  "pr_title": "[BugFix][Performance] fix performance issue when enable return router experts with async scheduling",
+  "pr_status": "merged",
+  "merged_at": "2026-06-23T09:04:20Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "blocker",
+  "affected_files": [
+    "vllm_ascend/worker/model_runner_v1.py:2488"
+  ],
+  "landing_sha": "a4b8cd7",
+  "source_quote": "A `NameError` will occur here because `output` is not defined in this scope. The correct variable name is `model_runner_output`.",
+  "correspondence": [
+    {
+      "review_quote": "评审原文信号",
+      "patch_snippet": "patch 落地动作",
+      "adoption_judgment": "验证结论"
+    },
+    {
+      "review_quote": "\"output is not defined in this scope\" / suggestion snippet `model_runner_output.routed_experts",
+      "patch_snippet": "output.routed_experts` → `model_runner_output.routed_experts`，周围注释 / total / RoutedExpertsLists 参数均一致",
+      "adoption_judgment": "语义 1:1 对应，建议完全落地 ✅"
+    },
+    {
+      "review_quote": "作者 inline \"fixed\"（L1639）时间戳与 `a4b8cd7` commit 时间差 20 秒",
+      "patch_snippet": "commit 标题就是 \"fix nameerror\"",
+      "adoption_judgment": "意图与代码闭环，非巧合改动 ✅"
+    },
+    {
+      "review_quote": "同 PR 另一条 high 建议 `patch_routed_experts_capture` 条件保护（Import guard）",
+      "patch_snippet": "所有 sha（a1a8082/40079b8/07b986a/25bcdba/a4b8cd7）均未修改 `vllm_ascend/patch/worker/__init__.py",
+      "adoption_judgment": "此条建议证据不足，不纳入本报告，单独判定跳过"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "a4b8cd7",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在 model_runner_v1 `sample_tokens` / `_bookkeeping_sync` 等包含 `ModelRunnerOutput` 对象构造与 async scheduling 分支的函数中，引用 routed experts 输出字段时必须使用 `model_runner_output`（即 `ModelRunnerOutput(...)` 左侧实际绑定的变量名），不得使用同文件或同作用域未声明的别名（如误写 `output`）。尤其在 MoE + 异步调度 + RoutedExpertsLists 设备到主机拷贝后封装路径，变量名错会直接导致运行期 NameError，该路径只在 `enable_return_routed_experts=True` 时触发，常规单测覆盖不足。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 2488,
+      "code": "# vllm_ascend/worker/model_runner_v1.py，model_runner_v1.py:L2540 附近（commit a4b8cd7^）\n                # synchronized by ``_to_list``'s event.synchronize(), so\n                # the pinned buffers are ready to be wrapped as numpy.\n                total = scheduler_output.total_num_scheduled_tokens\n                output.routed_experts = RoutedExpertsLists(\n                    routing_data=self.routed_experts_cpu[:total].numpy(),\n                    slot_mapping=self.routed_experts_slot_mapping_cpu[:total].numpy(),\n                )",
+      "context": "A `NameError` will occur here because `output` is not defined in this scope. The correct variable name is `model_runner_output`."
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 2488,
+      "code": "# vllm_ascend/worker/model_runner_v1.py:2540（a4b8cd7 patch diff 精确位置）\n                # synchronized by ``_to_list``'s event.synchronize(), so\n                # the pinned buffers are ready to be wrapped as numpy.\n                total = scheduler_output.total_num_scheduled_tokens\n                model_runner_output.routed_experts = RoutedExpertsLists(\n                    routing_data=self.routed_experts_cpu[:total].numpy(),\n                    slot_mapping=self.routed_experts_slot_mapping_cpu[:total].numpy(),\n                )",
+      "context": "A `NameError` will occur here because `output` is not defined in this scope. The correct variable name is `model_runner_output`."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/model_runner_v1.py\n+++ b/vllm_ascend/worker/model_runner_v1.py\n@@ -1,8 +1,8 @@\n-# vllm_ascend/worker/model_runner_v1.py，model_runner_v1.py:L2540 附近（commit a4b8cd7^）\n+# vllm_ascend/worker/model_runner_v1.py:2540（a4b8cd7 patch diff 精确位置）\n                 # synchronized by ``_to_list``'s event.synchronize(), so\n                 # the pinned buffers are ready to be wrapped as numpy.\n                 total = scheduler_output.total_num_scheduled_tokens\n-                output.routed_experts = RoutedExpertsLists(\n+                model_runner_output.routed_experts = RoutedExpertsLists(\n                     routing_data=self.routed_experts_cpu[:total].numpy(),\n                     slot_mapping=self.routed_experts_slot_mapping_cpu[:total].numpy(),\n                 )",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "移除: # vllm_ascend/worker/model_runner_v1.py，model_runner_v1.py:L2540 附近（commit a4b8c",
+        "新增: # vllm_ascend/worker/model_runner_v1.py:2540（a4b8cd7 patch diff 精确位置）",
+        "移除: output.routed_experts = RoutedExpertsLists(",
+        "新增: model_runner_output.routed_experts = RoutedExpertsLists("
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

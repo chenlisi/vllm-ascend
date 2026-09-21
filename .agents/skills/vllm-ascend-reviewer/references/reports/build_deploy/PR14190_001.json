@@ -1,0 +1,61 @@
+{
+  "report_id": "PR14190_001",
+  "pr_number": 14190,
+  "pr_title": "[CI] add a5 nightly multi test- #14112",
+  "pr_status": "merged",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "tests/e2e/nightly/multi_node/scripts/lws.yaml.jinja2:203"
+  ],
+  "landing_sha": "5c752f5",
+  "source_quote": "![critical]\n> The `volumes` block for `shared-volume` was accidentally pasted inside the worker container's `resources` limits block, completely replacing the container's `requests` and `volumeMounts` sections and breaking the YAML structure. This will cause Kubernetes deployment to fail.\n> Please restore the container's `resources` and `volumeMounts` blocks here, and instead apply the `shared_volume_path` conditional logic to the `volumes` section at the bottom of the file (lines 198-208).",
+  "correspondence": [
+    {
+      "review_quote": "tests/e2e/nightly/multi_node/scripts/lws.yaml.jinja2:203",
+      "patch_snippet": "评后sha 5c752f5 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "5c752f5",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在编辑 Kubernetes 资源 YAML 模板（如 Jinja2）时，容器 `resources` 块的 `limits`/`requests` 与 `volumeMounts` 必须保持结构完整，不能因粘贴 `volumes` 块而替换掉 `requests`/`volumeMounts` 节，否则会破坏 YAML 结构导致部署失败。",
+    "context": "",
+    "checkpoints": [
+      "检查容器 `resources` 块下 `limits` 与 `requests` 是否成对出现且层级正确",
+      "检查 `volumeMounts` 是否被误删或被其他块覆盖",
+      "检查 `volumes` 块是否被粘贴到了 `resources`/`volumeMounts` 的位置（典型粘贴错误）",
+      "检查 Pod 级 `volumes` 是否位于容器 spec 之外（不应嵌套在容器 `resources` 内）"
+    ],
+    "antipattern": {
+      "file": "tests/e2e/nightly/multi_node/scripts/lws.yaml.jinja2",
+      "line": 203,
+      "code": "# tests/e2e/nightly/multi_node/scripts/lws.yaml.jinja2\n# worker 容器的 resources 段，约第 178-210 行\n            command:\n              - sh\n              - -c\n              - |\n                bash /root/.cache/tests/run.sh \\\n                  \"{{ soc_version | default(\"\") }}\" \\\n                  \"{{ max_good_age_days | default(\"3\") }}\"\n            resources:\n              limits:\n                memory: 512Gi\n                {{ npu_resource_name | default(\"huawei.com/ascend-1980\") }}: {{ npu_per_node | default(\"16\") }}\n            # ❌ volumes 块误粘贴到此处，破坏了 resources 块结构\n            # requests 和 volumeMounts 节被替换丢失\n            - name: shared-volume\n              hostPath:\n                path: \"{{ shared_volume_path }}\"\n                type: DirectoryOrCreate\n            # ❌ 缺少 requests 块（ephemeral-storage, cpu, NPU 资源）\n            # ❌ 缺少 volumeMounts 块（/root/.cache, /usr/local/Ascend/driver/tools, /dev/shm）",
+      "context": "tests/e2e/nightly/multi_node/scripts/lws.yaml.jinja2 worker 容器的 resources 段，约第 178-210 行 ❌ volumes 块误粘贴到此处，破坏了 resources 块结构"
+    },
+    "pattern": {
+      "file": "tests/e2e/nightly/multi_node/scripts/lws.yaml.jinja2",
+      "line": 203,
+      "code": "# tests/e2e/nightly/multi_node/scripts/lws.yaml.jinja2\n            command:\n              - sh\n              - -c\n              - |\n                bash /root/.cache/tests/run.sh \\\n                  \"{{ soc_version | default(\"\") }}\" \\\n                  \"{{ max_good_age_days | default(\"3\") }}\"\n            resources:\n              limits:\n                memory: 512Gi\n                ephemeral-storage: 100Gi\n                huawei.com/ascend-1980: {{ npu_per_node | default(\"16\") }}\n              requests:\n                ephemeral-storage: 100Gi\n                cpu: 125\n                huawei.com/ascend-1980: {{ npu_per_node | default(\"16\") }}\n            volumeMounts:\n              - mountPath: /root/.cache\n                name: shared-volume\n              - mountPath: /usr/local/Ascend/driver/tools\n                name: driver-tools\n              - mountPath: /dev/shm\n                name: dshm\n        volumes:\n        - name: dshm\n          emptyDir:\n            medium: Memory\n            sizeLimit: 512Gi\n{% if shared_volume_path %}\n        - name: shared-volume\n          hostPath:\n            path: \"{{ shared_volume_path }}\"\n            type: DirectoryOrCreate\n{% else %}\n        - name: shared-volume\n          persistentVolumeClaim:\n            claimName: {{ pvc_name | default(\"nv-action-vllm-benchmarks-v2\") }}\n{% endif %}",
+      "context": "tests/e2e/nightly/multi_node/scripts/lws.yaml.jinja2"
+    },
+    "diff": {
+      "unified": "--- a/tests/e2e/nightly/multi_node/scripts/lws.yaml.jinja2\n+++ b/tests/e2e/nightly/multi_node/scripts/lws.yaml.jinja2\n@@ -1,5 +1,4 @@\n # tests/e2e/nightly/multi_node/scripts/lws.yaml.jinja2\n-# worker 容器的 resources 段，约第 178-210 行\n             command:\n               - sh\n               - -c\n@@ -10,12 +9,31 @@\n             resources:\n               limits:\n                 memory: 512Gi\n-                {{ npu_resource_name | default(\"huawei.com/ascend-1980\") }}: {{ npu_per_node | default(\"16\") }}\n-            # ❌ volumes 块误粘贴到此处，破坏了 resources 块结构\n-            # requests 和 volumeMounts 节被替换丢失\n-            - name: shared-volume\n-              hostPath:\n-                path: \"{{ shared_volume_path }}\"\n-                type: DirectoryOrCreate\n-            # ❌ 缺少 requests 块（ephemeral-storage, cpu, NPU 资源）\n-            # ❌ 缺少 volumeMounts 块（/root/.cache, /usr/local/Ascend/driver/tools, /dev/shm）\n+                ephemeral-storage: 100Gi\n+                huawei.com/ascend-1980: {{ npu_per_node | default(\"16\") }}\n+              requests:\n+                ephemeral-storage: 100Gi\n+                cpu: 125\n+                huawei.com/ascend-1980: {{ npu_per_node | default(\"16\") }}\n+            volumeMounts:\n+              - mountPath: /root/.cache\n+                name: shared-volume\n+              - mountPath: /usr/local/Ascend/driver/tools\n+                name: driver-tools\n+              - mountPath: /dev/shm\n+                name: dshm\n+        volumes:\n+        - name: dshm\n+          emptyDir:\n+            medium: Memory\n+            sizeLimit: 512Gi\n+{% if shared_volume_path %}\n+        - name: shared-volume\n+          hostPath:\n+            path: \"{{ shared_volume_path }}\"\n+            type: DirectoryOrCreate\n+{% else %}\n+        - name: shared-volume\n+          persistentVolumeClaim:\n+            claimName: {{ pvc_name | default(\"nv-action-vllm-benchmarks-v2\") }}\n+{% endif %}\n",
+      "stats": "1 file changed, +28 lines, -10 lines",
+      "key_changes": [
+        "移除: type: DirectoryOrCreate",
+        "新增: requests:",
+        "新增: hostPath:",
+        "新增: claimName: {{ pvc_name | default(\"nv-action-vllm-benchmarks-v2\") }}"
+      ]
+    },
+    "language": "yaml",
+    "_status": "processed"
+  }
+}

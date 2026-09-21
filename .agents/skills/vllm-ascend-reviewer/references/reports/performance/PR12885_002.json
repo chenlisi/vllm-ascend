@@ -1,0 +1,57 @@
+{
+  "report_id": "PR12885_002",
+  "pr_number": 12885,
+  "pr_title": "[BugFix][NetLoader] Fix processed-layout P2P for INT8_CACHE=no",
+  "pr_status": "merged",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/model_loader/netloader/interaction/elastic.py:52"
+  ],
+  "landing_sha": "bc12037",
+  "source_quote": "`_recv_json_message` decodes and attempts to parse the entire buffer as JSON on every single received chunk. For large payloads (such as a model's shape manifest, which can be several megabytes), this results in an $O(N^2)$ CPU overhead where $N$ is the number of network chunks. This can cause severe CPU starvation, timeouts, or even a Denial of Service. Only attempt to parse the JSON when the buffer ends with a closing brace `}` or bracket `]`, or once the connection is closed (EOF).",
+  "correspondence": [
+    {
+      "review_quote": "gemini-code-assist[bot]: vllm_ascend/model_loader/netloader/interaction/elastic.py:52",
+      "patch_snippet": "评后sha bc12037 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "bc12037",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "从 socket 流式接收并拼装 JSON 时，不应在每个 chunk 到达后全量解析（$O(N^2)$），而应仅在缓冲区以闭合符 `}`/`]` 结尾或连接关闭(EOF)时才尝试解析。",
+    "context": "",
+    "checkpoints": [
+      "检查 socket 接收循环中是否存在 `json.loads(buffer)` 的无条件调用",
+      "增加\"缓冲区以 `}` 或 `]` 结尾\"的解析守卫",
+      "EOF 后兜底解析一次"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/model_loader/netloader/interaction/elastic.py",
+      "line": 0,
+      "code": "import json\nimport socket\n\ndef _recv_json_message(sock, max_size=64 * 1024 * 1024):\n    \"\"\"Receive a complete JSON message from socket.\n\n    Reads chunks until a complete JSON object is received.\n    \"\"\"\n    buffer = bytearray()\n    while True:\n        chunk = sock.recv(65536)\n        if not chunk:\n            break\n        buffer.extend(chunk)\n        if len(buffer) > max_size:\n            raise RuntimeError(f\"JSON message exceeds max size {max_size} bytes\")\n        try:\n            payload = json.loads(buffer.decode(\"utf-8\"))   # 每个 chunk 都全量解析 → O(N²)\n        except json.JSONDecodeError:\n            continue\n        if not isinstance(payload, dict):\n            raise RuntimeError(f\"Expected JSON object, got {type(payload)}\")\n        return payload\n    raise RuntimeError(\"Incomplete JSON message received from server\")",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/model_loader/netloader/interaction/elastic.py",
+      "line": 0,
+      "code": "import json\nimport socket\n\ndef _recv_json_message(sock, max_size=64 * 1024 * 1024):\n    \"\"\"Receive a complete JSON message from socket.\n\n    Reads chunks until a complete JSON object is received.\n    Only attempts parsing when buffer ends with closing brace/bracket.\n    \"\"\"\n    buffer = bytearray()\n    while True:\n        chunk = sock.recv(65536)\n        if not chunk:\n            break\n        buffer.extend(chunk)\n        if len(buffer) > max_size:\n            raise RuntimeError(f\"JSON message exceeds max size {max_size} bytes\")\n        # 仅当缓冲区以 } 或 ] 结尾时才尝试解析，避免 O(N^2) 全量解析\n        if buffer.rstrip().endswith((b\"}\", b\"]\")):\n            try:\n                payload = json.loads(buffer.decode(\"utf-8\"))\n            except json.JSONDecodeError:\n                continue\n            if not isinstance(payload, dict):\n                raise RuntimeError(f\"Expected JSON object, got {type(payload)}\")\n            return payload\n    # EOF 后最后尝试一次解析\n    try:\n        payload = json.loads(buffer.decode(\"utf-8\"))\n    except json.JSONDecodeError as e:\n        raise RuntimeError(\"Incomplete JSON message received from server\") from e\n    if not isinstance(payload, dict):\n        raise RuntimeError(f\"Expected JSON object, got {type(payload)}\")\n    return payload",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/model_loader/netloader/interaction/elastic.py\n+++ b/vllm_ascend/model_loader/netloader/interaction/elastic.py\n@@ -5,6 +5,7 @@\n     \"\"\"Receive a complete JSON message from socket.\n \n     Reads chunks until a complete JSON object is received.\n+    Only attempts parsing when buffer ends with closing brace/bracket.\n     \"\"\"\n     buffer = bytearray()\n     while True:\n@@ -14,11 +15,20 @@\n         buffer.extend(chunk)\n         if len(buffer) > max_size:\n             raise RuntimeError(f\"JSON message exceeds max size {max_size} bytes\")\n-        try:\n-            payload = json.loads(buffer.decode(\"utf-8\"))   # 每个 chunk 都全量解析 → O(N²)\n-        except json.JSONDecodeError:\n-            continue\n-        if not isinstance(payload, dict):\n-            raise RuntimeError(f\"Expected JSON object, got {type(payload)}\")\n-        return payload\n-    raise RuntimeError(\"Incomplete JSON message received from server\")\n+        # 仅当缓冲区以 } 或 ] 结尾时才尝试解析，避免 O(N^2) 全量解析\n+        if buffer.rstrip().endswith((b\"}\", b\"]\")):\n+            try:\n+                payload = json.loads(buffer.decode(\"utf-8\"))\n+            except json.JSONDecodeError:\n+                continue\n+            if not isinstance(payload, dict):\n+                raise RuntimeError(f\"Expected JSON object, got {type(payload)}\")\n+            return payload\n+    # EOF 后最后尝试一次解析\n+    try:\n+        payload = json.loads(buffer.decode(\"utf-8\"))\n+    except json.JSONDecodeError as e:\n+        raise RuntimeError(\"Incomplete JSON message received from server\") from e\n+    if not isinstance(payload, dict):\n+        raise RuntimeError(f\"Expected JSON object, got {type(payload)}\")\n+    return payload",
+      "stats": "1 file changed, +18 lines, -8 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

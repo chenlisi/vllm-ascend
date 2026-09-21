@@ -1,0 +1,45 @@
+{
+  "report_id": "PR12912_001",
+  "pr_number": 12912,
+  "pr_title": "[Refactor][Misc] Remove unused shared expert DP flags",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "1dfdd85",
+  "source_quote": "Since `get_ascend_config` is no longer imported or used in `vllm_ascend/ops/mla.py`, any attempt to patch it via **`@patch(\"vllm_ascend.ops.mla.get_ascend_config\")`** will raise an **`AttributeError`** and cause the unit tests to fail.\n> Please remove the `@patch(\"vllm_ascend.ops.mla.get_ascend_config\")` **decorators**, their corresponding **`mock_ascend_config` arguments**, and any **unused references to `mock_ascend_config`** from both `test_initialization` and `test_forward` in this file.",
+  "correspondence": [],
+  "verification": {
+    "merged": true,
+    "modified_commit": "1dfdd85",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "tests/ut/ops/test_mla.py",
+      "line": 74,
+      "code": "class MLATestCase(unittest.TestCase):\n    def setUp(self):\n        self.mock_quant_config = MagicMock()\n\n    # test_initialization 装饰器栈（约 L77-L86）\n    @patch(\"vllm_ascend.ops.mla.get_current_vllm_config\")\n    @patch(\"vllm_ascend.ops.mla.get_ascend_config\")          # ← 错 1：符号已在 mla.py 整条删除\n    @patch(\"vllm_ascend.ops.mla.get_tensor_model_parallel_world_size\")\n    def test_initialization(self, mock_tp_size, mock_ascend_config, mock_get_vllm_config):\n    #                                               ↑ 错 2：参数与装饰器对应，装饰器删了参数也得删\n        mock_mla_attn = MagicMock()\n        mock_mla_attn.process_weights_after_loading = MagicMock()\n        ...\n\n    # test_forward 装饰器栈（约 L110-L125）\n    @patch(\"vllm_ascend.ops.mla.torch.ops.vllm.mla_forward\")\n    @patch(\"vllm_ascend.ops.mla.get_current_vllm_config\")\n    @patch(\"vllm_ascend.ops.mla.get_ascend_config\")      # ← 错 3：同上，forward 也残留\n    @patch(\"vllm_ascend.ops.mla.get_tensor_model_parallel_world_size\")\n    @patch(\"vllm_ascend.ops.mla.get_forward_context\")\n    @patch(\"vllm_ascend.ascend_forward_context.get_forward_context\")\n    def test_forward(\n        self,\n        mock_get_forward_context_2,\n        mock_get_forward_context,\n        mock_tp_size,\n        mock_ascend_config,                               # ← 错 4：forward 也残留 mock 形参\n        mock_get_vllm_config,\n        mock_mla_forward,\n    ):\n        mock_tp_size.return_value = 1\n        mock_ascend_config.return_value.enable_shared_expert_dp = False    # ← 错 5：deprecated flag\n        mock_vllm_config = MagicMock(spec=VllmConfig)\n        mock_vllm_config.model_config.hf_text_config = MagicMock(\n            num_hidden_layers=32, first_k_dense_replace=False)\n        mock_get_vllm_config.return_value = mock_vllm_config\n        ...",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "tests/ut/ops/test_mla.py",
+      "line": 74,
+      "code": "class MLATestCase(unittest.TestCase):\n    def setUp(self):\n        self.mock_quant_config = MagicMock()\n\n    @patch(\"vllm_ascend.ops.mla.get_current_vllm_config\")\n    # 删 @patch(\"vllm_ascend.ops.mla.get_ascend_config\")         # ← 删装饰器（错1修复）\n    @patch(\"vllm_ascend.ops.mla.get_tensor_model_parallel_world_size\")\n    def test_initialization(self, mock_tp_size, mock_get_vllm_config):\n    #                                       ↑ 删 mock_ascend_config 形参（错2修复）\n        mock_mla_attn = MagicMock()\n        mock_mla_attn.process_weights_after_loading = MagicMock()\n        ...\n\n    @patch(\"vllm_ascend.ops.mla.torch.ops.vllm.mla_forward\")\n    @patch(\"vllm_ascend.ops.mla.get_current_vllm_config\")\n    # 删 @patch(\"vllm_ascend.ops.mla.get_ascend_config\")         # ← 删装饰器（错3修复）\n    @patch(\"vllm_ascend.ops.mla.get_tensor_model_parallel_world_size\")\n    @patch(\"vllm_ascend.ops.mla.get_forward_context\")\n    @patch(\"vllm_ascend.ascend_forward_context.get_forward_context\")\n    def test_forward(\n        self,\n        mock_get_forward_context_2,\n        mock_get_forward_context,\n        mock_tp_size,\n        # 删 mock_ascend_config,                                  # ← 删 forward 形参（错4修复）\n        mock_get_vllm_config,\n        mock_mla_forward,\n    ):\n        mock_tp_size.return_value = 1\n        # 删 mock_ascend_config.return_value.enable_shared_expert_dp = False  # ← 删实体赋值（错5修复）\n        mock_vllm_config = MagicMock(spec=VllmConfig)\n        mock_vllm_config.model_config.hf_text_config = MagicMock(\n            num_hidden_layers=32, first_k_dense_replace=False)\n        mock_get_vllm_config.return_value = mock_vllm_config\n        ...",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/tests/ut/ops/test_mla.py\n+++ b/tests/ut/ops/test_mla.py\n@@ -2,20 +2,18 @@\n     def setUp(self):\n         self.mock_quant_config = MagicMock()\n \n-    # test_initialization 装饰器栈（约 L77-L86）\n     @patch(\"vllm_ascend.ops.mla.get_current_vllm_config\")\n-    @patch(\"vllm_ascend.ops.mla.get_ascend_config\")          # ← 错 1：符号已在 mla.py 整条删除\n+    # 删 @patch(\"vllm_ascend.ops.mla.get_ascend_config\")         # ← 删装饰器（错1修复）\n     @patch(\"vllm_ascend.ops.mla.get_tensor_model_parallel_world_size\")\n-    def test_initialization(self, mock_tp_size, mock_ascend_config, mock_get_vllm_config):\n-    #                                               ↑ 错 2：参数与装饰器对应，装饰器删了参数也得删\n+    def test_initialization(self, mock_tp_size, mock_get_vllm_config):\n+    #                                       ↑ 删 mock_ascend_config 形参（错2修复）\n         mock_mla_attn = MagicMock()\n         mock_mla_attn.process_weights_after_loading = MagicMock()\n         ...\n \n-    # test_forward 装饰器栈（约 L110-L125）\n     @patch(\"vllm_ascend.ops.mla.torch.ops.vllm.mla_forward\")\n     @patch(\"vllm_ascend.ops.mla.get_current_vllm_config\")\n-    @patch(\"vllm_ascend.ops.mla.get_ascend_config\")      # ← 错 3：同上，forward 也残留\n+    # 删 @patch(\"vllm_ascend.ops.mla.get_ascend_config\")         # ← 删装饰器（错3修复）\n     @patch(\"vllm_ascend.ops.mla.get_tensor_model_parallel_world_size\")\n     @patch(\"vllm_ascend.ops.mla.get_forward_context\")\n     @patch(\"vllm_ascend.ascend_forward_context.get_forward_context\")\n@@ -24,12 +22,12 @@\n         mock_get_forward_context_2,\n         mock_get_forward_context,\n         mock_tp_size,\n-        mock_ascend_config,                               # ← 错 4：forward 也残留 mock 形参\n+        # 删 mock_ascend_config,                                  # ← 删 forward 形参（错4修复）\n         mock_get_vllm_config,\n         mock_mla_forward,\n     ):\n         mock_tp_size.return_value = 1\n-        mock_ascend_config.return_value.enable_shared_expert_dp = False    # ← 错 5：deprecated flag\n+        # 删 mock_ascend_config.return_value.enable_shared_expert_dp = False  # ← 删实体赋值（错5修复）\n         mock_vllm_config = MagicMock(spec=VllmConfig)\n         mock_vllm_config.model_config.hf_text_config = MagicMock(\n             num_hidden_layers=32, first_k_dense_replace=False)",
+      "stats": "1 file changed, +6 lines, -8 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

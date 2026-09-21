@@ -1,0 +1,62 @@
+{
+  "report_id": "PR3572_001",
+  "pr_number": 3572,
+  "pr_title": "[Bugfix] Fix zero attention output in qwen3-next",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/model_runner_v1.py:1475"
+  ],
+  "landing_sha": "cb77dc4",
+  "source_quote": "Maybe check graph mode, I'm a bit worried this might result accuracy issue.",
+  "correspondence": [
+    {
+      "review_quote": "yiz-liu: vllm_ascend/worker/model_runner_v1.py:1475(2025-10-22 08:33:51)",
+      "patch_snippet": "评后sha cb77dc4 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "cb77dc4",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 NPUModelRunner 中，不同注意力机制（如不同 attention group）不应共享可变张量（如 `slot_mapping`），应各自从对应的 BlockTable 中获取，避免状态覆盖导致输出异常。",
+    "context": "",
+    "checkpoints": [
+      "是否存在多个 attention group 共享同一可变张量的情况",
+      "修改是否经过 graph mode 下的准确性验证",
+      "`slot_mapping` 的数据类型是否为 `int32`（硬件兼容性）",
+      "修改后是否在多种模型上验证了输出一致性"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 1475,
+      "code": "# vllm_ascend/worker/model_runner_v1.py:1465-1490\nclass NPUModelRunner:\n    \"\"\"Model runner for NPU devices.\"\"\"\n\n    def __init__(\n        self,\n        vllm_config: VllmConfig,\n        device: torch.device,\n        ...\n    ):\n        # ... 其他初始化代码 ...\n        # 共享的 slot_mapping 张量，被多个 attention group 共用\n        self.slot_mapping = torch.empty(\n            self.max_num_tokens,\n            dtype=torch.int32,\n            device=self.device,\n        )\n        self.attn_groups = ...\n\n    def execute_model(\n        self,\n        scheduler_output: SchedulerOutput,\n    ) -> ModelRunnerOutput:\n        # 不同 attention group 依次写入共享的 slot_mapping\n        for attn_group in self.attn_groups:\n            self.slot_mapping = attn_group.compute_slot_mapping()\n            # 后续 group 覆盖了前面 group 的 slot_mapping\n            # 导致前面 group 的注意力输出为零\n        ...",
+      "context": "vllm_ascend/worker/model_runner_v1.py:1465-1490 ... 其他初始化代码 ... 共享的 slot_mapping 张量，被多个 attention group 共用"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 1475,
+      "code": "# vllm_ascend/worker/model_runner_v1.py:1465-1490\nclass NPUModelRunner:\n    \"\"\"Model runner for NPU devices.\"\"\"\n\n    def __init__(\n        self,\n        vllm_config: VllmConfig,\n        device: torch.device,\n        ...\n    ):\n        # ... 其他初始化代码 ...\n        # 移除共享的 slot_mapping 属性，不再维护全局状态\n        del self.slot_mapping\n        self.attn_groups = ...\n\n    def execute_model(\n        self,\n        scheduler_output: SchedulerOutput,\n    ) -> ModelRunnerOutput:\n        # 每个 attention group 从自己的 BlockTable 独立获取 slot_mapping\n        for attn_group in self.attn_groups:\n            block_table = attn_group.block_table\n            slot_mapping = block_table.slot_mapping\n            slot_mapping = slot_mapping.to(torch.int32)  # 硬件兼容性: int32\n            # 各 group 使用各自的 slot_mapping，互不干扰\n        ...",
+      "context": "vllm_ascend/worker/model_runner_v1.py:1465-1490 ... 其他初始化代码 ... 移除共享的 slot_mapping 属性，不再维护全局状态"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/model_runner_v1.py\n+++ b/vllm_ascend/worker/model_runner_v1.py\n@@ -9,21 +9,18 @@\n         ...\n     ):\n         # ... 其他初始化代码 ...\n-        # 共享的 slot_mapping 张量，被多个 attention group 共用\n-        self.slot_mapping = torch.empty(\n-            self.max_num_tokens,\n-            dtype=torch.int32,\n-            device=self.device,\n-        )\n+        # 移除共享的 slot_mapping 属性，不再维护全局状态\n+        del self.slot_mapping\n         self.attn_groups = ...\n \n     def execute_model(\n         self,\n         scheduler_output: SchedulerOutput,\n     ) -> ModelRunnerOutput:\n-        # 不同 attention group 依次写入共享的 slot_mapping\n+        # 每个 attention group 从自己的 BlockTable 独立获取 slot_mapping\n         for attn_group in self.attn_groups:\n-            self.slot_mapping = attn_group.compute_slot_mapping()\n-            # 后续 group 覆盖了前面 group 的 slot_mapping\n-            # 导致前面 group 的注意力输出为零\n+            block_table = attn_group.block_table\n+            slot_mapping = block_table.slot_mapping\n+            slot_mapping = slot_mapping.to(torch.int32)  # 硬件兼容性: int32\n+            # 各 group 使用各自的 slot_mapping，互不干扰\n         ...\n",
+      "stats": "1 file changed, +7 lines, -10 lines",
+      "key_changes": [
+        "移除: self.max_num_tokens,",
+        "移除: )",
+        "移除: device=self.device,",
+        "新增: slot_mapping = slot_mapping.to(torch.int32)  # 硬件兼容性: int32",
+        "新增: del self.slot_mapping"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

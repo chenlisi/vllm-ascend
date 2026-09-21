@@ -1,0 +1,65 @@
+{
+  "report_id": "PR10884_001",
+  "pr_number": 10884,
+  "pr_title": "[Doc][Misc] Improve doc of Kimi-K2-Thinking",
+  "pr_status": "merged",
+  "merged_at": "2026-06-29T09:41:30Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/models/Kimi-K2-Thinking.md:331",
+    "docs/source/tutorials/models/Kimi-K2-Thinking.md:335",
+    "docs/source/tutorials/models/Kimi-K2-Thinking.md:339",
+    "docs/source/tutorials/models/Kimi-K2-Thinking.md:341"
+  ],
+  "landing_sha": "9306db7",
+  "source_quote": "\"Chapter 10 (FAQ) needs to be supplemented with explanatory notes referring to the template.\"",
+  "correspondence": [
+    {
+      "review_quote": "herizhen 指出 FAQ 章节需按模板补充说明注释。MengqingCao 提出四点改进：(1) 端口占用不应提供 kill all 命令，应引导用户检查并终止特定进程；(2) OOM 答案不准确，应引用 vLLM 官方 troubleshooting；(3) 应使用精确的错误消息便于用户搜索。作者通过 commit `9306db7` 统一改进了 FAQ 内容。",
+      "patch_snippet": "commit `9306db7`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "9306db7",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "模型文档的 FAQ 章节应：(1) 按模板格式编写；(2) 避免提供可能误杀进程的破坏性命令（如 `pkill -f vllm`），应引导用户检查并定向处理；(3) 对于通用问题（如 OOM），应引用 vLLM 官方 troubleshooting 链接；(4) 使用精确的错误消息便于用户搜索定位。",
+    "context": "",
+    "checkpoints": [
+      "检查 FAQ 是否按模板格式编写",
+      "确认是否包含破坏性命令（如 kill all）",
+      "验证通用问题是否引用了官方文档",
+      "检查是否使用了精确的错误消息"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/Kimi-K2-Thinking.md",
+      "line": 331,
+      "code": "<!-- 第 10 章 FAQ 部分 -->\n\n## 10. FAQ\n\n### Q1: 启动服务时提示端口被占用怎么办？\n\n如果启动 vLLM 服务时提示端口被占用，可以执行以下命令释放端口：",
+      "context": "\"Chapter 10 (FAQ) needs to be supplemented with explanatory notes referring to the template.\""
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/Kimi-K2-Thinking.md",
+      "line": 331,
+      "code": "<!-- 第 10 章 FAQ 部分 -->\n\n## 10. FAQ\n\n### Q1: 启动服务时出现 \"Address already in use\" 错误怎么办？\n\n请先检查是否有其他进程占用该端口：",
+      "context": "\"Chapter 10 (FAQ) needs to be supplemented with explanatory notes referring to the template.\""
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/Kimi-K2-Thinking.md\n+++ b/docs/source/tutorials/models/Kimi-K2-Thinking.md\n@@ -2,6 +2,6 @@\n \n ## 10. FAQ\n \n-### Q1: 启动服务时提示端口被占用怎么办？\n+### Q1: 启动服务时出现 \"Address already in use\" 错误怎么办？\n \n-如果启动 vLLM 服务时提示端口被占用，可以执行以下命令释放端口：\n+请先检查是否有其他进程占用该端口：",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "移除: ### Q1: 启动服务时提示端口被占用怎么办？",
+        "新增: ### Q1: 启动服务时出现 \"Address already in use\" 错误怎么办？",
+        "移除: 如果启动 vLLM 服务时提示端口被占用，可以执行以下命令释放端口：",
+        "新增: 请先检查是否有其他进程占用该端口："
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

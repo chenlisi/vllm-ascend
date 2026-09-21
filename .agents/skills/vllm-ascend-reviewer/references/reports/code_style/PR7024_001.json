@@ -1,0 +1,64 @@
+{
+  "report_id": "PR7024_001",
+  "pr_number": 7024,
+  "pr_title": "[refactor] replace scattered business kwargs with typed request objects and explicit stage boundaries",
+  "pr_status": "merged",
+  "merged_at": "2026-03-20T15:23:58Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/fused_moe/prepare_finalize.py:292",
+    "vllm_ascend/ops/fused_moe/moe_runtime_args.py:47",
+    "vllm_ascend/ops/fused_moe/moe_runtime_args.py:38",
+    "vllm_ascend/ops/fused_moe/moe_runtime_args.py:118",
+    "vllm_ascend/ops/fused_moe/moe_runtime_args.py:130"
+  ],
+  "landing_sha": "312c544",
+  "source_quote": "may can remove this context， just pass padded_hidden_states_shape",
+  "correspondence": [
+    {
+      "review_quote": "weijinqian0 提出了5条重构建议：移除不必要的 context manager、合并类并继承 MoEQuantSpec、解包参数、使用 QuantSpec 替代。作者通过 commit `312c544` 及后续多个 commit 统一了 fused moe runtime contracts，5/5 建议全部落地。",
+      "patch_snippet": "commit `312c544`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "312c544",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 MoE 模块中，应使用类型化的数据类（如 dataclass）封装函数间传递的参数，避免使用长参数列表。当存在功能重叠的类时应合并，并优先继承已有的基类（如 MoEQuantSpec）。避免使用不必要的 context manager，直接传递所需参数即可。",
+    "context": "",
+    "checkpoints": [
+      "检查是否存在可以合并的功能重叠的类",
+      "确认新类是否继承了合适的基类（如 MoEQuantSpec）",
+      "检查是否使用了不必要的 context manager",
+      "验证参数传递是否使用了类型化的请求对象",
+      "确认是否可以用 QuantSpec 替代自定义的量化参数类型"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/fused_moe/prepare_finalize.py",
+      "line": 270,
+      "code": "    def prepare(self, hidden_states, router_logits, mc2_mask=None):\n        padded_hidden_states_shape = hidden_states.shape\n        if not self.replace_allreduce:\n            self.num_tokens, _ = hidden_states.shape\n            target_pad_length = _EXTRA_CTX.padded_num_tokens\n            pad_size = target_pad_length - self.num_tokens\n\n            if pad_size > 0:\n                hidden_states = nn.functional.pad(hidden_states, (0, 0, 0, pad_size))\n                router_logits = nn.functional.pad(router_logits, (0, 0, 0, pad_size))\n                padded_hidden_states_shape = hidden_states.shape\n\n        with padded_hidden_states_shape_context(padded_hidden_states_shape):\n            return PrepareOutput(\n                hidden_states=hidden_states,\n                router_logits=router_logits,\n                mc2_mask=mc2_mask,\n            )",
+      "context": "may can remove this context， just pass padded_hidden_states_shape"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/fused_moe/prepare_finalize.py",
+      "line": 270,
+      "code": "    def prepare(self, hidden_states, router_logits, mc2_mask=None):\n        padded_hidden_states_shape = hidden_states.shape\n        if not self.replace_allreduce:\n            self.num_tokens, _ = hidden_states.shape\n            target_pad_length = _EXTRA_CTX.padded_num_tokens\n            pad_size = target_pad_length - self.num_tokens\n\n            if pad_size > 0:\n                hidden_states = nn.functional.pad(hidden_states, (0, 0, 0, pad_size))\n                router_logits = nn.functional.pad(router_logits, (0, 0, 0, pad_size))\n                padded_hidden_states_shape = hidden_states.shape\n\n        return MoEPrepareOutput(\n            hidden_states=hidden_states,\n            router_logits=router_logits,\n            mc2_mask=mc2_mask,\n            padded_hidden_states_shape=padded_hidden_states_shape,\n            pertoken_scale=None,\n        )",
+      "context": "may can remove this context， just pass padded_hidden_states_shape"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/fused_moe/prepare_finalize.py\n+++ b/vllm_ascend/ops/fused_moe/prepare_finalize.py\n@@ -270,18 +270,19 @@\n                 router_logits = nn.functional.pad(router_logits, (0, 0, 0, pad_size))\n                 padded_hidden_states_shape = hidden_states.shape\n \n-        with padded_hidden_states_shape_context(padded_hidden_states_shape):\n-            return PrepareOutput(\n-                hidden_states=hidden_states,\n-                router_logits=router_logits,\n-                mc2_mask=mc2_mask,\n-            )\n+        return MoEPrepareOutput(\n+            hidden_states=hidden_states,\n+            router_logits=router_logits,\n+            mc2_mask=mc2_mask,\n+            padded_hidden_states_shape=padded_hidden_states_shape,\n+            pertoken_scale=None,\n+        )",
+      "stats": "1 file changed, +7 lines, -6 lines",
+      "key_changes": [
+        "修改了第 13-18 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "report_id": "PR10236_001",
+  "pr_number": 10236,
+  "pr_title": "[Ascend950][Feature] Add support for W8A8FP8FP8 dynamic quantization on Ascend950",
+  "pr_status": "merged",
+  "merged_at": "2026-06-13T07:45:23Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/device/device_op.py:109",
+    "vllm_ascend/device/device_op.py:882",
+    "vllm_ascend/device/device_op.py:1007",
+    "vllm_ascend/quantization/compressed_tensors_config.py:356",
+    "vllm_ascend/quantization/methods/w8a8fp8_dynamic.py:18"
+  ],
+  "landing_sha": "a695265",
+  "source_quote": "The `act_quant_type` field can be reused. This field indicates the quantization type of the activation value.",
+  "correspondence": [
+    {
+      "review_quote": "kunpengW-code 指出 `act_quant_type` 字段可以复用，以及在 `compressed_tensors_config.py:356` 需要添加判断逻辑区分 W8A8_DYNAMIC 和 W8A8FP8_DYNAMIC。momo609 指出需要添加单元测试。作者通过 commit `a695265` 将 W8A8FP8 相关代码重构到新文件，并通过 commit `cfad91d` 添加了单元测试，5/5 建议全部落地。",
+      "patch_snippet": "commit `a695265`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "a695265",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "新增量化类型时，应复用已有的 `act_quant_type` 字段来表示激活值的量化类型，避免重复定义。同时在配置判断中需结合 `weight_quant.type` 和 `input_quant.type` 综合判断返回的量化方法。新增功能必须包含单元测试。",
+    "context": "",
+    "checkpoints": [
+      "检查是否复用了 `act_quant_type` 字段而非新增字段",
+      "检查 `compressed_tensors_config` 中是否根据 weight/input quant type 正确区分量化方法",
+      "检查是否为新增量化方法添加了单元测试"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/device/device_op.py",
+      "line": 109,
+      "code": "import torch\nimport torch_npu\nfrom vllm_ascend.device.device_op import DeviceOp\n\n# ... 其他代码 ...\n\nclass AscendDeviceOp(DeviceOp):\n    # ... 其他方法 ...\n\n    def npu_dynamic_quant_with_scale(\n        self,\n        hidden_states: torch.Tensor,\n        mxfp_quant_dtype: \"QuantType\",\n        dynamic_scale: Optional[torch.Tensor] = None,\n    ) -> tuple[torch.Tensor, torch.Tensor]:\n        \"\"\"对 hidden_states 进行动态量化，支持传入已有的 scale\"\"\"\n        # ... 其他量化类型分支 ...\n\n        if mxfp_quant_dtype == QuantType.W8A8FP8:\n            # W8A8FP8 分支缺少 dynamic_scale 的短路返回\n            # 即使 dynamic_scale 已提供，也会重复调用 npu_dynamic_quant\n            return torch_npu.npu_dynamic_quant(\n                hidden_states, dst_type=torch.float8_e4m3fn)\n\n        # ... 其他代码 ...",
+      "context": "The `act_quant_type` field can be reused. This field indicates the quantization type of the activation value."
+    },
+    "pattern": {
+      "file": "vllm_ascend/device/device_op.py",
+      "line": 109,
+      "code": "import torch\nimport torch_npu\nfrom vllm_ascend.device.device_op import DeviceOp\n\n# ... 其他代码 ...\n\nclass AscendDeviceOp(DeviceOp):\n    # ... 其他方法 ...\n\n    def npu_dynamic_quant_with_scale(\n        self,\n        hidden_states: torch.Tensor,\n        mxfp_quant_dtype: \"QuantType\",\n        dynamic_scale: Optional[torch.Tensor] = None,\n    ) -> tuple[torch.Tensor, torch.Tensor]:\n        \"\"\"对 hidden_states 进行动态量化，支持传入已有的 scale\"\"\"\n        # ... 其他量化类型分支 ...\n\n        if mxfp_quant_dtype == QuantType.W8A8FP8:\n            # 当 dynamic_scale 已提供时直接返回，避免重复量化\n            if dynamic_scale is not None:\n                return hidden_states, dynamic_scale\n            return torch_npu.npu_dynamic_quant(\n                hidden_states, dst_type=torch.float8_e4m3fn)\n\n        # ... 其他代码 ...",
+      "context": "The `act_quant_type` field can be reused. This field indicates the quantization type of the activation value."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/device/device_op.py\n+++ b/vllm_ascend/device/device_op.py\n@@ -17,8 +17,9 @@\n         # ... 其他量化类型分支 ...\n \n         if mxfp_quant_dtype == QuantType.W8A8FP8:\n-            # W8A8FP8 分支缺少 dynamic_scale 的短路返回\n-            # 即使 dynamic_scale 已提供，也会重复调用 npu_dynamic_quant\n+            # 当 dynamic_scale 已提供时直接返回，避免重复量化\n+            if dynamic_scale is not None:\n+                return hidden_states, dynamic_scale\n             return torch_npu.npu_dynamic_quant(\n                 hidden_states, dst_type=torch.float8_e4m3fn)\n ",
+      "stats": "1 file changed, +3 lines, -2 lines",
+      "key_changes": [
+        "移除: # W8A8FP8 分支缺少 dynamic_scale 的短路返回",
+        "移除: # 即使 dynamic_scale 已提供，也会重复调用 npu_dynamic_quant",
+        "新增: # 当 dynamic_scale 已提供时直接返回，避免重复量化",
+        "新增: if dynamic_scale is not None:",
+        "新增: return hidden_states, dynamic_scale"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

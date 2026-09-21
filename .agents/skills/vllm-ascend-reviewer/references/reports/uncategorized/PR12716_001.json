@@ -1,0 +1,45 @@
+{
+  "report_id": "PR12716_001",
+  "pr_number": 0,
+  "pr_title": "",
+  "pr_status": "unknown",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "",
+  "source_quote": "",
+  "correspondence": [],
+  "verification": {
+    "merged": false,
+    "modified_commit": "",
+    "approvals": 0
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": ".github/workflows/scripts/analyze_failure_report.py",
+      "line": 0,
+      "code": "# 失败用例分析报告生成器 (Failure Case Analysis Report Generator)\nimport json\nimport os\nimport sys\n\ndef generate_report(data, local_source, ci_source):\n    \"\"\"Generate failure case analysis report.\"\"\"\n    report = \"\"\n    report += \"## 失败用例\\n\"\n    for case in data[\"failed_cases\"]:\n        report += f\"- {case['name']}: {case['reason']}\\n\"\n\n    report += \"## 推荐用例\\n\"\n    matched, total = 0, 0\n    for case in data[\"recommended_cases\"]:\n        if case[\"matched\"]:\n            matched += 1\n        total += 1\n        report += f\"- {case['name']}\\n\"\n\n    if total == 0:\n        report += \"无推荐用例\\n\"\n\n    report += \"- [来源: 本地文件] %s\\n\" % local_source\n    report += \"- [来源: 历史CI] %s\\n\" % ci_source\n    report += \"命中推荐: %d / %d\\n\" % (matched, total)\n    return report\n\ndef main():\n    ...",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": ".github/workflows/scripts/analyze_failure_report.py",
+      "line": 0,
+      "code": "# Failure Case Analysis Report Generator\nimport json\nimport os\nimport sys\n\ndef generate_report(data, local_source, ci_source):\n    \"\"\"Generate failure case analysis report.\"\"\"\n    report = \"\"\n    report += \"## Failed Test Cases\\n\"\n    for case in data[\"failed_cases\"]:\n        report += f\"- {case['name']}: {case['reason']}\\n\"\n\n    report += \"## Recommended Test Cases\\n\"\n    matched, total = 0, 0\n    for case in data[\"recommended_cases\"]:\n        if case[\"matched\"]:\n            matched += 1\n        total += 1\n        report += f\"- {case['name']}\\n\"\n\n    if total == 0:\n        report += \"No recommended test cases\\n\"\n\n    report += \"- [Source: Local File] %s\\n\" % local_source\n    report += \"- [Source: Historical CI] %s\\n\" % ci_source\n    report += \"Matched Recommendation: %d / %d\\n\" % (matched, total)\n    return report\n\ndef main():\n    ...",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/scripts/analyze_failure_report.py\n+++ b/.github/workflows/scripts/analyze_failure_report.py\n@@ -1,4 +1,4 @@\n-# 失败用例分析报告生成器 (Failure Case Analysis Report Generator)\n+# Failure Case Analysis Report Generator\n import json\n import os\n import sys\n@@ -6,11 +6,11 @@\n def generate_report(data, local_source, ci_source):\n     \"\"\"Generate failure case analysis report.\"\"\"\n     report = \"\"\n-    report += \"## 失败用例\\n\"\n+    report += \"## Failed Test Cases\\n\"\n     for case in data[\"failed_cases\"]:\n         report += f\"- {case['name']}: {case['reason']}\\n\"\n \n-    report += \"## 推荐用例\\n\"\n+    report += \"## Recommended Test Cases\\n\"\n     matched, total = 0, 0\n     for case in data[\"recommended_cases\"]:\n         if case[\"matched\"]:\n@@ -19,11 +19,11 @@\n         report += f\"- {case['name']}\\n\"\n \n     if total == 0:\n-        report += \"无推荐用例\\n\"\n+        report += \"No recommended test cases\\n\"\n \n-    report += \"- [来源: 本地文件] %s\\n\" % local_source\n-    report += \"- [来源: 历史CI] %s\\n\" % ci_source\n-    report += \"命中推荐: %d / %d\\n\" % (matched, total)\n+    report += \"- [Source: Local File] %s\\n\" % local_source\n+    report += \"- [Source: Historical CI] %s\\n\" % ci_source\n+    report += \"Matched Recommendation: %d / %d\\n\" % (matched, total)\n     return report\n \n def main():",
+      "stats": "1 file changed, +7 lines, -7 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

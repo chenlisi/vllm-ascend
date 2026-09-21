@@ -1,0 +1,66 @@
+{
+  "report_id": "PR10332_001",
+  "pr_number": 10332,
+  "pr_title": "[Doc] Optimize documentation for context parallel, EPLB, and speculative decoding; remove Multi-Token Prediction guide",
+  "pr_status": "merged",
+  "merged_at": "2026-06-15T08:32:36Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/user_guide/feature_guide/eplb_swift_balancer.md:30"
+  ],
+  "landing_sha": "7dc1bf8",
+  "source_quote": "plz notice supported diff hardware types for different quantization methods.",
+  "correspondence": [
+    {
+      "review_quote": "jyoung6652 和 kunpengW-code 均指出 `eplb_swift_balancer.md:30` 处的量化方法需要标注支持的硬件类型，并检查量化模式的支持情况。作者回复已确认支持的量化类型及其对应硬件。commit `7dc1bf8` 更新了文档，2/2 建议全部落地。",
+      "patch_snippet": "commit `7dc1bf8`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "7dc1bf8",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在描述量化方法的文档中，必须明确标注每种量化方法支持的硬件类型，避免用户在不支持的硬件上使用。",
+    "context": "",
+    "checkpoints": [
+      "检查量化方法列表是否标注了支持的硬件类型",
+      "检查文档中是否有未验证的量化模式描述"
+    ],
+    "antipattern": {
+      "file": "docs/source/user_guide/feature_guide/eplb_swift_balancer.md",
+      "line": 30,
+      "code": "<!-- 文件: docs/source/user_guide/feature_guide/eplb_swift_balancer.md -->\n<!-- 行号: ~25-40 -->\n\n# EPLB Swift Balancer\n\n## 支持的量化方法\n\n<!-- 量化方法列表未标注支持的硬件类型 -->\n<!-- jyoung6652: \"plz notice supported diff hardware types -->\n<!--              for different quantization methods\" -->\n<!-- kunpengW-code: \"Check whether these quantization modes are supported\" -->\n\n| 量化方法 | 说明 |\n|---------|------|\n| W8A8    | 8位权重量化，适用于 MoE 模型的 expert 层 |\n| W4A16   | 4位权重量化，适用于内存受限场景 |\n| FP8     | FP8 量化，适用于高精度推理 |\n\n## 配置说明\n\n...",
+      "context": "plz notice supported diff hardware types for different quantization methods."
+    },
+    "pattern": {
+      "file": "docs/source/user_guide/feature_guide/eplb_swift_balancer.md",
+      "line": 30,
+      "code": "<!-- 文件: docs/source/user_guide/feature_guide/eplb_swift_balancer.md -->\n<!-- 行号: ~25-45 -->\n\n# EPLB Swift Balancer\n\n## 支持的量化方法\n\n<!-- li1how: \"the supported quantization types and their hardware -->\n<!--          have been confirmed\" -->\n<!-- 量化方法列表标注了支持的硬件类型 -->\n\n| 量化方法 | 支持硬件 | 说明 |\n|---------|---------|------|\n| W8A8    | Ascend 910B / Ascend 950 | 8位权重量化，适用于 MoE 模型的 expert 层 |\n| W4A16   | Ascend 910B | 4位权重量化，适用于内存受限场景 |\n| FP8     | Ascend 950 | FP8 量化，适用于高精度推理 |\n\n## 配置说明\n\n...",
+      "context": "plz notice supported diff hardware types for different quantization methods."
+    },
+    "diff": {
+      "unified": "--- a/docs/source/user_guide/feature_guide/eplb_swift_balancer.md\n+++ b/docs/source/user_guide/feature_guide/eplb_swift_balancer.md\n@@ -1,20 +1,19 @@\n <!-- 文件: docs/source/user_guide/feature_guide/eplb_swift_balancer.md -->\n-<!-- 行号: ~25-40 -->\n+<!-- 行号: ~25-45 -->\n \n # EPLB Swift Balancer\n \n ## 支持的量化方法\n \n-<!-- 量化方法列表未标注支持的硬件类型 -->\n-<!-- jyoung6652: \"plz notice supported diff hardware types -->\n-<!--              for different quantization methods\" -->\n-<!-- kunpengW-code: \"Check whether these quantization modes are supported\" -->\n+<!-- li1how: \"the supported quantization types and their hardware -->\n+<!--          have been confirmed\" -->\n+<!-- 量化方法列表标注了支持的硬件类型 -->\n \n-| 量化方法 | 说明 |\n-|---------|------|\n-| W8A8    | 8位权重量化，适用于 MoE 模型的 expert 层 |\n-| W4A16   | 4位权重量化，适用于内存受限场景 |\n-| FP8     | FP8 量化，适用于高精度推理 |\n+| 量化方法 | 支持硬件 | 说明 |\n+|---------|---------|------|\n+| W8A8    | Ascend 910B / Ascend 950 | 8位权重量化，适用于 MoE 模型的 expert 层 |\n+| W4A16   | Ascend 910B | 4位权重量化，适用于内存受限场景 |\n+| FP8     | Ascend 950 | FP8 量化，适用于高精度推理 |\n \n ## 配置说明\n ",
+      "stats": "1 file changed, +9 lines, -10 lines",
+      "key_changes": [
+        "移除: <!-- 行号: ~25-40 -->",
+        "新增: <!-- 行号: ~25-45 -->",
+        "移除: <!-- 量化方法列表未标注支持的硬件类型 -->",
+        "移除: <!-- jyoung6652: \"plz notice supported diff hardware types -->",
+        "移除: <!--              for different quantization methods\" -->",
+        "移除: <!-- kunpengW-code: \"Check whether these quantization modes are supported\" -->",
+        "新增: <!-- li1how: \"the supported quantization types and their hardware -->",
+        "新增: <!--          have been confirmed\" -->",
+        "新增: <!-- 量化方法列表标注了支持的硬件类型 -->",
+        "移除: | 量化方法 | 说明 |"
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

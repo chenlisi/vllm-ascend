@@ -1,0 +1,57 @@
+{
+  "report_id": "PR11640_001",
+  "pr_number": 11640,
+  "pr_title": "[Doc][Misc] Update vLLM serve configuration for GLM models",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "docs/source/tutorials/models/GLM5.2.md:652"
+  ],
+  "landing_sha": "46a2ed9",
+  "source_quote": "fuse_muls_add There is an issue with this configuration; it defaults to true.",
+  "correspondence": [
+    {
+      "review_quote": "weiguihua2: docs/source/tutorials/models/GLM5.2.md:652",
+      "patch_snippet": "评后sha 46a2ed9 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "46a2ed9",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在部署教程文档中，当配置项（如 `fuse_muls_add`）存在默认值时，应明确说明其默认行为。如果默认值已经是 `true`，则不需要在配置中显式设置，或者应说明为什么需要显式设置。",
+    "context": "",
+    "checkpoints": [
+      "检查文档中引用的配置项是否有默认值",
+      "确认显式设置的值是否与默认值一致（如果是，则多余）",
+      "对于有默认值的配置，应在文档中说明默认行为"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/GLM5.2.md",
+      "line": 645,
+      "code": "## 部署示例\n\n### 单卡部署\n\n```bash\nvllm serve /path/to/glm5.2-model \\\n    --tensor-parallel-size 1 \\\n    --max-model-len 32768 \\\n    --additional-config '{\"fuse_muls_add\": true, \"enable_shared_expert_dp\": true}'\n```\n\n### PD 分离部署 - Prefill 节点\n\n```bash\nvllm serve /path/to/glm5.2-model \\\n    --tensor-parallel-size 8 \\\n    --max-model-len 32768 \\\n    --additional-config '{\"fuse_muls_add\": true, \"enable_shared_expert_dp\": true}'\n```",
+      "context": "修改前代码 (markdown)：包含多余的 fuse_muls_add: true 配置"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/GLM5.2.md",
+      "line": 652,
+      "code": "## 部署示例\n\n### 单卡部署\n\n```bash\nvllm serve /path/to/glm5.2-model \\\n    --tensor-parallel-size 1 \\\n    --max-model-len 32768 \\\n    --additional-config '{\"enable_shared_expert_dp\": true}'\n```\n\n### PD 分离部署 - Prefill 节点\n\n```bash\nvllm serve /path/to/glm5.2-model \\\n    --tensor-parallel-size 8 \\\n    --max-model-len 32768 \\\n    --additional-config '{\"enable_shared_expert_dp\": true}'\n```",
+      "context": "修改后代码 (markdown)：移除多余的 fuse_muls_add: true 配置"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/GLM5.2.md\n+++ b/docs/source/tutorials/models/GLM5.2.md\n@@ -6,7 +6,7 @@\n vllm serve /path/to/glm5.2-model \\\n     --tensor-parallel-size 1 \\\n     --max-model-len 32768 \\\n-    --additional-config '{\"fuse_muls_add\": true, \"enable_shared_expert_dp\": true}'\n+    --additional-config '{\"enable_shared_expert_dp\": true}'\n ```\n \n ### PD 分离部署 - Prefill 节点\n@@ -15,5 +15,5 @@\n vllm serve /path/to/glm5.2-model \\\n     --tensor-parallel-size 8 \\\n     --max-model-len 32768 \\\n-    --additional-config '{\"fuse_muls_add\": true, \"enable_shared_expert_dp\": true}'\n+    --additional-config '{\"enable_shared_expert_dp\": true}'\n ```",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "修改代码逻辑"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "report_id": "PR12292_002",
+  "pr_number": 12292,
+  "pr_title": "[Feature] DyntraLB: Dynamic Intra-decoder Data-parallel Load Balancing",
+  "pr_status": "merged",
+  "dimension": [
+    "design"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/patch/platform/patch_nonbsp_request_status.py:35"
+  ],
+  "landing_sha": "2a98206",
+  "source_quote": "delete this patch and status",
+  "correspondence": [
+    {
+      "review_quote": "DavidJiang9: vllm_ascend/patch/platform/patch_nonbsp_request_status.py:35",
+      "patch_snippet": "评后sha 2a98206 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "2a98206",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "不应通过 monkey-patch 修改上游库的枚举类型（如 RequestStatus）来添加自定义状态。应寻找替代方案（如使用内部状态字段或配置标志），避免引入难以维护的 patch。",
+    "context": "",
+    "checkpoints": [
+      "检查是否通过 monkey-patch 修改了上游枚举类型",
+      "评估是否有不修改上游类型的替代方案",
+      "如果存在替代方案，删除不必要的 patch"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/patch/platform/patch_nonbsp_request_status.py",
+      "line": 1,
+      "code": "\"\"\"Patch RequestStatus to add LB_PAUSED state for DyntraLB.\"\"\"\n\nfrom enum import Enum\n\n\nclass LBRequestStatus:\n    \"\"\"Load balancing request status extension.\"\"\"\n    LB_PAUSED = \"lb_paused\"\n\n\ndef apply_nonbsp_request_status_patch():\n    \"\"\"Monkey-patch upstream RequestStatus to include LB_PAUSED.\"\"\"\n    try:\n        from vllm.v1.request import RequestStatus\n        # 通过 monkey-patch 添加自定义状态到上游枚举\n        if not hasattr(RequestStatus, \"LB_PAUSED\"):\n            RequestStatus.LB_PAUSED = \"lb_paused\"\n    except ImportError:\n        pass\n\n\ndef is_request_lb_paused(request) -> bool:\n    \"\"\"Check if a request is paused by load balancer.\"\"\"\n    return getattr(request, \"status\", None) == LBRequestStatus.LB_PAUSED\n\n\ndef pause_request_for_lb(request, scheduler):\n    \"\"\"Pause a request for load balancing migration.\"\"\"\n    request.status = LBRequestStatus.LB_PAUSED\n    scheduler._paused_requests.add(request.request_id)\n\n\ndef resume_request_from_lb(request, scheduler):\n    \"\"\"Resume a previously paused request.\"\"\"\n    scheduler._paused_requests.discard(request.request_id)\n    request.status = None",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/patch/platform/patch_nonbsp_request_status.py",
+      "line": 0,
+      "code": "# 文件已被完全删除\n# commit 2a98206 的文件列表中不包含该文件\n# LB_PAUSED 状态的实现改用内部管理方式（不通过 monkey-patch RequestStatus）",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/patch/platform/patch_nonbsp_request_status.py\n+++ b/vllm_ascend/patch/platform/patch_nonbsp_request_status.py\n@@ -1,36 +1,3 @@\n-\"\"\"Patch RequestStatus to add LB_PAUSED state for DyntraLB.\"\"\"\n-\n-from enum import Enum\n-\n-\n-class LBRequestStatus:\n-    \"\"\"Load balancing request status extension.\"\"\"\n-    LB_PAUSED = \"lb_paused\"\n-\n-\n-def apply_nonbsp_request_status_patch():\n-    \"\"\"Monkey-patch upstream RequestStatus to include LB_PAUSED.\"\"\"\n-    try:\n-        from vllm.v1.request import RequestStatus\n-        # 通过 monkey-patch 添加自定义状态到上游枚举\n-        if not hasattr(RequestStatus, \"LB_PAUSED\"):\n-            RequestStatus.LB_PAUSED = \"lb_paused\"\n-    except ImportError:\n-        pass\n-\n-\n-def is_request_lb_paused(request) -> bool:\n-    \"\"\"Check if a request is paused by load balancer.\"\"\"\n-    return getattr(request, \"status\", None) == LBRequestStatus.LB_PAUSED\n-\n-\n-def pause_request_for_lb(request, scheduler):\n-    \"\"\"Pause a request for load balancing migration.\"\"\"\n-    request.status = LBRequestStatus.LB_PAUSED\n-    scheduler._paused_requests.add(request.request_id)\n-\n-\n-def resume_request_from_lb(request, scheduler):\n-    \"\"\"Resume a previously paused request.\"\"\"\n-    scheduler._paused_requests.discard(request.request_id)\n-    request.status = None\n+# 文件已被完全删除\n+# commit 2a98206 的文件列表中不包含该文件\n+# LB_PAUSED 状态的实现改用内部管理方式（不通过 monkey-patch RequestStatus）",
+      "stats": "1 file changed, +3 lines, -36 lines",
+      "key_changes": [
+        "添加注释说明"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

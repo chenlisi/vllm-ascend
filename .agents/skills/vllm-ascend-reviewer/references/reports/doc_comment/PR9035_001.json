@@ -1,0 +1,107 @@
+{
+  "report_id": "PR9035_001",
+  "pr_number": 9035,
+  "pr_title": "[Feature] Migrate KDA Triton Op to Ascend NPU",
+  "pr_status": "merged",
+  "merged_at": "2026-06-25T01:19:14Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/ops/triton/fla/chunk_delta_h.py:269",
+    "vllm_ascend/ops/triton/fla/index_kda.py:8",
+    "vllm_ascend/ops/triton/fla/l2norm.py:20",
+    "vllm_ascend/ops/triton/fla/l2norm.py:182",
+    "vllm_ascend/ops/triton/fla/utils.py:231"
+  ],
+  "landing_sha": "4fc3265",
+  "source_quote": "Remove comment code\nUpdate copyright\nWe should not add new envs.\nneeds to double check here, why we have \"fla\" backend\nsame here, should be removed",
+  "correspondence": [
+    {
+      "review_quote": "ChenxiQ: vllm_ascend/ops/triton/fla/chunk_delta_h.py:269",
+      "patch_snippet": "评后sha 4fc3265 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "ChenxiQ: vllm_ascend/ops/triton/fla/index_kda.py:8",
+      "patch_snippet": "评后sha 4fc3265 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "ChenxiQ: vllm_ascend/ops/triton/fla/l2norm.py:20",
+      "patch_snippet": "评后sha 4fc3265 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "ChenxiQ: vllm_ascend/ops/triton/fla/l2norm.py:182",
+      "patch_snippet": "评后sha 4fc3265 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "ChenxiQ: vllm_ascend/ops/triton/fla/utils.py:231",
+      "patch_snippet": "评后sha 4fc3265 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "4fc3265",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "Remove comment code",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/ops/triton/fla/chunk_delta_h.py",
+      "line": 255,
+      "code": "# ChenxiQ 评论: \"Remove comment code\"\n# （根据评审意见推断）该位置存在被注释掉的代码块，类似于：\n\n    return h, v_new, final_state\n\n# def chunk_gated_delta_rule_fwd_h_kda_naive(q, k, v, g, beta, h0=None):\n#     \"\"\"Naive reference implementation for KDA chunk forward.\"\"\"\n#     # ... commented out naive implementation ...\n#     pass\n\n# 下方为当前文件中对应的函数尾部（commit 4fc3265 精简后）:\n    )\n    return h, v_new, final_state",
+      "context": "Remove comment code\nUpdate copyright\nWe should not add new envs.\nneeds to double check here, why we have \"fla\" backend\nsame here, should be removed"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/triton/fla/chunk_delta_h.py",
+      "line": 230,
+      "code": "# 根据 commit 4fc3265 \"refactor(kda): streamline KDA triton operators\"\n# 删除了注释代码，精简了 KDA triton 操作\n\n        v=v,\n        w=w,\n        v_new=v_new,\n        g=g,\n        h=h,\n        h0=initial_state,\n        ht=final_state,\n        cu_seqlens=cu_seqlens,\n        chunk_offsets=chunk_offsets,\n        h_update=h_update,\n        T=T,\n        H=H,\n        Hg=Hg,\n        K=K,\n        V=V,\n        BT=BT,\n        num_warps=4,\n        num_stages=2,\n    )\n    return h, v_new, final_state",
+      "context": "Remove comment code\nUpdate copyright\nWe should not add new envs.\nneeds to double check here, why we have \"fla\" backend\nsame here, should be removed"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/triton/fla/chunk_delta_h.py\n+++ b/vllm_ascend/ops/triton/fla/chunk_delta_h.py\n@@ -1,13 +1,23 @@\n-# ChenxiQ 评论: \"Remove comment code\"\n-# （根据评审意见推断）该位置存在被注释掉的代码块，类似于：\n+# 根据 commit 4fc3265 \"refactor(kda): streamline KDA triton operators\"\n+# 删除了注释代码，精简了 KDA triton 操作\n \n-    return h, v_new, final_state\n-\n-# def chunk_gated_delta_rule_fwd_h_kda_naive(q, k, v, g, beta, h0=None):\n-#     \"\"\"Naive reference implementation for KDA chunk forward.\"\"\"\n-#     # ... commented out naive implementation ...\n-#     pass\n-\n-# 下方为当前文件中对应的函数尾部（commit 4fc3265 精简后）:\n+        v=v,\n+        w=w,\n+        v_new=v_new,\n+        g=g,\n+        h=h,\n+        h0=initial_state,\n+        ht=final_state,\n+        cu_seqlens=cu_seqlens,\n+        chunk_offsets=chunk_offsets,\n+        h_update=h_update,\n+        T=T,\n+        H=H,\n+        Hg=Hg,\n+        K=K,\n+        V=V,\n+        BT=BT,\n+        num_warps=4,\n+        num_stages=2,\n     )\n     return h, v_new, final_state\n",
+      "stats": "1 file changed, +20 lines, -10 lines",
+      "key_changes": [
+        "-# ChenxiQ 评论: \"Remove comment code\"",
+        "-# （根据评审意见推断）该位置存在被注释掉的代码块，类似于：",
+        "+# 根据 commit 4fc3265 \"refactor(kda): streamline KDA triton operators\"",
+        "+# 删除了注释代码，精简了 KDA triton 操作",
+        "-    return h, v_new, final_state",
+        "-",
+        "-# def chunk_gated_delta_rule_fwd_h_kda_naive(q, k, v, g, beta, h0=None):",
+        "-#     \"\"\"Naive reference implementation for KDA chunk forward.\"\"\"",
+        "-#     # ... commented out naive implementation ...",
+        "-#     pass",
+        "-",
+        "-# 下方为当前文件中对应的函数尾部（commit 4fc3265 精简后）:",
+        "+        v=v,",
+        "+        w=w,",
+        "+        v_new=v_new,",
+        "+        g=g,",
+        "+        h=h,",
+        "+        h0=initial_state,",
+        "+        ht=final_state,",
+        "+        cu_seqlens=cu_seqlens,",
+        "+        chunk_offsets=chunk_offsets,",
+        "+        h_update=h_update,",
+        "+        T=T,",
+        "+        H=H,",
+        "+        Hg=Hg,",
+        "+        K=K,",
+        "+        V=V,",
+        "+        BT=BT,",
+        "+        num_warps=4,",
+        "+        num_stages=2,"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

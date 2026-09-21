@@ -1,0 +1,72 @@
+{
+  "report_id": "PR11327_001",
+  "pr_number": 11327,
+  "pr_title": "[BugFix] Add the verification for GLM spec",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/spec_decode/llm_base_proposer.py:218",
+    "tests/e2e/pull_request/one_card/_310p/test_classification_310p.py:9"
+  ],
+  "landing_sha": "fc3e5e5",
+  "source_quote": "Just call eager mode, that would be enough.\nplz make sure there is someone addressing this.",
+  "correspondence": [
+    {
+      "review_quote": "slippersss: vllm_ascend/spec_decode/llm_base_proposer.py:218",
+      "patch_snippet": "评后sha fc3e5e5 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: tests/e2e/pull_request/one_card/_310p/test_classification_310p.py:9",
+      "patch_snippet": "评后sha fc3e5e5 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "fc3e5e5",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当存在简洁直接的解决方案时（如直接调用 eager mode），应避免引入复杂的验证逻辑。简洁的实现更容易维护和理解。",
+    "context": "",
+    "checkpoints": [
+      "是否有更简洁的实现方式",
+      "复杂验证逻辑是否可以用简单调用替代",
+      "测试文件中是否有需要跟进的 TODO 项"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/spec_decode/llm_base_proposer.py",
+      "line": 218,
+      "code": "import logging\nfrom vllm.config import VllmConfig\n\nlogger = logging.getLogger(__name__)\n\ndef _is_glm_model(model_config) -> bool:\n    \"\"\"Check if model is GLM series.\"\"\"\n    config = getattr(model_config, \"hf_text_config\", None)\n    model_type = getattr(config, \"model_type\", \"\") or \"\"\n    return \"glm\" in str(model_type).lower()\n\nclass LLMBaselineProposer:\n    \"\"\"Base proposer for LLM speculative decoding.\"\"\"\n\n    def __init__(self, vllm_config: VllmConfig, ...):\n        self.vllm_config = vllm_config\n\n        # GLM 模型推测解码时使用复杂的验证逻辑\n        if _is_glm_model(self.vllm_config.model_config):\n            # 复杂的禁用 graph mode 逻辑\n            disable_graph_mode()\n            validate_compatibility()\n            set_eager_fallback()\n            logger.warning(\"GLM model detected, disabling graph mode...\")",
+      "context": "Just call eager mode, that would be enough."
+    },
+    "pattern": {
+      "file": "vllm_ascend/spec_decode/llm_base_proposer.py",
+      "line": 218,
+      "code": "import logging\nfrom vllm.config import VllmConfig\n\nlogger = logging.getLogger(__name__)\n\ndef _is_glm_model(model_config) -> bool:\n    \"\"\"Check if model is GLM series.\"\"\"\n    config = getattr(model_config, \"hf_text_config\", None) or \\\n             getattr(model_config, \"hf_config\", None)\n    model_type = getattr(config, \"model_type\", \"\") or \"\"\n    return \"glm\" in str(model_type).lower()\n\nclass LLMBaselineProposer:\n    \"\"\"Base proposer for LLM speculative decoding.\"\"\"\n\n    def __init__(self, vllm_config: VllmConfig, ...):\n        self.vllm_config = vllm_config\n\n        # 简化为直接调用 eager mode\n        # （评审人建议：Just call eager mode, that would be enough）\n        if _is_glm_model(self.vllm_config.model_config):\n            use_eager_mode()\n            logger.info(\"GLM model: using eager mode for spec decode\")",
+      "context": "Just call eager mode, that would be enough."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/spec_decode/llm_base_proposer.py\n+++ b/vllm_ascend/spec_decode/llm_base_proposer.py\n@@ -5,7 +5,8 @@\n \n def _is_glm_model(model_config) -> bool:\n     \"\"\"Check if model is GLM series.\"\"\"\n-    config = getattr(model_config, \"hf_text_config\", None)\n+    config = getattr(model_config, \"hf_text_config\", None) or \\\n+             getattr(model_config, \"hf_config\", None)\n     model_type = getattr(config, \"model_type\", \"\") or \"\"\n     return \"glm\" in str(model_type).lower()\n \n@@ -15,10 +16,8 @@\n     def __init__(self, vllm_config: VllmConfig, ...):\n         self.vllm_config = vllm_config\n \n-        # GLM 模型推测解码时使用复杂的验证逻辑\n+        # 简化为直接调用 eager mode\n+        # （评审人建议：Just call eager mode, that would be enough）\n         if _is_glm_model(self.vllm_config.model_config):\n-            # 复杂的禁用 graph mode 逻辑\n-            disable_graph_mode()\n-            validate_compatibility()\n-            set_eager_fallback()\n-            logger.warning(\"GLM model detected, disabling graph mode...\")\n+            use_eager_mode()\n+            logger.info(\"GLM model: using eager mode for spec decode\")",
+      "stats": "1 file changed, +6 lines, -7 lines",
+      "key_changes": [
+        "移除: config = getattr(model_config, \"hf_text_config\", None)",
+        "新增: config = getattr(model_config, \"hf_text_config\", None) or \\",
+        "新增: getattr(model_config, \"hf_config\", None)",
+        "移除: # GLM 模型推测解码时使用复杂的验证逻辑",
+        "新增: # 简化为直接调用 eager mode",
+        "新增: # （评审人建议：Just call eager mode, that would be enough）",
+        "移除: # 复杂的禁用 graph mode 逻辑",
+        "移除: disable_graph_mode()",
+        "移除: validate_compatibility()",
+        "移除: set_eager_fallback()"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

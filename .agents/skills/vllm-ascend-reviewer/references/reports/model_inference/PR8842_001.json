@@ -1,0 +1,61 @@
+{
+  "report_id": "PR8842_001",
+  "pr_number": 8842,
+  "pr_title": "[Feature]Replace Triton-based conv1d update operator with AscendC implementation",
+  "pr_status": "merged",
+  "merged_at": "2026-05-20T09:20:06Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/compilation/acl_graph.py:258",
+    "vllm_ascend/ops/gdn.py:456"
+  ],
+  "landing_sha": "4b78b4c",
+  "source_quote": "Will this affect non-GDN models? We have `impl_cls.update_graph_params` specifically to decouple different implementations, and now you’re tying it back to GDN.\nEager mode should be able to use the path above too, so is this if-else really necessary?",
+  "correspondence": [
+    {
+      "review_quote": "yiz-liu: vllm_ascend/compilation/acl_graph.py:258",
+      "patch_snippet": "评后sha 4b78b4c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "yiz-liu: vllm_ascend/ops/gdn.py:456",
+      "patch_snippet": "评后sha 4b78b4c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "4b78b4c",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "Will this affect non-GDN models? We have `impl_cls.update_graph_params` specifically to decouple different implementations, and now you’re tying it back to GDN.",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/compilation/acl_graph.py",
+      "line": 258,
+      "code": "# vllm_ascend/compilation/acl_graph.py:258",
+      "context": "Will this affect non-GDN models? We have `impl_cls.update_graph_params` specifically to decouple different implementations, and now you’re tying it back to GDN.\nEager mode should be able to use the pa"
+    },
+    "pattern": {
+      "file": "vllm_ascend/compilation/acl_graph.py",
+      "line": 258,
+      "code": "# 根据评审意见修改后的代码",
+      "context": "Will this affect non-GDN models? We have `impl_cls.update_graph_params` specifically to decouple different implementations, and now you’re tying it back to GDN.\nEager mode should be able to use the pa"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/compilation/acl_graph.py\n+++ b/vllm_ascend/compilation/acl_graph.py\n@@ -1 +1 @@\n-# vllm_ascend/compilation/acl_graph.py:258\n+# 根据评审意见修改后的代码\n",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "-# vllm_ascend/compilation/acl_graph.py:258",
+        "+# 根据评审意见修改后的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

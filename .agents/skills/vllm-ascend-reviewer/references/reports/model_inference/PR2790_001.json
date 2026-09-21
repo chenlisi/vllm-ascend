@@ -1,0 +1,79 @@
+{
+  "report_id": "PR2790_001",
+  "pr_number": 2790,
+  "pr_title": "Deepseek Mtp model uses the lm_head and embedding from the main model",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/spec_decode/mtp_proposer.py:103",
+    "vllm_ascend/spec_decode/mtp_proposer.py:109",
+    "vllm_ascend/spec_decode/mtp_proposer.py:112"
+  ],
+  "landing_sha": "bec18c8",
+  "source_quote": "The absence of redundant lm_head invocations in the dummy run it may lead to deadlocks during DP load imbalance scenarios?\nlet' wait https://github.com/vllm-project/vllm-ascend/pull/3528 merge first. Then mtp change can be in torchair module as well.\nIn the quantized DeepSeek weights provided by the Ascend community that address function call accuracy, the weight values of lm_head and shared_head differ numerically. When using these new quantized weights, this code line will result in precision degradation.\nModelslim has updated new quantization option `--rot` to fix function calling accuracy for quantized deepseek-like models. And re-using the lm_head and shared_head would lead to acceptance rate degradation for deepseek_r1 (~2% which can be ignored). The developers of ModelSlim do not recommend the re-usage behaviour because of robustness issues. Could you please add a verification here to check the numerical value of lm_head and shared_head weights?\nAs far as I know, MindIE adds a weight validation here to determine which we can re-use the lm_head of non-mtp part.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/spec_decode/mtp_proposer.py:103",
+      "patch_snippet": "评后sha bec18c8 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/spec_decode/mtp_proposer.py:109",
+      "patch_snippet": "评后sha bec18c8 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/spec_decode/mtp_proposer.py:112",
+      "patch_snippet": "评后sha bec18c8 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/spec_decode/mtp_proposer.py:112",
+      "patch_snippet": "评后sha bec18c8 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/spec_decode/mtp_proposer.py:112",
+      "patch_snippet": "评后sha bec18c8 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "bec18c8",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在复用模型权重（如将 lm_head 和 shared_head 共享）时，应添加数值校验逻辑，确保两个权重在数值上一致，避免因量化或其他处理导致的精度下降。",
+    "context": "",
+    "checkpoints": [
+      "复用的权重是否数值一致",
+      "是否有量化场景下的特殊处理",
+      "是否需要添加权重校验逻辑"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/spec_decode/mtp_proposer.py",
+      "line": 95,
+      "code": "# 评审人: gemini-code-assist[bot] (critical)\n# embed_tokens 被错误地赋值到每个 layer 模块上，而非父模块\n# 导致 self.model.model.embed_tokens 仍为 None，forward 时 TypeError\n\ndef _share_weights_from_main_model(self):\n    \"\"\"Share lm_head and embed_tokens from main model to MTP model.\"\"\"\n    main_model = self.main_model\n    main_embed_tokens = main_model.model.embed_tokens\n    main_lm_head = main_model.lm_head\n\n    # 错误：embed_tokens 赋值到每个 layer 而非父模块\n    # forward 中调用 self.model.model.embed_tokens 会得到 None\n    for key, layer_module in self.model.model.layers.items():\n        layer_module.embed_tokens = main_embed_tokens\n        layer_module.shared_head.head = main_lm_head",
+      "context": "评审人: gemini-code-assist[bot] (critical) embed_tokens 被错误地赋值到每个 layer 模块上，而非父模块 导致 self.model.model.embed_tokens 仍为 None，forward 时 TypeError"
+    },
+    "pattern": {
+      "file": "vllm_ascend/spec_decode/mtp_proposer.py",
+      "line": 95,
+      "code": "# embed_tokens 应赋值到父模块 self.model.model.embed_tokens\n# 循环仅用于将 main_lm_head 赋值到每个 layer 的 shared_head.head\n\ndef _share_weights_from_main_model(self):\n    \"\"\"Share lm_head and embed_tokens from main model to MTP model.\"\"\"\n    main_model = self.main_model\n    main_embed_tokens = main_model.model.embed_tokens\n    main_lm_head = main_model.lm_head\n\n    # 正确：embed_tokens 赋值到父模块\n    self.model.model.embed_tokens = main_embed_tokens\n    # 循环仅用于将 main_lm_head 赋值到每个 layer 的 shared_head.head\n    for layer_module in self.model.model.layers.values():\n        layer_module.shared_head.head = main_lm_head",
+      "context": "embed_tokens 应赋值到父模块 self.model.model.embed_tokens 循环仅用于将 main_lm_head 赋值到每个 layer 的 shared_head.head 正确：embed_tokens 赋值到父模块"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/spec_decode/mtp_proposer.py\n+++ b/vllm_ascend/spec_decode/mtp_proposer.py\n@@ -1,6 +1,5 @@\n-# 评审人: gemini-code-assist[bot] (critical)\n-# embed_tokens 被错误地赋值到每个 layer 模块上，而非父模块\n-# 导致 self.model.model.embed_tokens 仍为 None，forward 时 TypeError\n+# embed_tokens 应赋值到父模块 self.model.model.embed_tokens\n+# 循环仅用于将 main_lm_head 赋值到每个 layer 的 shared_head.head\n \n def _share_weights_from_main_model(self):\n     \"\"\"Share lm_head and embed_tokens from main model to MTP model.\"\"\"\n@@ -8,8 +7,8 @@\n     main_embed_tokens = main_model.model.embed_tokens\n     main_lm_head = main_model.lm_head\n \n-    # 错误：embed_tokens 赋值到每个 layer 而非父模块\n-    # forward 中调用 self.model.model.embed_tokens 会得到 None\n-    for key, layer_module in self.model.model.layers.items():\n-        layer_module.embed_tokens = main_embed_tokens\n+    # 正确：embed_tokens 赋值到父模块\n+    self.model.model.embed_tokens = main_embed_tokens\n+    # 循环仅用于将 main_lm_head 赋值到每个 layer 的 shared_head.head\n+    for layer_module in self.model.model.layers.values():\n         layer_module.shared_head.head = main_lm_head\n",
+      "stats": "1 file changed, +6 lines, -7 lines",
+      "key_changes": [
+        "新增: self.model.model.embed_tokens = main_embed_tokens"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

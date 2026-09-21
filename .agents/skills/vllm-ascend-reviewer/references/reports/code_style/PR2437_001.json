@@ -1,0 +1,59 @@
+{
+  "report_id": "PR2437_001",
+  "pr_number": 2437,
+  "pr_title": "[1/N][Draft][Refactor]torchair pangu_moe modeling refactor",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/models/pangu_moe.py:57"
+  ],
+  "landing_sha": "fe1a509",
+  "source_quote": "I think we can delete this file",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/models/pangu_moe.py:57",
+      "patch_snippet": "评后sha fe1a509 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "fe1a509",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在进行模型重构时，应删除不再需要的冗余文件，并确保相关的端到端测试被重新启用，以验证重构后的功能正确性。",
+    "context": "",
+    "checkpoints": [
+      "重构后是否清理了冗余文件",
+      "被禁用的测试是否被重新启用",
+      "e2e 测试是否覆盖了重构后的功能"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/models/pangu_moe.py",
+      "line": 1,
+      "code": "# 评审人 wangxiyuan: \"I think we can delete this file\"\n# pangu_moe.py 旧文件保留（已由 torchair 版本 torchair_pangu_moe.py 替代）\n\nfrom typing import Optional, List\nimport torch\nimport torch.nn as nn\n\nfrom vllm.model_executor.layers.fused_moe import FusedMoE\nfrom vllm_ascend.models.pangu_moe import PanguProMoESparseMoeBlock\n\nclass PanguProMoESparseMoeBlock(nn.Module):\n    \"\"\"Legacy Pangu MoE sparse block - superseded by torchair version.\"\"\"\n\n    def __init__(self, config, ...):\n        super().__init__()\n        self.config = config\n        self.experts = FusedMoE(...)\n\n    def forward(self, hidden_states, ...):\n        # 旧版实现，已由 torchair 版本替代\n        router_logits = self.gate(hidden_states)\n        return self.experts(hidden_states, router_logits)\n\n# pangu e2e test 被禁用，未重新启用",
+      "context": "评审人 wangxiyuan: \"I think we can delete this file\" pangu_moe.py 旧文件保留（已由 torchair 版本 torchair_pangu_moe.py 替代） 旧版实现，已由 torchair 版本替代"
+    },
+    "pattern": {
+      "file": "vllm_ascend/models/pangu_moe.py",
+      "line": 1,
+      "code": "# 删除冗余的 pangu_moe.py 文件（已由 torchair 版本替代）\n# 该文件已被完全删除\n\n# commit fe1a509 \"re-enable pangu torchair test\"\n# 重新启用被禁用的 pangu e2e test\n# commit e1f92f0 \"fix ut\" 修复了单元测试\n# 新文件: vllm_ascend/torchair/models/torchair_pangu_moe.py\n# 包含重构后的 torchair 版本实现",
+      "context": "删除冗余的 pangu_moe.py 文件（已由 torchair 版本替代） 该文件已被完全删除 commit fe1a509 \"re-enable pangu torchair test\""
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/models/pangu_moe.py\n+++ b/vllm_ascend/models/pangu_moe.py\n@@ -1,24 +1,8 @@\n-# 评审人 wangxiyuan: \"I think we can delete this file\"\n-# pangu_moe.py 旧文件保留（已由 torchair 版本 torchair_pangu_moe.py 替代）\n+# 删除冗余的 pangu_moe.py 文件（已由 torchair 版本替代）\n+# 该文件已被完全删除\n \n-from typing import Optional, List\n-import torch\n-import torch.nn as nn\n-\n-from vllm.model_executor.layers.fused_moe import FusedMoE\n-from vllm_ascend.models.pangu_moe import PanguProMoESparseMoeBlock\n-\n-class PanguProMoESparseMoeBlock(nn.Module):\n-    \"\"\"Legacy Pangu MoE sparse block - superseded by torchair version.\"\"\"\n-\n-    def __init__(self, config, ...):\n-        super().__init__()\n-        self.config = config\n-        self.experts = FusedMoE(...)\n-\n-    def forward(self, hidden_states, ...):\n-        # 旧版实现，已由 torchair 版本替代\n-        router_logits = self.gate(hidden_states)\n-        return self.experts(hidden_states, router_logits)\n-\n-# pangu e2e test 被禁用，未重新启用\n+# commit fe1a509 \"re-enable pangu torchair test\"\n+# 重新启用被禁用的 pangu e2e test\n+# commit e1f92f0 \"fix ut\" 修复了单元测试\n+# 新文件: vllm_ascend/torchair/models/torchair_pangu_moe.py\n+# 包含重构后的 torchair 版本实现\n",
+      "stats": "1 file changed, +7 lines, -23 lines",
+      "key_changes": [
+        "移除: self.experts = FusedMoE(...)",
+        "移除: from vllm.model_executor.layers.fused_moe import FusedMoE",
+        "移除: from vllm_ascend.models.pangu_moe import PanguProMoESparseMoeBlock"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

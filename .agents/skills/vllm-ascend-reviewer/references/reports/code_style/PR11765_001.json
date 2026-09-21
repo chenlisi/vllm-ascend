@@ -1,0 +1,81 @@
+{
+  "report_id": "PR11765_001",
+  "pr_number": 11765,
+  "pr_title": "[Feature] Add qwen/glm dspark for mrv1",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/ops/triton/spec_decode/utils.py:96",
+    "vllm_ascend/spec_decode/llm_base_proposer.py:1237",
+    "vllm_ascend/worker/model_runner_v1.py:3939",
+    "vllm_ascend/spec_decode/dspark_proposer.py:31",
+    "vllm_ascend/spec_decode/dspark_proposer.py:134"
+  ],
+  "landing_sha": "3ecd49e",
+  "source_quote": "Please follow vllm's naming, change it to SAMPLE_FROM_ANCHOR.\nAdd more comments here.\nConsider merging it with `_get_eagle3_aux_layers_from_config`.\nAdd more comments for `set_inputs_first_pass`.\nAdd more comments for `dummy_run`.",
+  "correspondence": [
+    {
+      "review_quote": "drslark: vllm_ascend/ops/triton/spec_decode/utils.py:96",
+      "patch_snippet": "评后sha 3ecd49e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "drslark: vllm_ascend/spec_decode/llm_base_proposer.py:1237",
+      "patch_snippet": "评后sha 3ecd49e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "drslark: vllm_ascend/worker/model_runner_v1.py:3939",
+      "patch_snippet": "评后sha 3ecd49e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "drslark: vllm_ascend/spec_decode/dspark_proposer.py:31",
+      "patch_snippet": "评后sha 3ecd49e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "drslark: vllm_ascend/spec_decode/dspark_proposer.py:134",
+      "patch_snippet": "评后sha 3ecd49e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "3ecd49e",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "在 speculative decoding 的实现中，常量命名应遵循 vllm 上游的命名规范（如 `SAMPLE_FROM_ANCHOR`）。同时，关键方法（如 `set_inputs_first_pass`、`dummy_run`）应添加充分的注释说明其用途和逻辑。",
+    "context": "",
+    "checkpoints": [
+      "检查 speculative decoding 相关常量是否与 vllm 上游命名一致",
+      "确认关键方法是否有充分的注释说明",
+      "检查是否存在可合并的相似逻辑（如 DSpark 和 Eagle3 的辅助层获取）"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/triton/spec_decode/utils.py",
+      "line": 88,
+      "code": "import triton\nimport triton.language as tl\n\n\n# Custom naming — does not follow vllm convention\nUSE_MASK_TOKEN = tl.constexpr(1)\n\n\n@triton.jit\ndef _prepare_dflash_inputs_kernel_ascend(\n    # ... kernel parameters ...\n    USE_MASK_TOKEN: tl.constexpr,\n):\n    \"\"\"Prepare inputs for DFlash speculative decoding.\"\"\"\n    pid = tl.program_id(0)\n    # ... kernel logic using USE_MASK_TOKEN ...\n    if USE_MASK_TOKEN:\n        # sample from anchor logic\n        ...",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/triton/spec_decode/utils.py",
+      "line": 96,
+      "code": "import triton\nimport triton.language as tl\n\n\n# Aligned with vllm upstream naming convention\nSAMPLE_FROM_ANCHOR = tl.constexpr(1)\n\n\n@triton.jit\ndef _prepare_dflash_inputs_kernel_ascend(\n    # ... kernel parameters ...\n    SAMPLE_FROM_ANCHOR: tl.constexpr,\n):\n    \"\"\"Prepare inputs for DFlash speculative decoding.\"\"\"\n    pid = tl.program_id(0)\n    # ... kernel logic using SAMPLE_FROM_ANCHOR ...\n    if SAMPLE_FROM_ANCHOR:\n        # sample from anchor logic\n        ...",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/triton/spec_decode/utils.py\n+++ b/vllm_ascend/ops/triton/spec_decode/utils.py\n@@ -2,18 +2,18 @@\n import triton.language as tl\n \n \n-# Custom naming — does not follow vllm convention\n-USE_MASK_TOKEN = tl.constexpr(1)\n+# Aligned with vllm upstream naming convention\n+SAMPLE_FROM_ANCHOR = tl.constexpr(1)\n \n \n @triton.jit\n def _prepare_dflash_inputs_kernel_ascend(\n     # ... kernel parameters ...\n-    USE_MASK_TOKEN: tl.constexpr,\n+    SAMPLE_FROM_ANCHOR: tl.constexpr,\n ):\n     \"\"\"Prepare inputs for DFlash speculative decoding.\"\"\"\n     pid = tl.program_id(0)\n-    # ... kernel logic using USE_MASK_TOKEN ...\n-    if USE_MASK_TOKEN:\n+    # ... kernel logic using SAMPLE_FROM_ANCHOR ...\n+    if SAMPLE_FROM_ANCHOR:\n         # sample from anchor logic\n         ...",
+      "stats": "1 file changed, +5 lines, -5 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

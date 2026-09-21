@@ -1,0 +1,69 @@
+{
+  "report_id": "PR10977_001",
+  "pr_number": 10977,
+  "pr_title": "[Feature][LoRA][MoE] Support LoRA with unquantified MoE models",
+  "pr_status": "merged",
+  "merged_at": "2026-07-09T00:42:39Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "blocker",
+  "affected_files": [
+    "vllm_ascend/ops/fused_moe/moe_mlp.py:381"
+  ],
+  "landing_sha": "46175ec",
+  "source_quote": "If `lora_context` is not None (meaning a LoRA adapter is active), but `expanded_row_idx` or `topk_ids` is None (which can happen if an unsupported communication method like MC2 or AllToAll is used), the current implementation silently skips applying the LoRA adapter. This leads to silently incorrect outputs where the base model is run instead of the adapter.\n\nWe should raise an explicit `AssertionError` if `lora_context` is active but the required routing metadata is missing, to prevent silent correctness bugs and guide the user to a supported configuration.",
+  "correspondence": [
+    {
+      "review_quote": "PR 中原本的逻辑用了 \"guard `and` guard `and` guard → enable feature\" 的写法，这种写法的问题是：**第一个 guard 表达了\"用户希望用这个 feature\"的意图，后面的 guard 是\"运行环境是否满足\"**——当\"意图成立但能力不满足\"时，不能默默地把功能关掉，否则排障时看不到任何报错/日志，只能靠\"为什么我的 lora 不生效\"去二分。\n\ngemini 明确把这一条标为 **critical**，并给出拆分的 if 结构：**第一 if 判意图（lora_context 非空），第二 if 判能力，不满足 raise + 解释 + ",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "46175ec",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "凡是代码中出现形如 `if feature_enabled_and_requested_by_user and capability_present: do_feature()` 的判定，必须**按意图/能力拆分**：",
+    "context": "",
+    "checkpoints": [
+      "扫描所有 `and` 拼接的 feature guard：`if use_xxx and can_do_xxx and has_dep_yyy: apply_xxx()`",
+      "特别留意 LoRA / 量化 / fused kernel / 通信后端 / TP PP 等\"有开关 + 有硬依赖\"的代码",
+      "错误信息是否包含 \"what's missing / why missing / how to fix\" 三段 —— 最差也要给出前两段",
+      "把 `if feature_ctx is not None: ... if capability is None: raise` 的组合作为推荐模板",
+      "对 unit-test：必须加\"启用了 LoRA 但传 expanded_row_idx=None\" 的场景测试，预期 raise AssertionError"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/fused_moe/moe_mlp.py",
+      "line": 370,
+      "code": "def unquant_apply_mlp(\n    hidden_states: torch.Tensor,\n    w1: torch.Tensor,\n    w2: torch.Tensor,\n    topk_weights: torch.Tensor,\n    topk_ids: torch.Tensor,\n    expanded_row_idx: Optional[torch.Tensor] = None,\n    lora_context: Optional[LoRAContext] = None,\n    **kwargs,\n) -> torch.Tensor:\n    \"\"\"Apply MLP for unquantified MoE models with optional LoRA.\"\"\"\n    lora_routing = None\n    apply_lora = (lora_context is not None\n                  and expanded_row_idx is not None\n                  and topk_ids is not None)\n    if apply_lora:\n        from vllm_ascend.lora.fused_moe import (moe_lora_apply_w2,\n                                                  moe_lora_apply_w13)\n        # ... LoRA w13/w2 delta injection logic ...\n    # 当 lora_context 非空但 expanded_row_idx 为 None 时，\n    # apply_lora 为 False → LoRA 被静默跳过，\n    # 用户得到 base model 输出却以为是 adapter 输出\n    return output",
+      "context": "If `lora_context` is not None (meaning a LoRA adapter is active), but `expanded_row_idx` or `topk_ids` is None (which can happen if an unsupported communication method like MC2 or AllToAll is used), the current implementation silently skips applying the LoRA adapter. This leads to silently incorrect outputs where the base model is run instead of the adapter."
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/fused_moe/moe_mlp.py",
+      "line": 370,
+      "code": "def unquant_apply_mlp(\n    hidden_states: torch.Tensor,\n    w1: torch.Tensor,\n    w2: torch.Tensor,\n    topk_weights: torch.Tensor,\n    topk_ids: torch.Tensor,\n    expanded_row_idx: Optional[torch.Tensor] = None,\n    lora_context: Optional[LoRAContext] = None,\n    **kwargs,\n) -> torch.Tensor:\n    \"\"\"Apply MLP for unquantified MoE models with optional LoRA.\"\"\"\n    apply_lora = lora_context is not None\n    lora_routing = None\n    if apply_lora:\n        if expanded_row_idx is None or topk_ids is None:\n            raise AssertionError(\n                \"MoE LoRA requires expanded_row_idx and topk_ids metadata, \"\n                \"which are only available in AllGather communication mode. \"\n                \"Please ensure you are running in a supported configuration.\"\n            )\n        from vllm_ascend.lora.fused_moe import (moe_lora_apply_w2,\n                                                  moe_lora_apply_w13)\n        # ... LoRA w13/w2 delta injection logic ...\n    return output",
+      "context": "If `lora_context` is not None (meaning a LoRA adapter is active), but `expanded_row_idx` or `topk_ids` is None (which can happen if an unsupported communication method like MC2 or AllToAll is used), the current implementation silently skips applying the LoRA adapter. This leads to silently incorrect outputs where the base model is run instead of the adapter."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/fused_moe/moe_mlp.py\n+++ b/vllm_ascend/ops/fused_moe/moe_mlp.py\n@@ -9,15 +9,16 @@\n     **kwargs,\n ) -> torch.Tensor:\n     \"\"\"Apply MLP for unquantified MoE models with optional LoRA.\"\"\"\n+    apply_lora = lora_context is not None\n     lora_routing = None\n-    apply_lora = (lora_context is not None\n-                  and expanded_row_idx is not None\n-                  and topk_ids is not None)\n     if apply_lora:\n+        if expanded_row_idx is None or topk_ids is None:\n+            raise AssertionError(\n+                \"MoE LoRA requires expanded_row_idx and topk_ids metadata, \"\n+                \"which are only available in AllGather communication mode. \"\n+                \"Please ensure you are running in a supported configuration.\"\n+            )\n         from vllm_ascend.lora.fused_moe import (moe_lora_apply_w2,\n                                                   moe_lora_apply_w13)\n         # ... LoRA w13/w2 delta injection logic ...\n-    # 当 lora_context 非空但 expanded_row_idx 为 None 时，\n-    # apply_lora 为 False → LoRA 被静默跳过，\n-    # 用户得到 base model 输出却以为是 adapter 输出\n     return output",
+      "stats": "1 file changed, +7 lines, -6 lines",
+      "key_changes": [
+        "新增: apply_lora = lora_context is not None",
+        "移除: apply_lora = (lora_context is not None",
+        "移除: and expanded_row_idx is not None",
+        "移除: and topk_ids is not None)",
+        "新增: if expanded_row_idx is None or topk_ids is None:",
+        "新增: raise AssertionError(",
+        "新增: \"MoE LoRA requires expanded_row_idx and topk_ids metadata, \"",
+        "新增: \"which are only available in AllGather communication mode. \"",
+        "新增: \"Please ensure you are running in a supported configuration.\"",
+        "新增: )"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

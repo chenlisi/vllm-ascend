@@ -1,0 +1,71 @@
+{
+  "report_id": "PR10148_001",
+  "pr_number": 10148,
+  "pr_title": "[Doc][Misc] Rewrite Qwen3-30B-A3B and Qwen3-Coder-30B-A3B tutorials with new template",
+  "pr_status": "merged",
+  "merged_at": "2026-06-29T06:23:34Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/models/Qwen3-30B-A3B.md:21",
+    "docs/source/tutorials/models/Qwen3-30B-A3B.md:173",
+    "docs/source/tutorials/models/Qwen3-30B-A3B.md:148",
+    "docs/source/tutorials/models/Qwen3-30B-A3B.md:235",
+    "docs/source/tutorials/models/Qwen3-30B-A3B.md:265",
+    "docs/source/tutorials/models/Qwen3-30B-A3B.md:282",
+    "docs/source/tutorials/models/Qwen3-30B-A3B.md:36",
+    "docs/source/tutorials/models/Qwen3-30B-A3B.md:234",
+    "docs/source/tutorials/models/Qwen3-30B-A3B.md:332",
+    "docs/source/tutorials/models/Qwen3-30B-A3B.md:369",
+    "docs/source/tutorials/models/Qwen3-30B-A3B.md:60"
+  ],
+  "landing_sha": "59a9a12",
+  "source_quote": "共享盘和用户配置强相关，不建议(e.g., `/root/.cache/`)使用具体例子。",
+  "correspondence": [
+    {
+      "review_quote": "本 PR 共收到 2 位人工评审人的 18 条意见，涵盖文档的准确性、规范性和完整性。CXY-Katrina 从内容准确性角度提出了 14 条意见（包括路径示例、精度描述、硬件描述、重复内容等），herizhen 从模板对齐角度提出了 4 条意见（章节标题、tab-set 语法）。作者通过 35 个 commit 逐步修复了所有问题。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "59a9a12",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "部署教程中不应使用具体的文件路径（如 `/root/.cache/`），应使用通用占位符或变量，因为路径与用户配置强相关。",
+    "context": "",
+    "checkpoints": [
+      "检查文档中是否存在硬编码的具体路径",
+      "确认是否使用了 `<your_path>` 或 `your_model_path` 等占位符",
+      "验证共享目录路径是否避免了具体示例"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/Qwen3-30B-A3B.md",
+      "line": 21,
+      "code": "<!-- docs/source/tutorials/models/Qwen3-30B-A3B.md:36 -->\n<!-- 第 1 章 Introduction 中的模型描述 -->\n\nQwen3-30B-A3B is a Mixture-of-Experts (MoE) model with 30B total parameters\nand 3B active parameters. The model weights are loaded in FP32 precision.\nThe total disk space required is approximately 60GB (FP32 format).",
+      "context": "共享盘和用户配置强相关，不建议(e.g., `/root/.cache/`)使用具体例子。"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/Qwen3-30B-A3B.md",
+      "line": 21,
+      "code": "<!-- docs/source/tutorials/models/Qwen3-30B-A3B.md:36 -->\n<!-- 第 1 章 Introduction 中的模型描述 -->\n\nQwen3-30B-A3B is a Mixture-of-Experts (MoE) model with 30B total parameters\nand 3B active parameters. The model weights are loaded in BF16 precision.\nThe total disk space required is approximately 60GB (BF16 format).",
+      "context": "共享盘和用户配置强相关，不建议(e.g., `/root/.cache/`)使用具体例子。"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/Qwen3-30B-A3B.md\n+++ b/docs/source/tutorials/models/Qwen3-30B-A3B.md\n@@ -2,5 +2,5 @@\n <!-- 第 1 章 Introduction 中的模型描述 -->\n \n Qwen3-30B-A3B is a Mixture-of-Experts (MoE) model with 30B total parameters\n-and 3B active parameters. The model weights are loaded in FP32 precision.\n-The total disk space required is approximately 60GB (FP32 format).\n+and 3B active parameters. The model weights are loaded in BF16 precision.\n+The total disk space required is approximately 60GB (BF16 format).",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "移除: and 3B active parameters. The model weights are loaded in FP32 precision.",
+        "移除: The total disk space required is approximately 60GB (FP32 format).",
+        "新增: and 3B active parameters. The model weights are loaded in BF16 precision.",
+        "新增: The total disk space required is approximately 60GB (BF16 format)."
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

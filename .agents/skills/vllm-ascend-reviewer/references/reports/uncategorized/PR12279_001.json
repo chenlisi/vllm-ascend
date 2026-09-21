@@ -1,0 +1,45 @@
+{
+  "report_id": "PR12279_001",
+  "pr_number": 12279,
+  "pr_title": "[CI] Prebuild missing CSRC caches on CPU runners for PR tests",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "12ec9d0",
+  "source_quote": "Why were two specific auxiliary files detected? Please explain in detail.\nThese two files are intentionally treated as workflow control inputs rather than source inputs. `source_ref` may point to a fork or an older commit that does not contain helpers compatible with the running workflow. The separate sparse checkout keeps the target schema and resolver aligned with `_ensure_csrc_cache.yaml`, isolates them from the source tree that will be rebased and hashed, and also supports cross-repository callers without overwriting their checkout. **I added a rationale comment above this step to make the separation explicit.**\nI think a comment needs to be added here. The main branch has incorporated code modifications for the C operator to rebuild the cache, which results in cache updates. However, during the update process, we did not obtain the new cache, so we need to rebase the code and rebuild it.\nAgreed. The rebase ensures that csrc changes already merged into the base branch participate in both the cache hash and the actual build. The caller resolves the base SHA once and passes that immutable snapshot to cache lookup, cache build, and test jobs, so a moving base branch cannot make the producer and consumer use different source trees. **I added comments next to the rebase and source-snapshot checks to document this behavior.**",
+  "correspondence": [],
+  "verification": {
+    "merged": true,
+    "modified_commit": "12ec9d0",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": ".github/workflows/_ensure_csrc_cache.yaml",
+      "line": 38,
+      "code": "      - name: Checkout source repository\n        uses: actions/checkout@v7\n        with:\n          ref: ${{ inputs.source_ref }}\n          fetch-depth: 0\n\n      - name: Checkout cache workflow helpers\n        uses: actions/checkout@v7\n        with:\n          ref: ${{ inputs.source_ref }}\n          path: .csrc-cache-workflow\n          sparse-checkout: |\n            .github/workflows/_ensure_csrc_cache.yaml\n            .github/workflows/scripts/resolve_csrc_cache_targets.py\n\n      - name: Setup Python\n        uses: actions/setup-python@v5\n        with:\n          python-version: '3.10'",
+      "context": "修改前代码 (yaml)"
+    },
+    "pattern": {
+      "file": ".github/workflows/_ensure_csrc_cache.yaml",
+      "line": 38,
+      "code": "      - name: Checkout source repository\n        uses: actions/checkout@v7\n        with:\n          ref: ${{ inputs.source_ref }}\n          fetch-depth: 0\n\n      # Treat target metadata and its resolver as workflow code rather than\n      # source inputs. source_ref may point to a fork or an older commit, so a\n      # separate sparse checkout keeps the helpers compatible with this workflow\n      # without modifying the source snapshot that will be hashed.\n      - name: Checkout cache workflow helpers\n        uses: actions/checkout@v7\n        with:\n          ref: ${{ inputs.source_ref }}\n          path: .csrc-cache-workflow\n          sparse-checkout: |\n            .github/workflows/_ensure_csrc_cache.yaml\n            .github/workflows/scripts/resolve_csrc_cache_targets.py\n\n      - name: Setup Python\n        uses: actions/setup-python@v5\n        with:\n          python-version: '3.10'",
+      "context": "修改后代码 (yaml)"
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/_ensure_csrc_cache.yaml\n+++ b/.github/workflows/_ensure_csrc_cache.yaml\n@@ -4,6 +4,10 @@\n           ref: ${{ inputs.source_ref }}\n           fetch-depth: 0\n \n+      # Treat target metadata and its resolver as workflow code rather than\n+      # source inputs. source_ref may point to a fork or an older commit, so a\n+      # separate sparse checkout keeps the helpers compatible with this workflow\n+      # without modifying the source snapshot that will be hashed.\n       - name: Checkout cache workflow helpers\n         uses: actions/checkout@v7\n         with:",
+      "stats": "1 file changed, +4 lines, -0 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "yaml",
+    "_status": "pending_llm_extract"
+  }
+}

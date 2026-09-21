@@ -1,0 +1,57 @@
+{
+  "report_id": "PR5130_001",
+  "pr_number": 5130,
+  "pr_title": "[2/N][Pangu][MoE] Remove Pangu Related Code",
+  "pr_status": "merged",
+  "merged_at": "2025-12-19T01:00:07Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/quantization/w8a8.py:206"
+  ],
+  "landing_sha": "f307977",
+  "source_quote": "this class can be removed as well? https://github.com/vllm-project/vllm-ascend/pull/1477",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan 指出 w8a8.py 中的 class 也可以一并移除（参考 PR #1477）。作者通过 commit `f307977` 移除 C8 相关代码，1/1 建议全部落地。",
+      "patch_snippet": "commit `f307977`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f307977",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "移除某个功能时，应彻底清理所有相关代码，包括关联的 class、引用和测试，避免残留废弃代码。",
+    "context": "",
+    "checkpoints": [
+      "移除功能时，检查是否所有相关 class 都已清理",
+      "检查其他 PR 中是否有可以一并清理的关联代码"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/quantization/w8a8.py",
+      "line": 0,
+      "code": "class AscendW8A8LinearMethod(QuantizeMethodBase):\n    \"\"\"W8A8 linear method for Ascend.\"\"\"\n\n    def process_weights_after_loading(self, ...):\n        ...\n\n    def apply(self, ...):\n        ...\n\n\nclass AscendW8A8FusedMoEMethod:  # L206: 参考 PR #1477，可一并移除\n    \"\"\"C8 fused MoE method for Pangu models.\"\"\"\n\n    def __init__(self, ...):\n        self.quant_config = quant_config\n\n    def create_weights(self, ...):\n        ...\n\n    def apply(self, ...):\n        ...",
+      "context": "this class can be removed as well? https://github.com/vllm-project/vllm-ascend/pull/1477"
+    },
+    "pattern": {
+      "file": "vllm_ascend/quantization/w8a8.py",
+      "line": 0,
+      "code": "class AscendW8A8LinearMethod(QuantizeMethodBase):\n    \"\"\"W8A8 linear method for Ascend.\"\"\"\n\n    def process_weights_after_loading(self, ...):\n        ...\n\n    def apply(self, ...):\n        ...",
+      "context": "this class can be removed as well? https://github.com/vllm-project/vllm-ascend/pull/1477"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/quantization/w8a8.py\n+++ b/vllm_ascend/quantization/w8a8.py\n@@ -1,21 +1,8 @@\n \n     def apply(self, ...):\n         ...\n-\n-\n-class AscendW8A8FusedMoEMethod:  # L206: 参考 PR #1477，可一并移除\n-    \"\"\"C8 fused MoE method for Pangu models.\"\"\"\n-\n-    def __init__(self, ...):\n-        self.quant_config = quant_config\n-\n-    def create_weights(self, ...):\n-        ...\n-\n-    def apply(self, ...):\n-        ...",
+      "stats": "1 file changed, +0 lines, -13 lines",
+      "key_changes": [
+        "删除了第 9-21 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

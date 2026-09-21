@@ -1,0 +1,89 @@
+{
+  "report_id": "PR9533_001",
+  "pr_number": 9533,
+  "pr_title": "[Feature][main][new] Support Hybrid & Mamba Align Prefix Cache in Ascend Atore",
+  "pr_status": "merged",
+  "merged_at": "2026-06-03T13:28:23Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py:317",
+    "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py:753",
+    "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/pool_scheduler.py:532",
+    "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/pool_scheduler.py:538",
+    "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/pool_scheduler.py:566"
+  ],
+  "landing_sha": "ff21875",
+  "source_quote": "MengqingCao 行级评论（2026-06-02 09:35:41），评后 sha `ff21875` 体现修改。\nMengqingCao 行级评论（2026-06-02 09:36:20），评后 sha `ff21875` 体现修改。\nMengqingCao 行级评论（2026-06-02 09:46:44），评后 sha `ff21875` 体现修改。\nMengqingCao 行级评论（2026-06-02 09:48:28），评后 sha `ff21875` 体现修改。\nMengqingCao 行级评论（2026-06-02 09:52:38），评后 sha `ff21875` 体现修改。\nMengqingCao 行级评论（2026-06-02 11:00:32），评后 sha `ff21875` 体现修改。\nMengqingCao 行级评论（2026-06-02 11:01:31），评后 sha `ff21875` 体现修改。",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao: vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py:317",
+      "patch_snippet": "评后sha ff21875 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py:753",
+      "patch_snippet": "评后sha ff21875 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/pool_scheduler.py:532",
+      "patch_snippet": "评后sha ff21875 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/pool_scheduler.py:538",
+      "patch_snippet": "评后sha ff21875 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/pool_scheduler.py:566",
+      "patch_snippet": "评后sha ff21875 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py:317",
+      "patch_snippet": "评后sha ff21875 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/pool_scheduler.py:566",
+      "patch_snippet": "评后sha ff21875 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "ff21875",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 Ascend Store 的 KV transfer 实现中，Hybrid 和 Mamba 模型的前缀缓存对齐需要确保 config_data 配置和 pool_scheduler 调度逻辑中的块边界计算一致，避免块对齐偏差导致缓存命中错误。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py",
+      "line": 317,
+      "code": "# vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py:320\nblock_stride = group_block_stride[i] if group_block_stride else group_block_stride[i]",
+      "context": "MengqingCao 行级评论（2026-06-02 09:35:41），评后 sha `ff21875` 体现修改。\nMengqingCao 行级评论（2026-06-02 09:36:20），评后 sha `ff21875` 体现修改。\nMengqingCao 行级评论（2026-06-02 09:46:44），评后 sha `ff21875` 体现修改。\nMengqingCao 行级评论（"
+    },
+    "pattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py",
+      "line": 317,
+      "code": "# vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py:320\nblock_stride = group_block_stride[i] if group_block_stride else group_block_len[i]",
+      "context": "MengqingCao 行级评论（2026-06-02 09:35:41），评后 sha `ff21875` 体现修改。\nMengqingCao 行级评论（2026-06-02 09:36:20），评后 sha `ff21875` 体现修改。\nMengqingCao 行级评论（2026-06-02 09:46:44），评后 sha `ff21875` 体现修改。\nMengqingCao 行级评论（"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py\n+++ b/vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py\n@@ -1,2 +1,2 @@\n # vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py:320\n-block_stride = group_block_stride[i] if group_block_stride else group_block_stride[i]\n+block_stride = group_block_stride[i] if group_block_stride else group_block_len[i]\n",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "-block_stride = group_block_stride[i] if group_block_stride else group_block_stride[i]",
+        "+block_stride = group_block_stride[i] if group_block_stride else group_block_len[i]"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

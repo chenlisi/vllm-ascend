@@ -1,0 +1,59 @@
+{
+  "report_id": "PR14023_002",
+  "pr_number": 14023,
+  "pr_title": "[Feature][MRV2] Support basic GQA prefill context parallelism",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/v2/pcp_manager.py:59"
+  ],
+  "landing_sha": "c4596bf",
+  "source_quote": "Do we really have this limitation?",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/worker/v2/pcp_manager.py:59",
+      "patch_snippet": "评后sha c4596bf 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "c4596bf",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "添加功能限制时，应确保限制是必要的。如果评审者质疑限制的必要性，应重新评估并移除不必要的限制。",
+    "context": "",
+    "checkpoints": [
+      "识别代码中的限制条件（NotImplementedError、assert 等）",
+      "确认限制是否有明确的技术原因",
+      "如果限制过于宽泛，应缩小限制范围"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/v2/pcp_manager.py",
+      "line": 59,
+      "code": "# vllm_ascend/worker/v2/pcp_manager.py\n# AscendPCPManager.validate_config 方法，约第 33-56 行\nclass AscendPCPManager(PCPManager):\n    \"\"\"PCP manager that refreshes Ascend-only local-batch metadata.\"\"\"\n\n    @staticmethod\n    def validate_config(\n        vllm_config: VllmConfig,\n        supports_mm_inputs: bool,\n    ) -> None:\n        \"\"\"Validate the Ascend MRV2 MLA and GQA PCP implementations.\"\"\"\n        parallel_config = vllm_config.parallel_config\n        model_config = vllm_config.model_config\n        if parallel_config.prefill_context_parallel_size <= 1:\n            return\n\n        if parallel_config.decode_context_parallel_size > 1:\n            raise NotImplementedError(\"Ascend MRV2 does not support PCP and DCP simultaneously yet.\")\n        if parallel_config.pipeline_parallel_size > 1:\n            raise NotImplementedError(\"Ascend MRV2 PCP does not support PP yet.\")\n        if model_config.is_encoder_decoder:\n            raise NotImplementedError(\"Ascend MRV2 PCP does not support encoder-decoder models yet.\")\n        if supports_mm_inputs:\n            raise NotImplementedError(\"Ascend MRV2 PCP does not support MM inputs yet.\")\n        if vllm_config.lora_config is not None:\n            raise NotImplementedError(\"Ascend MRV2 PCP does not support LoRA yet.\")",
+      "context": "vllm_ascend/worker/v2/pcp_manager.py AscendPCPManager.validate_config 方法，约第 33-56 行"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/v2/pcp_manager.py",
+      "line": 59,
+      "code": "# vllm_ascend/worker/v2/model_runner.py\n# NPUModelRunner.__init__ 内，约第 130-132 行\n        parallel_config = vllm_config.parallel_config\n        # ✅ 只禁止 DCP（确实不支持），PCP 已支持\n        if parallel_config.decode_context_parallel_size > 1:\n            raise NotImplementedError(\n                \"Decode Context parallelism is not supported by Ascend NPU model runner v2.\"\n            )",
+      "context": "vllm_ascend/worker/v2/model_runner.py NPUModelRunner.__init__ 内，约第 130-132 行 ✅ 只禁止 DCP（确实不支持），PCP 已支持"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/v2/pcp_manager.py\n+++ b/vllm_ascend/worker/v2/pcp_manager.py\n@@ -1,26 +1,8 @@\n-# vllm_ascend/worker/v2/pcp_manager.py\n-# AscendPCPManager.validate_config 方法，约第 33-56 行\n-class AscendPCPManager(PCPManager):\n-    \"\"\"PCP manager that refreshes Ascend-only local-batch metadata.\"\"\"\n-\n-    @staticmethod\n-    def validate_config(\n-        vllm_config: VllmConfig,\n-        supports_mm_inputs: bool,\n-    ) -> None:\n-        \"\"\"Validate the Ascend MRV2 MLA and GQA PCP implementations.\"\"\"\n+# vllm_ascend/worker/v2/model_runner.py\n+# NPUModelRunner.__init__ 内，约第 130-132 行\n         parallel_config = vllm_config.parallel_config\n-        model_config = vllm_config.model_config\n-        if parallel_config.prefill_context_parallel_size <= 1:\n-            return\n-\n+        # ✅ 只禁止 DCP（确实不支持），PCP 已支持\n         if parallel_config.decode_context_parallel_size > 1:\n-            raise NotImplementedError(\"Ascend MRV2 does not support PCP and DCP simultaneously yet.\")\n-        if parallel_config.pipeline_parallel_size > 1:\n-            raise NotImplementedError(\"Ascend MRV2 PCP does not support PP yet.\")\n-        if model_config.is_encoder_decoder:\n-            raise NotImplementedError(\"Ascend MRV2 PCP does not support encoder-decoder models yet.\")\n-        if supports_mm_inputs:\n-            raise NotImplementedError(\"Ascend MRV2 PCP does not support MM inputs yet.\")\n-        if vllm_config.lora_config is not None:\n-            raise NotImplementedError(\"Ascend MRV2 PCP does not support LoRA yet.\")\n+            raise NotImplementedError(\n+                \"Decode Context parallelism is not supported by Ascend NPU model runner v2.\"\n+            )\n",
+      "stats": "1 file changed, +6 lines, -24 lines",
+      "key_changes": [
+        "移除: raise NotImplementedError(\"Ascend MRV2 PCP does not support encoder-decoder mode",
+        "新增: )",
+        "新增: raise NotImplementedError("
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "report_id": "PR10069_001",
+  "pr_number": 10069,
+  "pr_title": "[Misc][Ops]add trion ops log",
+  "pr_status": "merged",
+  "merged_at": "2026-06-10T07:22:39Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/triton/layernorm_gated.py:148",
+    "vllm_ascend/ops/triton/mamba/causal_conv1d.py:665"
+  ],
+  "landing_sha": "d323a33",
+  "source_quote": "Why do we only raise RuntimeError here with logger.error but print error log above (e.g., in `vllm_ascend/ops/triton/mamba/causal_conv1d.py`).",
+  "correspondence": [
+    {
+      "review_quote": "linfeng-yuan 提出两个问题：(1) 日志行为不一致——`layernorm_gated.py` 中使用 `logger.error` + `raise RuntimeError`，而 `causal_conv1d.py` 中仅使用 `logger.warning` 打印日志，应统一处理方式；(2) `causal_conv1d.py` 中硬编码了 vector core 数量（CORE_HINT），这是不好的实现，应该使用 `get_vectorcore_num()` 动态获取。作者在 commit `d323a33` 中修改了两个文件：`layernorm_gated.py` (",
+      "patch_snippet": "commit `d323a33`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "d323a33",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在同一模块（如 Triton Ops）中，错误处理的方式应保持一致。如果某些文件使用 `logger.error` + `raise RuntimeError`，其他文件也应采用相同模式，避免部分位置仅打印 warning 而不抛异常。",
+    "context": "",
+    "checkpoints": [
+      "检查同一模块内各文件的错误处理模式是否一致",
+      "确认 `logger.error` 和 `raise RuntimeError` 是否配套使用",
+      "验证是否存在某些位置仅打印日志而不抛异常的情况"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/triton/layernorm_gated.py",
+      "line": 148,
+      "code": "# vllm_ascend/ops/triton/layernorm_gated.py\n# triton_rms_norm_gated() 函数内，当 Triton 不可用时的错误处理\n\ndef triton_rms_rms_norm_gated(...):\n    if not HAS_TRITON:\n        # 此处使用 logger.error + raise RuntimeError\n        logger.error(\"[TritonOps] layernorm_gated: Triton is not available.\")\n        raise RuntimeError(\"Triton is required for layernorm_gated\")\n    # ... triton kernel 调用逻辑 ...\n\n# vllm_ascend/ops/triton/mamba/causal_conv1d.py\n# causal_conv1d_update_npu() 函数内，错误处理方式不一致\n# gemini-code-assist[bot] 还指出此处使用了 logger.warning_once（不存在的方法）\n\ndef causal_conv1d_update_npu(...):\n    if not HAS_TRITON:\n        # 仅使用 logger.warning 打印日志，不抛异常（与 layernorm_gated.py 不一致）\n        logger.warning_once(  # gemini 指出：warning_once 不存在，会 AttributeError\n            \"[TritonOps] causal_conv1d: Triton is not available.\")\n    # ... 继续执行，不抛异常 ...",
+      "context": "Why do we only raise RuntimeError here with logger.error but print error log above (e.g., in `vllm_ascend/ops/triton/mamba/causal_conv1d.py`)."
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/triton/layernorm_gated.py",
+      "line": 148,
+      "code": "# vllm_ascend/ops/triton/layernorm_gated.py\n# triton_rms_norm_gated() 函数内（+4 行日志增强）\n\ndef triton_rms_norm_gated(...):\n    if not HAS_TRITON:\n        logger.error(\"[TritonOps] layernorm_gated: Triton is not available.\")\n        raise RuntimeError(\"Triton is required for layernorm_gated\")\n    logger.debug(  # 新增 debug 日志记录输入 shape（+4 行）\n        f\"[TritonOps] layernorm_gated: input.shape={input.shape}\")\n    # ... triton kernel 调用逻辑 ...\n\n# vllm_ascend/ops/triton/mamba/causal_conv1d.py\n# causal_conv1d_update_npu() 函数内（统一错误处理，修复 warning_once）\n\ndef causal_conv1d_update_npu(...):\n    if not HAS_TRITON:\n        # 统一为 logger.error + raise RuntimeError（与 layernorm_gated.py 一致）\n        logger.error(\"[TritonOps] causal_conv1d: Triton is not available.\")\n        raise RuntimeError(\"Triton is required for causal_conv1d\")\n    # ... triton kernel 调用逻辑 ...",
+      "context": "Why do we only raise RuntimeError here with logger.error but print error log above (e.g., in `vllm_ascend/ops/triton/mamba/causal_conv1d.py`)."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/triton/layernorm_gated.py\n+++ b/vllm_ascend/ops/triton/layernorm_gated.py\n@@ -1,20 +1,20 @@\n # vllm_ascend/ops/triton/layernorm_gated.py\n-# triton_rms_norm_gated() 函数内，当 Triton 不可用时的错误处理\n+# triton_rms_norm_gated() 函数内（+4 行日志增强）\n \n-def triton_rms_rms_norm_gated(...):\n+def triton_rms_norm_gated(...):\n     if not HAS_TRITON:\n-        # 此处使用 logger.error + raise RuntimeError\n         logger.error(\"[TritonOps] layernorm_gated: Triton is not available.\")\n         raise RuntimeError(\"Triton is required for layernorm_gated\")\n+    logger.debug(  # 新增 debug 日志记录输入 shape（+4 行）\n+        f\"[TritonOps] layernorm_gated: input.shape={input.shape}\")\n     # ... triton kernel 调用逻辑 ...\n \n # vllm_ascend/ops/triton/mamba/causal_conv1d.py\n-# causal_conv1d_update_npu() 函数内，错误处理方式不一致\n-# gemini-code-assist[bot] 还指出此处使用了 logger.warning_once（不存在的方法）\n+# causal_conv1d_update_npu() 函数内（统一错误处理，修复 warning_once）\n \n def causal_conv1d_update_npu(...):\n     if not HAS_TRITON:\n-        # 仅使用 logger.warning 打印日志，不抛异常（与 layernorm_gated.py 不一致）\n-        logger.warning_once(  # gemini 指出：warning_once 不存在，会 AttributeError\n-            \"[TritonOps] causal_conv1d: Triton is not available.\")\n-    # ... 继续执行，不抛异常 ...\n+        # 统一为 logger.error + raise RuntimeError（与 layernorm_gated.py 一致）\n+        logger.error(\"[TritonOps] causal_conv1d: Triton is not available.\")\n+        raise RuntimeError(\"Triton is required for causal_conv1d\")\n+    # ... triton kernel 调用逻辑 ...",
+      "stats": "1 file changed, +9 lines, -9 lines",
+      "key_changes": [
+        "移除: # triton_rms_norm_gated() 函数内，当 Triton 不可用时的错误处理",
+        "新增: # triton_rms_norm_gated() 函数内（+4 行日志增强）",
+        "移除: def triton_rms_rms_norm_gated(...):",
+        "新增: def triton_rms_norm_gated(...):",
+        "移除: # 此处使用 logger.error + raise RuntimeError",
+        "新增: logger.debug(  # 新增 debug 日志记录输入 shape（+4 行）",
+        "新增: f\"[TritonOps] layernorm_gated: input.shape={input.shape}\")",
+        "移除: # causal_conv1d_update_npu() 函数内，错误处理方式不一致",
+        "移除: # gemini-code-assist[bot] 还指出此处使用了 logger.warning_once（不存在的方法）",
+        "新增: # causal_conv1d_update_npu() 函数内（统一错误处理，修复 warning_once）"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

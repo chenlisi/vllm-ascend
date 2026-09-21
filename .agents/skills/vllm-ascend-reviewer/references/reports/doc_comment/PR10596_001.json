@@ -1,0 +1,66 @@
+{
+  "report_id": "PR10596_001",
+  "pr_number": 10596,
+  "pr_title": "[Feature]support qwen3.5+pcp+flashcomm1",
+  "pr_status": "merged",
+  "merged_at": "2026-06-18T06:30:43Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/context_parallel/attention_cp.py:884",
+    "vllm_ascend/worker/model_runner_v1.py:2182",
+    "vllm_ascend/attention/context_parallel/attention_cp.py:840"
+  ],
+  "landing_sha": "37f9b6b",
+  "source_quote": "这里是否需要断言/注释\n`assert real_num_tokens <= qkv_fla.shape[0],...`\n这里会与`_build_attn_metadata`出现分歧吗？\n需要增加一些必要的测试说明，比如你的测试结果对于你的修复场景；或者增加看护",
+  "correspondence": [
+    {
+      "review_quote": "Tflowers-0129 提出 3 条意见：(1) `attention_cp.py:884` 处是否需要添加断言或注释说明 `real_num_tokens <= qkv_fla.shape[0]`；(2) `model_runner_v1.py:2182` 处的逻辑是否会与 `_build_attn_metadata` 出现分歧；(3) `attention_cp.py:840` 处需要增加测试说明或看护。作者回复：query shape 保证 >= 真实 shape 无需冗余断言；与 `_build_attn_metadata` 不会出现分歧；测试用例需等依赖 PR 合并后补充。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "37f9b6b",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "当代码中存在关键的不变量假设（如 `real_num_tokens <= qkv_fla.shape[0]`）时，应添加断言或至少添加注释说明该假设成立的原因，以提高代码可维护性和调试效率。",
+    "context": "",
+    "checkpoints": [
+      "检查切片操作前是否有对索引范围的断言或注释",
+      "确认关键不变量是否有文档说明",
+      "对于依赖上游保证的假设，应添加注释说明来源"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/context_parallel/attention_cp.py",
+      "line": 830,
+      "code": "# ... (前序代码)\n\nclass AttentionCP(AttentionBase):\n    \"\"\"Context Parallel attention implementation for Ascend NPU.\"\"\"\n\n    def _pad_and_all_gather(\n        self,\n        qkv_fla: torch.Tensor,\n        num_tokens: int,\n        cp_size: int,\n    ) -> Tuple[torch.Tensor, int]:\n        \"\"\"Pad qkv_fla to cp_size multiple and perform all-gather.\"\"\"\n        # ... padding 逻辑\n        local_padded_num_tokens = _get_padded_num_tokens(\n            num_tokens, cp_size\n        )\n        # 修复: 使用 output_padded.shape[0] 计算 local padded token 数\n        # 原先可能使用了不准确的 num_tokens 计算\n\n        return qkv_fla, local_padded_num_tokens\n\n    def _forward_impl(\n        self,\n        qkv_fla: torch.Tensor,\n        real_num_tokens: int,\n        attn_metadata: AttentionMetadata,\n    ) -> torch.Tensor:\n        # 切片操作: real_num_tokens 与 qkv_fla.shape[0] 的关系未做断言\n        sliced = qkv_fla[:real_num_tokens]\n        # ... 后续 attention 计算\n        return output",
+      "context": "这里是否需要断言/注释"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/context_parallel/attention_cp.py",
+      "line": 830,
+      "code": "# ... (前序代码)\n\nclass AttentionCP(AttentionBase):\n    \"\"\"Context Parallel attention implementation for Ascend NPU.\"\"\"\n\n    def _pad_and_all_gather(\n        self,\n        qkv_fla: torch.Tensor,\n        num_tokens: int,\n        cp_size: int,\n    ) -> Tuple[torch.Tensor, int]:\n        \"\"\"Pad qkv_fla to cp_size multiple and perform all-gather.\"\"\"\n        # ... padding 逻辑\n        local_padded_num_tokens = output_padded.shape[0]  # 修复: 使用 output_padded.shape[0]\n        # 原先可能使用了不准确的 num_tokens 计算\n\n        return qkv_fla, local_padded_num_tokens\n\n    def _forward_impl(\n        self,\n        qkv_fla: torch.Tensor,\n        real_num_tokens: int,\n        attn_metadata: AttentionMetadata,\n    ) -> torch.Tensor:\n        # 作者回复: query 的 shape >= 真实的 shape，不需要冗余断言\n        sliced = qkv_fla[:real_num_tokens]\n        # ... 后续 attention 计算\n        return output",
+      "context": "这里是否需要断言/注释"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/context_parallel/attention_cp.py\n+++ b/vllm_ascend/attention/context_parallel/attention_cp.py\n@@ -11,10 +11,7 @@\n     ) -> Tuple[torch.Tensor, int]:\n         \"\"\"Pad qkv_fla to cp_size multiple and perform all-gather.\"\"\"\n         # ... padding 逻辑\n-        local_padded_num_tokens = _get_padded_num_tokens(\n-            num_tokens, cp_size\n-        )\n-        # 修复: 使用 output_padded.shape[0] 计算 local padded token 数\n+        local_padded_num_tokens = output_padded.shape[0]  # 修复: 使用 output_padded.shape[0]\n         # 原先可能使用了不准确的 num_tokens 计算\n \n         return qkv_fla, local_padded_num_tokens\n@@ -25,7 +22,7 @@\n         real_num_tokens: int,\n         attn_metadata: AttentionMetadata,\n     ) -> torch.Tensor:\n-        # 切片操作: real_num_tokens 与 qkv_fla.shape[0] 的关系未做断言\n+        # 作者回复: query 的 shape >= 真实的 shape，不需要冗余断言\n         sliced = qkv_fla[:real_num_tokens]\n         # ... 后续 attention 计算\n         return output",
+      "stats": "1 file changed, +2 lines, -5 lines",
+      "key_changes": [
+        "移除: local_padded_num_tokens = _get_padded_num_tokens(",
+        "移除: num_tokens, cp_size",
+        "移除: )",
+        "移除: # 修复: 使用 output_padded.shape[0] 计算 local padded token 数",
+        "新增: local_padded_num_tokens = output_padded.shape[0]  # 修复: 使用 output_padded.shape[0",
+        "移除: # 切片操作: real_num_tokens 与 qkv_fla.shape[0] 的关系未做断言",
+        "新增: # 作者回复: query 的 shape >= 真实的 shape，不需要冗余断言"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

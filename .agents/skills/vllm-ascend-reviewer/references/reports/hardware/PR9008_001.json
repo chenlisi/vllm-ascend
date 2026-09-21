@@ -1,0 +1,62 @@
+{
+  "report_id": "PR9008_001",
+  "pr_number": 9008,
+  "pr_title": "[Feature] ngram_npu implement compatilble with aync scheduler",
+  "pr_status": "merged",
+  "merged_at": "2026-05-15T08:22:42Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/model_runner_v1.py:1384"
+  ],
+  "landing_sha": "6322ffa",
+  "source_quote": "too much code about this. Can it be placed in the AscendNgramProposerNPU class?",
+  "correspondence": [
+    {
+      "review_quote": "weijinqian0: vllm_ascend/worker/model_runner_v1.py:1384",
+      "patch_snippet": "评后sha 6322ffa 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "6322ffa",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "too much code about this. Can it be placed in the AscendNgramProposerNPU class?",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 1370,
+      "code": "# the AscendNgramProposerNPU class?\"\n\nclass NPUModelRunner:\n    def __init__(self, ...):\n        # ... 其他初始化 ...\n        # AscendNgramProposerNPU 相关属性散落在 model_runner 中\n        self.token_ids_gpu_tensor = torch.empty(\n            max_num_reqs, dtype=torch.int32, device=\"npu\")\n        self.num_tokens_no_spec_gpu = torch.empty(\n            max_num_reqs, dtype=torch.int32, device=\"npu\")\n        self.discard_request_mask = torch.zeros(\n            max_num_reqs, dtype=torch.bool, device=\"npu\")\n        # async copy buffers/events\n        self._num_valid_draft_tokens_cpu = torch.empty(\n            max_num_reqs, dtype=torch.int32)\n        self._num_valid_draft_tokens_copy_stream = torch.npu.Stream()\n        self._num_valid_draft_tokens_event = torch.npu.Event()\n        self.draft_token_ids_cpu = torch.empty(\n            max_num_reqs, max_draft_tokens, dtype=torch.int32)\n        self.draft_token_ids_copy_stream = torch.npu.Stream()\n        self.draft_token_ids_event = torch.npu.Event()\n\n    def propose_draft_token_ids(self, ...):\n        # Line 1384: 大量 ngram 相关代码直接写在 model_runner 中\n        token_ids = self.token_ids_gpu_tensor[:num_reqs]\n        # ... ngram 提议逻辑 ...",
+      "context": "too much code about this. Can it be placed in the AscendNgramProposerNPU class?"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 1370,
+      "code": "# 作者 HF-001 回复: \"The code here is aligned with VLLM\"\n# 作者认为当前代码结构与 VLLM 上游保持一致，未进行位置调整\n# commit 6322ffa 主要为 push 操作，未包含针对此评审意见的代码重构\n# 代码组织位置保持不变，ngram 相关属性仍在 model_runner 中初始化\n\nclass NPUModelRunner:\n    def __init__(self, ...):\n        # ... 其他初始化 ...\n        # 代码结构与 VLLM 上游对齐，未移至 AscendNgramProposerNPU 类\n        self.token_ids_gpu_tensor = torch.empty(\n            max_num_reqs, dtype=torch.int32, device=\"npu\")\n        self.num_tokens_no_spec_gpu = torch.empty(\n            max_num_reqs, dtype=torch.int32, device=\"npu\")\n        self.discard_request_mask = torch.zeros(\n            max_num_reqs, dtype=torch.bool, device=\"npu\")\n        # async copy buffers/events\n        self._num_valid_draft_tokens_cpu = torch.empty(\n            max_num_reqs, dtype=torch.int32)\n        self._num_valid_draft_tokens_copy_stream = torch.npu.Stream()\n        self._num_valid_draft_tokens_event = torch.npu.Event()\n        self.draft_token_ids_cpu = torch.empty(\n            max_num_reqs, max_draft_tokens, dtype=torch.int32)\n        self.draft_token_ids_copy_stream = torch.npu.Stream()\n        self.draft_token_ids_event = torch.npu.Event()\n\n    def propose_draft_token_ids(self, ...):\n        # 代码结构与 VLLM 上游保持一致\n        token_ids = self.token_ids_gpu_tensor[:num_reqs]\n        # ... ngram 提议逻辑 ...",
+      "context": "too much code about this. Can it be placed in the AscendNgramProposerNPU class?"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/model_runner_v1.py\n+++ b/vllm_ascend/worker/model_runner_v1.py\n@@ -1,9 +1,12 @@\n-# the AscendNgramProposerNPU class?\"\n+# 作者 HF-001 回复: \"The code here is aligned with VLLM\"\n+# 作者认为当前代码结构与 VLLM 上游保持一致，未进行位置调整\n+# commit 6322ffa 主要为 push 操作，未包含针对此评审意见的代码重构\n+# 代码组织位置保持不变，ngram 相关属性仍在 model_runner 中初始化\n \n class NPUModelRunner:\n     def __init__(self, ...):\n         # ... 其他初始化 ...\n-        # AscendNgramProposerNPU 相关属性散落在 model_runner 中\n+        # 代码结构与 VLLM 上游对齐，未移至 AscendNgramProposerNPU 类\n         self.token_ids_gpu_tensor = torch.empty(\n             max_num_reqs, dtype=torch.int32, device=\"npu\")\n         self.num_tokens_no_spec_gpu = torch.empty(\n@@ -21,6 +24,6 @@\n         self.draft_token_ids_event = torch.npu.Event()\n \n     def propose_draft_token_ids(self, ...):\n-        # Line 1384: 大量 ngram 相关代码直接写在 model_runner 中\n+        # 代码结构与 VLLM 上游保持一致\n         token_ids = self.token_ids_gpu_tensor[:num_reqs]\n         # ... ngram 提议逻辑 ...\n",
+      "stats": "1 file changed, +6 lines, -3 lines",
+      "key_changes": [
+        "-# the AscendNgramProposerNPU class?\"",
+        "+# 作者 HF-001 回复: \"The code here is aligned with VLLM\"",
+        "+# 作者认为当前代码结构与 VLLM 上游保持一致，未进行位置调整",
+        "+# commit 6322ffa 主要为 push 操作，未包含针对此评审意见的代码重构",
+        "+# 代码组织位置保持不变，ngram 相关属性仍在 model_runner 中初始化",
+        "-        # AscendNgramProposerNPU 相关属性散落在 model_runner 中",
+        "+        # 代码结构与 VLLM 上游对齐，未移至 AscendNgramProposerNPU 类",
+        "-        # Line 1384: 大量 ngram 相关代码直接写在 model_runner 中",
+        "+        # 代码结构与 VLLM 上游保持一致"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

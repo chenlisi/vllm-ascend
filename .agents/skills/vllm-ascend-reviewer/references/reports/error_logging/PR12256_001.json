@@ -1,0 +1,64 @@
+{
+  "report_id": "PR12256_001",
+  "pr_number": 12256,
+  "pr_title": "[Feature] add synthetic mode for speculative decode",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/ops/triton/reject_sample.py:134",
+    "vllm_ascend/ops/triton/reject_sample.py:222"
+  ],
+  "landing_sha": "4d7d506",
+  "source_quote": "In Triton JIT kernels, it is highly recommended to use the bitwise/logical operator `&` instead of Python's short-circuiting `and` operator, even for scalar values. This ensures consistent behavior and avoids potential compiler-specific optimization bugs or compilation failures across different Triton versions on Ascend.",
+  "correspondence": [
+    {
+      "review_quote": "gemini-code-assist[bot]: vllm_ascend/ops/triton/reject_sample.py:134",
+      "patch_snippet": "评后sha 4d7d506 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "gemini-code-assist[bot]: vllm_ascend/ops/triton/reject_sample.py:222",
+      "patch_snippet": "评后sha 4d7d506 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "4d7d506",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在 `@triton.jit` 装饰的 kernel 函数内部，所有合成 boolean 条件（mask 合并、条件比较结果组合、accepted/rejected 标志）一律使用逐位/逻辑运算符 `&`（and）、`|`（or）、`~`（not）。即便对于\"纯 scalar、Python 语义下 short-circuit 也完全等价\"的写法也禁止——Triton 编译器可能对 `and`/`or` 产生保守分支、或产生 backend 不能处理的 IR 节点，从而引发跨版本编译失败或生成错误代码。",
+    "context": "",
+    "checkpoints": [
+      "扫描所有 `**/ops/triton/**/*.py` 文件中的 `@triton.jit` 函数体",
+      "正则 grep: `\\band\\b|\\bor\\b|\\bnot\\b` 在 jit kernel 内的使用（需排除字符串注释 / `#` 行尾注释）",
+      "重点检查 `if cond1 and cond2:`、`accepted = cmp1 and cmp2`、`mask = valid1 and valid2` 这种组合 boolean 的位置",
+      "若包含 `accepted = ... & mask`、`accept_mask = (draft == target) & mask` 这种\"一半位运算、一半 Python 逻辑\"的混合写法，必须整体改为位运算"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/triton/reject_sample.py",
+      "line": 115,
+      "code": "@triton.jit\ndef rejection_greedy_sample_spec_len_1_triton(\n    # ... 参数列表 ...\n    uniform_probs_ptr,\n    synthetic_conditional_rates_ptr,\n    draft_token_ids_ptr,\n    output_ptr,\n    n_tokens: tl.constexpr,\n    SYNTHETIC_MODE: tl.constexpr,\n):\n    offset = tl.program_id(0)\n    mask = offset < n_tokens\n    draft_token_id = tl.load(draft_token_ids_ptr + offset, mask=mask, other=-1)\n\n    if SYNTHETIC_MODE:\n        uniform_prob = tl.load(uniform_probs_ptr + offset, mask=mask, other=1.0)\n        rate = tl.load(synthetic_conditional_rates_ptr + 0)\n        # Python short-circuit `and` — 在 Triton JIT 中不安全\n        accepted = (uniform_prob < rate) and (draft_token_id >= 0)\n        tl.store(output_ptr + offset, draft_token_id, mask=accepted & mask)\n    else:\n        # 非 synthetic 分支已使用位运算\n        accept_mask = (draft_token_id >= 0) & mask\n        tl.store(output_ptr + offset, draft_token_id, mask=accept_mask)",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/triton/reject_sample.py",
+      "line": 115,
+      "code": "@triton.jit\ndef rejection_greedy_sample_spec_len_1_triton(\n    # ... 参数列表 ...\n    uniform_probs_ptr,\n    synthetic_conditional_rates_ptr,\n    draft_token_ids_ptr,\n    output_ptr,\n    n_tokens: tl.constexpr,\n    SYNTHETIC_MODE: tl.constexpr,\n):\n    offset = tl.program_id(0)\n    mask = offset < n_tokens\n    draft_token_id = tl.load(draft_token_ids_ptr + offset, mask=mask, other=-1)\n\n    if SYNTHETIC_MODE:\n        uniform_prob = tl.load(uniform_probs_ptr + offset, mask=mask, other=1.0)\n        rate = tl.load(synthetic_conditional_rates_ptr + 0)\n        # ✅ 使用位运算 & 替代 Python and\n        accepted = (uniform_prob < rate) & (draft_token_id >= 0) & mask\n        tl.store(output_ptr + offset, draft_token_id, mask=accepted)\n    else:\n        # 非 synthetic 分支保持位运算风格\n        accept_mask = (draft_token_id >= 0) & mask\n        tl.store(output_ptr + offset, draft_token_id, mask=accept_mask)",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/triton/reject_sample.py\n+++ b/vllm_ascend/ops/triton/reject_sample.py\n@@ -15,10 +15,10 @@\n     if SYNTHETIC_MODE:\n         uniform_prob = tl.load(uniform_probs_ptr + offset, mask=mask, other=1.0)\n         rate = tl.load(synthetic_conditional_rates_ptr + 0)\n-        # Python short-circuit `and` — 在 Triton JIT 中不安全\n-        accepted = (uniform_prob < rate) and (draft_token_id >= 0)\n-        tl.store(output_ptr + offset, draft_token_id, mask=accepted & mask)\n+        # ✅ 使用位运算 & 替代 Python and\n+        accepted = (uniform_prob < rate) & (draft_token_id >= 0) & mask\n+        tl.store(output_ptr + offset, draft_token_id, mask=accepted)\n     else:\n-        # 非 synthetic 分支已使用位运算\n+        # 非 synthetic 分支保持位运算风格\n         accept_mask = (draft_token_id >= 0) & mask\n         tl.store(output_ptr + offset, draft_token_id, mask=accept_mask)",
+      "stats": "1 file changed, +4 lines, -4 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

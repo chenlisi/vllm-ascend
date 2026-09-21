@@ -1,0 +1,61 @@
+{
+  "report_id": "PR2279_001",
+  "pr_number": 2279,
+  "pr_title": "Accuracy report formatting",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/e2e/models/report_template.md:17"
+  ],
+  "landing_sha": "4b7610d",
+  "source_quote": "- **vLLM Version**: vLLM: {{ vllm_version }} ([{{ vllm_commit[:7] }}](https://github.com/vllm-project/vllm/commit/{{ vllm_commit }})), **vLLM Ascend Version**: {{ vllm_ascend_version }} ([{{ vllm_ascend_commit[:7] }}](https://github.com/vllm-project/vllm-ascend/commit/{{ vllm_ascend_commit }}))\n- **Software Environment**: **CANN**: {{ cann_version }}, **PyTorch**: {{ torch_version }}, **torch-npu**: {{ torch_npu_version }}\n- **Hardware Environment**: Atlas A2 Series\n- **Parallel mode**: {{ parallel_mode }}\n- **Execution mode**: ACLGraph",
+  "correspondence": [
+    {
+      "review_quote": "tests/e2e/models/report_template.md:17",
+      "patch_snippet": "评后sha 4b7610d 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "4b7610d",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "精度测试报告模板应包含 vLLM 版本（带 commit 链接）、软件环境（CANN、PyTorch、torch-npu 版本）、硬件环境、并行模式和执行模式等完整信息，确保报告可复现。",
+    "context": "",
+    "checkpoints": [
+      "是否包含 vLLM 和 vLLM-Ascend 的版本信息及 commit 链接",
+      "是否包含完整的软件环境信息（CANN、PyTorch、torch-npu）",
+      "是否包含硬件环境和并行模式信息"
+    ],
+    "antipattern": {
+      "file": "tests/e2e/models/report_template.md",
+      "line": 17,
+      "code": "<!-- 文件: tests/e2e/models/report_template.md -->\n<!-- 行号: 1-25 -->\n<!-- 评审人 Yikun 指出报告模板缺少版本链接和完整的环境信息 -->\n<!-- 原模板格式不统一，缺少 vLLM commit 链接、软件环境、硬件环境等信息 -->\n\n# Accuracy Test Report\n\n## Model Info\n- **Model**: {{ model_name }}\n\n## Version Info\n- vLLM Version: {{ vllm_version }}\n- vLLM Ascend Version: {{ vllm_ascend_version }}\n\n## Environment\n- CANN: {{ cann_version }}\n\n## Results\n| Metric | Value |\n|--------|-------|\n| Accuracy | {{ accuracy }} |",
+      "context": "Accuracy Test Report Model Info Version Info"
+    },
+    "pattern": {
+      "file": "tests/e2e/models/report_template.md",
+      "line": 17,
+      "code": "<!-- 文件: tests/e2e/models/report_template.md -->\n<!-- 行号: 1-25 -->\n<!-- 评审人 Yikun 提供的 suggestion 代码块，作者已采纳 -->\n\n# Accuracy Test Report\n\n## Model Info\n- **Model**: {{ model_name }}\n\n## Version Info\n- **vLLM Version**: vLLM: {{ vllm_version }} ([{{ vllm_commit[:7] }}](https://github.com/vllm-project/vllm/commit/{{ vllm_commit }})), **vLLM Ascend Version**: {{ vllm_ascend_version }} ([{{ vllm_ascend_commit[:7] }}](https://github.com/vllm-project/vllm-ascend/commit/{{ vllm_ascend_commit }}))  \n- **Software Environment**: **CANN**: {{ cann_version }}, **PyTorch**: {{ torch_version }}, **torch-npu**: {{ torch_npu_version }}  \n- **Hardware Environment**: Atlas A2 Series  \n- **Parallel mode**: {{ parallel_mode }}\n- **Execution mode**: ACLGraph\n\n## Results\n| Metric | Value |\n|--------|-------|\n| Accuracy | {{ accuracy }} |",
+      "context": "Accuracy Test Report Model Info Version Info"
+    },
+    "diff": {
+      "unified": "--- a/tests/e2e/models/report_template.md\n+++ b/tests/e2e/models/report_template.md\n@@ -1,7 +1,6 @@\n <!-- 文件: tests/e2e/models/report_template.md -->\n <!-- 行号: 1-25 -->\n-<!-- 评审人 Yikun 指出报告模板缺少版本链接和完整的环境信息 -->\n-<!-- 原模板格式不统一，缺少 vLLM commit 链接、软件环境、硬件环境等信息 -->\n+<!-- 评审人 Yikun 提供的 suggestion 代码块，作者已采纳 -->\n \n # Accuracy Test Report\n \n@@ -9,11 +8,11 @@\n - **Model**: {{ model_name }}\n \n ## Version Info\n-- vLLM Version: {{ vllm_version }}\n-- vLLM Ascend Version: {{ vllm_ascend_version }}\n-\n-## Environment\n-- CANN: {{ cann_version }}\n+- **vLLM Version**: vLLM: {{ vllm_version }} ([{{ vllm_commit[:7] }}](https://github.com/vllm-project/vllm/commit/{{ vllm_commit }})), **vLLM Ascend Version**: {{ vllm_ascend_version }} ([{{ vllm_ascend_commit[:7] }}](https://github.com/vllm-project/vllm-ascend/commit/{{ vllm_ascend_commit }}))  \n+- **Software Environment**: **CANN**: {{ cann_version }}, **PyTorch**: {{ torch_version }}, **torch-npu**: {{ torch_npu_version }}  \n+- **Hardware Environment**: Atlas A2 Series  \n+- **Parallel mode**: {{ parallel_mode }}\n+- **Execution mode**: ACLGraph\n \n ## Results\n | Metric | Value |\n",
+      "stats": "1 file changed, +6 lines, -7 lines",
+      "key_changes": [
+        "移除: - vLLM Version: {{ vllm_version }}",
+        "移除: <!-- 评审人 Yikun 指出报告模板缺少版本链接和完整的环境信息 -->",
+        "新增: - **Software Environment**: **CANN**: {{ cann_version }}, **PyTorch**: {{ torch_",
+        "新增: - **vLLM Version**: vLLM: {{ vllm_version }} ([{{ vllm_commit[:7] }}](https://gi",
+        "新增: - **Execution mode**: ACLGraph"
+      ]
+    },
+    "language": "markdown",
+    "_status": "processed"
+  }
+}

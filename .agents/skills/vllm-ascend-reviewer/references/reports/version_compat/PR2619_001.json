@@ -1,0 +1,81 @@
+{
+  "report_id": "PR2619_001",
+  "pr_number": 2619,
+  "pr_title": "[Feat] Unquantized linear nz support",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/linear.py:51",
+    "vllm_ascend/ops/linear.py:60",
+    "vllm_ascend/ops/linear.py:64",
+    "vllm_ascend/ops/linear.py:65"
+  ],
+  "landing_sha": "0bb2a32",
+  "source_quote": "Is a cudagraph check necessary?\nthe NZ tranform requires CANN >= 8.3 ? you just just startswith(\"8.3\"), when cann release \"8.4\", this branch won't enter. it may not as expected.\nplease make sure if this feature requires cann==8.3 or cann>=8.3\nelse statement is redundant\nif bias is None:\nreturn torch.matmul(x, layer.weight)\nreturn torch.matmul(x, layer.weight) + bias\nThis else statement is also redundant, please remove it.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/ops/linear.py:51",
+      "patch_snippet": "评后sha 0bb2a32 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/ops/linear.py:51",
+      "patch_snippet": "评后sha 0bb2a32 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/ops/linear.py:60",
+      "patch_snippet": "评后sha 0bb2a32 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/ops/linear.py:64",
+      "patch_snippet": "评后sha 0bb2a32 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/ops/linear.py:65",
+      "patch_snippet": "评后sha 0bb2a32 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "0bb2a32",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在进行软件版本检查时，应使用数值比较（如 `>=`）而非字符串前缀匹配（如 `startswith`），避免因版本号变化导致逻辑遗漏。",
+    "context": "",
+    "checkpoints": [
+      "是否使用 startswith 进行版本匹配",
+      "版本比较是否覆盖后续版本",
+      "是否使用语义化版本比较"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/linear.py",
+      "line": 40,
+      "code": "# 评审人 momo609: \"Is a cudagraph check necessary?\"\n# 评审人 Ronald1995: \"the NZ tranform requires CANN >= 8.3 ? you just just\n#   startswith('8.3'), when cann release '8.4', this branch won't enter.\n#   it may not as expected.\"\n# 评审人 Ronald1995: \"please make sure if this feature requires cann==8.3\n#   or cann>=8.3\"\n\nfrom typing import Optional\nimport torch\nimport torch.nn as nn\n\nfrom vllm_ascend.utils import get_cann_version\n\nclass AscendUnquantizedLinearMethod:\n    \"\"\"Unquantized linear method for Ascend with NZ format support.\"\"\"\n\n    def apply(self, layer, x, bias=None):\n        \"\"\"Apply linear with optional NZ format conversion.\"\"\"\n        cann_version = get_cann_version()\n        # 版本检查使用 startswith(\"8.3\")，当 CANN 发布 8.4 时不会进入该分支\n        if cann_version.startswith(\"8.3\"):\n            # NZ 格式转换\n            weight_nz = self._convert_to_nz(layer.weight)\n            output = torch.matmul(x, weight_nz)\n        else:\n            output = torch.matmul(x, layer.weight)\n\n        # 冗余的 else 分支\n        if bias is None:\n            return output\n        else:\n            return output + bias",
+      "context": "评审人 momo609: \"Is a cudagraph check necessary?\" 评审人 Ronald1995: \"the NZ tranform requires CANN >= 8.3 ? you just just startswith('8.3'), when cann release '8.4', this branch won't enter."
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/linear.py",
+      "line": 40,
+      "code": "# 版本检查改为 >= 比较，覆盖后续版本\n# 移除冗余 else 分支\n\nfrom typing import Optional\nimport torch\nimport torch.nn as nn\n\nfrom vllm_ascend.utils import get_cann_version\n\nclass AscendUnquantizedLinearMethod:\n    \"\"\"Unquantized linear method for Ascend with NZ format support.\"\"\"\n\n    def apply(self, layer, x, bias=None):\n        \"\"\"Apply linear with optional NZ format conversion.\"\"\"\n        cann_version = get_cann_version()\n        # 修复：使用 >= 比较，覆盖 8.3, 8.4 等后续版本\n        if tuple(map(int, cann_version.split(\".\"))) >= (8, 3):\n            # NZ 格式转换\n            weight_nz = self._convert_to_nz(layer.weight)\n            output = torch.matmul(x, weight_nz)\n        else:\n            output = torch.matmul(x, layer.weight)\n\n        # 移除冗余 else 分支\n        if bias is None:\n            return output\n        return output + bias",
+      "context": "版本检查改为 >= 比较，覆盖后续版本 移除冗余 else 分支 修复：使用 >= 比较，覆盖 8.3, 8.4 等后续版本"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/linear.py\n+++ b/vllm_ascend/ops/linear.py\n@@ -1,9 +1,5 @@\n-# 评审人 momo609: \"Is a cudagraph check necessary?\"\n-# 评审人 Ronald1995: \"the NZ tranform requires CANN >= 8.3 ? you just just\n-#   startswith('8.3'), when cann release '8.4', this branch won't enter.\n-#   it may not as expected.\"\n-# 评审人 Ronald1995: \"please make sure if this feature requires cann==8.3\n-#   or cann>=8.3\"\n+# 版本检查改为 >= 比较，覆盖后续版本\n+# 移除冗余 else 分支\n \n from typing import Optional\n import torch\n@@ -17,16 +13,15 @@\n     def apply(self, layer, x, bias=None):\n         \"\"\"Apply linear with optional NZ format conversion.\"\"\"\n         cann_version = get_cann_version()\n-        # 版本检查使用 startswith(\"8.3\")，当 CANN 发布 8.4 时不会进入该分支\n-        if cann_version.startswith(\"8.3\"):\n+        # 修复：使用 >= 比较，覆盖 8.3, 8.4 等后续版本\n+        if tuple(map(int, cann_version.split(\".\"))) >= (8, 3):\n             # NZ 格式转换\n             weight_nz = self._convert_to_nz(layer.weight)\n             output = torch.matmul(x, weight_nz)\n         else:\n             output = torch.matmul(x, layer.weight)\n \n-        # 冗余的 else 分支\n+        # 移除冗余 else 分支\n         if bias is None:\n             return output\n-        else:\n-            return output + bias\n+        return output + bias\n",
+      "stats": "1 file changed, +6 lines, -11 lines",
+      "key_changes": [
+        "移除: return output + bias",
+        "新增: return output + bias"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

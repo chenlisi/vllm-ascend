@@ -1,0 +1,60 @@
+{
+  "report_id": "PR14023_003",
+  "pr_number": 14023,
+  "pr_title": "[Feature][MRV2] Support basic GQA prefill context parallelism",
+  "pr_status": "merged",
+  "dimension": [
+    "test"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/ut/worker/test_pcp_manager_v2.py:240"
+  ],
+  "landing_sha": "bcb0876",
+  "source_quote": "What is the function of this UT? I don't see it verifying anything. Is it necessary?\n> I see there are many UTs for validating validate_config. Is it necessary? Let's review it.",
+  "correspondence": [
+    {
+      "review_quote": "tests/ut/worker/test_pcp_manager_v2.py:240",
+      "patch_snippet": "评后sha bcb0876 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "bcb0876",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "每个测试用例都应有明确的验证目标。如果测试用例没有验证任何实质内容，或者多个测试用例验证相同逻辑，应删除冗余测试。",
+    "context": "",
+    "checkpoints": [
+      "识别测试用例是否有明确的验证目标",
+      "确认测试用例是否验证了实质内容",
+      "如果有多个测试验证相同逻辑，应合并或删除冗余"
+    ],
+    "antipattern": {
+      "file": "tests/ut/worker/test_pcp_manager_v2.py",
+      "line": 240,
+      "code": "# tests/ut/worker/test_pcp_manager_v2.py\n# 文件末尾的 validate_config 相关测试，约第 190-240 行\n\ndef test_npu_model_runner_uses_ascend_pcp_manager() -> None:\n    runner = NPUModelRunner.__new__(NPUModelRunner)\n    assert runner.pcp_manager_cls is AscendPCPManager\n\n\n# ❌ 以下测试被质疑没有验证实质内容\ndef test_validate_ascend_gqa_pcp_config():\n    AscendPCPManager.validate_config(\n        _make_gqa_pcp_config(),\n        supports_mm_inputs=False,\n    )\n    # ❌ 只是调用 validate_config，没有断言验证任何实质内容\n\n\n@pytest.mark.parametrize(\n    (\"case\", \"match\"),\n    [\n        (\"dcp\", \"PCP and DCP\"),\n        (\"pp\", \"PP\"),\n        # ... 多个参数化测试用例\n    ],\n)\ndef test_validate_ascend_pcp_rejects_unsupported_modes(case, match):\n    vllm_config = _make_gqa_pcp_config()\n    with pytest.raises(NotImplementedError, match=match):\n        AscendPCPManager.validate_config(vllm_config, supports_mm_inputs=False)\n\n\n@pytest.mark.parametrize(\"use_mla\", [False, True])\n@pytest.mark.parametrize(\"case\", [...])\ndef test_validate_ascend_pcp_allows_supported_modes(use_mla, case):\n    AscendPCPManager.validate_config(vllm_config, supports_mm_inputs=False)",
+      "context": "tests/ut/worker/test_pcp_manager_v2.py 文件末尾的 validate_config 相关测试，约第 190-240 行 ❌ 以下测试被质疑没有验证实质内容"
+    },
+    "pattern": {
+      "file": "tests/ut/worker/test_pcp_manager_v2.py",
+      "line": 240,
+      "code": "# tests/ut/worker/test_pcp_manager_v2.py\n# ✅ 保留了有实质验证的测试\n\ndef test_npu_model_runner_uses_ascend_pcp_manager() -> None:\n    runner = NPUModelRunner.__new__(NPUModelRunner)\n    assert runner.pcp_manager_cls is AscendPCPManager\n\n\ndef test_initialize_kv_cache_skips_pcp_binding_when_disabled() -> None:\n    # ✅ 有明确验证目标：确保 PCP 禁用时跳过 pcp 绑定\n    runner = NPUModelRunner.__new__(NPUModelRunner)\n    runner.pcp_manager = None\n    runner.model_config = MagicMock(enable_return_routed_experts=False)\n    kv_cache_config = MagicMock()\n\n    with (\n        patch(\"vllm_ascend.worker.v2.model_runner.graph_manager_wrapper\"),\n        patch(\"vllm.v1.worker.gpu.model_runner.GPUModelRunner.initialize_kv_cache\") as initialize_kv_cache,\n    ):\n        runner.initialize_kv_cache(kv_cache_config)\n\n    initialize_kv_cache.assert_called_once_with(kv_cache_config)\n    # ✅ 删除了 test_validate_ascend_gqa_pcp_config、\n    #    test_validate_ascend_pcp_rejects_unsupported_modes、\n    #    test_validate_ascend_pcp_allows_supported_modes\n    #    及 _make_gqa_pcp_config 辅助函数",
+      "context": "tests/ut/worker/test_pcp_manager_v2.py ✅ 保留了有实质验证的测试 ✅ 有明确验证目标：确保 PCP 禁用时跳过 pcp 绑定"
+    },
+    "diff": {
+      "unified": "--- a/tests/ut/worker/test_pcp_manager_v2.py\n+++ b/tests/ut/worker/test_pcp_manager_v2.py\n@@ -1,35 +1,26 @@\n # tests/ut/worker/test_pcp_manager_v2.py\n-# 文件末尾的 validate_config 相关测试，约第 190-240 行\n+# ✅ 保留了有实质验证的测试\n \n def test_npu_model_runner_uses_ascend_pcp_manager() -> None:\n     runner = NPUModelRunner.__new__(NPUModelRunner)\n     assert runner.pcp_manager_cls is AscendPCPManager\n \n \n-# ❌ 以下测试被质疑没有验证实质内容\n-def test_validate_ascend_gqa_pcp_config():\n-    AscendPCPManager.validate_config(\n-        _make_gqa_pcp_config(),\n-        supports_mm_inputs=False,\n-    )\n-    # ❌ 只是调用 validate_config，没有断言验证任何实质内容\n+def test_initialize_kv_cache_skips_pcp_binding_when_disabled() -> None:\n+    # ✅ 有明确验证目标：确保 PCP 禁用时跳过 pcp 绑定\n+    runner = NPUModelRunner.__new__(NPUModelRunner)\n+    runner.pcp_manager = None\n+    runner.model_config = MagicMock(enable_return_routed_experts=False)\n+    kv_cache_config = MagicMock()\n \n+    with (\n+        patch(\"vllm_ascend.worker.v2.model_runner.graph_manager_wrapper\"),\n+        patch(\"vllm.v1.worker.gpu.model_runner.GPUModelRunner.initialize_kv_cache\") as initialize_kv_cache,\n+    ):\n+        runner.initialize_kv_cache(kv_cache_config)\n \n-@pytest.mark.parametrize(\n-    (\"case\", \"match\"),\n-    [\n-        (\"dcp\", \"PCP and DCP\"),\n-        (\"pp\", \"PP\"),\n-        # ... 多个参数化测试用例\n-    ],\n-)\n-def test_validate_ascend_pcp_rejects_unsupported_modes(case, match):\n-    vllm_config = _make_gqa_pcp_config()\n-    with pytest.raises(NotImplementedError, match=match):\n-        AscendPCPManager.validate_config(vllm_config, supports_mm_inputs=False)\n-\n-\n-@pytest.mark.parametrize(\"use_mla\", [False, True])\n-@pytest.mark.parametrize(\"case\", [...])\n-def test_validate_ascend_pcp_allows_supported_modes(use_mla, case):\n-    AscendPCPManager.validate_config(vllm_config, supports_mm_inputs=False)\n+    initialize_kv_cache.assert_called_once_with(kv_cache_config)\n+    # ✅ 删除了 test_validate_ascend_gqa_pcp_config、\n+    #    test_validate_ascend_pcp_rejects_unsupported_modes、\n+    #    test_validate_ascend_pcp_allows_supported_modes\n+    #    及 _make_gqa_pcp_config 辅助函数\n",
+      "stats": "1 file changed, +17 lines, -26 lines",
+      "key_changes": [
+        "移除: def test_validate_ascend_gqa_pcp_config():",
+        "移除: @pytest.mark.parametrize(\"use_mla\", [False, True])",
+        "新增: def test_initialize_kv_cache_skips_pcp_binding_when_disabled() -> None:",
+        "新增: runner.pcp_manager = None"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

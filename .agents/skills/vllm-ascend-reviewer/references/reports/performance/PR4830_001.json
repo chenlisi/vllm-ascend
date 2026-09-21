@@ -1,0 +1,66 @@
+{
+  "report_id": "PR4830_001",
+  "pr_number": 4830,
+  "pr_title": "feat: implement high-performance Triton kernels for rejection sampling",
+  "pr_status": "merged",
+  "merged_at": "2025-12-18T11:42:11Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/sample/rejection_sampler.py:777"
+  ],
+  "landing_sha": "60cc2b7",
+  "source_quote": "Please add a comment to state why you encapsulate this method.",
+  "correspondence": [
+    {
+      "review_quote": "JC-ut0 要求添加注释说明为何将方法封装为独立函数。作者解释了原因：对于某些输入，`if not rejected` 分支仍占用大量 MTE3 传输时间，移除该分支不影响精度且性能提升 40%，因此将相关步骤提取为独立算子 `bonus_renew`。1/1 建议已处理。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "60cc2b7",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当为了性能优化目的将代码逻辑封装为独立方法或算子时，必须添加注释说明封装的原因、性能收益数据，以及为何不影响正确性。",
+    "context": "",
+    "checkpoints": [
+      "性能优化封装是否有注释说明封装动机",
+      "是否提供 profiling 数据或性能收益说明",
+      "是否说明封装不影响正确性/精度"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/sample/rejection_sampler.py",
+      "line": 770,
+      "code": "@triton.jit\ndef rejection_greedy_sample_kernel(\n    output_token_ids_ptr,\n    bonus_token_ids_ptr,\n    draft_token_ids_ptr,\n    target_argmax_ptr,\n    mask_ptr,\n    BLOCK_SIZE: tl.constexpr,\n):\n    \"\"\"Triton kernel for greedy rejection sampling.\"\"\"\n    pid = tl.program_id(0)\n    offset = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)\n    mask = tl.load(mask_ptr + offset)\n\n    # 主采样逻辑\n    draft_token_id = tl.load(draft_token_ids_ptr + offset)\n    target_argmax_id = tl.load(target_argmax_ptr + pid)\n    accepted_mask = (draft_token_id == target_argmax_id) & mask\n\n    # ... 采样处理 ...\n\n    # 调用封装的 bonus_renew 算子\n    bonus_renew(output_token_ids_ptr, bonus_token_ids_ptr,\n                offset, accepted_mask, BLOCK_SIZE)\n\n\n@triton.jit\ndef bonus_renew(output_token_ids_ptr, bonus_token_ids_ptr,\n                offset, accepted_mask, BLOCK_SIZE: tl.constexpr):\n    # 缺少注释说明为何封装为独立方法\n    bonus_token_id = tl.load(bonus_token_ids_ptr + offset,\n                             mask=accepted_mask)\n    tl.store(output_token_ids_ptr + offset * 2 + 1,\n             bonus_token_id, mask=accepted_mask)",
+      "context": "JC-ut0: Please add a comment to state why you encapsulate this method."
+    },
+    "pattern": {
+      "file": "vllm_ascend/sample/rejection_sampler.py",
+      "line": 777,
+      "code": "@triton.jit\ndef rejection_greedy_sample_kernel(\n    output_token_ids_ptr,\n    bonus_token_ids_ptr,\n    draft_token_ids_ptr,\n    target_argmax_ptr,\n    mask_ptr,\n    BLOCK_SIZE: tl.constexpr,\n):\n    \"\"\"Triton kernel for greedy rejection sampling.\"\"\"\n    pid = tl.program_id(0)\n    offset = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)\n    mask = tl.load(mask_ptr + offset)\n\n    # 主采样逻辑\n    draft_token_id = tl.load(draft_token_ids_ptr + offset)\n    target_argmax_id = tl.load(target_argmax_ptr + pid)\n    accepted_mask = (draft_token_id == target_argmax_id) & mask\n\n    # ... 采样处理 ...\n\n    # 调用封装的 bonus_renew 算子\n    bonus_renew(output_token_ids_ptr, bonus_token_ids_ptr,\n                offset, accepted_mask, BLOCK_SIZE)\n\n\n@triton.jit\ndef bonus_renew(output_token_ids_ptr, bonus_token_ids_ptr,\n                offset, accepted_mask, BLOCK_SIZE: tl.constexpr):\n    # 缺少注释说明为何封装为独立方法\n    bonus_token_id = tl.load(bonus_token_ids_ptr + offset,\n                             mask=accepted_mask)\n    tl.store(output_token_ids_ptr + offset * 2 + 1,\n             bonus_token_id, mask=accepted_mask)",
+      "context": "JC-ut0: Please add a comment to state why you encapsulate this method."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/sample/rejection_sampler.py\n+++ b/vllm_ascend/sample/rejection_sampler.py\n@@ -27,8 +27,15 @@\n @triton.jit\n def bonus_renew(output_token_ids_ptr, bonus_token_ids_ptr,\n                 offset, accepted_mask, BLOCK_SIZE: tl.constexpr):\n-    # 缺少注释说明为何封装为独立方法\n+    # 对于某些输入，每个请求不走 'if not rejected' 分支。\n+    # Profiling 显示该分支占用大量 MTE3 传输时间。\n+    # 移除该分支不影响精度，性能提升 40%。\n+    # 将该步骤写入独立算子 bonus_renew，\n+    # 在主算子 rejection_greedy_sample_kernel 内调用。\n+    # 实验表明不同输入的性能均有不同程度提升。\n     bonus_token_id = tl.load(bonus_token_ids_ptr + offset,\n                              mask=accepted_mask)\n     tl.store(output_token_ids_ptr + offset * 2 + 1,\n              bonus_token_id, mask=accepted_mask)\n+# （JC-ut0: Please add a comment to state why you encapsulate this method.）\n+# （yuxingcyx: 解释了封装原因和性能收益）",
+      "stats": "1 file changed, +8 lines, -1 lines",
+      "key_changes": [
+        "- # 缺少注释说明为何封装为独立方法",
+        "+ # 对于某些输入，每个请求不走 'if not rejected' 分支。",
+        "+ # Profiling 显示该分支占用大量 MTE3 传输时间。",
+        "+ # 移除该分支不影响精度，性能提升 40%。",
+        "+ # 将该步骤写入独立算子 bonus_renew，",
+        "+ # 在主算子 rejection_greedy_sample_kernel 内调用。",
+        "+ # 实验表明不同输入的性能均有不同程度提升。",
+        "+ # （JC-ut0: Please add a comment to state why you encapsulate this method.）",
+        "+ # （yuxingcyx: 解释了封装原因和性能收益）"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

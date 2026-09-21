@@ -1,0 +1,76 @@
+{
+  "report_id": "PR5051_001",
+  "pr_number": 5051,
+  "pr_title": "[Feature] implement model runner v2 basic framework",
+  "pr_status": "merged",
+  "merged_at": "",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "blocker",
+  "affected_files": [
+    "vllm_ascend/worker/v2/model_runner.py:327"
+  ],
+  "landing_sha": "5d395ff",
+  "source_quote": "",
+  "correspondence": [
+    {
+      "review_quote": "评审点: #(原文语义)",
+      "patch_snippet": "评后sha 作者响应 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "gemini 🤖 critical model_runner.py L327: 1(`num_computed_token`（单数） 与定义的 `num_computed_tokens`（复数） 拼写不一致 → 将引发 `NameError`)",
+      "patch_snippet": "评后sha 未显式回复 bot，但 23 小时后在 5d395ff 一次性集中修 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "5d395ff",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当函数内定义一个变量名（尤其包含 token/step/request 这类常见单复数的词）时，所有后续引用、循环 unpack、数组赋值右侧的拼写必须与定义点**逐字节完全一致**。Python 大小写敏感、也敏感单数 `token` / 复数 `tokens` 后缀差 1 个 `s`，不一致直接抛出 `NameError` 导致整条请求路径 crash，评审中一律按 CRITICAL 处理。",
+    "context": "",
+    "checkpoints": [
+      "评审时对 `num_*_token(s)` / `step(s)` / `request(s)` / `batch(es)` 这类高频单复数变量做 diff 两侧 grep 交叉：",
+      "注意\"bot suggestion 建议统一方向（复数）\"与\"作者实际落地统一方向（单数）\"可以不同——只要统一即有效，不苛求字面一致",
+      "即使变量出现在注释掉的/未启用的分支中也建议修：后续 refactor 打开分支时会重新触发 NameError"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/v2/model_runner.py",
+      "line": 327,
+      "code": "# 某行（bot 说 L324）定义形态：\nnum_computed_tokens = xxx   # 定义时用复数形式（plural）\n# 但 L327 引用时 bot 看到写成了单数：\n... = num_computed_token + num_scheduled_tokens[req_id]  # ←少个s，NameError",
+      "context": "意见推断的原始代码"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/v2/model_runner.py",
+      "line": 327,
+      "code": " file=vllm_ascend/worker/v2/model_runner.py +81/-120\n ...\n ----PATCH----\n（末段 L1023 区域 for 循环变量）\n-    for req_id, num_computed_tokens in zip(req_ids, num_computed_tokens_list):\n+    for req_id, num_computed_token in zip(req_ids, num_computed_tokens_list):\n         ...\n-        req_index] = num_computed_tokens\n+        req_index] = num_computed_token\n----END----",
+      "context": ""
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/v2/model_runner.py\n+++ b/vllm_ascend/worker/v2/model_runner.py\n@@ -1,4 +1,10 @@\n-# 某行（bot 说 L324）定义形态：\n-num_computed_tokens = xxx   # 定义时用复数形式（plural）\n-# 但 L327 引用时 bot 看到写成了单数：\n-... = num_computed_token + num_scheduled_tokens[req_id]  # ←少个s，NameError\n+ file=vllm_ascend/worker/v2/model_runner.py +81/-120\n+ ...\n+ ----PATCH----\n+（末段 L1023 区域 for 循环变量）\n+-    for req_id, num_computed_tokens in zip(req_ids, num_computed_tokens_list):\n++    for req_id, num_computed_token in zip(req_ids, num_computed_tokens_list):\n+         ...\n+-        req_index] = num_computed_tokens\n++        req_index] = num_computed_token\n+----END----",
+      "stats": "1 file changed, +10 lines, -4 lines",
+      "key_changes": [
+        "- # 某行（bot 说 L324）定义形态：",
+        "- num_computed_tokens = xxx   # 定义时用复数形式（plural）",
+        "- # 但 L327 引用时 bot 看到写成了单数：",
+        "- ... = num_computed_token + num_scheduled_tokens[req_id]  # ←少个s，NameError",
+        "+ file=vllm_ascend/worker/v2/model_runner.py +81/-120",
+        "+ ...",
+        "+ ----PATCH----",
+        "+ （末段 L1023 区域 for 循环变量）",
+        "+ -    for req_id, num_computed_tokens in zip(req_ids, num_computed_tokens_list):",
+        "+ +    for req_id, num_computed_token in zip(req_ids, num_computed_tokens_list):",
+        "+ ...",
+        "+ -        req_index] = num_computed_tokens",
+        "+ +        req_index] = num_computed_token",
+        "+ ----END----"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

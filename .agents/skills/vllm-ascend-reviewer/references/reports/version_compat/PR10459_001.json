@@ -1,0 +1,74 @@
+{
+  "report_id": "PR10459_001",
+  "pr_number": 10459,
+  "pr_title": "[Misc] main2main 0612",
+  "pr_status": "merged",
+  "merged_at": "2026-07-01T09:59:41Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/patch/worker/patch_gpt_oss.py:24",
+    "vllm_ascend/ops/fused_moe/fused_moe.py:155",
+    "vllm_ascend/eplb/utils.py:24",
+    "vllm_ascend/quantization/compressed_tensors_config.py:52",
+    "vllm_ascend/quantization/compressed_tensors_config.py:185",
+    "vllm_ascend/quantization/fp8_config.py:20",
+    "vllm_ascend/quantization/fp8_config.py:126",
+    "vllm_ascend/quantization/method_adapters.py:292"
+  ],
+  "landing_sha": "7e2c7fc",
+  "source_quote": "why adding this patch? Can this PR resolve this issue? https://github.com/vllm-project/vllm/pull/45067",
+  "correspondence": [
+    {
+      "review_quote": "menogrey 指出多处不必要的包装和类型转换（`No need to wrap it`、`No need to cast`），以及 `select_experts` 的实现效率问题。MengqingCao 和 wxsIcey 对 `model_runner.py` 和测试文件提出了修改建议。作者通过 commit `7e2c7fc` 清理了冗余包装和类型转换，15/15 建议全部落地。",
+      "patch_snippet": "commit `7e2c7fc`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "7e2c7fc",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在版本升级同步 PR 中，应检查是否存在不必要的类型包装（wrap）和类型转换（cast）。直接使用 `isinstance` 检查和属性访问即可，无需额外包装。",
+    "context": "",
+    "checkpoints": [
+      "检查是否有不必要的 `wrap()` 调用",
+      "检查是否有不必要的 `cast()` 调用",
+      "检查 `isinstance` 是否可以直接使用"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/eplb/utils.py",
+      "line": 18,
+      "code": "import functools\nfrom typing import Any, Callable\n\nfrom vllm.model_executor.layers.fused_moe import RoutedExperts\n\n\ndef wrap_function(fn: Callable) -> Callable:\n    \"\"\"Wrap a function for EPLB instrumentation.\"\"\"\n    @functools.wraps(fn)\n    def wrapper(*args, **kwargs):\n        # EPLB 插桩逻辑：记录专家路由信息\n        result = fn(*args, **kwargs)\n        return result\n    return wrapper\n\n\ndef register_eplb_hooks(layer: RoutedExperts) -> None:\n    # menogrey: \"No need to wrap it, just use .routed_experts\"\n    # 对 routed_experts 进行不必要的包装\n    wrapped = wrap_function(layer.routed_experts)\n    layer.routed_experts = wrapped",
+      "context": "why adding this patch? Can this PR resolve this issue? https://github.com/vllm-project/vllm/pull/45067"
+    },
+    "pattern": {
+      "file": "vllm_ascend/eplb/utils.py",
+      "line": 18,
+      "code": "import functools\nfrom typing import Any, Callable\n\nfrom vllm.model_executor.layers.fused_moe import RoutedExperts\n\n\ndef register_eplb_hooks(layer: RoutedExperts) -> None:\n    # MrZ20: \"done\"\n    # 直接使用 .routed_experts，移除不必要的 wrap_function 包装\n    experts = layer.routed_experts\n    # EPLB 直接通过 experts 属性访问，无需额外包装层",
+      "context": "why adding this patch? Can this PR resolve this issue? https://github.com/vllm-project/vllm/pull/45067"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/eplb/utils.py\n+++ b/vllm_ascend/eplb/utils.py\n@@ -4,18 +4,8 @@\n from vllm.model_executor.layers.fused_moe import RoutedExperts\n \n \n-def wrap_function(fn: Callable) -> Callable:\n-    \"\"\"Wrap a function for EPLB instrumentation.\"\"\"\n-    @functools.wraps(fn)\n-    def wrapper(*args, **kwargs):\n-        # EPLB 插桩逻辑：记录专家路由信息\n-        result = fn(*args, **kwargs)\n-        return result\n-    return wrapper\n-\n-\n def register_eplb_hooks(layer: RoutedExperts) -> None:\n-    # menogrey: \"No need to wrap it, just use .routed_experts\"\n-    # 对 routed_experts 进行不必要的包装\n-    wrapped = wrap_function(layer.routed_experts)\n-    layer.routed_experts = wrapped\n+    # MrZ20: \"done\"\n+    # 直接使用 .routed_experts，移除不必要的 wrap_function 包装\n+    experts = layer.routed_experts\n+    # EPLB 直接通过 experts 属性访问，无需额外包装层",
+      "stats": "1 file changed, +4 lines, -14 lines",
+      "key_changes": [
+        "移除: def wrap_function(fn: Callable) -> Callable:",
+        "移除: \"\"\"Wrap a function for EPLB instrumentation.\"\"\"",
+        "移除: @functools.wraps(fn)",
+        "移除: def wrapper(*args, **kwargs):",
+        "移除: # EPLB 插桩逻辑：记录专家路由信息",
+        "移除: result = fn(*args, **kwargs)",
+        "移除: return result",
+        "移除: return wrapper",
+        "移除: # menogrey: \"No need to wrap it, just use .routed_experts\"",
+        "移除: # 对 routed_experts 进行不必要的包装"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

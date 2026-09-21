@@ -1,0 +1,60 @@
+{
+  "report_id": "PR5298_001",
+  "pr_number": 5298,
+  "pr_title": "[bugfix] solve dp scenario Host-Device sync",
+  "pr_status": "merged",
+  "merged_at": "",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/model_runner_v1.py:1863",
+    "vllm_ascend/worker/model_runner_v1.py:1870"
+  ],
+  "landing_sha": "9762847",
+  "source_quote": "move this line under `if self.speculative_config:`",
+  "correspondence": [
+    {
+      "review_quote": "realliujiaxu 要求将特定行移到 `if self.speculative_config:` 条件内。yiz-liu 指出应使用 `self.query_start_loc.np` 而非创建新 tensor，以避免破坏 `pin_memory` 关联。作者通过 commit `9762847` 修复，3/3 建议全部落地。",
+      "patch_snippet": "commit `9762847`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "9762847",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "更新同时存在于 CPU 和 GPU 上的 tensor 时，应通过 `.np` 属性直接修改 numpy 数组以保持 `pin_memory` 的关联，避免创建新 tensor 破坏同步机制。条件性操作应放在正确的条件分支内。",
+    "context": "",
+    "checkpoints": [
+      "是否通过 `.np` 属性更新 pin_memory tensor 而非创建新 tensor",
+      "CPU 和 GPU tensor 的同步是否在正确的条件分支内",
+      "是否避免了破坏 `pin_memory` 关联"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 0,
+      "code": "    def _build_dummy_attn_metadata(self, ...):\n        query_start_loc_cpu = self.query_start_loc.cpu()\n        self.query_start_loc.copy_(query_start_loc_cpu)\n\n        if self.speculative_config:\n            actual_seq_lengths_q = ...\n            ...\n        return metadata",
+      "context": "move this line under `if self.speculative_config:`"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 0,
+      "code": "    def _build_dummy_attn_metadata(self, ...):\n\n        if self.speculative_config:\n            self.query_start_loc.copy_(self.query_start_loc_cpu)\n            actual_seq_lengths_q = ...\n            ...\n        return metadata",
+      "context": "move this line under `if self.speculative_config:`"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/model_runner_v1.py\n+++ b/vllm_ascend/worker/model_runner_v1.py\n@@ -1,8 +1,7 @@\n     def _build_dummy_attn_metadata(self, ...):\n-        query_start_loc_cpu = self.query_start_loc.cpu()\n-        self.query_start_loc.copy_(query_start_loc_cpu)\n \n         if self.speculative_config:\n+            self.query_start_loc.copy_(self.query_start_loc_cpu)\n             actual_seq_lengths_q = ...\n             ...\n         return metadata",
+      "stats": "1 file changed, +1 lines, -2 lines",
+      "key_changes": [
+        "删除了第 2-3 行的代码",
+        "在第 4-4 行新增了代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

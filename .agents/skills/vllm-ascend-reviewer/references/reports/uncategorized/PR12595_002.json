@@ -1,0 +1,45 @@
+{
+  "report_id": "PR12595_002",
+  "pr_number": 0,
+  "pr_title": "",
+  "pr_status": "unknown",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "",
+  "source_quote": "",
+  "correspondence": [],
+  "verification": {
+    "merged": false,
+    "modified_commit": "",
+    "approvals": 0
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/worker/v2/model_runner.py",
+      "line": 0,
+      "code": "# vllm_ascend/worker/v2/model_runner.py — AscendModelRunner\n# commit fdde5af 版本 prepare_inputs() 方法\n\nclass AscendModelRunner(ModelRunner):\n    \"\"\"Ascend model runner for v2 pipeline with PCP/DCP support.\"\"\"\n\n    @torch.inference_mode()\n    def prepare_inputs(self, input_batch: AscendInputBatch) -> AscendInputBatch:\n        # Step 1: 计算 positions / attn_state 等（均用 input_batch 形参）\n        positions = input_batch.positions\n        attn_metadata = self._build_attn_metadata(input_batch)\n        # ... 前面若干计算（positions / attn_state 等，均用 input_batch 形参）...\n\n        # ❌ 两个 bug：\n        #   (a) read 端误用 self.input_batch（persistent 全局状态）作为 partition 输入；\n        #   (b) write 端又写回 self.input_batch，等于\"只改全局、不改本 step 的局部形参\"；\n        #   (c) 下一行 update_cos_sin(input_batch.positions) 仍然走未切分的原始 input_batch。\n        self.input_batch = vllm_model_runner.pcp.maybe_partition_pcp_batch(\n            self.pcp_manager, self.input_batch\n        )\n\n        # For mla/sfa, update cos/sin. Here is for execute_model.\n        update_cos_sin(input_batch.positions)  # → 这里还是未切分的 input_batch！\n        # ... 后续计算继续使用 input_batch 形参 ...\n        return input_batch  # → 直接返回了未切分的 input_batch！",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/v2/model_runner.py",
+      "line": 0,
+      "code": "# vllm_ascend/worker/v2/model_runner.py — AscendModelRunner\n# commit cccc467 + 4544b53 版本 prepare_inputs() 方法（最终状态）\n\nclass AscendModelRunner(ModelRunner):\n    \"\"\"Ascend model runner for v2 pipeline with PCP/DCP support.\"\"\"\n\n    @torch.inference_mode()\n    def prepare_inputs(self, input_batch: AscendInputBatch) -> AscendInputBatch:\n        # Step 1: 计算 positions / attn_state 等（均用 input_batch 形参）\n        positions = input_batch.positions\n        attn_metadata = self._build_attn_metadata(input_batch)\n        # ... 同上 ...\n\n        # ✅ 读 input_batch（形参），写回局部变量 input_batch；\n        #    随后 update_cos_sin / return 都拿到\"切分后的 local partition\"：\n        if not vllm_version_is(\"0.25.1\"):\n            input_batch = vllm_model_runner.pcp.maybe_partition_pcp_batch(\n                self.pcp_manager, input_batch\n            )\n\n        # For mla/sfa, update cos/sin. Here is for execute_model.\n        update_cos_sin(input_batch.positions)  # → 现在是切分后的 positions\n        # ... 后续计算使用切分后的 input_batch ...\n        return input_batch  # → 返回切分后的 local batch",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/v2/model_runner.py\n+++ b/vllm_ascend/worker/v2/model_runner.py\n@@ -1,5 +1,5 @@\n # vllm_ascend/worker/v2/model_runner.py — AscendModelRunner\n-# commit fdde5af 版本 prepare_inputs() 方法\n+# commit cccc467 + 4544b53 版本 prepare_inputs() 方法（最终状态）\n \n class AscendModelRunner(ModelRunner):\n     \"\"\"Ascend model runner for v2 pipeline with PCP/DCP support.\"\"\"\n@@ -9,17 +9,16 @@\n         # Step 1: 计算 positions / attn_state 等（均用 input_batch 形参）\n         positions = input_batch.positions\n         attn_metadata = self._build_attn_metadata(input_batch)\n-        # ... 前面若干计算（positions / attn_state 等，均用 input_batch 形参）...\n+        # ... 同上 ...\n \n-        # ❌ 两个 bug：\n-        #   (a) read 端误用 self.input_batch（persistent 全局状态）作为 partition 输入；\n-        #   (b) write 端又写回 self.input_batch，等于\"只改全局、不改本 step 的局部形参\"；\n-        #   (c) 下一行 update_cos_sin(input_batch.positions) 仍然走未切分的原始 input_batch。\n-        self.input_batch = vllm_model_runner.pcp.maybe_partition_pcp_batch(\n-            self.pcp_manager, self.input_batch\n-        )\n+        # ✅ 读 input_batch（形参），写回局部变量 input_batch；\n+        #    随后 update_cos_sin / return 都拿到\"切分后的 local partition\"：\n+        if not vllm_version_is(\"0.25.1\"):\n+            input_batch = vllm_model_runner.pcp.maybe_partition_pcp_batch(\n+                self.pcp_manager, input_batch\n+            )\n \n         # For mla/sfa, update cos/sin. Here is for execute_model.\n-        update_cos_sin(input_batch.positions)  # → 这里还是未切分的 input_batch！\n-        # ... 后续计算继续使用 input_batch 形参 ...\n-        return input_batch  # → 直接返回了未切分的 input_batch！\n+        update_cos_sin(input_batch.positions)  # → 现在是切分后的 positions\n+        # ... 后续计算使用切分后的 input_batch ...\n+        return input_batch  # → 返回切分后的 local batch",
+      "stats": "1 file changed, +11 lines, -12 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

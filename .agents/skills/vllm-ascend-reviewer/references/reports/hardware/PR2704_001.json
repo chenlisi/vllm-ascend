@@ -1,0 +1,63 @@
+{
+  "report_id": "PR2704_001",
+  "pr_number": 2704,
+  "pr_title": "[BugFix][MLA] Fix attn_mask bug for ring mla",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/mla_v1.py:491"
+  ],
+  "landing_sha": "44d2be9",
+  "source_quote": "will this always create mask on rank 0? is there any way to get current device?\ndoes 091dev have the same bug?",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/attention/mla_v1.py:491",
+      "patch_snippet": "评后sha 44d2be9 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/attention/mla_v1.py:491",
+      "patch_snippet": "评后sha 44d2be9 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "44d2be9",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在分布式环境中创建 tensor 时，应明确获取当前设备而非依赖 `set_device` 的隐式行为，避免因设备设置不当导致的跨 rank 错误。",
+    "context": "",
+    "checkpoints": [
+      "tensor 创建时设备指定是否明确",
+      "是否依赖隐式的 set_device 行为",
+      "分布式场景下设备选择是否正确"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/mla_v1.py",
+      "line": 475,
+      "code": "# 评审人 MengqingCao: \"will this always create mask on rank 0?\n#   is there any way to get current device?\"\n# 评审人 momo609: \"does 091dev have the same bug?\"\n\nfrom typing import Optional\nimport torch\nimport torch.nn as nn\nimport torch_npu\n\nfrom vllm.attention.backends.abstract import AttentionMetadata\n\nclass AscendMLAAttention(nn.Module):\n    \"\"\"Ascend MLA attention implementation with ring support.\"\"\"\n\n    def __init__(self, num_heads, head_size, ...):\n        super().__init__()\n        self.num_heads = num_heads\n        self.head_size = head_size\n        # prefill_mask 未在 __init__ 中创建\n\n    def _forward_prefill(self, query, key, value, attn_metadata, ...):\n        \"\"\"Forward pass for prefill phase.\"\"\"\n        # prefill_mask 在每次 forward pass 中重复创建\n        # 使用 'npu' 设备，依赖 set_device 已正确设置\n        prefill_mask = torch.ones(\n            1, 512, 512, device='npu', dtype=torch.bool)\n        # mask 可能被就地修改，导致后续调用出错\n        result = torch_npu.npu_ring_mla(\n            query, key, value, prefill_mask, ...)\n        return result",
+      "context": "评审人 MengqingCao: \"will this always create mask on rank 0? is there any way to get current device?\" 评审人 momo609: \"does 091dev have the same bug?\""
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/mla_v1.py",
+      "line": 475,
+      "code": "# 作者 whx-sjtu 回复: \"This is called in a process that has already set_device,\n#   in this situation 'npu' will be automatically set to corresponding rank\"\n# 将 prefill_mask 创建移到 __init__ 中，避免每次 forward pass 重复创建\n# 修复 mask 被就地修改的潜在 bug\n\nfrom typing import Optional\nimport torch\nimport torch.nn as nn\nimport torch_npu\n\nfrom vllm.attention.backends.abstract import AttentionMetadata\n\nclass AscendMLAAttention(nn.Module):\n    \"\"\"Ascend MLA attention implementation with ring support.\"\"\"\n\n    def __init__(self, num_heads, head_size, ...):\n        super().__init__()\n        self.num_heads = num_heads\n        self.head_size = head_size\n        # 在 __init__ 中创建 prefill_mask，避免重复创建\n        self.prefill_mask = torch.ones(\n            1, 512, 512, device='npu', dtype=torch.bool)\n\n    def _forward_prefill(self, query, key, value, attn_metadata, ...):\n        \"\"\"Forward pass for prefill phase.\"\"\"\n        # 使用 __init__ 中预创建的 mask\n        # 注意：如果 mask 被就地修改，需要 clone\n        mask = self.prefill_mask\n        if attn_metadata.num_prefills > 1:\n            mask = mask.unsqueeze(0).repeat(\n                attn_metadata.num_prefills, 1, 1)\n        result = torch_npu.npu_ring_mla(\n            query, key, value, mask, ...)\n        return result",
+      "context": "作者 whx-sjtu 回复: \"This is called in a process that has already set_device, in this situation 'npu' will be automatically set to corresponding rank\" 将 prefill_mask 创建移到 __init__ 中，避免每次 forward pass 重复创建"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/mla_v1.py\n+++ b/vllm_ascend/attention/mla_v1.py\n@@ -1,6 +1,7 @@\n-# 评审人 MengqingCao: \"will this always create mask on rank 0?\n-#   is there any way to get current device?\"\n-# 评审人 momo609: \"does 091dev have the same bug?\"\n+# 作者 whx-sjtu 回复: \"This is called in a process that has already set_device,\n+#   in this situation 'npu' will be automatically set to corresponding rank\"\n+# 将 prefill_mask 创建移到 __init__ 中，避免每次 forward pass 重复创建\n+# 修复 mask 被就地修改的潜在 bug\n \n from typing import Optional\n import torch\n@@ -16,15 +17,18 @@\n         super().__init__()\n         self.num_heads = num_heads\n         self.head_size = head_size\n-        # prefill_mask 未在 __init__ 中创建\n+        # 在 __init__ 中创建 prefill_mask，避免重复创建\n+        self.prefill_mask = torch.ones(\n+            1, 512, 512, device='npu', dtype=torch.bool)\n \n     def _forward_prefill(self, query, key, value, attn_metadata, ...):\n         \"\"\"Forward pass for prefill phase.\"\"\"\n-        # prefill_mask 在每次 forward pass 中重复创建\n-        # 使用 'npu' 设备，依赖 set_device 已正确设置\n-        prefill_mask = torch.ones(\n-            1, 512, 512, device='npu', dtype=torch.bool)\n-        # mask 可能被就地修改，导致后续调用出错\n+        # 使用 __init__ 中预创建的 mask\n+        # 注意：如果 mask 被就地修改，需要 clone\n+        mask = self.prefill_mask\n+        if attn_metadata.num_prefills > 1:\n+            mask = mask.unsqueeze(0).repeat(\n+                attn_metadata.num_prefills, 1, 1)\n         result = torch_npu.npu_ring_mla(\n-            query, key, value, prefill_mask, ...)\n+            query, key, value, mask, ...)\n         return result\n",
+      "stats": "1 file changed, +14 lines, -10 lines",
+      "key_changes": [
+        "新增: mask = self.prefill_mask",
+        "新增: mask = mask.unsqueeze(0).repeat("
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

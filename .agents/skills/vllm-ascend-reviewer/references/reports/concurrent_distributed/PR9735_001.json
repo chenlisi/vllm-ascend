@@ -1,0 +1,70 @@
+{
+  "report_id": "PR9735_001",
+  "pr_number": 9735,
+  "pr_title": "[BugFix]Reduce sampling is reconstructed to eliminate all patch behaviors and support DFlash and MTP",
+  "pr_status": "merged",
+  "merged_at": "2026-06-04T03:56:02Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/spec_decode/llm_base_proposer.py:368",
+    "vllm_ascend/spec_decode/llm_base_proposer.py:900"
+  ],
+  "landing_sha": "b127196",
+  "source_quote": "Check this place, self.update_stream = torch.npu.Stream()\nthis rename makes the context more clear 👍",
+  "correspondence": [
+    {
+      "review_quote": "lilinsiman: vllm_ascend/spec_decode/llm_base_proposer.py:368",
+      "patch_snippet": "评后sha b127196 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "lilinsiman: vllm_ascend/spec_decode/llm_base_proposer.py:900",
+      "patch_snippet": "评后sha b127196 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "b127196",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 speculative decoding 的 base proposer 中，`torch.npu.Stream()` 的初始化应放在正确的位置，确保在异步操作前完成初始化，避免 stream 竞争。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/spec_decode/llm_base_proposer.py",
+      "line": 355,
+      "code": "# （根据评审意见推断）update_stream 初始化位置需要确认\n# lilinsiman 评论: \"Check this place, self.update_stream = torch.npu.Stream()\"\n# 需确认 stream 初始化是否在正确的初始化阶段，而非在异步操作内部\n\nclass AscendSpecDecodeBaseProposer:\n    def __init__(self, runner, vllm_config, **kwargs):\n        self.runner = runner\n        self.vllm_config = vllm_config\n        self.model = runner.model\n        # ... 其他初始化 ...\n        # update_stream 未在 __init__ 中初始化\n\n    def _run_merged_draft(\n        self,\n        hidden_states: torch.Tensor,\n        attn_metadata: Any,\n        **kwargs,\n    ) -> torch.Tensor:\n        # 在运行逻辑中初始化 stream — 每次调用都重新创建\n        self.update_stream = torch.npu.Stream()\n        # 使用 stream 进行异步操作\n        with torch.npu.stream(self.update_stream):\n            draft_logits = self.model.compute_logits(hidden_states)\n            # ... 异步处理逻辑 ...\n        return draft_token_ids",
+      "context": "Check this place, self.update_stream = torch.npu.Stream()\nthis rename makes the context more clear 👍"
+    },
+    "pattern": {
+      "file": "vllm_ascend/spec_decode/llm_base_proposer.py",
+      "line": 355,
+      "code": "# 确认 update_stream 在 __init__ 中创建，避免在异步操作中初始化\n\nclass AscendSpecDecodeBaseProposer:\n    def __init__(self, runner, vllm_config, **kwargs):\n        self.runner = runner\n        self.vllm_config = vllm_config\n        self.model = runner.model\n        # stream 在初始化阶段创建，避免在异步操作中初始化\n        self.update_stream = torch.npu.Stream()\n        # ... 其他初始化 ...\n\n    def _run_merged_draft(\n        self,\n        hidden_states: torch.Tensor,\n        attn_metadata: Any,\n        **kwargs,\n    ) -> torch.Tensor:\n        # 直接使用已初始化的 stream\n        with torch.npu.stream(self.update_stream):\n            draft_logits = self.model.compute_logits(hidden_states)\n            # ... 异步处理逻辑 ...\n        return draft_token_ids",
+      "context": "Check this place, self.update_stream = torch.npu.Stream()\nthis rename makes the context more clear 👍"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/spec_decode/llm_base_proposer.py\n+++ b/vllm_ascend/spec_decode/llm_base_proposer.py\n@@ -1,14 +1,13 @@\n-# （根据评审意见推断）update_stream 初始化位置需要确认\n-# lilinsiman 评论: \"Check this place, self.update_stream = torch.npu.Stream()\"\n-# 需确认 stream 初始化是否在正确的初始化阶段，而非在异步操作内部\n+# 确认 update_stream 在 __init__ 中创建，避免在异步操作中初始化\n \n class AscendSpecDecodeBaseProposer:\n     def __init__(self, runner, vllm_config, **kwargs):\n         self.runner = runner\n         self.vllm_config = vllm_config\n         self.model = runner.model\n+        # stream 在初始化阶段创建，避免在异步操作中初始化\n+        self.update_stream = torch.npu.Stream()\n         # ... 其他初始化 ...\n-        # update_stream 未在 __init__ 中初始化\n \n     def _run_merged_draft(\n         self,\n@@ -16,9 +15,7 @@\n         attn_metadata: Any,\n         **kwargs,\n     ) -> torch.Tensor:\n-        # 在运行逻辑中初始化 stream — 每次调用都重新创建\n-        self.update_stream = torch.npu.Stream()\n-        # 使用 stream 进行异步操作\n+        # 直接使用已初始化的 stream\n         with torch.npu.stream(self.update_stream):\n             draft_logits = self.model.compute_logits(hidden_states)\n             # ... 异步处理逻辑 ...\n",
+      "stats": "1 file changed, +4 lines, -7 lines",
+      "key_changes": [
+        "-# （根据评审意见推断）update_stream 初始化位置需要确认",
+        "-# lilinsiman 评论: \"Check this place, self.update_stream = torch.npu.Stream()\"",
+        "-# 需确认 stream 初始化是否在正确的初始化阶段，而非在异步操作内部",
+        "+# 确认 update_stream 在 __init__ 中创建，避免在异步操作中初始化",
+        "+        # stream 在初始化阶段创建，避免在异步操作中初始化",
+        "+        self.update_stream = torch.npu.Stream()",
+        "-        # update_stream 未在 __init__ 中初始化",
+        "-        # 在运行逻辑中初始化 stream — 每次调用都重新创建",
+        "-        self.update_stream = torch.npu.Stream()",
+        "-        # 使用 stream 进行异步操作",
+        "+        # 直接使用已初始化的 stream"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

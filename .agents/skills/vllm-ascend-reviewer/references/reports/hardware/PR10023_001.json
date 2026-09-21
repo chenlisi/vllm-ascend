@@ -1,0 +1,65 @@
+{
+  "report_id": "PR10023_001",
+  "pr_number": 10023,
+  "pr_title": "[Feature] Add kv sliding window for Eagle3 and DFlash",
+  "pr_status": "merged",
+  "merged_at": "2026-07-13T10:49:38Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/spec_decode/utils.py:164"
+  ],
+  "landing_sha": "394adac",
+  "source_quote": "What is `_windowed_cpu` used for?\nI can't find anywhere that uses it.",
+  "correspondence": [
+    {
+      "review_quote": "drslark 对 `_windowed_cpu` 变量的用途提出疑问，表示找不到使用该变量的地方。作者解释说 `seq_lens_cpu`、`_seq_lens_cpu`、`seq_lens_cpu_upper_bound` 都是 CPU 端 tensor，其中 `_seq_lens_cpu` 在 FIA（FlashInfer Attention）操作中使用。为了避免 D2H（Device-to-Host）传输，代码在第 164/165 行重新计算并覆盖这些 CPU tensor。drslark 理解后确认了该设计的合理性。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "394adac",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当代码中为了避免 D2H（Device-to-Host）传输而重新计算 CPU 端 tensor 时，应添加注释说明原因和哪些下游操作依赖这些 CPU tensor。",
+    "context": "",
+    "checkpoints": [
+      "检查 CPU tensor 重计算是否有注释说明目的",
+      "确认是否标注了哪些下游操作（如 FIA ops）依赖这些 tensor",
+      "验证变量命名是否清晰表达了用途"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/spec_decode/utils.py",
+      "line": 150,
+      "code": "def _apply_sliding_window(common_attn_metadata, full_seq_lens,\n                          draft_window_size, block_size, num_spec_tokens):\n    \"\"\"Apply sliding window to draft model attention metadata.\"\"\"\n    W = draft_window_size\n    B = block_size\n    K = num_spec_tokens\n\n    # Windowed seq_lens\n    windowed_seq_lens = full_seq_lens.clamp(max=W)\n    common_attn_metadata.seq_lens = windowed_seq_lens\n\n    # Sync CPU-side mirrors\n    windowed_seq_lens_cpu = windowed_seq_lens.cpu()\n    _windowed_cpu = windowed_seq_lens_cpu  # 用途不明？\n    # drslark: \"What is _windowed_cpu used for? I can't find anywhere that uses it.\"\n\n    if getattr(common_attn_metadata, \"seq_lens_cpu\", None) is not None:\n        common_attn_metadata.seq_lens_cpu = windowed_seq_lens_cpu\n    if getattr(common_attn_metadata, \"_seq_lens_cpu\", None) is not None:\n        common_attn_metadata._seq_lens_cpu = windowed_seq_lens_cpu.clone()\n    if getattr(common_attn_metadata, \"seq_lens_cpu_upper_bound\", None) is not None:\n        common_attn_metadata.seq_lens_cpu_upper_bound = windowed_seq_lens_cpu.clone()",
+      "context": "What is `_windowed_cpu` used for?"
+    },
+    "pattern": {
+      "file": "vllm_ascend/spec_decode/utils.py",
+      "line": 150,
+      "code": "def _apply_sliding_window(common_attn_metadata, full_seq_lens,\n                          draft_window_size, block_size, num_spec_tokens):\n    \"\"\"Apply sliding window to draft model attention metadata.\"\"\"\n    W = draft_window_size\n    B = block_size\n    K = num_spec_tokens\n\n    # Windowed seq_lens\n    windowed_seq_lens = full_seq_lens.clamp(max=W)\n    common_attn_metadata.seq_lens = windowed_seq_lens\n\n    # Recompute CPU-side mirrors to avoid D2H transfer.\n    # \"seq_lens_cpu\", \"_seq_lens_cpu\", \"seq_lens_cpu_upper_bound\" are all\n    # CPU tensors. \"_seq_lens_cpu\" is used in FIA ops; to avoid D2H\n    # transfer, we recompute and override CPU tensors here.\n    # (Author explanation in response to drslark's question)\n    windowed_seq_lens_cpu = windowed_seq_lens.cpu()\n    if getattr(common_attn_metadata, \"seq_lens_cpu\", None) is not None:\n        common_attn_metadata.seq_lens_cpu = windowed_seq_lens_cpu\n    if getattr(common_attn_metadata, \"_seq_lens_cpu\", None) is not None:\n        common_attn_metadata._seq_lens_cpu = windowed_seq_lens_cpu.clone()\n    if getattr(common_attn_metadata, \"seq_lens_cpu_upper_bound\", None) is not None:\n        common_attn_metadata.seq_lens_cpu_upper_bound = windowed_seq_lens_cpu.clone()",
+      "context": "What is `_windowed_cpu` used for?"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/spec_decode/utils.py\n+++ b/vllm_ascend/spec_decode/utils.py\n@@ -9,11 +9,12 @@\n     windowed_seq_lens = full_seq_lens.clamp(max=W)\n     common_attn_metadata.seq_lens = windowed_seq_lens\n \n-    # Sync CPU-side mirrors\n+    # Recompute CPU-side mirrors to avoid D2H transfer.\n+    # \"seq_lens_cpu\", \"_seq_lens_cpu\", \"seq_lens_cpu_upper_bound\" are all\n+    # CPU tensors. \"_seq_lens_cpu\" is used in FIA ops; to avoid D2H\n+    # transfer, we recompute and override CPU tensors here.\n+    # (Author explanation in response to drslark's question)\n     windowed_seq_lens_cpu = windowed_seq_lens.cpu()\n-    _windowed_cpu = windowed_seq_lens_cpu  # 用途不明？\n-    # drslark: \"What is _windowed_cpu used for? I can't find anywhere that uses it.\"\n-\n     if getattr(common_attn_metadata, \"seq_lens_cpu\", None) is not None:\n         common_attn_metadata.seq_lens_cpu = windowed_seq_lens_cpu\n     if getattr(common_attn_metadata, \"_seq_lens_cpu\", None) is not None:",
+      "stats": "1 file changed, +5 lines, -4 lines",
+      "key_changes": [
+        "移除: # Sync CPU-side mirrors",
+        "新增: # Recompute CPU-side mirrors to avoid D2H transfer.",
+        "新增: # \"seq_lens_cpu\", \"_seq_lens_cpu\", \"seq_lens_cpu_upper_bound\" are all",
+        "新增: # CPU tensors. \"_seq_lens_cpu\" is used in FIA ops; to avoid D2H",
+        "新增: # transfer, we recompute and override CPU tensors here.",
+        "新增: # (Author explanation in response to drslark's question)",
+        "移除: _windowed_cpu = windowed_seq_lens_cpu  # 用途不明？",
+        "移除: # drslark: \"What is _windowed_cpu used for? I can't find anywhere that uses it.\""
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

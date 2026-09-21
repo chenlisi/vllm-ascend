@@ -1,0 +1,67 @@
+{
+  "report_id": "PR10026_001",
+  "pr_number": 10026,
+  "pr_title": "[BugFix][dsv4-flash] add dsa-cp support for a5",
+  "pr_status": "merged",
+  "merged_at": "2026-06-18T01:16:32Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/attention/context_parallel/dsa_cp.py:806"
+  ],
+  "landing_sha": "57243da",
+  "source_quote": "please take a look on this comment @zhangtao0408",
+  "correspondence": [
+    {
+      "review_quote": "pisceskkk 提醒作者关注 chatgpt-codex-connector[bot] 提出的 P1 问题：在非 A5 设备上 `get_dsa_sparse_attn_metadata_kwargs()` 已经返回包含 `device` 键的字典，如果再通过 `dict(**metadata_kwargs, device=str(...))` 传递会导致 `TypeError` 重复关键字错误。作者在后续 commit 中修复了该问题，确保 metadata 构建在 A5 和非 A5 设备上均正常工作。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "57243da",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当从适配器/工厂方法获取的 kwargs 字典可能已包含某个键时，不应在 `dict()` 构造中再次显式传递该键，应使用 `setdefault` 或先检查键是否存在。",
+    "context": "",
+    "checkpoints": [
+      "检查 `dict(**kwargs, key=value)` 模式中 kwargs 是否可能已包含 key",
+      "确认适配器返回的字典键是否与后续显式参数冲突",
+      "验证多设备路径（A5 vs 非 A5）的 metadata 构建是否一致"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/context_parallel/dsa_cp.py",
+      "line": 795,
+      "code": "def _build_metadata(self, common_attn_metadata, num_reqs, ...):\n    \"\"\"Build DSA sparse attention metadata for non-drafting path.\"\"\"\n    ...\n    # Get device-specific metadata kwargs from adaptor\n    metadata_kwargs = (\n        BaseDeviceAdaptor\n        .get_dsa_sparse_attn_metadata_kwargs(device_type=self.device_type)\n    )\n    # On non-A5 devices, metadata_kwargs already contains {\"device\": ...}\n    # codex bot P1: expanding **metadata_kwargs and then passing\n    # device=str(...) causes TypeError: dict() got multiple values\n    # for keyword argument 'device'\n    dsa_sparse_attn_metadata = dict(\n        **metadata_kwargs,\n        device=str(self.device_type),\n        num_reqs=num_reqs,\n        ...\n    )\n    return dsa_sparse_attn_metadata",
+      "context": "please take a look on this comment @zhangtao0408"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/context_parallel/dsa_cp.py",
+      "line": 795,
+      "code": "def _build_metadata(self, common_attn_metadata, num_reqs, ...):\n    \"\"\"Build DSA sparse attention metadata for non-drafting path.\"\"\"\n    ...\n    # Get device-specific metadata kwargs from adaptor\n    metadata_kwargs = (\n        BaseDeviceAdaptor\n        .get_dsa_sparse_attn_metadata_kwargs(device_type=self.device_type)\n    )\n    # Avoid passing device twice: use setdefault so that if the adaptor\n    # already provides \"device\", we don't override it; if it doesn't,\n    # we set it as fallback. This ensures compatibility across A5 and\n    # non-A5 devices. (pisceskkk / codex bot P1 fix)\n    metadata_kwargs.setdefault(\"device\", str(self.device_type))\n    dsa_sparse_attn_metadata = dict(\n        **metadata_kwargs,\n        num_reqs=num_reqs,\n        ...\n    )\n    return dsa_sparse_attn_metadata",
+      "context": "please take a look on this comment @zhangtao0408"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/context_parallel/dsa_cp.py\n+++ b/vllm_ascend/attention/context_parallel/dsa_cp.py\n@@ -6,13 +6,13 @@\n         BaseDeviceAdaptor\n         .get_dsa_sparse_attn_metadata_kwargs(device_type=self.device_type)\n     )\n-    # On non-A5 devices, metadata_kwargs already contains {\"device\": ...}\n-    # codex bot P1: expanding **metadata_kwargs and then passing\n-    # device=str(...) causes TypeError: dict() got multiple values\n-    # for keyword argument 'device'\n+    # Avoid passing device twice: use setdefault so that if the adaptor\n+    # already provides \"device\", we don't override it; if it doesn't,\n+    # we set it as fallback. This ensures compatibility across A5 and\n+    # non-A5 devices. (pisceskkk / codex bot P1 fix)\n+    metadata_kwargs.setdefault(\"device\", str(self.device_type))\n     dsa_sparse_attn_metadata = dict(\n         **metadata_kwargs,\n-        device=str(self.device_type),\n         num_reqs=num_reqs,\n         ...\n     )",
+      "stats": "1 file changed, +5 lines, -5 lines",
+      "key_changes": [
+        "移除: # On non-A5 devices, metadata_kwargs already contains {\"device\": ...}",
+        "移除: # codex bot P1: expanding **metadata_kwargs and then passing",
+        "移除: # device=str(...) causes TypeError: dict() got multiple values",
+        "移除: # for keyword argument 'device'",
+        "新增: # Avoid passing device twice: use setdefault so that if the adaptor",
+        "新增: # already provides \"device\", we don't override it; if it doesn't,",
+        "新增: # we set it as fallback. This ensures compatibility across A5 and",
+        "新增: # non-A5 devices. (pisceskkk / codex bot P1 fix)",
+        "新增: metadata_kwargs.setdefault(\"device\", str(self.device_type))",
+        "移除: device=str(self.device_type),"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

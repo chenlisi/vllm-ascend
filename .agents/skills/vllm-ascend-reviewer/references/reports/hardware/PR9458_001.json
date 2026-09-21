@@ -1,0 +1,56 @@
+{
+  "report_id": "PR9458_001",
+  "pr_number": 9458,
+  "pr_title": "[Ops][Feature] Add Ascend 310P support for chunk_gated_delta_rule_fwd_h and chunk_fwd_o",
+  "pr_status": "merged",
+  "merged_at": "2026-06-23T11:43:24Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "csrc/moe/chunk_gated_delta_rule_fwd_h/examples/python/test_npu_chunk_gdr.py:63"
+  ],
+  "landing_sha": "c5c965b",
+  "source_quote": "This should be a test for the fused operator, rather than a CPU-vs-NPU test for the same pytorch operator.",
+  "correspondence": [
+    {
+      "review_quote": "Tflowers-0129: csrc/moe/chunk_gated_delta_rule_fwd_h/examples/python/test_npu_chunk_gdr.py:63",
+      "patch_snippet": "评后sha c5c965b 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "c5c965b",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "This should be a test for the fused operator, rather than a CPU-vs-NPU test for the same pytorch operator.",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "csrc/moe/chunk_gated_delta_rule_fwd_h/examples/python/test_npu_chunk_gdr.py",
+      "line": 63,
+      "code": "// 文件: csrc/moe/chunk_gated_delta_rule_fwd_h/op_kernel/arch20/gemm/kernel/gdn_fwd_h_kernel.hpp\n// （pr/ 数据不足，待补充）\n// gemini-code-assist 指出: stateUbTensor 和 hUbTensor 的硬编码 UB 偏移量\n// 假设 state size 不超过 64KB/32KB，对于 K=192,V=128 的场景(96KB)会导致数据损坏",
+      "context": "This should be a test for the fused operator, rather than a CPU-vs-NPU test for the same pytorch operator."
+    },
+    "pattern": {
+      "file": "csrc/moe/chunk_gated_delta_rule_fwd_h/examples/python/test_npu_chunk_gdr.py",
+      "line": 63,
+      "code": "// 文件: csrc/moe/chunk_gated_delta_rule_fwd_h/op_kernel/arch20/gemm/kernel/gdn_fwd_h_kernel.hpp\n// （pr/ 数据不足，待补充）\n// 建议根据 stateBlockSize 和元素大小动态计算偏移量，或添加静态断言检查边界",
+      "context": "This should be a test for the fused operator, rather than a CPU-vs-NPU test for the same pytorch operator."
+    },
+    "diff": {
+      "unified": "--- a/csrc/moe/chunk_gated_delta_rule_fwd_h/examples/python/test_npu_chunk_gdr.py\n+++ b/csrc/moe/chunk_gated_delta_rule_fwd_h/examples/python/test_npu_chunk_gdr.py\n@@ -1,4 +1,3 @@\n // 文件: csrc/moe/chunk_gated_delta_rule_fwd_h/op_kernel/arch20/gemm/kernel/gdn_fwd_h_kernel.hpp\n // （pr/ 数据不足，待补充）\n-// gemini-code-assist 指出: stateUbTensor 和 hUbTensor 的硬编码 UB 偏移量\n-// 假设 state size 不超过 64KB/32KB，对于 K=192,V=128 的场景(96KB)会导致数据损坏\n+// 建议根据 stateBlockSize 和元素大小动态计算偏移量，或添加静态断言检查边界\n",
+      "stats": "1 file changed, +1 lines, -2 lines",
+      "key_changes": [
+        "-// gemini-code-assist 指出: stateUbTensor 和 hUbTensor 的硬编码 UB 偏移量",
+        "-// 假设 state size 不超过 64KB/32KB，对于 K=192,V=128 的场景(96KB)会导致数据损坏",
+        "+// 建议根据 stateBlockSize 和元素大小动态计算偏移量，或添加静态断言检查边界"
+      ]
+    },
+    "language": "c",
+    "_status": "pending_llm_extract"
+  }
+}

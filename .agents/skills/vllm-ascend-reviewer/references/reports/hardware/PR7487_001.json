@@ -1,0 +1,79 @@
+{
+  "report_id": "PR7487_001",
+  "pr_number": 7487,
+  "pr_title": "[Feature] Optimize Qwen3.5/Qwen3Next GDN prefill by prebuilding chunk metadata",
+  "pr_status": "merged",
+  "merged_at": "2026-03-22T11:10:57Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/patch/worker/patch_gdn_attn.py:27",
+    "vllm_ascend/patch/worker/patch_gdn_attn.py:38",
+    "vllm_ascend/patch/worker/patch_gdn_attn.py:143"
+  ],
+  "landing_sha": "9f9419d",
+  "source_quote": "代码中所有的 `64` 是指 int64 还是 chunk size。\nDoes all the 64 refers to int64 or chunck size?\n使用 `CpuGpuBuffer` 替代分别创建 CPU 和 device tensor 的方式。\nI think it is better to use `CpuGpuBuffer` instead of creating cpu and device tensor seperately?\n`608*2` 的含义。\nwhat's the meaning of `608*2` here?",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao: vllm_ascend/patch/worker/patch_gdn_attn.py:27",
+      "patch_snippet": "评后sha 9f9419d 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/patch/worker/patch_gdn_attn.py:38",
+      "patch_snippet": "评后sha 9f9419d 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/patch/worker/patch_gdn_attn.py:143",
+      "patch_snippet": "评后sha 9f9419d 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "9f9419d",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在需要同时创建 CPU 和 device tensor 进行数据传输时，应使用 `CpuGpuBuffer` 统一管理；代码中的数字常量应使用命名常量并添加注释说明其含义。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/patch/worker/patch_gdn_attn.py",
+      "line": 20,
+      "code": "from dataclasses import dataclass\nimport torch\n\n\n@dataclass\nclass GDNChunkMetadata:\n    \"\"\"Metadata for GDN chunk prefill computation.\"\"\"\n    # Chunk-related fields; \"64\" suffix unclear (int64 or chunk size?)\n    chunk_offsets: torch.Tensor\n    chunk_sizes: torch.Tensor\n    chunk_indices: torch.Tensor\n    num_chunks: torch.Tensor\n\n    # Buffer management\n    cpu_tensor: torch.Tensor\n    device_tensor: torch.Tensor\n\n\ndef _prepare_chunk_metadata(\n    seq_lens: torch.Tensor,\n    chunk_size: int = 64,\n) -> GDNChunkMetadata:\n    \"\"\"Build chunk metadata on CPU and copy to device.\"\"\"\n    ...",
+      "context": "代码中所有的 `64` 是指 int64 还是 chunk size。\nDoes all the 64 refers to int64 or chunck size?\n使用 `CpuGpuBuffer` 替代分别创建 CPU 和 device tensor 的方式。\nI think it is better to use `CpuGpuBuffer` instead of creating cpu"
+    },
+    "pattern": {
+      "file": "vllm_ascend/patch/worker/patch_gdn_attn.py",
+      "line": 20,
+      "code": "from dataclasses import dataclass\nimport torch\nfrom vllm.utils import CpuGpuBuffer\n\n\n@dataclass\nclass GDNChunkMetadata:\n    \"\"\"Metadata for GDN chunk prefill computation.\"\"\"\n    # Chunk-related fields; \"chunk64\" clearly means 64-token chunk\n    chunk64_offsets: torch.Tensor\n    chunk64_sizes: torch.Tensor\n    chunk64_indices: torch.Tensor\n    num_chunks: torch.Tensor\n\n    # Buffer management using CpuGpuBuffer\n    buffer: CpuGpuBuffer\n\n\ndef _prepare_chunk_metadata(\n    seq_lens: torch.Tensor,\n    chunk_size: int = 64,\n) -> GDNChunkMetadata:\n    \"\"\"Build chunk metadata on CPU and copy to device.\"\"\"\n    ...",
+      "context": "代码中所有的 `64` 是指 int64 还是 chunk size。\nDoes all the 64 refers to int64 or chunck size?\n使用 `CpuGpuBuffer` 替代分别创建 CPU 和 device tensor 的方式。\nI think it is better to use `CpuGpuBuffer` instead of creating cpu"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/patch/worker/patch_gdn_attn.py\n+++ b/vllm_ascend/patch/worker/patch_gdn_attn.py\n@@ -1,19 +1,19 @@\n from dataclasses import dataclass\n import torch\n+from vllm.utils import CpuGpuBuffer\n \n \n @dataclass\n class GDNChunkMetadata:\n     \"\"\"Metadata for GDN chunk prefill computation.\"\"\"\n-    # Chunk-related fields; \"64\" suffix unclear (int64 or chunk size?)\n-    chunk_offsets: torch.Tensor\n-    chunk_sizes: torch.Tensor\n-    chunk_indices: torch.Tensor\n+    # Chunk-related fields; \"chunk64\" clearly means 64-token chunk\n+    chunk64_offsets: torch.Tensor\n+    chunk64_sizes: torch.Tensor\n+    chunk64_indices: torch.Tensor\n     num_chunks: torch.Tensor\n \n-    # Buffer management\n-    cpu_tensor: torch.Tensor\n-    device_tensor: torch.Tensor\n+    # Buffer management using CpuGpuBuffer\n+    buffer: CpuGpuBuffer\n \n \n def _prepare_chunk_metadata(\n",
+      "stats": "1 file changed, +7 lines, -7 lines",
+      "key_changes": [
+        "+from vllm.utils import CpuGpuBuffer",
+        "-    # Chunk-related fields; \"64\" suffix unclear (int64 or chunk size?)",
+        "-    chunk_offsets: torch.Tensor",
+        "-    chunk_sizes: torch.Tensor",
+        "-    chunk_indices: torch.Tensor",
+        "+    # Chunk-related fields; \"chunk64\" clearly means 64-token chunk",
+        "+    chunk64_offsets: torch.Tensor",
+        "+    chunk64_sizes: torch.Tensor",
+        "+    chunk64_indices: torch.Tensor",
+        "-    # Buffer management",
+        "-    cpu_tensor: torch.Tensor",
+        "-    device_tensor: torch.Tensor",
+        "+    # Buffer management using CpuGpuBuffer",
+        "+    buffer: CpuGpuBuffer"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

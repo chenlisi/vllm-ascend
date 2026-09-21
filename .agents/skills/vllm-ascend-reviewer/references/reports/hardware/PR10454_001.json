@@ -1,0 +1,69 @@
+{
+  "report_id": "PR10454_001",
+  "pr_number": 10454,
+  "pr_title": "[CI] main2main 0703 commit: 1f486d9",
+  "pr_status": "merged",
+  "merged_at": "2026-07-06T08:25:51Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/_310p/fused_moe/fused_moe.py:70",
+    "vllm_ascend/ops/fused_moe/fused_moe.py:116",
+    "vllm_ascend/ops/fused_moe/fused_moe.py:510",
+    "vllm_ascend/patch/worker/patch_deepseek_v2.py:332"
+  ],
+  "landing_sha": "cd5a6c3",
+  "source_quote": "why we need remove contiguous here?",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 质疑为何移除 `contiguous()` 调用。作者解释：上游 PR 改变了权重加载时机后，所有 MoE 权重同时驻留在 NPU 上，`.transpose(1,2).contiguous()` 会物化完整副本导致内存翻倍（大 MoE 模型 OOM），且 `.transpose()` 已是零拷贝视图，后续 `maybe_trans_nz()` 能处理非连续输入。对于 `patch_deepseek_v2.py:332`，作者确认该 patch 是必需的（vLLM SP 和 Ascend MC2 通信路径不兼容），4/4 建议全部落地。",
+      "patch_snippet": "",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "cd5a6c3",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在 NPU 内存受限场景下，`.contiguous()` 会物化张量的完整副本。如果后续操作能处理非连续输入（如 `maybe_trans_nz()`），应移除中间的 `.contiguous()` 调用以降低峰值内存。",
+    "context": "",
+    "checkpoints": [
+      "检查 `.contiguous()` 是否必要（后续操作是否要求连续输入）",
+      "检查大模型场景下是否有内存翻倍的隐式拷贝"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/_310p/fused_moe/fused_moe.py",
+      "line": 70,
+      "code": "import torch\nimport torch_npu\nfrom typing import Optional\n\n# ... 其他代码 ...\n\nclass AscendFusedMoE310P:\n    # ... 其他方法 ...\n\n    def process_weights_after_loading(self, layer: torch.nn.Module) -> None:\n        \"\"\"权重加载后的处理\"\"\"\n        # MengqingCao: \"why we need remove contiguous here?\"\n        # 上游 PR #44589 改变了权重加载时机后，\n        # 所有 MoE 权重同时驻留在 NPU 上\n        # .transpose(1,2).contiguous() 会物化完整副本\n        # 导致内存翻倍 — 大 MoE 模型（如 Qwen3-Next-80B-A3B TP=4）OOM\n        weight = layer.w13_weight.data\n        weight = weight.transpose(1, 2).contiguous()  # OOM!\n        weight = maybe_trans_nz(weight)\n        layer.w13_weight.data = weight\n\n    # ... 其他方法 ...",
+      "context": "why we need remove contiguous here?"
+    },
+    "pattern": {
+      "file": "vllm_ascend/_310p/fused_moe/fused_moe.py",
+      "line": 70,
+      "code": "import torch\nimport torch_npu\nfrom typing import Optional\n\n# ... 其他代码 ...\n\nclass AscendFusedMoE310P:\n    # ... 其他方法 ...\n\n    def process_weights_after_loading(self, layer: torch.nn.Module) -> None:\n        \"\"\"权重加载后的处理\"\"\"\n        # zhangxinyuehfad 解释:\n        # 1. 峰值内存降低: .transpose(1,2) 已是零拷贝视图\n        #    .contiguous() 会物化完整副本导致内存翻倍\n        # 2. 冗余操作: 后续 maybe_trans_nz() 能处理非连续输入\n        #    并输出连续 NZ 存储，中间的 .contiguous() 不必要\n        weight = layer.w13_weight.data\n        weight = weight.transpose(1, 2)  # 零拷贝视图，无需 contiguous\n        weight = maybe_trans_nz(weight)  # 处理非连续输入，输出 NZ 存储\n        layer.w13_weight.data = weight\n\n    # ... 其他方法 ...",
+      "context": "why we need remove contiguous here?"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/_310p/fused_moe/fused_moe.py\n+++ b/vllm_ascend/_310p/fused_moe/fused_moe.py\n@@ -9,14 +9,14 @@\n \n     def process_weights_after_loading(self, layer: torch.nn.Module) -> None:\n         \"\"\"权重加载后的处理\"\"\"\n-        # MengqingCao: \"why we need remove contiguous here?\"\n-        # 上游 PR #44589 改变了权重加载时机后，\n-        # 所有 MoE 权重同时驻留在 NPU 上\n-        # .transpose(1,2).contiguous() 会物化完整副本\n-        # 导致内存翻倍 — 大 MoE 模型（如 Qwen3-Next-80B-A3B TP=4）OOM\n+        # zhangxinyuehfad 解释:\n+        # 1. 峰值内存降低: .transpose(1,2) 已是零拷贝视图\n+        #    .contiguous() 会物化完整副本导致内存翻倍\n+        # 2. 冗余操作: 后续 maybe_trans_nz() 能处理非连续输入\n+        #    并输出连续 NZ 存储，中间的 .contiguous() 不必要\n         weight = layer.w13_weight.data\n-        weight = weight.transpose(1, 2).contiguous()  # OOM!\n-        weight = maybe_trans_nz(weight)\n+        weight = weight.transpose(1, 2)  # 零拷贝视图，无需 contiguous\n+        weight = maybe_trans_nz(weight)  # 处理非连续输入，输出 NZ 存储\n         layer.w13_weight.data = weight\n \n     # ... 其他方法 ...",
+      "stats": "1 file changed, +7 lines, -7 lines",
+      "key_changes": [
+        "移除: # MengqingCao: \"why we need remove contiguous here?\"",
+        "移除: # 上游 PR #44589 改变了权重加载时机后，",
+        "移除: # 所有 MoE 权重同时驻留在 NPU 上",
+        "移除: # .transpose(1,2).contiguous() 会物化完整副本",
+        "移除: # 导致内存翻倍 — 大 MoE 模型（如 Qwen3-Next-80B-A3B TP=4）OOM",
+        "新增: # zhangxinyuehfad 解释:",
+        "新增: # 1. 峰值内存降低: .transpose(1,2) 已是零拷贝视图",
+        "新增: #    .contiguous() 会物化完整副本导致内存翻倍",
+        "新增: # 2. 冗余操作: 后续 maybe_trans_nz() 能处理非连续输入",
+        "新增: #    并输出连续 NZ 存储，中间的 .contiguous() 不必要"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

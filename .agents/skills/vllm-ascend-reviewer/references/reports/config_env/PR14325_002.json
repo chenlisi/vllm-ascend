@@ -1,0 +1,58 @@
+{
+  "report_id": "PR14325_002",
+  "pr_number": 14325,
+  "pr_title": "[Doc][Feature] Add Qwen3.8-27B tutorial",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/models/Qwen3.8-27B.md:160"
+  ],
+  "landing_sha": "93d59bc",
+  "source_quote": "Remove this.",
+  "correspondence": [
+    {
+      "review_quote": "docs/source/tutorials/models/Qwen3.8-27B.md:160",
+      "patch_snippet": "评后sha 93d59bc 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "93d59bc",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "部署教程文档中的环境变量和启动参数应只保留必要项，移除与该部署场景无关或可能误导用户的配置（如默认值的显式重写、与该模型无关的环境变量）。",
+    "context": "",
+    "checkpoints": [
+      "检查文档中是否有 export 了不必要的环境变量（如默认值的显式设置）",
+      "检查启动参数中是否有显式重写默认值的项（如 `--seed`、`--no-enable-prefix-caching` 这类与教程目标无关的项）",
+      "检查是否有与该模型/部署场景无关的 TASK_QUEUE 等环境变量"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/Qwen3.8-27B.md",
+      "line": 160,
+      "code": "# docs/source/tutorials/models/Qwen3.8-27B.md\nexport OMP_PROC_BIND=false\n# Number of OpenMP threads available for parallel regions\nexport OMP_NUM_THREADS=1\n# Enables the Ascend task queue for asynchronous operator dispatch\nexport TASK_QUEUE_ENABLE=1\n\n# Model weight path...\n        --port 8000 \\\n        --data-parallel-size 1 \\\n        --tensor-parallel-size 2 \\\n        --seed 1024 \\\n        --quantization ascend \\\n        --served-model-name qwen3.8 \\\n        --max-num-seqs 32 \\\n        --max-model-len 131072 \\\n        --max-num-batched-tokens 16384 \\\n        --trust-remote-code \\\n        --gpu-memory-utilization 0.85 \\\n        --no-enable-prefix-caching \\",
+      "context": "docs/source/tutorials/models/Qwen3.8-27B.md Number of OpenMP threads available for parallel regions Enables the Ascend task queue for asynchronous operator dispatch"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/Qwen3.8-27B.md",
+      "line": 160,
+      "code": "# docs/source/tutorials/models/Qwen3.8-27B.md\nexport OMP_PROC_BIND=false\n# Number of OpenMP threads available for parallel regions\nexport OMP_NUM_THREADS=1\n\n# Model weight path...\n        --port 8000 \\\n        --data-parallel-size 1 \\\n        --tensor-parallel-size 2 \\\n        --quantization ascend \\\n        --served-model-name qwen3.8 \\\n        --max-num-seqs 32 \\\n        --max-model-len 131072 \\\n        --max-num-batched-tokens 16384 \\\n        --trust-remote-code \\\n        --gpu-memory-utilization 0.85 \\",
+      "context": "docs/source/tutorials/models/Qwen3.8-27B.md Number of OpenMP threads available for parallel regions Model weight path..."
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/Qwen3.8-27B.md\n+++ b/docs/source/tutorials/models/Qwen3.8-27B.md\n@@ -2,14 +2,11 @@\n export OMP_PROC_BIND=false\n # Number of OpenMP threads available for parallel regions\n export OMP_NUM_THREADS=1\n-# Enables the Ascend task queue for asynchronous operator dispatch\n-export TASK_QUEUE_ENABLE=1\n \n # Model weight path...\n         --port 8000 \\\n         --data-parallel-size 1 \\\n         --tensor-parallel-size 2 \\\n-        --seed 1024 \\\n         --quantization ascend \\\n         --served-model-name qwen3.8 \\\n         --max-num-seqs 32 \\\n@@ -17,4 +14,3 @@\n         --max-num-batched-tokens 16384 \\\n         --trust-remote-code \\\n         --gpu-memory-utilization 0.85 \\\n-        --no-enable-prefix-caching \\\n",
+      "stats": "1 file changed, +0 lines, -4 lines",
+      "key_changes": [
+        "移除: export TASK_QUEUE_ENABLE=1",
+        "移除: --seed 1024 \\"
+      ]
+    },
+    "language": "sh",
+    "_status": "processed"
+  }
+}

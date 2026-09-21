@@ -1,0 +1,55 @@
+{
+  "report_id": "PR9528_001",
+  "pr_number": 9528,
+  "pr_title": "[Feature]Optimize workspace usage by workspace reuse for dispatch_ffn_combine operator",
+  "pr_status": "merged",
+  "merged_at": "2026-05-30T09:56:25Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "csrc/mc2/dispatch_ffn_combine/op_kernel/dispatch_ffn_combine_kernel.hpp:1135"
+  ],
+  "landing_sha": "08ace9f",
+  "source_quote": "remove the useless annoation code.",
+  "correspondence": [
+    {
+      "review_quote": "zzzzwwjj: csrc/mc2/dispatch_ffn_combine/op_kernel/dispatch_ffn_combine_kernel.hpp:1135",
+      "patch_snippet": "评后sha 08ace9f 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "08ace9f",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "remove the useless annoation code.",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "csrc/mc2/dispatch_ffn_combine/op_kernel/dispatch_ffn_combine_kernel.hpp",
+      "line": 1135,
+      "code": "// csrc/mc2/dispatch_ffn_combine/op_kernel/utils/block_epilogue_pertoken_swiglu.hpp:189\nauto gmTileC = gmC[loopIdx * blockK];",
+      "context": "remove the useless annoation code."
+    },
+    "pattern": {
+      "file": "csrc/mc2/dispatch_ffn_combine/op_kernel/dispatch_ffn_combine_kernel.hpp",
+      "line": 1135,
+      "code": "// csrc/mc2/dispatch_ffn_combine/op_kernel/utils/block_epilogue_pertoken_swiglu.hpp:189\nauto gmTileC = gmC[loopIdx * blockN];",
+      "context": "remove the useless annoation code."
+    },
+    "diff": {
+      "unified": "--- a/csrc/mc2/dispatch_ffn_combine/op_kernel/dispatch_ffn_combine_kernel.hpp\n+++ b/csrc/mc2/dispatch_ffn_combine/op_kernel/dispatch_ffn_combine_kernel.hpp\n@@ -1,2 +1,2 @@\n // csrc/mc2/dispatch_ffn_combine/op_kernel/utils/block_epilogue_pertoken_swiglu.hpp:189\n-auto gmTileC = gmC[loopIdx * blockK];\n+auto gmTileC = gmC[loopIdx * blockN];\n",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "-auto gmTileC = gmC[loopIdx * blockK];",
+        "+auto gmTileC = gmC[loopIdx * blockN];"
+      ]
+    },
+    "language": "c",
+    "_status": "pending_llm_extract"
+  }
+}

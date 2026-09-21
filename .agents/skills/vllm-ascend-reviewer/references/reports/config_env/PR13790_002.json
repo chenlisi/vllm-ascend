@@ -1,0 +1,60 @@
+{
+  "report_id": "PR13790_002",
+  "pr_number": 13790,
+  "pr_title": "[BugFix][Config] Validate MC2 hierarchy and profiling timing",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/model_runner_v1.py:1788"
+  ],
+  "landing_sha": "873180f",
+  "source_quote": "Also add constraint to ascend config if users disable this flag but set need_timing",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/worker/model_runner_v1.py:1788",
+      "patch_snippet": "评后sha 873180f 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "873180f",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当存在 `enabled`（主开关）和 `need_timing`（子开关）这类语义依赖关系时，配置初始化阶段必须检测\"主开关关闭但子开关开启\"的矛盾配置，记 warning 并强制重置子开关为 False；同时所有调用点不能仅依赖子开关，必须显式判断 `enabled and need_timing`，防止跨进程 config singleton 不一致导致 worker 端在 profiling 关闭时仍执行 timing 同步逻辑。",
+    "context": "",
+    "checkpoints": [
+      "识别配置类中是否存在\"主开关 + 子开关\"的语义依赖（如 `enabled` + `need_timing`）",
+      "在配置 `__init__` 中检测矛盾配置（`not enabled and need_timing`），记 warning 并强制重置子开关",
+      "所有调用点使用 `if config.enabled and config.need_timing:`，禁止仅依赖 `config.need_timing`",
+      "注意跨进程 config singleton 一致性：scheduler 进程修改 config 不影响 worker 进程，调用点必须自检",
+      "配套单测覆盖：(a) 配置层矛盾纠正 (b) 调用点在矛盾配置下不触发副作用（如 `_sync_device` / 计时变量）"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 1788,
+      "code": "# vllm_ascend/ascend_config.py\n\nimport logging\nfrom dataclasses import dataclass\nfrom typing import Any, Dict, Optional\n\nlogger = logging.getLogger(__name__)\n\n\nclass ProfilingChunkConfig:\n    \"\"\"Configuration for profiling chunk behavior.\"\"\"\n\n    def __init__(self, config: Dict[str, Any]):\n        self.enabled: bool = config.get(\"enabled\", False)\n        self.chunk_size: int = config.get(\"chunk_size\", 100)\n        self.need_timing: bool = config.get(\"need_timing\", self.enabled)\n        # ❌ 未校验 enabled=False 时 need_timing=True 的矛盾配置\n        # 用户若误把 need_timing=True 但 enabled=False，worker 端依然会执行 timing 同步逻辑\n\n    def __repr__(self) -> str:\n        return (\n            f\"ProfilingChunkConfig(enabled={self.enabled}, \"\n            f\"chunk_size={self.chunk_size}, \"\n            f\"need_timing={self.need_timing})\"\n        )",
+      "context": "vllm_ascend/ascend_config.py ❌ 未校验 enabled=False 时 need_timing=True 的矛盾配置 用户若误把 need_timing=True 但 enabled=False，worker 端依然会执行 timing 同步逻辑"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 1788,
+      "code": "# vllm_ascend/ascend_config.py\n\nimport logging\nfrom dataclasses import dataclass\nfrom typing import Any, Dict, Optional\n\nlogger = logging.getLogger(__name__)\n\n\nclass ProfilingChunkConfig:\n    \"\"\"Configuration for profiling chunk behavior.\"\"\"\n\n    def __init__(self, config: Dict[str, Any]):\n        self.enabled: bool = config.get(\"enabled\", False)\n        self.chunk_size: int = config.get(\"chunk_size\", 100)\n        self.need_timing: bool = config.get(\"need_timing\", self.enabled)\n        # ✅ 配置初始化阶段就纠正矛盾配置，记 warning 并强制 need_timing=False\n        if not self.enabled and self.need_timing:\n            logger.warning(\n                \"profiling_chunk_config.need_timing=True is ignored because \"\n                \"profiling_chunk_config.enabled=False. Setting need_timing to False.\"\n            )\n            self.need_timing = False\n\n    def __repr__(self) -> str:\n        return (\n            f\"ProfilingChunkConfig(enabled={self.enabled}, \"\n            f\"chunk_size={self.chunk_size}, \"\n            f\"need_timing={self.need_timing})\"\n        )",
+      "context": "vllm_ascend/ascend_config.py ✅ 配置初始化阶段就纠正矛盾配置，记 warning 并强制 need_timing=False"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/model_runner_v1.py\n+++ b/vllm_ascend/worker/model_runner_v1.py\n@@ -14,8 +14,13 @@\n         self.enabled: bool = config.get(\"enabled\", False)\n         self.chunk_size: int = config.get(\"chunk_size\", 100)\n         self.need_timing: bool = config.get(\"need_timing\", self.enabled)\n-        # ❌ 未校验 enabled=False 时 need_timing=True 的矛盾配置\n-        # 用户若误把 need_timing=True 但 enabled=False，worker 端依然会执行 timing 同步逻辑\n+        # ✅ 配置初始化阶段就纠正矛盾配置，记 warning 并强制 need_timing=False\n+        if not self.enabled and self.need_timing:\n+            logger.warning(\n+                \"profiling_chunk_config.need_timing=True is ignored because \"\n+                \"profiling_chunk_config.enabled=False. Setting need_timing to False.\"\n+            )\n+            self.need_timing = False\n \n     def __repr__(self) -> str:\n         return (\n",
+      "stats": "1 file changed, +7 lines, -2 lines",
+      "key_changes": [
+        "新增: \"profiling_chunk_config.enabled=False. Setting need_timing to False.\"",
+        "新增: logger.warning("
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

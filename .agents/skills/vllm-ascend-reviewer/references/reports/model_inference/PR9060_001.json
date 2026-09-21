@@ -1,0 +1,71 @@
+{
+  "report_id": "PR9060_001",
+  "pr_number": 9060,
+  "pr_title": "[Feature] support Flash Attention 3 (FA3) for training-inference consistency.",
+  "pr_status": "merged",
+  "merged_at": "2026-05-18T10:51:50Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "blocker",
+  "affected_files": [
+    "vllm_ascend/platform.py:941",
+    "vllm_ascend/platform.py:624",
+    "vllm_ascend/platform.py:622"
+  ],
+  "landing_sha": "948d700",
+  "source_quote": "add some comments to explain why we need to use AttentionBackendEnum.FLASH_ATTN\nmove the logic to the beginning of the method\nif not attn_selector_config.use_batch_invariant or not fa3:\nreturn\nlogging.info(\"training-inference consistency scenario....., we will use fa3,which will make performance\")\n.....",
+  "correspondence": [
+    {
+      "review_quote": "Ronald1995: vllm_ascend/platform.py:941",
+      "patch_snippet": "评后sha 948d700 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Ronald1995: vllm_ascend/platform.py:624",
+      "patch_snippet": "评后sha 948d700 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Ronald1995: vllm_ascend/platform.py:622",
+      "patch_snippet": "评后sha 948d700 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "948d700",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "add some comments to explain why we need to use AttentionBackendEnum.FLASH_ATTN",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/attention/fa3_v1.py",
+      "line": 98,
+      "code": "# gemini-code-assist 标记为 critical\n\n    def forward_impl(\n        self,\n        query: torch.Tensor,\n        key: torch.Tensor,\n        value: torch.Tensor,\n        kv_cache: tuple[torch.Tensor],\n        attn_metadata,\n        output: torch.Tensor,\n    ):\n        num_tokens = attn_metadata.actual_seq_lengths_q[-1]\n        query = query[:num_tokens]\n\n        num_decodes = attn_metadata.num_decodes\n        num_decode_tokens = attn_metadata.num_decode_tokens\n        num_prefills = attn_metadata.num_prefills\n        outputs = []\n\n        if num_decodes > 0:\n            outputs.append(\n                self._flash_attn_with_kvcache(\n                    query[:num_decode_tokens],\n                    attn_metadata.block_tables[:num_decodes, :],\n                    attn_metadata.query_start_loc[: num_decodes + 1],\n                    attn_metadata.seq_lens[:num_decodes].npu(),\n                    False,\n                    max(attn_metadata.seq_lens[:num_decodes]),\n                )\n            )\n\n        if num_prefills > 0:\n            outputs.append(\n                self._flash_attn_with_kvcache(\n                    query[num_decode_tokens:],\n                    attn_metadata.block_tables[num_decode_tokens:, :],  # BUG: 应使用 num_decodes\n                    attn_metadata.query_start_loc[num_decodes:],\n                    attn_metadata.seq_lens[num_decodes:].npu(),\n                    True,\n                    max(attn_metadata.seq_lens[num_decodes:]),\n                )\n            )",
+      "context": "add some comments to explain why we need to use AttentionBackendEnum.FLASH_ATTN\nmove the logic to the beginning of the method\nif not attn_selector_config.use_batch_invariant or not fa3:\nreturn\nlogging"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/fa3_v1.py",
+      "line": 98,
+      "code": "# gemini-code-assist suggestion:\n# block_tables 应按序列数索引而非 token 数，在 speculative decoding 等场景下\n# num_decodes != num_decode_tokens 会导致错误内存访问\n\n    def forward_impl(\n        self,\n        query: torch.Tensor,\n        key: torch.Tensor,\n        value: torch.Tensor,\n        kv_cache: tuple[torch.Tensor],\n        attn_metadata,\n        output: torch.Tensor,\n    ):\n        num_tokens = attn_metadata.actual_seq_lengths_q[-1]\n        query = query[:num_tokens]\n\n        num_decodes = attn_metadata.num_decodes\n        num_decode_tokens = attn_metadata.num_decode_tokens\n        num_prefills = attn_metadata.num_prefills\n        outputs = []\n\n        if num_decodes > 0:\n            outputs.append(\n                self._flash_attn_with_kvcache(\n                    query[:num_decode_tokens],\n                    attn_metadata.block_tables[:num_decodes, :],\n                    attn_metadata.query_start_loc[: num_decodes + 1],\n                    attn_metadata.seq_lens[:num_decodes].npu(),\n                    False,\n                    max(attn_metadata.seq_lens[:num_decodes]),\n                )\n            )\n\n        if num_prefills > 0:\n            outputs.append(\n                self._flash_attn_with_kvcache(\n                    query[num_decode_tokens:],\n                    attn_metadata.block_tables[num_decodes:, :],  # 修复: 使用 num_decodes\n                    attn_metadata.query_start_loc[num_decodes:],\n                    attn_metadata.seq_lens[num_decodes:].npu(),\n                    True,\n                    max(attn_metadata.seq_lens[num_decodes:]),\n                )\n            )",
+      "context": "add some comments to explain why we need to use AttentionBackendEnum.FLASH_ATTN\nmove the logic to the beginning of the method\nif not attn_selector_config.use_batch_invariant or not fa3:\nreturn\nlogging"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/fa3_v1.py\n+++ b/vllm_ascend/attention/fa3_v1.py\n@@ -1,4 +1,6 @@\n-# gemini-code-assist 标记为 critical\n+# gemini-code-assist suggestion:\n+# block_tables 应按序列数索引而非 token 数，在 speculative decoding 等场景下\n+# num_decodes != num_decode_tokens 会导致错误内存访问\n \n     def forward_impl(\n         self,\n@@ -33,7 +35,7 @@\n             outputs.append(\n                 self._flash_attn_with_kvcache(\n                     query[num_decode_tokens:],\n-                    attn_metadata.block_tables[num_decode_tokens:, :],  # BUG: 应使用 num_decodes\n+                    attn_metadata.block_tables[num_decodes:, :],  # 修复: 使用 num_decodes\n                     attn_metadata.query_start_loc[num_decodes:],\n                     attn_metadata.seq_lens[num_decodes:].npu(),\n                     True,\n",
+      "stats": "1 file changed, +4 lines, -2 lines",
+      "key_changes": [
+        "-# gemini-code-assist 标记为 critical",
+        "+# gemini-code-assist suggestion:",
+        "+# block_tables 应按序列数索引而非 token 数，在 speculative decoding 等场景下",
+        "+# num_decodes != num_decode_tokens 会导致错误内存访问",
+        "-                    attn_metadata.block_tables[num_decode_tokens:, :],  # BUG: 应使用 num_decodes",
+        "+                    attn_metadata.block_tables[num_decodes:, :],  # 修复: 使用 num_decodes"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

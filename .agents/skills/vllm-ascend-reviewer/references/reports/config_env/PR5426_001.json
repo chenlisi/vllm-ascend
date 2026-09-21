@@ -1,0 +1,62 @@
+{
+  "report_id": "PR5426_001",
+  "pr_number": 5426,
+  "pr_title": "[Doc] Modify DeepSeek-R1/V3.1 documentation",
+  "pr_status": "merged",
+  "merged_at": "",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/DeepSeek-R1.md:97",
+    "docs/source/tutorials/DeepSeek-R1.md:149",
+    "docs/source/tutorials/DeepSeek-R1.md:148",
+    "docs/source/tutorials/DeepSeek-R1.md:195"
+  ],
+  "landing_sha": "5c01b5a",
+  "source_quote": "don't remove this, users could only find `vllm-ascend/DeepSeek-R1-W8A8` in modelscope",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 指出不应删除 modelscope 上的模型路径说明（用户仅能在 modelscope 找到该模型），V1 默认已启用无需手动设置，`OMP_NUM_THREADS` 应设为 1。作者通过 commit `5c01b5a` 修改，4/4 建议全部落地。",
+      "patch_snippet": "commit `5c01b5a`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "5c01b5a",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "文档中不应删除用户获取模型的路径信息（如 modelscope 链接），已默认启用的功能无需在示例中手动设置，环境变量（如 `OMP_NUM_THREADS`）应使用推荐值。",
+    "context": "",
+    "checkpoints": [
+      "是否保留了模型获取路径（modelscope/huggingface 链接）",
+      "是否移除了默认已启用功能的冗余设置",
+      "环境变量是否使用了推荐值（如 `OMP_NUM_THREADS=1`）",
+      "同一文件中的多个示例是否保持一致"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/DeepSeek-R1.md",
+      "line": 90,
+      "code": "（模型路径说明被删除，用户无法找到模型下载地址）",
+      "context": "don't remove this, users could only find `vllm-ascend/DeepSeek-R1-W8A8` in modelscope"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/DeepSeek-R1.md",
+      "line": 90,
+      "code": "模型可在 modelscope 获取：vllm-ascend/DeepSeek-R1-W8A8",
+      "context": "don't remove this, users could only find `vllm-ascend/DeepSeek-R1-W8A8` in modelscope"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/DeepSeek-R1.md\n+++ b/docs/source/tutorials/DeepSeek-R1.md\n@@ -90,1 +90,1 @@\n-（模型路径说明被删除，用户无法找到模型下载地址）\n+模型可在 modelscope 获取：vllm-ascend/DeepSeek-R1-W8A8",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "修改了第 1-1 行的代码"
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

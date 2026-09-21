@@ -1,0 +1,106 @@
+{
+  "report_id": "PR3823_001",
+  "pr_number": 3823,
+  "pr_title": "[Test]Add accuracy test for multiple models",
+  "pr_status": "merged",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/e2e/models/configs/Mistral-7B-Instruct-v0.1.yaml:11",
+    "tests/e2e/models/configs/Phi-4-mini-instruct.yaml:14",
+    ".github/workflows/accuracy_test.yaml:58",
+    "tests/e2e/models/configs/ERNIE-4.5-21B-A3B-PT.yaml:14",
+    "tests/e2e/models/configs/Meta-Llama-3.1-8B-Instruct.yaml:2",
+    "tests/e2e/models/configs/Mistral-7B-Instruct-v0.1.yaml:8",
+    "tests/e2e/models/configs/Qwen2.5-Omni-7B.yaml:8",
+    "tests/e2e/models/configs/Qwen3-VL-8B-Instruct.yaml:8"
+  ],
+  "landing_sha": "5db67df",
+  "source_quote": "![high] The configuration for `Mistral-7B-Instruct-v0.1` uses a model from `AI-ModelScope` and sets `trust_remote_code: True`. The original `mistralai/Mistral-7B-Instruct-v0.1` model does not require remote code execution. Using a third-party copy of the model with `trust_remote_code` enabled introduces a security risk, as it allows arbitrary code from the model repository to be executed.\n![high] This configuration uses a re-uploaded model `LLM-Research/Phi-4-mini-instruct` and sets `trust_remote_code: True`. While official Microsoft Phi models often require `trust_remote_code`, using a third-party repository introduces a security risk from executing un-vetted code. It is highly recommended to use the official model from the `microsoft` organization on Hugging Face.\nWhy remove this test?\nJust curious: why setting `gpu_memory_utilization` to 0.6 here?\nI noticed some of the yaml specified the hardware, and some didn't. I think this is no need to specify? cc @zhangxinyuehfad plz also take a look\nThe accuracy indecate that there is some accuracy issues with this model?\nditto\nditto\nLet's rebase your code and revert this change after https://github.com/vllm-project/vllm-ascend/pull/3897 is merged",
+  "correspondence": [
+    {
+      "review_quote": "gemini-code-assist[bot]: tests/e2e/models/configs/Mistral-7B-Instruct-v0.1.yaml:11(2025-10-28 07:15:07)",
+      "patch_snippet": "评后sha 5db67df 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "gemini-code-assist[bot]: tests/e2e/models/configs/Phi-4-mini-instruct.yaml:14(2025-10-28 07:15:07)",
+      "patch_snippet": "评后sha 5db67df 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: .github/workflows/accuracy_test.yaml:58(2025-10-31 01:20:09)",
+      "patch_snippet": "评后sha 5db67df 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: tests/e2e/models/configs/ERNIE-4.5-21B-A3B-PT.yaml:14(2025-10-31 01:22:22)",
+      "patch_snippet": "评后sha 5db67df 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: tests/e2e/models/configs/Meta-Llama-3.1-8B-Instruct.yaml:2(2025-10-31 01:23:54)",
+      "patch_snippet": "评后sha 5db67df 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: tests/e2e/models/configs/Mistral-7B-Instruct-v0.1.yaml:8(2025-10-31 01:25:12)",
+      "patch_snippet": "评后sha 5db67df 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: tests/e2e/models/configs/Qwen2.5-Omni-7B.yaml:8(2025-10-31 01:25:19)",
+      "patch_snippet": "评后sha 5db67df 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: tests/e2e/models/configs/Qwen3-VL-8B-Instruct.yaml:8(2025-10-31 01:25:35)",
+      "patch_snippet": "评后sha 5db67df 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: .github/workflows/accuracy_test.yaml:58(2025-11-03 09:38:58)",
+      "patch_snippet": "评后sha 5db67df 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "5db67df",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "精度测试的 YAML 配置文件应使用官方模型源（如 `mistralai/`、`microsoft/`），不应使用第三方 re-upload 模型（如 `AI-ModelScope/`、`LLM-Research/`）并启用 `trust_remote_code: True`，这会引入安全风险。",
+    "context": "",
+    "checkpoints": [
+      "模型配置是否使用官方源",
+      "是否启用了 `trust_remote_code: True`",
+      "第三方 re-upload 模型是否有文档说明原因"
+    ],
+    "antipattern": {
+      "file": "tests/e2e/models/configs/Mistral-7B-Instruct-v0.1.yaml",
+      "line": 1,
+      "code": "# gemini-bot suggestion：使用第三方 re-upload 模型并启用 trust_remote_code\nmodel_name: \"AI-ModelScope/Mistral-7B-Instruct-v0.1\"\nrunner: \"linux-aarch64-a2-1\"\nhardware: \"Atlas A2 Series\"\ntrust_remote_code: true\ntasks:\n- name: \"gsm8k\"\n  metrics:\n  - name: \"exact_match,strict-match\"\n    value: 0.35\n  - name: \"exact_match,flexible-extract\"\n    value: 0.38",
+      "context": "gemini-bot suggestion：使用第三方 re-upload 模型并启用 trust_remote_code"
+    },
+    "pattern": {
+      "file": "tests/e2e/models/configs/Mistral-7B-Instruct-v0.1.yaml",
+      "line": 1,
+      "code": "# 使用官方模型源，移除 trust_remote_code\nmodel_name: \"mistralai/Mistral-7B-Instruct-v0.1\"\nrunner: \"linux-aarch64-a2-1\"\nhardware: \"Atlas A2 Series\"\ntasks:\n- name: \"gsm8k\"\n  metrics:\n  - name: \"exact_match,strict-match\"\n    value: 0.35\n  - name: \"exact_match,flexible-extract\"\n    value: 0.38",
+      "context": "使用官方模型源，移除 trust_remote_code"
+    },
+    "diff": {
+      "unified": "--- a/tests/e2e/models/configs/Mistral-7B-Instruct-v0.1.yaml\n+++ b/tests/e2e/models/configs/Mistral-7B-Instruct-v0.1.yaml\n@@ -1,8 +1,7 @@\n-# gemini-bot suggestion：使用第三方 re-upload 模型并启用 trust_remote_code\n-model_name: \"AI-ModelScope/Mistral-7B-Instruct-v0.1\"\n+# 使用官方模型源，移除 trust_remote_code\n+model_name: \"mistralai/Mistral-7B-Instruct-v0.1\"\n runner: \"linux-aarch64-a2-1\"\n hardware: \"Atlas A2 Series\"\n-trust_remote_code: true\n tasks:\n - name: \"gsm8k\"\n   metrics:\n",
+      "stats": "1 file changed, +2 lines, -3 lines",
+      "key_changes": [
+        "移除: trust_remote_code: true",
+        "移除: model_name: \"AI-ModelScope/Mistral-7B-Instruct-v0.1\"",
+        "新增: model_name: \"mistralai/Mistral-7B-Instruct-v0.1\""
+      ]
+    },
+    "language": "yaml",
+    "_status": "processed"
+  }
+}

@@ -1,0 +1,105 @@
+{
+  "report_id": "PR9757_001",
+  "pr_number": 9757,
+  "pr_title": "[Feature] DeepSeek-V4 for Ascend950",
+  "pr_status": "merged",
+  "merged_at": "2026-06-03T13:48:05Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/quantization/methods/fp8.py:31",
+    "vllm_ascend/quantization/method_adapters.py:113",
+    "vllm_ascend/quantization/fp8_config.py:1",
+    "vllm_ascend/models/deepseek_v4.py:516",
+    "vllm_ascend/ops/activation.py:45"
+  ],
+  "landing_sha": "53c7403",
+  "source_quote": "添加类的说明，针对fp8原生适配\ncheck是否会影响其他模型\ncheck vllm 上游 fp8实现，分析实现差异\n已修改，只针对有pack_factor相关属性的场景下配置相关属性\n已添加\nMengqingCao 行级评论（2026-06-03 07:44:51），评后 sha `662984c` 体现修改。\nMengqingCao 行级评论（2026-06-03 07:45:32），评后 sha `662984c` 体现修改。\nlcfenglinwan 行级评论（2026-06-03 08:57:29/08:57:38），评后 sha `662984c` 体现修改。",
+  "correspondence": [
+    {
+      "review_quote": "lcfenglinwan: vllm_ascend/quantization/methods/fp8.py:31",
+      "patch_snippet": "评后sha 53c7403 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "lcfenglinwan: vllm_ascend/quantization/method_adapters.py:113",
+      "patch_snippet": "评后sha 53c7403 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "lcfenglinwan: vllm_ascend/quantization/fp8_config.py:1",
+      "patch_snippet": "评后sha 53c7403 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "lcfenglinwan: vllm_ascend/quantization/method_adapters.py:113",
+      "patch_snippet": "评后sha 53c7403 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "lcfenglinwan: vllm_ascend/quantization/methods/fp8.py:31",
+      "patch_snippet": "评后sha 53c7403 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "lcfenglinwan: vllm_ascend/models/deepseek_v4.py:516",
+      "patch_snippet": "评后sha 53c7403 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "lcfenglinwan: vllm_ascend/ops/activation.py:45",
+      "patch_snippet": "评后sha 53c7403 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "lcfenglinwan: vllm_ascend/models/deepseek_v4.py:516",
+      "patch_snippet": "评后sha 53c7403 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "53c7403",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "新增量化方法（如 FP8）实现时，必须添加类说明文档，分析上游 vLLM 实现的差异，并确认修改不会影响其他模型。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/quantization/methods/fp8.py",
+      "line": 25,
+      "code": "# （根据评审意见推断）缺少类说明文档\n# lcfenglinwan 评论: \"添加类的说明，针对fp8原生适配\"\n\nimport torch\nfrom vllm.model_executor.layers.quantization.fp8 import Fp8LinearMethod\n\n\nclass AscendFp8LinearMethod:\n    # 无 docstring，未说明与上游 vLLM FP8 实现的差异\n    def __init__(self, quant_config: AscendFp8Config):\n        self.quant_config = quant_config\n        self.block_size = quant_config.block_size\n\n    def apply(\n        self,\n        layer: torch.nn.Module,\n        x: torch.Tensor,\n        bias: Optional[torch.Tensor] = None,\n    ) -> torch.Tensor:\n        # Ascend-specific FP8 quantization and matmul\n        ...",
+      "context": "添加类的说明，针对fp8原生适配\ncheck是否会影响其他模型\ncheck vllm 上游 fp8实现，分析实现差异\n已修改，只针对有pack_factor相关属性的场景下配置相关属性\n已添加\nMengqingCao 行级评论（2026-06-03 07:44:51），评后 sha `662984c` 体现修改。\nMengqingCao 行级评论（2026-06-03 07:45:32），评后 s"
+    },
+    "pattern": {
+      "file": "vllm_ascend/quantization/methods/fp8.py",
+      "line": 25,
+      "code": "# 添加类说明：针对 fp8 原生适配，说明与上游差异\n# lcfenglinwan 回复: \"已添加\"\n\nimport torch\nfrom vllm.model_executor.layers.quantization.fp8 import Fp8LinearMethod\n\n\nclass AscendFp8LinearMethod:\n    \"\"\"Ascend native FP8 linear method for DeepSeek-V4 on Ascend950.\n\n    Differences from upstream vLLM FP8:\n    - Uses Ascend-specific quantization kernels (torch_npu.npu_dynamic_mx_quant)\n    - Handles pack_factor for weight compression on A5 hardware\n    - Supports W4A8 MXFP quantization scheme\n    \"\"\"\n\n    def __init__(self, quant_config: AscendFp8Config):\n        self.quant_config = quant_config\n        self.block_size = quant_config.block_size\n\n    def apply(\n        self,\n        layer: torch.nn.Module,\n        x: torch.Tensor,\n        bias: Optional[torch.Tensor] = None,\n    ) -> torch.Tensor:\n        # Ascend-specific FP8 quantization and matmul\n        ...",
+      "context": "添加类的说明，针对fp8原生适配\ncheck是否会影响其他模型\ncheck vllm 上游 fp8实现，分析实现差异\n已修改，只针对有pack_factor相关属性的场景下配置相关属性\n已添加\nMengqingCao 行级评论（2026-06-03 07:44:51），评后 sha `662984c` 体现修改。\nMengqingCao 行级评论（2026-06-03 07:45:32），评后 s"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/quantization/methods/fp8.py\n+++ b/vllm_ascend/quantization/methods/fp8.py\n@@ -1,12 +1,19 @@\n-# （根据评审意见推断）缺少类说明文档\n-# lcfenglinwan 评论: \"添加类的说明，针对fp8原生适配\"\n+# 添加类说明：针对 fp8 原生适配，说明与上游差异\n+# lcfenglinwan 回复: \"已添加\"\n \n import torch\n from vllm.model_executor.layers.quantization.fp8 import Fp8LinearMethod\n \n \n class AscendFp8LinearMethod:\n-    # 无 docstring，未说明与上游 vLLM FP8 实现的差异\n+    \"\"\"Ascend native FP8 linear method for DeepSeek-V4 on Ascend950.\n+\n+    Differences from upstream vLLM FP8:\n+    - Uses Ascend-specific quantization kernels (torch_npu.npu_dynamic_mx_quant)\n+    - Handles pack_factor for weight compression on A5 hardware\n+    - Supports W4A8 MXFP quantization scheme\n+    \"\"\"\n+\n     def __init__(self, quant_config: AscendFp8Config):\n         self.quant_config = quant_config\n         self.block_size = quant_config.block_size\n",
+      "stats": "1 file changed, +10 lines, -3 lines",
+      "key_changes": [
+        "-# （根据评审意见推断）缺少类说明文档",
+        "-# lcfenglinwan 评论: \"添加类的说明，针对fp8原生适配\"",
+        "+# 添加类说明：针对 fp8 原生适配，说明与上游差异",
+        "+# lcfenglinwan 回复: \"已添加\"",
+        "-    # 无 docstring，未说明与上游 vLLM FP8 实现的差异",
+        "+    \"\"\"Ascend native FP8 linear method for DeepSeek-V4 on Ascend950.",
+        "+",
+        "+    Differences from upstream vLLM FP8:",
+        "+    - Uses Ascend-specific quantization kernels (torch_npu.npu_dynamic_mx_quant)",
+        "+    - Handles pack_factor for weight compression on A5 hardware",
+        "+    - Supports W4A8 MXFP quantization scheme",
+        "+    \"\"\"",
+        "+"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

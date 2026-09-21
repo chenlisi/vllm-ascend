@@ -1,0 +1,62 @@
+{
+  "report_id": "PR7044_001",
+  "pr_number": 7044,
+  "pr_title": "[Feat][SP] Suport SP for VL MoE models",
+  "pr_status": "merged",
+  "merged_at": "2026-03-24T09:16:01Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/compilation/passes/noop_elimination.py:11",
+    "vllm_ascend/patch/worker/patch_distributed.py:117",
+    "vllm_ascend/patch/worker/patch_distributed.py:109"
+  ],
+  "landing_sha": "bd3aa0f",
+  "source_quote": "Why not directly reuse the upstream `NoOpEliminationPass`?",
+  "correspondence": [
+    {
+      "review_quote": "wxsIcey 提出了两个问题：1) 为何不直接复用上游的 NoOpEliminationPass；2) 不再需要手动 patch collective ops，上游已实现了自定义 collective ops 注册机制。作者回复：上游 NoOpEliminationPass 仅消除 reshape 和 slice，Ascend 需要额外消除 view，因此保留了自定义实现。对于 collective ops patch，作者通过后续 commit 移除了冗余的 patch 代码，wxsIcey 确认了修改。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "bd3aa0f",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当上游已有类似功能实现时，应优先复用。如果因平台差异需要自定义实现，必须在代码中添加注释说明与上游实现的差异及原因。同时，当上游提供了新的扩展机制（如 platform.py 中的注册接口）时，应及时迁移并移除旧的 patch 代码。",
+    "context": "",
+    "checkpoints": [
+      "检查是否存在与上游功能重叠的自定义实现",
+      "确认自定义实现是否添加了注释说明与上游的差异",
+      "验证是否已迁移到上游提供的新扩展机制",
+      "检查 patch 代码是否仍有必要，上游是否已提供替代方案",
+      "确认移除 patch 后功能是否正常"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/compilation/passes/noop_elimination.py",
+      "line": 1,
+      "code": "from collections.abc import Iterable\n\nimport torch\nimport torch.fx\nfrom torch import SymInt\nfrom torch.fx.experimental.symbolic_shapes import statically_known_true\nfrom vllm.compilation.passes.vllm_inductor_pass import VllmInductorPass\nfrom vllm.logger import logger\n\n\nclass NoOpEliminationPass(VllmInductorPass):\n    \"\"\"Eliminates no-op operations from the computation graph.\"\"\"\n\n    def __call__(self, graph: torch.fx.Graph) -> None:\n        fx_graph = graph.graph if hasattr(graph, \"graph\") else graph\n        removed = 0\n        for node in list(fx_graph.nodes):\n            if not self._is_view_like(node):\n                continue\n\n            input_node = node.args[0]\n            if not isinstance(input_node, torch.fx.Node):\n                continue\n\n            input_meta = input_node.meta.get(\"val\")\n            output_meta = node.meta.get(\"val\")\n            if input_meta is None or output_meta is None:\n                continue\n\n            input_shape = getattr(input_meta, \"shape\", None)\n            output_shape = getattr(output_meta, \"shape\", None)\n            if input_shape is None or output_shape is None:\n                continue\n\n            if self._all_dims_equivalent(input_shape, output_shape):\n                node.replace_all_uses_with(input_node)\n                fx_graph.erase_node(node)\n                removed += 1\n\n        logger.debug(\"NoOpEliminationPass removed %s no-op views\", removed)",
+      "context": "Why not directly reuse the upstream `NoOpEliminationPass`?"
+    },
+    "pattern": {
+      "file": "vllm_ascend/compilation/passes/noop_elimination.py",
+      "line": 1,
+      "code": "from collections.abc import Iterable\n\nimport torch\nimport torch.fx\nfrom torch import SymInt\nfrom torch.fx.experimental.symbolic_shapes import statically_known_true\nfrom vllm.compilation.passes.vllm_inductor_pass import VllmInductorPass\nfrom vllm.logger import logger\n\n\nclass NoOpEliminationPass(VllmInductorPass):\n    \"\"\"Remove no-op view/reshape nodes after pattern rewrites.\n\n    Note: Upstream NoOpEliminationPass only eliminates `reshape` and `slice`,\n    but Ascend needs to additionally eliminate `view` operations.\n    Therefore, we keep this custom implementation.\n    \"\"\"\n\n    def __call__(self, graph: torch.fx.Graph) -> None:\n        fx_graph = graph.graph if hasattr(graph, \"graph\") else graph\n        removed = 0\n        for node in list(fx_graph.nodes):\n            if not self._is_view_like(node):\n                continue\n\n            input_node = node.args[0]\n            if not isinstance(input_node, torch.fx.Node):\n                continue\n\n            input_meta = input_node.meta.get(\"val\")\n            output_meta = node.meta.get(\"val\")\n            if input_meta is None or output_meta is None:\n                continue\n\n            input_shape = getattr(input_meta, \"shape\", None)\n            output_shape = getattr(output_meta, \"shape\", None)\n            if input_shape is None or output_shape is None:\n                continue\n\n            if self._all_dims_equivalent(input_shape, output_shape):\n                node.replace_all_uses_with(input_node)\n                fx_graph.erase_node(node)\n                removed += 1\n\n        logger.debug(\"NoOpEliminationPass removed %s no-op views\", removed)",
+      "context": "Why not directly reuse the upstream `NoOpEliminationPass`?"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/compilation/passes/noop_elimination.py\n+++ b/vllm_ascend/compilation/passes/noop_elimination.py\n@@ -1,40 +1,45 @@\n \n \n class NoOpEliminationPass(VllmInductorPass):\n-    \"\"\"Eliminates no-op operations from the computation graph.\"\"\"\n+    \"\"\"Remove no-op view/reshape nodes after pattern rewrites.\n+\n+    Note: Upstream NoOpEliminationPass only eliminates `reshape` and `slice`,\n+    but Ascend needs to additionally eliminate `view` operations.\n+    Therefore, we keep this custom implementation.\n+    \"\"\"\n \n     def __call__(self, graph: torch.fx.Graph) -> None:\n         fx_graph = graph.graph if hasattr(graph, \"graph\") else graph",
+      "stats": "1 file changed, +6 lines, -1 lines",
+      "key_changes": [
+        "修改了第 12-12 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

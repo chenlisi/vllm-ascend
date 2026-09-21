@@ -1,0 +1,45 @@
+{
+  "report_id": "PR12878_001",
+  "pr_number": 12878,
+  "pr_title": "[Performance] 9.1.0 CANN supports the mla_prolog operator",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "f2b7d66",
+  "source_quote": "Directly checking `torch.version.cann == \"9.1.0\"` introduces **two major issues**:\n> 1. **Fragility with Future Versions**: Any patch release (e.g., **`9.1.1`**) or future minor/major release (e.g., **`9.2.0`**, **`10.0.0`**) will evaluate to **`False`**, silently disabling this performance optimization. We should use **`>= \"9.1.0\"` via `packaging.version.Version`** for robust semantic version comparison.\n2. **Potential AttributeError**: In environments where `torch_npu` is not fully initialized or is mocked (such as **CPU-based unit tests**), `torch.version` may not have the `cann` attribute, leading to an `AttributeError` and crashing the initialization. Using **`getattr`** prevents this crash.",
+  "correspondence": [],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f2b7d66",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/attention/sfa_v1.py",
+      "line": 672,
+      "code": "class AscendSFABackend(AttentionImpl):\n    def __init__(self, ...):\n        ...\n        sfa_prolog_v3_supported = torch.version.cann == \"9.1.0\"\n        # ↑ 硬伤1：精确相等 → 9.1.1 / 9.2.0 / 10.0.0 全 False，静默关闭 mla_prolog\n        # ↑ 硬伤2：torch.version 无 cann 属性（UT环境）→ AttributeError：'Version' object has no attribute 'cann'\n        self.enable_sfa_prolog_v3 = (\n            sfa_prolog_v3_supported\n            and self.is_kv_consumer\n            and kv_cache is not None\n            and self.is_decoder\n        )",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/sfa_v1.py",
+      "line": 0,
+      "code": "class AscendSFABackend(AttentionImpl):\n    def __init__(self, ...):\n        ...\n        cann_version = getattr(torch.version, \"cann\", None)\n        if cann_version is not None:\n            from packaging.version import Version\n\n            sfa_prolog_v3_supported = Version(cann_version) >= Version(\"9.1.0\")\n        else:\n            sfa_prolog_v3_supported = False\n        self.enable_sfa_prolog_v3 = (\n            sfa_prolog_v3_supported\n            and self.is_kv_consumer\n            and kv_cache is not None\n            and self.is_decoder\n        )",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/sfa_v1.py\n+++ b/vllm_ascend/attention/sfa_v1.py\n@@ -1,9 +1,13 @@\n class AscendSFABackend(AttentionImpl):\n     def __init__(self, ...):\n         ...\n-        sfa_prolog_v3_supported = torch.version.cann == \"9.1.0\"\n-        # ↑ 硬伤1：精确相等 → 9.1.1 / 9.2.0 / 10.0.0 全 False，静默关闭 mla_prolog\n-        # ↑ 硬伤2：torch.version 无 cann 属性（UT环境）→ AttributeError：'Version' object has no attribute 'cann'\n+        cann_version = getattr(torch.version, \"cann\", None)\n+        if cann_version is not None:\n+            from packaging.version import Version\n+\n+            sfa_prolog_v3_supported = Version(cann_version) >= Version(\"9.1.0\")\n+        else:\n+            sfa_prolog_v3_supported = False\n         self.enable_sfa_prolog_v3 = (\n             sfa_prolog_v3_supported\n             and self.is_kv_consumer",
+      "stats": "1 file changed, +7 lines, -3 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

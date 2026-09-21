@@ -1,0 +1,59 @@
+{
+  "report_id": "PR5239_001",
+  "pr_number": 5239,
+  "pr_title": "[feature] fia support sliding windows",
+  "pr_status": "merged",
+  "merged_at": "",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/attention_v1.py:371"
+  ],
+  "landing_sha": "01461e2",
+  "source_quote": "may need move this to AttnMaskBuilder for cache and use only one same mask.",
+  "correspondence": [
+    {
+      "review_quote": "weijinqian0 建议将 swa_mask 移至 AttnMaskBuilder 以实现缓存和复用。作者通过 commit `01461e2` 完成了重构，将 mask 创建逻辑移入 AttnMaskBuilder，1/1 建议落地。",
+      "patch_snippet": "commit `01461e2`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "01461e2",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "Attention mask（如 sliding window attention mask）应在 AttnMaskBuilder 中统一管理和缓存，避免在每次 forward 调用中重复创建相同的 mask。",
+    "context": "",
+    "checkpoints": [
+      "mask 是否在 AttnMaskBuilder 中统一管理",
+      "是否存在重复创建相同 mask 的情况",
+      "mask 是否支持缓存和复用"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 0,
+      "code": "class AscendAttentionImpl:\n    \"\"\"Attention implementation for Ascend.\"\"\"\n\n    def forward(self, query, key, value, ...):\n        if self.sliding_window is not None:\n            swa_mask = torch.ones((2048, 2048), dtype=torch.bool,\n                                  device=query.device)\n            attn_output = self._apply_mask(query, key, swa_mask)\n        else:\n            attn_output = self._forward_standard(query, key, value)\n        return attn_output",
+      "context": "may need move this to AttnMaskBuilder for cache and use only one same mask."
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 0,
+      "code": "class AttnMaskBuilder:\n    \"\"\"Builder for attention masks with caching support.\"\"\"\n\n    def __init__(self, ...):\n        self.swa_mask = None\n\n    def build_swa_mask(self, max_model_len, device):\n        if self.swa_mask is None:\n            self.swa_mask = torch.ones((max_model_len, max_model_len),\n                                       dtype=torch.bool, device=device)\n        return self.swa_mask\n\n\nclass AscendAttentionImpl:\n    \"\"\"Attention implementation for Ascend.\"\"\"\n\n    def forward(self, query, key, value, ...):\n        if self.sliding_window is not None:\n            max_model_len = self.vllm_config.model_config.max_model_len\n            swa_mask = self.mask_builder.build_swa_mask(max_model_len,\n                                                        query.device)\n            attn_output = self._apply_mask(query, key, swa_mask)\n        else:\n            attn_output = self._forward_standard(query, key, value)\n        return attn_output",
+      "context": "may need move this to AttnMaskBuilder for cache and use only one same mask."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/attention_v1.py\n+++ b/vllm_ascend/attention/attention_v1.py\n@@ -1,11 +1,25 @@\n+class AttnMaskBuilder:\n+    \"\"\"Builder for attention masks with caching support.\"\"\"\n+\n+    def __init__(self, ...):\n+        self.swa_mask = None\n+\n+    def build_swa_mask(self, max_model_len, device):\n+        if self.swa_mask is None:\n+            self.swa_mask = torch.ones((max_model_len, max_model_len),\n+                                       dtype=torch.bool, device=device)\n+        return self.swa_mask\n+\n+\n class AscendAttentionImpl:\n     \"\"\"Attention implementation for Ascend.\"\"\"\n \n     def forward(self, query, key, value, ...):\n         if self.sliding_window is not None:\n-            swa_mask = torch.ones((2048, 2048), dtype=torch.bool,\n-                                  device=query.device)\n+            max_model_len = self.vllm_config.model_config.max_model_len\n+            swa_mask = self.mask_builder.build_swa_mask(max_model_len,\n+                                                        query.device)\n             attn_output = self._apply_mask(query, key, swa_mask)\n         else:\n             attn_output = self._forward_standard(query, key, value)",
+      "stats": "1 file changed, +16 lines, -2 lines",
+      "key_changes": [
+        "在第 1-13 行新增了代码",
+        "修改了第 6-7 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

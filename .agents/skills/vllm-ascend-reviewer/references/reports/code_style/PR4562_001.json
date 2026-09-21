@@ -1,0 +1,60 @@
+{
+  "report_id": "PR4562_001",
+  "pr_number": 4562,
+  "pr_title": "[bugfix] Repair the problem of moe model accuracy caused by version upgrade.",
+  "pr_status": "merged",
+  "merged_at": "2025-11-29T22:12:39Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "blocker",
+  "affected_files": [
+    "vllm_ascend/ops/fused_moe/fused_moe.py:295",
+    "vllm_ascend/ops/fused_moe/fused_moe.py:296"
+  ],
+  "landing_sha": "d9a6a4d",
+  "source_quote": "if we just want to replace the whole forward pipeline of FusedMoE, I think we can just overwrite the `forward_oot` to make it clearly.\n```suggestion\ndef forward_oot(self, hidden_states: torch.Tensor,\n```",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 指出如果要替换整个 FusedMoE 的 forward 流程，应该直接覆写 `forward_oot` 方法使意图更清晰。wangxiyuan 建议覆写 `forward` 可能更好。gemini-code-assist[bot] 指出重命名 `forward_impl` 为 `forward_native` 是不完整的，会导致调用链断裂。作者通过 commit `d9a6a4d` 及后续 commits 修复，2/2 人工建议全部落地。",
+      "patch_snippet": "commit `d9a6a4d`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "d9a6a4d",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当需要替换 FusedMoE 的整个 forward 流程时，应使用明确的方法名（如 `forward_oot` 或 `forward`），而不是通过重命名内部方法（如 `forward_impl` → `forward_native`）来实现。",
+    "context": "",
+    "checkpoints": [
+      "覆写方法名是否清晰表达意图（`forward_oot` / `forward`）",
+      "是否更新了所有调用链中的方法引用",
+      "是否会导致继承链断裂或调用错误的基础类方法"
+    ],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "import torch\nfrom vllm.model_executor.layers.fused_moe import FusedMoE\n\n\nclass AscendFusedMoE(FusedMoE):\n    \"\"\"Ascend NPU 上的 FusedMoE 实现，覆写基类的 forward 流程。\"\"\"\n\n    def __init__(self, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n\n    def forward_impl(self, hidden_states: torch.Tensor,\n                     topk_weights: torch.Tensor,\n                     topk_ids: torch.Tensor) -> torch.Tensor:\n        return output",
+      "context": "MengqingCao: if we just want to replace the whole forward pipeline of FusedMoE, I think we can just overwrite the `forward_oot` to make it clearly."
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "import torch\nfrom vllm.model_executor.layers.fused_moe import FusedMoE\n\n\nclass AscendFusedMoE(FusedMoE):\n    \"\"\"Ascend NPU 上的 FusedMoE 实现。\"\"\"\n\n    def __init__(self, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n\n    def forward_oot(self, hidden_states: torch.Tensor,\n                    topk_weights: torch.Tensor,\n                    topk_ids: torch.Tensor) -> torch.Tensor:\n        return output",
+      "context": "MengqingCao: if we just want to replace the whole forward pipeline of FusedMoE, I think we can just overwrite the `forward_oot` to make it clearly."
+    },
+    "diff": {
+      "unified": "--- a/a/file\n+++ b/b/file\n@@ -1,14 +1,14 @@\n \n \n class AscendFusedMoE(FusedMoE):\n-    \"\"\"Ascend NPU 上的 FusedMoE 实现，覆写基类的 forward 流程。\"\"\"\n+    \"\"\"Ascend NPU 上的 FusedMoE 实现。\"\"\"\n \n     def __init__(self, *args, **kwargs):\n         super().__init__(*args, **kwargs)\n \n-    def forward_impl(self, hidden_states: torch.Tensor,\n-                     topk_weights: torch.Tensor,\n-                     topk_ids: torch.Tensor) -> torch.Tensor:\n+    def forward_oot(self, hidden_states: torch.Tensor,\n+                    topk_weights: torch.Tensor,\n+                    topk_ids: torch.Tensor) -> torch.Tensor:\n         return output",
+      "stats": "1 file changed, +4 lines, -4 lines",
+      "key_changes": [
+        "修改了第 6-6 行的代码",
+        "修改了第 11-13 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

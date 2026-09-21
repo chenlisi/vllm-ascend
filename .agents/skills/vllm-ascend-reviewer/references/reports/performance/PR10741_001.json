@@ -1,0 +1,67 @@
+{
+  "report_id": "PR10741_001",
+  "pr_number": 10741,
+  "pr_title": "[Performance][Attention] Build DSA compressor metadata on device",
+  "pr_status": "merged",
+  "merged_at": "2026-06-30T10:35:35Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/triton/compressor/slot_mapping.py:51"
+  ],
+  "landing_sha": "4893025",
+  "source_quote": "NUM_REQS和COMPRESS_RATIO实际运行中都不会变吗？排查一下是否会出现重编译",
+  "correspondence": [
+    {
+      "review_quote": "chenlongxiao 指出应排查 Triton kernel 中 NUM_REQS 和 COMPRESS_RATIO 在实际运行中是否会变化导致重编译。作者确认 COMPRESS_RATIO 与模型压缩配置绑定后固定，NUM_REQS 虽随 batch 变化但在 910B/910C 上未观察到重编译，1/1 建议全部落地。",
+      "patch_snippet": "",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "4893025",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在 Triton kernel 中使用的常量参数，应确认其在实际运行中是否保持不变，变化是否会导致 kernel 重编译，从而影响性能。",
+    "context": "",
+    "checkpoints": [
+      "Triton kernel 中的常量参数在运行时是否会变化",
+      "参数变化是否会导致 kernel 重编译",
+      "是否在不同硬件平台（910B/910C）上验证了行为"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/triton/compressor/slot_mapping.py",
+      "line": 35,
+      "code": "# （根据评审意见推断）原实现在 CPU 端计算压缩位置，\n# 导致 GPU-CPU 同步开销\n\nimport triton\nimport triton.language as tl\n\n\n@triton.jit\ndef _compute_compressed_slot_mapping_kernel(\n    slot_mapping_ptr,\n    compressed_positions_ptr,\n    compress_ratio_ptr,\n    num_reqs_ptr,\n    BLOCK_SIZE: tl.constexpr,\n):\n    \"\"\"Compute compressed slot mapping on device.\"\"\"\n    pid = tl.program_id(0)\n    # COMPRESS_RATIO 和 NUM_REQS 作为 constexpr 参数传入\n    COMPRESS_RATIO: tl.constexpr = tl.load(compress_ratio_ptr)\n    NUM_REQS: tl.constexpr = tl.load(num_reqs_ptr)\n\n    offset = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)\n    mask = offset < NUM_REQS\n    pos = tl.load(compressed_positions_ptr + offset, mask=mask)\n    compressed_idx = pos // COMPRESS_RATIO\n    tl.store(slot_mapping_ptr + offset, compressed_idx, mask=mask)\n\n\ndef build_compressed_slot_mapping_cpu(compressed_positions, compress_ratio):\n    \"\"\"CPU-side computation of compressed slot mapping.\n    此函数导致 GPU-CPU 同步，是性能瓶颈。\n    \"\"\"\n    num_reqs = compressed_positions.shape[0]\n    slot_mapping = compressed_positions // compress_ratio\n    return slot_mapping",
+      "context": "NUM_REQS和COMPRESS_RATIO实际运行中都不会变吗？排查一下是否会出现重编译"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/triton/compressor/slot_mapping.py",
+      "line": 35,
+      "code": "# 压缩 slot mapping 改为在设备上计算，消除 CPU 端同步\n# COMPRESS_RATIO 绑定模型压缩配置，加载后固定不变\n# NUM_REQS 随 batch 请求数变化，但经 910B/910C 验证不触发重编译\n\nimport triton\nimport triton.language as tl\n\n\n@triton.jit\ndef _compute_compressed_slot_mapping_kernel(\n    slot_mapping_ptr,\n    compressed_positions_ptr,\n    compress_ratio,\n    num_reqs,\n    BLOCK_SIZE: tl.constexpr,\n):\n    \"\"\"Compute compressed slot mapping on device.\n    COMPRESS_RATIO: 绑定模型压缩配置，固定不变。\n    NUM_REQS: 随 batch 变化，但在 910B/910C 上未观察到重编译。\n    \"\"\"\n    pid = tl.program_id(0)\n    offset = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)\n    mask = offset < num_reqs\n    pos = tl.load(compressed_positions_ptr + offset, mask=mask)\n    compressed_idx = pos // compress_ratio\n    tl.store(slot_mapping_ptr + offset, compressed_idx, mask=mask)\n\n\n# CPU-side build_compressed_slot_mapping_cpu 已删除\n# 改为直接在设备上通过 Triton kernel 计算",
+      "context": "NUM_REQS和COMPRESS_RATIO实际运行中都不会变吗？排查一下是否会出现重编译"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/triton/compressor/slot_mapping.py\n+++ b/vllm_ascend/ops/triton/compressor/slot_mapping.py\n@@ -1,5 +1,6 @@\n-# （根据评审意见推断）原实现在 CPU 端计算压缩位置，\n-# 导致 GPU-CPU 同步开销\n+# 压缩 slot mapping 改为在设备上计算，消除 CPU 端同步\n+# COMPRESS_RATIO 绑定模型压缩配置，加载后固定不变\n+# NUM_REQS 随 batch 请求数变化，但经 910B/910C 验证不触发重编译\n \n import triton\n import triton.language as tl\n@@ -9,27 +10,21 @@\n def _compute_compressed_slot_mapping_kernel(\n     slot_mapping_ptr,\n     compressed_positions_ptr,\n-    compress_ratio_ptr,\n-    num_reqs_ptr,\n+    compress_ratio,\n+    num_reqs,\n     BLOCK_SIZE: tl.constexpr,\n ):\n-    \"\"\"Compute compressed slot mapping on device.\"\"\"\n+    \"\"\"Compute compressed slot mapping on device.\n+    COMPRESS_RATIO: 绑定模型压缩配置，固定不变。\n+    NUM_REQS: 随 batch 变化，但在 910B/910C 上未观察到重编译。\n+    \"\"\"\n     pid = tl.program_id(0)\n-    # COMPRESS_RATIO 和 NUM_REQS 作为 constexpr 参数传入\n-    COMPRESS_RATIO: tl.constexpr = tl.load(compress_ratio_ptr)\n-    NUM_REQS: tl.constexpr = tl.load(num_reqs_ptr)\n-\n     offset = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)\n-    mask = offset < NUM_REQS\n+    mask = offset < num_reqs\n     pos = tl.load(compressed_positions_ptr + offset, mask=mask)\n-    compressed_idx = pos // COMPRESS_RATIO\n+    compressed_idx = pos // compress_ratio\n     tl.store(slot_mapping_ptr + offset, compressed_idx, mask=mask)\n \n \n-def build_compressed_slot_mapping_cpu(compressed_positions, compress_ratio):\n-    \"\"\"CPU-side computation of compressed slot mapping.\n-    此函数导致 GPU-CPU 同步，是性能瓶颈。\n-    \"\"\"\n-    num_reqs = compressed_positions.shape[0]\n-    slot_mapping = compressed_positions // compress_ratio\n-    return slot_mapping\n+# CPU-side build_compressed_slot_mapping_cpu 已删除\n+# 改为直接在设备上通过 Triton kernel 计算",
+      "stats": "1 file changed, +13 lines, -18 lines",
+      "key_changes": [
+        "移除: # （根据评审意见推断）原实现在 CPU 端计算压缩位置，",
+        "移除: # 导致 GPU-CPU 同步开销",
+        "新增: # 压缩 slot mapping 改为在设备上计算，消除 CPU 端同步",
+        "新增: # COMPRESS_RATIO 绑定模型压缩配置，加载后固定不变",
+        "新增: # NUM_REQS 随 batch 请求数变化，但经 910B/910C 验证不触发重编译",
+        "移除: compress_ratio_ptr,",
+        "移除: num_reqs_ptr,",
+        "新增: compress_ratio,",
+        "新增: num_reqs,",
+        "移除: \"\"\"Compute compressed slot mapping on device.\"\"\""
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

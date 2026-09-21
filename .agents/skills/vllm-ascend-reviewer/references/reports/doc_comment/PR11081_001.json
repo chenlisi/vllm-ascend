@@ -1,0 +1,66 @@
+{
+  "report_id": "PR11081_001",
+  "pr_number": 11081,
+  "pr_title": "[Misc] main2main 0608(refactor fused moe)",
+  "pr_status": "merged",
+  "merged_at": "2026-07-10T02:13:59Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/utils.py:703"
+  ],
+  "landing_sha": "8e3fcae",
+  "source_quote": "",
+  "correspondence": [
+    {
+      "review_quote": "wxsIcey 指出 `vllm_ascend/utils.py` 第 703 行存在需要删除的代码（结合 linfeng-yuan 的普通评论 \"vllm_ascend/utils.py comments are invalid, please change this behaviour\"，该行为删除无效注释/代码）。作者通过 commit `8e3fcae`（\"modify by checklist\"）完成了修改。",
+      "patch_snippet": "commit `8e3fcae`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "8e3fcae",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "代码中的注释、辅助代码段应定期清理，确保不包含无效或过时的内容。重构时应检查并移除不再适用的注释和代码。",
+    "context": "",
+    "checkpoints": [
+      "注释是否仍然准确反映代码行为",
+      "是否存在过时的辅助代码"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/utils.py",
+      "line": 703,
+      "code": "import torch\nfrom typing import Optional, List\n\n# ... 其他工具函数\n\ndef get_moe_router_topk(topk: int, scores: torch.Tensor) -> torch.Tensor:\n    \"\"\"Get top-k routing indices for MoE.\"\"\"\n    topk_scores, topk_indices = torch.topk(scores, topk, dim=-1)\n    return topk_scores, topk_indices\n\n\n# TODO: remove this after upstream vLLM aligns the FusedMoE interface\n# This is a workaround for the legacy FusedMoE class-based design.\n# Once the upstream migration to MoERunner is complete, this function\n# and its callers should be removed.\ndef _legacy_fused_moe_compat(hidden_states, expert_weights, ...):\n    \"\"\"Legacy compatibility wrapper for FusedMoE.\"\"\"\n    # 该函数用于兼容旧的 FusedMoE 接口\n    # 评审人指出此处的注释和代码已经无效，应删除\n    return _dispatch_to_runner(hidden_states, expert_weights)\n\n\ndef _dispatch_to_runner(hidden_states, expert_weights):\n    \"\"\"Dispatch to the appropriate MoE runner.\"\"\"\n    # ... 实际分发逻辑\n    return output",
+      "context": ""
+    },
+    "pattern": {
+      "file": "vllm_ascend/utils.py",
+      "line": 703,
+      "code": "import torch\nfrom typing import Optional, List\n\n# ... 其他工具函数\n\ndef get_moe_router_topk(topk: int, scores: torch.Tensor) -> torch.Tensor:\n    \"\"\"Get top-k routing indices for MoE.\"\"\"\n    topk_scores, topk_indices = torch.topk(scores, topk, dim=-1)\n    return topk_scores, topk_indices\n\n\n# 已删除 _legacy_fused_moe_compat 函数及其无效注释\n# （评审人 wxsIcey 指出 \"delete it\"，linfeng-yuan 确认 \"comments are invalid\"）\n\n\ndef _dispatch_to_runner(hidden_states, expert_weights):\n    \"\"\"Dispatch to the appropriate MoE runner.\"\"\"\n    # ... 实际分发逻辑\n    return output",
+      "context": ""
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/utils.py\n+++ b/vllm_ascend/utils.py\n@@ -9,15 +9,8 @@\n     return topk_scores, topk_indices\n \n \n-# TODO: remove this after upstream vLLM aligns the FusedMoE interface\n-# This is a workaround for the legacy FusedMoE class-based design.\n-# Once the upstream migration to MoERunner is complete, this function\n-# and its callers should be removed.\n-def _legacy_fused_moe_compat(hidden_states, expert_weights, ...):\n-    \"\"\"Legacy compatibility wrapper for FusedMoE.\"\"\"\n-    # 该函数用于兼容旧的 FusedMoE 接口\n-    # 评审人指出此处的注释和代码已经无效，应删除\n-    return _dispatch_to_runner(hidden_states, expert_weights)\n+# 已删除 _legacy_fused_moe_compat 函数及其无效注释\n+# （评审人 wxsIcey 指出 \"delete it\"，linfeng-yuan 确认 \"comments are invalid\"）\n \n \n def _dispatch_to_runner(hidden_states, expert_weights):",
+      "stats": "1 file changed, +2 lines, -9 lines",
+      "key_changes": [
+        "移除: # TODO: remove this after upstream vLLM aligns the FusedMoE interface",
+        "移除: # This is a workaround for the legacy FusedMoE class-based design.",
+        "移除: # Once the upstream migration to MoERunner is complete, this function",
+        "移除: # and its callers should be removed.",
+        "移除: def _legacy_fused_moe_compat(hidden_states, expert_weights, ...):",
+        "移除: \"\"\"Legacy compatibility wrapper for FusedMoE.\"\"\"",
+        "移除: # 该函数用于兼容旧的 FusedMoE 接口",
+        "移除: # 评审人指出此处的注释和代码已经无效，应删除",
+        "移除: return _dispatch_to_runner(hidden_states, expert_weights)",
+        "新增: # 已删除 _legacy_fused_moe_compat 函数及其无效注释"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

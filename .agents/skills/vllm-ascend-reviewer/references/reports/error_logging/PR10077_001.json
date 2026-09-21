@@ -1,0 +1,69 @@
+{
+  "report_id": "PR10077_001",
+  "pr_number": 10077,
+  "pr_title": "[KV Cache][Feature] Support Layerwise KV Pooling",
+  "pr_status": "merged",
+  "merged_at": "2026-06-18T10:32:28Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/context_parallel/attention_cp.py:1038",
+    "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/__init__.py:17",
+    "vllm_ascend/cpu_binding.py:20"
+  ],
+  "landing_sha": "36e0f1e",
+  "source_quote": "Plz save only one.",
+  "correspondence": [
+    {
+      "review_quote": "本 PR 收到 2 位人工评审人的 3 条意见：\n\n1. **weijinqian0** 指出 `attention_cp.py:1038` 处存在冗余的保存操作，建议只保留一个 → 作者在 commit `36e0f1e` 中修复\n2. **weijinqian0** 指出 `backend/__init__.py` 文件头部缺少版权信息 → 作者已添加\n3. **jyoung6652** 指出 `cpu_binding.py:20` 中存在硬编码的固定值，建议使用动态值替代 → 作者在后续 commit 中重构为动态配置",
+      "patch_snippet": "commit `36e0f1e`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "36e0f1e",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "每个新增的源文件都应在文件头部包含标准的版权信息声明。",
+    "context": "",
+    "checkpoints": [
+      "检查新增文件是否包含 Copyright 声明",
+      "确认版权信息格式是否符合项目规范",
+      "验证 `__init__.py` 等文件是否也包含版权头"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/context_parallel/attention_cp.py",
+      "line": 1038,
+      "code": "# vllm_ascend/attention/context_parallel/attention_cp.py\n# _forward_layerwise_kv_transfer() 方法内（层式 KV 传输逻辑）\n\ndef _forward_layerwise_kv_transfer(self, ...):\n    # ... 前置的 KV 传输准备逻辑 ...\n\n    # 1038 行附近：存在冗余的保存操作\n    # weijinqian0 评审：\"Plz save only one.\"\n    self.layer_save(layer_id, kv_cache_send)    # 保存操作 1\n    self.layer_save(layer_id, kv_cache_recv)    # 保存操作 2（冗余）\n    # 同一个 layer 的 KV 数据被保存了多次\n\n    # ... 后续的传输同步逻辑 ...",
+      "context": "Plz save only one."
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/context_parallel/attention_cp.py",
+      "line": 1038,
+      "code": "# vllm_ascend/attention/context_parallel/attention_cp.py\n# _forward_layerwise_kv_transfer() 方法内（层式 KV 传输逻辑）\n\ndef _forward_layerwise_kv_transfer(self, ...):\n    # ... 前置的 KV 传输准备逻辑 ...\n\n    # 仅保留一个必要的保存操作（移除冗余副本）\n    self.layer_save(layer_id, kv_cache_send)    # 只保留一个 save\n\n    # commit 36e0f1e: 实现层式 KV 缓存传输同步机制\n    # 添加 per-layer 的 wait/signal 同步，确保传输与计算正确重叠\n    self.wait_for_kv_layer_from_connector(layer_id)\n    # ... 后续的 attention 计算 ...",
+      "context": "Plz save only one."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/context_parallel/attention_cp.py\n+++ b/vllm_ascend/attention/context_parallel/attention_cp.py\n@@ -4,10 +4,10 @@\n def _forward_layerwise_kv_transfer(self, ...):\n     # ... 前置的 KV 传输准备逻辑 ...\n \n-    # 1038 行附近：存在冗余的保存操作\n-    # weijinqian0 评审：\"Plz save only one.\"\n-    self.layer_save(layer_id, kv_cache_send)    # 保存操作 1\n-    self.layer_save(layer_id, kv_cache_recv)    # 保存操作 2（冗余）\n-    # 同一个 layer 的 KV 数据被保存了多次\n+    # 仅保留一个必要的保存操作（移除冗余副本）\n+    self.layer_save(layer_id, kv_cache_send)    # 只保留一个 save\n \n-    # ... 后续的传输同步逻辑 ...\n+    # commit 36e0f1e: 实现层式 KV 缓存传输同步机制\n+    # 添加 per-layer 的 wait/signal 同步，确保传输与计算正确重叠\n+    self.wait_for_kv_layer_from_connector(layer_id)\n+    # ... 后续的 attention 计算 ...",
+      "stats": "1 file changed, +6 lines, -6 lines",
+      "key_changes": [
+        "移除: # 1038 行附近：存在冗余的保存操作",
+        "移除: # weijinqian0 评审：\"Plz save only one.\"",
+        "移除: self.layer_save(layer_id, kv_cache_send)    # 保存操作 1",
+        "移除: self.layer_save(layer_id, kv_cache_recv)    # 保存操作 2（冗余）",
+        "移除: # 同一个 layer 的 KV 数据被保存了多次",
+        "新增: # 仅保留一个必要的保存操作（移除冗余副本）",
+        "新增: self.layer_save(layer_id, kv_cache_send)    # 只保留一个 save",
+        "移除: # ... 后续的传输同步逻辑 ...",
+        "新增: # commit 36e0f1e: 实现层式 KV 缓存传输同步机制",
+        "新增: # 添加 per-layer 的 wait/signal 同步，确保传输与计算正确重叠"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

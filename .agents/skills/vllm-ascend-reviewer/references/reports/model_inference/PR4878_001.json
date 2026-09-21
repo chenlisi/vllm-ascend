@@ -1,0 +1,58 @@
+{
+  "report_id": "PR4878_001",
+  "pr_number": 4878,
+  "pr_title": "[refactor] refactor weight trans nz and transpose",
+  "pr_status": "merged",
+  "merged_at": "2025-12-19T06:27:24Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/quantization/w8a8_dynamic.py:271"
+  ],
+  "landing_sha": "35427d7",
+  "source_quote": "https://github.com/vllm-project/vllm-ascend/commit/01a13a9b770093f54095b7aa425b7d21bd8bbaa5",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan 提供了 commit `01a13a9` 的链接，指出应参考该 commit 的方式处理 weight trans nz 的赋值问题（使用 `.data` 属性赋值以保持 `torch.nn.Parameter` 状态，而非直接替换为 `torch.Tensor`）。作者通过 commit `35427d7` 进行了重构修复，1/1 建议已处理。",
+      "patch_snippet": "commit `01a13a9`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "35427d7",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在对模型权重进行 NZ 格式转换（`maybe_trans_nz`）或 `torch_npu.npu_format_cast_` 等操作时，必须通过 `.data` 属性赋值以保持 `torch.nn.Parameter` 状态，避免直接替换为普通 `torch.Tensor`。",
+    "context": "",
+    "checkpoints": [
+      "权重格式转换是否使用 `.data` 属性赋值（如 `layer.w13_weight.data = maybe_trans_nz(layer.w13_weight.data)`）",
+      "是否避免了将 `torch.nn.Parameter` 直接替换为 `torch.Tensor`",
+      "转换后权重的设备放置、state dict 和 optimizer 行为是否正常"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/quantization/w8a8_dynamic.py",
+      "line": 250,
+      "code": "import os\nimport torch\nimport torch.nn as nn\nfrom vllm_ascend.utils import maybe_trans_nz\n\nclass AscendW8A8LinearMethod:\n    \"\"\"W8A8 quantization linear method for Ascend NPU.\"\"\"\n\n    def process_weights_after_loading(self, layer: nn.Module) -> None:\n        \"\"\"Process weights after model loading.\"\"\"\n        if int(os.environ.get(\"VLLM_ASCEND_ENABLE_NZ\", 1)) == 1:\n            layer.w13_weight = maybe_trans_nz(layer.w13_weight)\n            layer.w2_weight = maybe_trans_nz(layer.w2_weight)\n        else:\n            torch_npu.npu_format_cast_(layer.w13_weight, ...)\n            torch_npu.npu_format_cast_(layer.w2_weight, ...)",
+      "context": "wangxiyuan: https://github.com/vllm-project/vllm-ascend/commit/01a13a9b770093f54095b7aa425b7d21bd8bbaa5"
+    },
+    "pattern": {
+      "file": "vllm_ascend/quantization/w8a8_dynamic.py",
+      "line": 250,
+      "code": "import os\nimport torch\nimport torch.nn as nn\nfrom vllm_ascend.utils import maybe_trans_nz\n\nclass AscendW8A8LinearMethod:\n    \"\"\"W8A8 quantization linear method for Ascend NPU.\"\"\"\n\n    def process_weights_after_loading(self, layer: nn.Module) -> None:\n        \"\"\"Process weights after model loading.\"\"\"\n        if int(os.environ.get(\"VLLM_ASCEND_ENABLE_NZ\", 1)) == 1:\n            layer.w13_weight.data = maybe_trans_nz(layer.w13_weight.data)\n            layer.w2_weight.data = maybe_trans_nz(layer.w2_weight.data)\n        else:\n            torch_npu.npu_format_cast_(layer.w13_weight, ...)\n            torch_npu.npu_format_cast_(layer.w2_weight, ...)",
+      "context": "wangxiyuan: https://github.com/vllm-project/vllm-ascend/commit/01a13a9b770093f54095b7aa425b7d21bd8bbaa5"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/quantization/w8a8_dynamic.py\n+++ b/vllm_ascend/quantization/w8a8_dynamic.py\n@@ -250,16 +250,16 @@\n     def process_weights_after_loading(self, layer: nn.Module) -> None:\n         \"\"\"Process weights after model loading.\"\"\"\n         if int(os.environ.get(\"VLLM_ASCEND_ENABLE_NZ\", 1)) == 1:\n-            layer.w13_weight = maybe_trans_nz(layer.w13_weight)\n-            layer.w2_weight = maybe_trans_nz(layer.w2_weight)\n+            layer.w13_weight.data = maybe_trans_nz(layer.w13_weight.data)\n+            layer.w2_weight.data = maybe_trans_nz(layer.w2_weight.data)\n         else:\n             torch_npu.npu_format_cast_(layer.w13_weight, ...)\n             torch_npu.npu_format_cast_(layer.w2_weight, ...)",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "修改了第 12-13 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

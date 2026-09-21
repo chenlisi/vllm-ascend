@@ -1,0 +1,62 @@
+{
+  "report_id": "PR4893_001",
+  "pr_number": 4893,
+  "pr_title": "[Feat] Support async_scheduler and disable_padded_drafter_batch in eagle",
+  "pr_status": "merged",
+  "merged_at": "2025-12-16T14:06:40Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/utils.py:134",
+    "vllm_ascend/worker/model_runner_v1.py:1833",
+    "tests/e2e/singlecard/spec_decode_v1/test_v1_spec_decode.py:153"
+  ],
+  "landing_sha": "fafd238",
+  "source_quote": "check whether cos/sin needed to be sliced.",
+  "correspondence": [
+    {
+      "review_quote": "whx-sjtu 要求检查 cos/sin 是否需要切片，作者确认当前场景下 cos/sin 为 None 不会出错，已为后续场景添加切片。realliujiaxu 建议使用 `self.speculative_config.use_eagle()` 替代原有判断方式，作者确认完成。MengqingCao 指出测试用例中使用 LLM 类时必须清理 NPU HBM，建议改用 `VllmRunner` 或手动清理。3/3 建议已处理。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "fafd238",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在 E2E 测试用例中，如果不使用 `VllmRunner`，则必须手动清理 NPU HBM 以避免内存泄漏。建议优先使用 `VllmRunner` 替代直接使用 `LLM` 类。同时，speculative config 的判断应使用统一 API `self.speculative_config.use_eagle()`。",
+    "context": "",
+    "checkpoints": [
+      "测试用例中是否使用 `VllmRunner` 替代直接使用 `LLM`",
+      "如必须使用 `LLM`，是否在测试结束后清理 NPU HBM（参考 `tests/e2e/conftest.py#L81`）",
+      "eagle 模式判断是否使用 `self.speculative_config.use_eagle()` 统一 API",
+      "cos/sin 张量是否根据场景正确处理切片"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/spec_decode/eagle_proposer.py",
+      "line": 65,
+      "code": "class EagleProposer:\n    def __init__(self, vllm_config, device, ...):\n        self.pcp_size = 0\n        self.backup_next_token_ids = CpuGpuBuffer(\n            max_batch_size,  # NameError: name 'max_batch_size' is not defined\n            dtype=torch.int32,\n            pin_memory=is_pin_memory_available(),\n            device=device,\n            with_numpy=True,\n        )",
+      "context": "whx-sjtu: check whether cos/sin needed to be sliced."
+    },
+    "pattern": {
+      "file": "vllm_ascend/spec_decode/eagle_proposer.py",
+      "line": 65,
+      "code": "class EagleProposer:\n    def __init__(self, vllm_config, device, ...):\n        max_batch_size = vllm_config.scheduler_config.max_num_seqs\n        self.pcp_size = 0\n        self.backup_next_token_ids = CpuGpuBuffer(\n            max_batch_size,\n            dtype=torch.int32,\n            pin_memory=is_pin_memory_available(),\n            device=device,\n            with_numpy=True,\n        )",
+      "context": "whx-sjtu: check whether cos/sin needed to be sliced."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/spec_decode/eagle_proposer.py\n+++ b/vllm_ascend/spec_decode/eagle_proposer.py\n@@ -65,10 +65,11 @@\n class EagleProposer:\n     def __init__(self, vllm_config, device, ...):\n+        max_batch_size = vllm_config.scheduler_config.max_num_seqs\n         self.pcp_size = 0\n         self.backup_next_token_ids = CpuGpuBuffer(\n-            max_batch_size,  # NameError: name 'max_batch_size' is not defined\n+            max_batch_size,\n             dtype=torch.int32,\n             pin_memory=is_pin_memory_available(),\n             device=device,",
+      "stats": "1 file changed, +2 lines, -1 lines",
+      "key_changes": [
+        "在第 3-3 行新增了代码",
+        "修改了第 5-5 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

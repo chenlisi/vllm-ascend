@@ -1,0 +1,65 @@
+{
+  "report_id": "PR4054_001",
+  "pr_number": 4054,
+  "pr_title": "mooncake connector support pipeline parallel & fix pp with flashcomm1",
+  "pr_status": "merged",
+  "merged_at": "2025-12-10T08:01:43Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/distributed/mooncake_connector.py:51",
+    "vllm_ascend/core/scheduler.py:51"
+  ],
+  "landing_sha": "09bd3d0",
+  "source_quote": "no need to support 0.11.0 on main branch now\nwhy modify this file？ascendschedule will drop in the future\nWe've made the same adaptation in vllm's scheduler; this part is only to stay in sync, ascendschedule is not required.",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan: mooncake_connector.py:51(2025-11-27 08:49:33)",
+      "patch_snippet": "评后sha `09bd3d0` add assert for pcp&pp 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "zhenwenqi2024: scheduler.py:51(2025-11-27 08:55:57)",
+      "patch_snippet": "评后sha `09bd3d0` add assert for pcp&pp 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Kurumi5210: scheduler.py:51(2025-11-27 09:20:55)",
+      "patch_snippet": "评后sha `4718c7c` format code 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "09bd3d0",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/distributed/mooncake_connector.py",
+      "line": 40,
+      "code": "class MooncakeConnector:\n    def __init__(self, ...):\n\n        if vllm_version_is(\"0.11.0\"):\n            self._legacy_init()\n        else:\n            self._current_init()",
+      "context": "no need to support 0.11.0 on main branch now"
+    },
+    "pattern": {
+      "file": "vllm_ascend/distributed/mooncake_connector.py",
+      "line": 40,
+      "code": "class MooncakeConnector:\n    def __init__(self, ...):\n\n        self._current_init()",
+      "context": "no need to support 0.11.0 on main branch now"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/distributed/mooncake_connector.py\n+++ b/vllm_ascend/distributed/mooncake_connector.py\n@@ -40,7 +40,4 @@\n class MooncakeConnector:\n     def __init__(self, ...):\n \n-        if vllm_version_is(\"0.11.0\"):\n-            self._legacy_init()\n-        else:\n-            self._current_init()\n+        self._current_init()",
+      "stats": "1 file changed, +1 lines, -4 lines",
+      "key_changes": [
+        "修改了第 4-7 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

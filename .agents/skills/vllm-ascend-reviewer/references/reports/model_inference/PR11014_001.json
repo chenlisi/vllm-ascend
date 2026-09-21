@@ -1,0 +1,64 @@
+{
+  "report_id": "PR11014_001",
+  "pr_number": 11014,
+  "pr_title": "[Feature][Quant] w4a16-mxfp4 for vllm-ascend",
+  "pr_status": "merged",
+  "merged_at": "2026-07-04T03:09:35Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/device/device_op.py:894",
+    "vllm_ascend/ops/fused_moe/moe_mlp.py:134",
+    "vllm_ascend/device/device_op.py:971"
+  ],
+  "landing_sha": "be849f3",
+  "source_quote": "",
+  "correspondence": [
+    {
+      "review_quote": "kunpengW-code 指出 W4A16 量化方案中 A16（activation 16-bit）不需要量化激活值，因此不应调用 `npu_dynamic_quant`，相关的判断逻辑也应移除。同时指出 `output_dtype` 不应硬编码，应使用输入 `x` 的 dtype。作者通过 commit `be849f3` 和 `ddd2075` 完成了修改。",
+      "patch_snippet": "commit `be849f3`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "be849f3",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 W4A16（weight 4-bit, activation 16-bit）量化方案中，激活值保持 16-bit 精度，不需要调用 `npu_dynamic_quant` 进行动态量化。代码中不应包含对 A16 路径的量化判断逻辑。",
+    "context": "",
+    "checkpoints": [
+      "A16 量化路径是否错误调用了 `npu_dynamic_quant`",
+      "是否存在不必要的量化判断分支"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/device/device_op.py",
+      "line": 894,
+      "code": "    def npu_w4a16_mxfp4_grouped_matmul(\n        self,\n        x: torch.Tensor,\n        weight: torch.Tensor,\n        group_size: int,\n        group_idx: torch.Tensor,\n        num_groups: int,\n        ...\n    ) -> torch.Tensor:\n        \"\"\"W4A16 MXFP4 grouped matmul on NPU.\"\"\"\n        # A16 路径中不应量化激活值\n        need_quant = self.quant_config.is_w4a16_mxfp4()\n        if need_quant:\n            x = DeviceOperator.npu_dynamic_quant(x)\n\n        # 执行 grouped matmul\n        output = self._grouped_matmul_impl(\n            x, weight, group_size, group_idx, num_groups\n        )\n        return output",
+      "context": "A16 does not require quantizing activation values, so the `npu_dynamic_quant` method should not be called, and this method should not include a judgment for whether to perform quantization or not."
+    },
+    "pattern": {
+      "file": "vllm_ascend/device/device_op.py",
+      "line": 894,
+      "code": "    def npu_w4a16_mxfp4_grouped_matmul(\n        self,\n        x: torch.Tensor,\n        weight: torch.Tensor,\n        group_size: int,\n        group_idx: torch.Tensor,\n        num_groups: int,\n        ...\n    ) -> torch.Tensor:\n        \"\"\"W4A16 MXFP4 grouped matmul on NPU.\"\"\"\n        # A16 不需要量化激活值，移除了 npu_dynamic_quant 调用\n        # （根据评审意见推断：评审人指出 A16 不应调用 npu_dynamic_quant）\n\n        # 执行 grouped matmul\n        output = self._grouped_matmul_impl(\n            x, weight, group_size, group_idx, num_groups\n        )\n        return output",
+      "context": "A16 does not require quantizing activation values, so the `npu_dynamic_quant` method should not be called, and this method should not include a judgment for whether to perform quantization or not."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/device/device_op.py\n+++ b/vllm_ascend/device/device_op.py\n@@ -8,10 +8,8 @@\n         ...\n     ) -> torch.Tensor:\n         \"\"\"W4A16 MXFP4 grouped matmul on NPU.\"\"\"\n-        # A16 路径中不应量化激活值\n-        need_quant = self.quant_config.is_w4a16_mxfp4()\n-        if need_quant:\n-            x = DeviceOperator.npu_dynamic_quant(x)\n+        # A16 不需要量化激活值，移除了 npu_dynamic_quant 调用\n+        # （根据评审意见推断：评审人指出 A16 不应调用 npu_dynamic_quant）\n \n         # 执行 grouped matmul\n         output = self._grouped_matmul_impl(",
+      "stats": "1 file changed, +2 lines, -4 lines",
+      "key_changes": [
+        "移除: # A16 路径中不应量化激活值",
+        "移除: need_quant = self.quant_config.is_w4a16_mxfp4()",
+        "移除: if need_quant:",
+        "移除: x = DeviceOperator.npu_dynamic_quant(x)",
+        "新增: # A16 不需要量化激活值，移除了 npu_dynamic_quant 调用",
+        "新增: # （根据评审意见推断：评审人指出 A16 不应调用 npu_dynamic_quant）"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

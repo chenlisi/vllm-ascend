@@ -1,0 +1,75 @@
+{
+  "report_id": "PR4636_001",
+  "pr_number": 4636,
+  "pr_title": "[doc] Add Qwen2.5 tutorials",
+  "pr_status": "merged",
+  "merged_at": "2025-12-11T09:30:05Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/Qwen2.5.md:182",
+    "docs/source/tutorials/Qwen2.5.md:168",
+    "docs/source/tutorials/Qwen2.5.md:187",
+    "docs/source/tutorials/Qwen2.5.md:18",
+    "docs/source/tutorials/Qwen2.5.md:137",
+    "docs/source/tutorials/Qwen2.5.md:1",
+    "docs/source/tutorials/Qwen2.5.md:9",
+    "docs/source/tutorials/Qwen2.5.md:121",
+    "docs/source/tutorials/Qwen2.5.md:109"
+  ],
+  "landing_sha": "466835f",
+  "source_quote": "please use `bash deploy.sh` instead",
+  "correspondence": [
+    {
+      "review_quote": "1092626063 指出部署脚本用法、设备可见性设置、不推荐多节点部署、链接和卡片数量描述、删除 custom-ops、修改文档名称。wangxiyuan 指出模型支持描述不准确、不应强制 eager 模式、环境变量已默认开启、存在不清楚的配置项。作者通过多个 commits 修改，10/10 建议全部落地。",
+      "patch_snippet": "",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "466835f",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "教程文档应准确描述模型支持状态，部署命令应使用标准用法，不应包含已默认开启的环境变量或不必要的配置。",
+    "context": "",
+    "checkpoints": [
+      "模型支持描述是否准确（不应将已长期支持的模型描述为新支持）",
+      "部署脚本是否使用 `bash deploy.sh` 标准用法",
+      "是否设置了 `ASCEND_RT_VISIBLE_DEVICES`",
+      "是否删除了已默认开启的环境变量（如 `VLLM_ASCEND_ENABLE_TOPK_OPTIMIZE`）",
+      "是否包含不清楚用途的配置项",
+      "enforce eager 和 tp 设置是否有合理说明",
+      "是否不推荐 Multi-node Deployment（除非有明确需求）"
+    ],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "<!-- 文件: docs/source/tutorials/Qwen2.5.md -->\n<!-- 行号: ~1-20 (commit 466835f 之前) -->\n<!-- （pr/ 数据不足，以下为根据评审意见和文档结构推断的上下文） -->\n\n\n<!-- 文档名称不准确（1092626063: modify name） -->\n\nThis tutorial describes how to deploy Qwen2.5 on vLLM Ascend.\n\n<!-- 描述不准确：Qwen2.5 是很早就支持的模型 -->\nQwen2.5 is newly supported by vLLM Ascend.\n\n\nQwen2.5 is a large language model. This tutorial will guide you through\nthe deployment process on Ascend hardware.\n\n\n| Model | Cards | Notes |\n|-------|-------|-------|\n| Qwen2.5-7B-Instruct | 7B? | <!-- 1092626063: 7B? check link and modify nodes by 2 cards -->",
+      "context": "1092626063: please use `bash deploy.sh` instead"
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "<!-- 文件: docs/source/tutorials/Qwen2.5.md -->\n<!-- 行号: ~1-20 (commit 466835f 及后续) -->\n<!-- （pr/ 数据不足，以下为根据评审意见和文档结构推断的上下文） -->\n\n\n<!-- FIX: 文档名称已修正 -->\n\nThis tutorial describes how to deploy Qwen2.5-7B-Instruct on vLLM Ascend.\n\n<!-- FIX: 准确描述支持状态 -->\nQwen2.5 has been supported by vLLM Ascend for a long time.\n(wangxiyuan: this is not correct. Qwen2.5 is a very old model. we support it for a long time.)\n\n\nQwen2.5-7B-Instruct is a large language model. This tutorial will guide you\nthrough the deployment process on Ascend hardware.\n\n\n| Model | Cards | Notes |\n|-------|-------|-------|\n| Qwen2.5-7B-Instruct | 2 cards | <!-- FIX: 已修正卡片数量 -->",
+      "context": "1092626063: please use `bash deploy.sh` instead"
+    },
+    "diff": {
+      "unified": "--- a/a/file\n+++ b/b/file\n@@ -1,20 +1,21 @@\n <!-- 文件: docs/source/tutorials/Qwen2.5.md -->\n-<!-- 行号: ~1-20 (commit 466835f 之前) -->\n+<!-- 行号: ~1-20 (commit 466835f 及后续) -->\n <!-- （pr/ 数据不足，以下为根据评审意见和文档结构推断的上下文） -->\n \n \n-<!-- 文档名称不准确（1092626063: modify name） -->\n+<!-- FIX: 文档名称已修正 -->\n \n-This tutorial describes how to deploy Qwen2.5 on vLLM Ascend.\n+This tutorial describes how to deploy Qwen2.5-7B-Instruct on vLLM Ascend.\n \n-<!-- 描述不准确：Qwen2.5 是很早就支持的模型 -->\n-Qwen2.5 is newly supported by vLLM Ascend.\n+<!-- FIX: 准确描述支持状态 -->\n+Qwen2.5 has been supported by vLLM Ascend for a long time.\n+(wangxiyuan: this is not correct. Qwen2.5 is a very old model. we support it for a long time.)\n \n \n-Qwen2.5 is a large language model. This tutorial will guide you through\n-the deployment process on Ascend hardware.\n+Qwen2.5-7B-Instruct is a large language model. This tutorial will guide you\n+through the deployment process on Ascend hardware.\n \n \n | Model | Cards | Notes |\n |-------|-------|-------|\n-| Qwen2.5-7B-Instruct | 7B? | <!-- 1092626063: 7B? check link and modify nodes by 2 cards -->\n+| Qwen2.5-7B-Instruct | 2 cards | <!-- FIX: 已修正卡片数量 -->",
+      "stats": "1 file changed, +9 lines, -8 lines",
+      "key_changes": [
+        "修改了第 2-2 行的代码",
+        "修改了第 6-6 行的代码",
+        "修改了第 8-8 行的代码",
+        "修改了第 10-11 行的代码",
+        "修改了第 14-15 行的代码",
+        "修改了第 20-20 行的代码"
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

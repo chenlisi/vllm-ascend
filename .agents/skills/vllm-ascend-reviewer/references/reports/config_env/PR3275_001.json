@@ -1,0 +1,75 @@
+{
+  "report_id": "PR3275_001",
+  "pr_number": 3275,
+  "pr_title": "[Doc] Add deepseek v3.2 tutorial",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/multi-node_dsv3.2.md:95",
+    "docs/source/tutorials/multi-node_dsv3.2.md:144",
+    "docs/source/tutorials/multi-node_dsv3.2.md:183",
+    "docs/source/tutorials/multi-node_dsv3.2.md:207"
+  ],
+  "landing_sha": "4b9260f",
+  "source_quote": "this is meaningless in the host network\nuse ` --additional-config '{\"torchair_graph_config\":{\"enabled\":true,\"graph_batch_sizes\":[16]}}' `\n--additional-config '{\"torchair_graph_config\":{\"enabled\":true,\"graph_batch_sizes\":[16]}}'\nditto",
+  "correspondence": [
+    {
+      "review_quote": "Potabk: docs/source/tutorials/multi-node_dsv3.2.md:95(2025-09-30 06:56:08)",
+      "patch_snippet": "评后sha 4b9260f 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Potabk: docs/source/tutorials/multi-node_dsv3.2.md:144(2025-09-30 06:57:20)",
+      "patch_snippet": "评后sha 4b9260f 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Potabk: docs/source/tutorials/multi-node_dsv3.2.md:183(2025-09-30 06:57:36)",
+      "patch_snippet": "评后sha 4b9260f 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Potabk: docs/source/tutorials/multi-node_dsv3.2.md:207(2025-09-30 06:58:01)",
+      "patch_snippet": "评后sha 4b9260f 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "4b9260f",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "多节点部署教程应区分 host network 和 bridge network 模式，避免在 host network 模式下展示无意义的端口映射。同时应提供完整的 `--additional-config` 配置示例。",
+    "context": "",
+    "checkpoints": [
+      "host network 模式下是否移除了无意义的端口映射（`-p`）",
+      "是否提供了 `torchair_graph_config` 的完整配置示例",
+      "文档中多处引用配置时是否保持一致"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/multi-node_dsv3.2.md",
+      "line": 95,
+      "code": "# docs/source/tutorials/multi-node_dsv3.2.md:88-100\n# Docker 启动命令（host network 模式）\ndocker run --rm \\\n--name deepseek_v3.2 \\\n--network host \\\n-p 8000:8000 \\\n--device /dev/davinci0 \\\n--device /dev/davinci1 \\\n--device /dev/davinci2 \\\n--device /dev/davinci3 \\\n--device /dev/davinci_manager \\\n--device /dev/devmm_svm \\\n--device /dev/hisi_hdc \\\n-v /usr/local/Ascend/driver:/usr/local/Ascend/driver \\\n-v /usr/local/dcmi:/usr/local/dcmi \\",
+      "context": "docs/source/tutorials/multi-node_dsv3.2.md:88-100 Docker 启动命令（host network 模式）"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/multi-node_dsv3.2.md",
+      "line": 95,
+      "code": "# docs/source/tutorials/multi-node_dsv3.2.md:88-100\n# Docker 启动命令（host network 模式）\ndocker run --rm \\\n--name deepseek_v3.2 \\\n--network host \\\n--device /dev/davinci0 \\\n--device /dev/davinci1 \\\n--device /dev/davinci2 \\\n--device /dev/davinci3 \\\n--device /dev/davinci_manager \\\n--device /dev/devmm_svm \\\n--device /dev/hisi_hdc \\\n-v /usr/local/Ascend/driver:/usr/local/Ascend/driver \\\n-v /usr/local/dcmi:/usr/local/dcmi \\",
+      "context": "docs/source/tutorials/multi-node_dsv3.2.md:88-100 Docker 启动命令（host network 模式）"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/multi-node_dsv3.2.md\n+++ b/docs/source/tutorials/multi-node_dsv3.2.md\n@@ -3,7 +3,6 @@\n docker run --rm \\\n --name deepseek_v3.2 \\\n --network host \\\n--p 8000:8000 \\\n --device /dev/davinci0 \\\n --device /dev/davinci1 \\\n --device /dev/davinci2 \\\n",
+      "stats": "1 file changed, +0 lines, -1 lines",
+      "key_changes": [
+        "移除: -p 8000:8000 \\"
+      ]
+    },
+    "language": "markdown",
+    "_status": "processed"
+  }
+}

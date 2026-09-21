@@ -1,0 +1,57 @@
+{
+  "report_id": "PR11925_001",
+  "pr_number": 11925,
+  "pr_title": "[Feature] change ngram spec deode to triton op",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/ops/triton/spec_decode/ngram.py:259"
+  ],
+  "landing_sha": "ee55b91",
+  "source_quote": "We need to update the helper function `triton_ngram_spec_decode` to:\n1. Add a guard for `batch_size == 0` to prevent launching the Triton kernel with a grid size of 0, which would crash.\n2. Compute the next power of 2 for `max_new_tokens`, `max_n`, and `k` on the host using `triton.next_power_of_2` and pass them as constexprs to the kernel.",
+  "correspondence": [
+    {
+      "review_quote": "gemini-code-assist[bot]: vllm_ascend/ops/triton/spec_decode/ngram.py:259",
+      "patch_snippet": "评后sha ee55b91 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "ee55b91",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "启动 Triton kernel（或 CUDA kernel）的 Python wrapper，必须在计算 grid 之后、launch kernel 之前检查 `grid_dims[i] == 0` 的任何分量；若发生直接返回形状一致的空输出 tensor，不得 launch。常见触发情形：`batch_size == 0`、`num_tokens == 0`、prefix-cache 空列表等导致的 grid 推导结果为 0。",
+    "context": "",
+    "checkpoints": [
+      "wrapper 内所有 `func[grid](...)` 调用点之前，是否对 `grid` 每个分量做过非零断言或早退",
+      "早退的返回值是否与正常路径的 tuple 结构一致（`(next_token_ids, draft_token_ids, num_valid, ...)` 元素个数、dtype、device 对齐）",
+      "空结果的\"第二维派生量\"（如 `draft.shape==(0, k)`）是否显式传入 k 而非硬编码，避免后续 k 变化时不一致"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/triton/spec_decode/ngram.py",
+      "line": 250,
+      "code": "@triton.jit\ndef ngram_spec_decode_kernel(\n    token_ids_ptr, num_tokens_ptr, sampled_ptr, discard_ptr,\n    next_token_ids_ptr, draft_token_ids_ptr, num_valid_draft_ptr,\n    raw_valid_count_ptr, max_seq_len: tl.constexpr,\n    max_new_tokens: tl.constexpr, vocab_size: tl.constexpr,\n    min_n: tl.constexpr, max_n: tl.constexpr, k: tl.constexpr,\n    batch_size,\n):\n    \"\"\"Ngram speculative decoding kernel.\"\"\"\n    ...\n\n\ndef triton_ngram_spec_decode(token_ids, num_tokens_no_spec,\n                             sampled_token_ids, discard_request_mask,\n                             vocab_size, min_n, max_n, k):\n    \"\"\"Host wrapper for the ngram spec decode Triton kernel.\"\"\"\n    device = torch_npu.npu.current_device()\n    properties = triton.runtime.driver.active.utils.get_device_properties(device)\n    vectorcore_num = properties[\"num_vectorcore\"]\n\n    batch_size = token_ids.shape[0]          # 可能为 0\n    device = token_ids.device\n    max_seq_len = token_ids.shape[1]\n\n    # ↓↓ 若 batch_size==0 → grid=(0,) → Triton launch grid (0,) 非法 ↓↓\n    grid = (batch_size if batch_size < vectorcore_num else vectorcore_num,)\n    ngram_spec_decode_kernel[grid](\n        token_ids, num_tokens_no_spec, sampled_token_ids,\n        discard_request_mask,\n        # outputs\n        torch.empty_like(...), torch.empty_like(...),\n        torch.empty_like(...), torch.empty_like(...),\n        max_seq_len=max_seq_len,\n        max_new_tokens=max_new_tokens,\n        vocab_size=vocab_size,\n        min_n=min_n, max_n=max_n, k=k,\n        batch_size=batch_size,\n    )\n    return next_token_ids, draft_token_ids, num_valid, raw_valid_count",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/triton/spec_decode/ngram.py",
+      "line": 250,
+      "code": "@triton.jit\ndef ngram_spec_decode_kernel(\n    token_ids_ptr, num_tokens_ptr, sampled_ptr, discard_ptr,\n    next_token_ids_ptr, draft_token_ids_ptr, num_valid_draft_ptr,\n    raw_valid_count_ptr, max_seq_len: tl.constexpr,\n    max_new_tokens: tl.constexpr, vocab_size: tl.constexpr,\n    min_n: tl.constexpr, max_n: tl.constexpr, k: tl.constexpr,\n    batch_size,\n):\n    \"\"\"Ngram speculative decoding kernel.\"\"\"\n    ...\n\n\ndef triton_ngram_spec_decode(token_ids, num_tokens_no_spec,\n                             sampled_token_ids, discard_request_mask,\n                             vocab_size, min_n, max_n, k):\n    \"\"\"Host wrapper for the ngram spec decode Triton kernel.\"\"\"\n    batch_size = token_ids.shape[0]\n    device = token_ids.device\n    max_seq_len = token_ids.shape[1]\n\n    # Guard against an empty batch: launching the kernel with grid=(0,) is\n    # invalid. Return correctly-shaped empty outputs so callers stay uniform.\n    if batch_size == 0:\n        empty = torch.empty(0, dtype=torch.int32, device=device)\n        return (empty,\n                torch.empty((0, k), dtype=torch.int32, device=device),\n                empty, empty)\n\n    device_idx = torch_npu.npu.current_device()\n    properties = triton.runtime.driver.active.utils.get_device_properties(device_idx)\n    vectorcore_num = properties[\"num_vectorcore\"]\n\n    grid = (batch_size if batch_size < vectorcore_num else vectorcore_num,)\n    ngram_spec_decode_kernel[grid](\n        token_ids, num_tokens_no_spec, sampled_token_ids,\n        discard_request_mask,\n        # outputs\n        torch.empty_like(...), torch.empty_like(...),\n        torch.empty_like(...), torch.empty_like(...),\n        max_seq_len=max_seq_len,\n        max_new_tokens=max_new_tokens,\n        vocab_size=vocab_size,\n        min_n=min_n, max_n=max_n, k=k,\n        batch_size=batch_size,\n    )\n    return next_token_ids, draft_token_ids, num_valid, raw_valid_count",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/triton/spec_decode/ngram.py\n+++ b/vllm_ascend/ops/triton/spec_decode/ngram.py\n@@ -15,15 +15,22 @@\n                              sampled_token_ids, discard_request_mask,\n                              vocab_size, min_n, max_n, k):\n     \"\"\"Host wrapper for the ngram spec decode Triton kernel.\"\"\"\n-    device = torch_npu.npu.current_device()\n-    properties = triton.runtime.driver.active.utils.get_device_properties(device)\n-    vectorcore_num = properties[\"num_vectorcore\"]\n-\n-    batch_size = token_ids.shape[0]          # 可能为 0\n+    batch_size = token_ids.shape[0]\n     device = token_ids.device\n     max_seq_len = token_ids.shape[1]\n \n-    # ↓↓ 若 batch_size==0 → grid=(0,) → Triton launch grid (0,) 非法 ↓↓\n+    # Guard against an empty batch: launching the kernel with grid=(0,) is\n+    # invalid. Return correctly-shaped empty outputs so callers stay uniform.\n+    if batch_size == 0:\n+        empty = torch.empty(0, dtype=torch.int32, device=device)\n+        return (empty,\n+                torch.empty((0, k), dtype=torch.int32, device=device),\n+                empty, empty)\n+\n+    device_idx = torch_npu.npu.current_device()\n+    properties = triton.runtime.driver.active.utils.get_device_properties(device_idx)\n+    vectorcore_num = properties[\"num_vectorcore\"]\n+\n     grid = (batch_size if batch_size < vectorcore_num else vectorcore_num,)\n     ngram_spec_decode_kernel[grid](\n         token_ids, num_tokens_no_spec, sampled_token_ids,",
+      "stats": "1 file changed, +13 lines, -6 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

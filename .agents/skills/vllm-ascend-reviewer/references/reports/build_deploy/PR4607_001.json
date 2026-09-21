@@ -1,0 +1,59 @@
+{
+  "report_id": "PR4607_001",
+  "pr_number": 4607,
+  "pr_title": "Add Qwen3-Next tutorials",
+  "pr_status": "merged",
+  "merged_at": "2025-12-15T03:48:22Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/Qwen3-Next.md:59",
+    "docs/source/tutorials/Qwen3-Next.md:95"
+  ],
+  "landing_sha": "f0bf022",
+  "source_quote": "don't need to install bisheng anymore",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan 指出不再需要安装 bisheng。MengqingCao 提供了完整的 vllm serve 命令参数配置。作者通过 commit `f0bf022` 删除 bisheng 安装步骤，MengqingCao 直接通过 commit `b835186` 修改 serve 命令，2/2 建议全部落地。",
+      "patch_snippet": "commit `f0bf022`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f0bf022",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "教程文档中不应包含已不再需要的依赖安装步骤，部署命令应包含完整的参数配置。",
+    "context": "",
+    "checkpoints": [
+      "是否包含已废弃的依赖安装步骤（如 bisheng）",
+      "部署命令是否包含完整参数（tensor-parallel-size, max-model-len, gpu-memory-utilization, compilation-config）",
+      "cudagraph_mode 配置是否正确"
+    ],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "<!-- 文件: docs/source/tutorials/Qwen3-Next.md -->\n<!-- 行号: ~45-75 (commit f0bf022 之前) -->\n<!-- （pr/ 数据不足，以下为根据评审意见和文档结构推断的上下文） -->\n\n\n...\n\n--device /dev/davinci_manager \\\n--device /dev/devmm_svm \\\n--device /dev/hisi_hdc \\\n-v /usr/local/dcmi:/usr/local/dcmi \\\n-v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi \\\n-v /usr/local/Ascend/driver/lib64/:/usr/local/Ascend/driver/lib64/ \\\n-v /usr/local/Ascend/driver/version.info:/usr/local/Ascend/driver/version.info \\\n-v /etc/ascend_install.info:/etc/ascend_install.info \\\n-v /root/.cache:/root/.cache \\\n-p 8000:8000 \\\n-it $IMAGE bash",
+      "context": "wangxiyuan: don't need to install bisheng anymore"
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "<!-- 文件: docs/source/tutorials/Qwen3-Next.md -->\n<!-- 行号: ~45-75 (commit f0bf022) -->\n<!-- （pr/ 数据不足，以下为根据评审意见和文档结构推断的上下文） -->\n\n\n...\n\n--device /dev/davinci_manager \\\n--device /dev/devmm_svm \\\n--device /dev/hisi_hdc \\\n-v /usr/local/dcmi:/usr/local/dcmi \\\n-v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi \\\n-v /usr/local/Ascend/driver/lib64/:/usr/local/Ascend/driver/lib64/ \\\n-v /usr/local/Ascend/driver/version.info:/usr/local/Ascend/driver/version.info \\\n-v /etc/ascend_install.info:/etc/ascend_install.info \\\n-v /root/.cache:/root/.cache \\\n-p 8000:8000 \\\n-it $IMAGE bash",
+      "context": "wangxiyuan: don't need to install bisheng anymore"
+    },
+    "diff": {
+      "unified": "--- a/a/file\n+++ b/b/file\n@@ -1,18 +1,18 @@\n <!-- 文件: docs/source/tutorials/Qwen3-Next.md -->\n-<!-- 行号: ~45-75 (commit f0bf022 之前) -->\n+<!-- 行号: ~45-75 (commit f0bf022) -->\n <!-- （pr/ 数据不足，以下为根据评审意见和文档结构推断的上下文） -->\n \n ",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "修改了第 2-2 行的代码"
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

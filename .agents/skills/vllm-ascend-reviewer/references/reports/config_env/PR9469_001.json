@@ -1,0 +1,56 @@
+{
+  "report_id": "PR9469_001",
+  "pr_number": 9469,
+  "pr_title": "[CI] Resolves the issue of occasional 503 errors when downloading packages",
+  "pr_status": "merged",
+  "merged_at": "2026-05-22T09:56:52Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    ".github/workflows/_e2e_test.yaml:146"
+  ],
+  "landing_sha": "d8a1dcb",
+  "source_quote": "plz add comment to describe the reason of setting this source separately",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao: .github/workflows/_e2e_test.yaml:146",
+      "patch_snippet": "评后sha d8a1dcb 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "d8a1dcb",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "plz add comment to describe the reason of setting this source separately",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": ".github/workflows/_e2e_test.yaml",
+      "line": 146,
+      "code": "# 第146行单独设置了某个 source，但没有说明原因",
+      "context": "plz add comment to describe the reason of setting this source separately"
+    },
+    "pattern": {
+      "file": ".github/workflows/_e2e_test.yaml",
+      "line": 146,
+      "code": "# MengqingCao 评论: \"plz add comment to describe the reason of setting this source separately\"\n# tfhddd 回复: \"done\"",
+      "context": "plz add comment to describe the reason of setting this source separately"
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/_e2e_test.yaml\n+++ b/.github/workflows/_e2e_test.yaml\n@@ -1 +1,2 @@\n-# 第146行单独设置了某个 source，但没有说明原因\n+# MengqingCao 评论: \"plz add comment to describe the reason of setting this source separately\"\n+# tfhddd 回复: \"done\"\n",
+      "stats": "1 file changed, +2 lines, -1 lines",
+      "key_changes": [
+        "-# 第146行单独设置了某个 source，但没有说明原因",
+        "+# MengqingCao 评论: \"plz add comment to describe the reason of setting this source separately\"",
+        "+# tfhddd 回复: \"done\""
+      ]
+    },
+    "language": "yaml",
+    "_status": "pending_llm_extract"
+  }
+}

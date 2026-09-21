@@ -1,0 +1,61 @@
+{
+  "report_id": "PR13532_002",
+  "pr_number": 13532,
+  "pr_title": "[Refactor] Clean some useless code and change some parameter type to avoid re-comppilation inside minimax m3 triton",
+  "pr_status": "merged",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/models/minimax_m3/ops/msa_m3_triton.py:899"
+  ],
+  "landing_sha": "33d1fd5",
+  "source_quote": "### Performance Optimization Opportunity: Avoid Dynamic Division/Modulo via 3D Grid\n> In `_gqa_sparse_decode_kernel`, `total_q` is added to `do_not_specialize` to avoid recompilation overhead when the batch size changes. However, this causes the following lines to compile into dynamic integer division and modulo operations:\npid_b = pid_bc % total_q\npid_c = pid_bc // total_q\nSince these operations are executed on every thread block during decode, they introduce measurable overhead.\n> To completely eliminate this overhead, we can refactor the launch grid from 2D to 3D:\n# In minimax_m3_sparse_attn_decode:\ngrid = (total_q, num_topk_chunks, num_kv_heads)\nAnd then retrieve the IDs directly using `tl.program_id` without any division or modulo:\npid_b = tl.program_id(0)\npid_c = tl.program_id(1)\npid_kh = tl.program_id(2)\nThis is a highly recommended optimization for decode performance. Since the launch grid is not in the current diff, please consider applying this refactoring in a follow-up or expanding this PR to include it.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/models/minimax_m3/ops/msa_m3_triton.py:899",
+      "patch_snippet": "评后sha 33d1fd5 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "33d1fd5",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 Triton kernel 中，若 `do_not_specialize` 列表中的参数被用于整数除法 `//` 或取模 `%` 运算，会导致编译为动态 GPU 指令（性能回归）。应通过 specialization 或重构 launch grid 消除动态除法/取模。",
+    "context": "",
+    "checkpoints": [
+      "检查 `do_not_specialize` 列表中的参数是否在 kernel 体内参与 `//` 或 `%` 运算",
+      "评估该参数是否可改为 specialized（架构常量、变化频率低）以让编译器优化",
+      "对 batch size 等变化频繁的参数，考虑重构 launch grid 维度，用 `tl.program_id` 直接获取 ID 替代除法/取模",
+      "权衡 specialization 的重编译开销与动态除法的运行时开销"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/models/minimax_m3/ops/msa_m3_triton.py",
+      "line": 890,
+      "code": "@triton.jit(\n    do_not_specialize=[\n        \"total_q\",            # total_q 在 do_not_specialize 中，导致动态除法\n        \"decode_query_len\",\n    ]\n)\ndef _gqa_sparse_fwd_kernel(\n    # ... pointer params ...\n    total_q,\n    decode_query_len,\n    # ... other params ...\n):\n    \"\"\"Forward kernel for block-sparse GQA decode attention.\"\"\"\n    pid_bc = tl.program_id(0)\n\n    # GPU 无原生整数除法硬件，total_q 不是 constexpr 时编译为动态指令\n    pid_b = pid_bc % total_q   # 动态 GPU 指令\n    pid_c = pid_bc // total_q  # 动态 GPU 指令\n\n    # ... rest of kernel body ...",
+      "context": "... pointer params ... ... other params ... GPU 无原生整数除法硬件，total_q 不是 constexpr 时编译为动态指令"
+    },
+    "pattern": {
+      "file": "vllm_ascend/models/minimax_m3/ops/msa_m3_triton.py",
+      "line": 890,
+      "code": "@triton.jit(\n    do_not_specialize=[\n        # \"total_q\" 已移除，total_q 现在被 specialized\n        \"decode_query_len\",\n    ]\n)\ndef _gqa_sparse_fwd_kernel(\n    # ... pointer params ...\n    total_q,\n    decode_query_len,\n    # ... other params ...\n):\n    \"\"\"Forward kernel for block-sparse GQA decode attention.\"\"\"\n    pid_bc = tl.program_id(0)\n\n    # total_q 被 specialized，编译器可优化为乘法/移位\n    pid_b = pid_bc % total_q   # total_q 为编译期常量，可优化\n    pid_c = pid_bc // total_q  # total_q 为编译期常量，可优化\n\n    # ... rest of kernel body ...",
+      "context": "\"total_q\" 已移除，total_q 现在被 specialized ... pointer params ... ... other params ..."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/models/minimax_m3/ops/msa_m3_triton.py\n+++ b/vllm_ascend/models/minimax_m3/ops/msa_m3_triton.py\n@@ -1,6 +1,6 @@\n @triton.jit(\n     do_not_specialize=[\n-        \"total_q\",            # total_q 在 do_not_specialize 中，导致动态除法\n+        # \"total_q\" 已移除，total_q 现在被 specialized\n         \"decode_query_len\",\n     ]\n )\n@@ -13,8 +13,8 @@\n     \"\"\"Forward kernel for block-sparse GQA decode attention.\"\"\"\n     pid_bc = tl.program_id(0)\n \n-    # GPU 无原生整数除法硬件，total_q 不是 constexpr 时编译为动态指令\n-    pid_b = pid_bc % total_q   # 动态 GPU 指令\n-    pid_c = pid_bc // total_q  # 动态 GPU 指令\n+    # total_q 被 specialized，编译器可优化为乘法/移位\n+    pid_b = pid_bc % total_q   # total_q 为编译期常量，可优化\n+    pid_c = pid_bc // total_q  # total_q 为编译期常量，可优化\n \n     # ... rest of kernel body ...\n",
+      "stats": "1 file changed, +4 lines, -4 lines",
+      "key_changes": [
+        "移除: pid_c = pid_bc // total_q  # 动态 GPU 指令",
+        "移除: pid_b = pid_bc % total_q   # 动态 GPU 指令",
+        "新增: pid_b = pid_bc % total_q   # total_q 为编译期常量，可优化",
+        "新增: pid_c = pid_bc // total_q  # total_q 为编译期常量，可优化"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

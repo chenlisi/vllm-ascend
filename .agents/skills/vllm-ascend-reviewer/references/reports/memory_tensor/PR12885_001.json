@@ -1,0 +1,57 @@
+{
+  "report_id": "PR12885_001",
+  "pr_number": 12885,
+  "pr_title": "[BugFix][NetLoader] Fix processed-layout P2P for INT8_CACHE=no",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/model_loader/netloader/executor/elastic_load.py:549"
+  ],
+  "landing_sha": "bc12037",
+  "source_quote": "There is currently no validation of tensor sizes (`numel`) between the client and the server before starting the HCCL transfer. If there is a mismatch in tensor sizes (e.g., due to different quantization layouts, TP/PP configurations, or model versions), running the HCCL transfer will lead to silent memory corruption, hangs, or hard crashes. Since the client already receives the `transfer_shape_manifest` from the server, we should validate that every local tensor matches the expected `numel` in the manifest before calling the transfer loop.",
+  "correspondence": [
+    {
+      "review_quote": "gemini-code-assist[bot]: vllm_ascend/model_loader/netloader/executor/elastic_load.py:549",
+      "patch_snippet": "评后sha bc12037 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "bc12037",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "在发起 HCCL/P2P 张量传输前，应将本地张量 `numel` 与对端下发的 shape manifest 比对，不匹配时 fail-fast 中止并走 fallback，而非直接传输导致静默内存损坏或挂起。",
+    "context": "",
+    "checkpoints": [
+      "检查 HCCL/分布式传输前是否对每个张量校验了 `numel`",
+      "校验失败应返回可降级信号（如 None），而非继续传输",
+      "numel 计算用 `math.prod(manifest_shape)` 而非依赖本地 shape 视图"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/model_loader/netloader/executor/elastic_load.py",
+      "line": 0,
+      "code": "import torch\nimport math\nfrom vllm.logger import logger\n\nclass ElasticLoadExecutor:\n    def _recv_weights_via_hccl(self, model, ...):\n        \"\"\"Receive model weights via HCCL P2P transfer.\"\"\"\n        ...\n        transfer_items = _get_recv_transfer_items(model, self.transfer_processed_layout)\n\n        # HCCL process group 初始化后直接进入传输循环，无 numel 校验\n        receiver_pg = stateless_init_process_group(\n            self.master_addr, self.master_port,\n            self.rank, self.world_size, ...)\n\n        # 直接 _recv_loop()，张量大小不匹配会导致静默内存损坏/挂起\n        self._recv_loop(receiver_pg, transfer_items)\n        ...",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/model_loader/netloader/executor/elastic_load.py",
+      "line": 0,
+      "code": "import torch\nimport math\nfrom vllm.logger import logger\n\n\ndef validate_transfer_items_numel_against_manifest(\n    transfer_items: list[tuple[str, torch.Tensor]],\n    transfer_shape_manifest: dict[str, tuple[int, ...]] | None,\n) -> bool:\n    \"\"\"Fail-fast before HCCL: local tensors must match seed manifest numel.\"\"\"\n    if not transfer_shape_manifest:\n        return True\n    for name, tensor in transfer_items:\n        manifest_shape = transfer_shape_manifest.get(name)\n        if manifest_shape is None:\n            logger.error(\"Missing manifest shape for transfer tensor %s before HCCL\", name)\n            return False\n        manifest_numel = math.prod(manifest_shape)\n        if tensor.numel() != manifest_numel:\n            logger.error(\n                \"Weight numel mismatch before HCCL for %s: local shape %s (numel=%s) vs manifest shape %s (numel=%s)\",\n                name, tuple(tensor.shape), tensor.numel(), manifest_shape, manifest_numel,\n            )\n            return False\n    return True\n\n\nclass ElasticLoadExecutor:\n    def _recv_weights_via_hccl(self, model, ...):\n        \"\"\"Receive model weights via HCCL P2P transfer.\"\"\"\n        ...\n        transfer_items = _get_recv_transfer_items(model, self.transfer_processed_layout)\n\n        # 在 HCCL process group 初始化前调用，不匹配则返回 None 走 fallback\n        if self.transfer_processed_layout and not validate_transfer_items_numel_against_manifest(\n            transfer_items, self.transfer_shape_manifest,\n        ):\n            logger.error(\"[netloader_p2p] abort recv before HCCL due to numel/manifest mismatch ...\")\n            return None\n\n        receiver_pg = stateless_init_process_group(\n            self.master_addr, self.master_port,\n            self.rank, self.world_size, ...)\n\n        self._recv_loop(receiver_pg, transfer_items)\n        ...",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/model_loader/netloader/executor/elastic_load.py\n+++ b/vllm_ascend/model_loader/netloader/executor/elastic_load.py\n@@ -1,6 +1,29 @@\n import torch\n import math\n from vllm.logger import logger\n+\n+\n+def validate_transfer_items_numel_against_manifest(\n+    transfer_items: list[tuple[str, torch.Tensor]],\n+    transfer_shape_manifest: dict[str, tuple[int, ...]] | None,\n+) -> bool:\n+    \"\"\"Fail-fast before HCCL: local tensors must match seed manifest numel.\"\"\"\n+    if not transfer_shape_manifest:\n+        return True\n+    for name, tensor in transfer_items:\n+        manifest_shape = transfer_shape_manifest.get(name)\n+        if manifest_shape is None:\n+            logger.error(\"Missing manifest shape for transfer tensor %s before HCCL\", name)\n+            return False\n+        manifest_numel = math.prod(manifest_shape)\n+        if tensor.numel() != manifest_numel:\n+            logger.error(\n+                \"Weight numel mismatch before HCCL for %s: local shape %s (numel=%s) vs manifest shape %s (numel=%s)\",\n+                name, tuple(tensor.shape), tensor.numel(), manifest_shape, manifest_numel,\n+            )\n+            return False\n+    return True\n+\n \n class ElasticLoadExecutor:\n     def _recv_weights_via_hccl(self, model, ...):\n@@ -8,11 +31,16 @@\n         ...\n         transfer_items = _get_recv_transfer_items(model, self.transfer_processed_layout)\n \n-        # HCCL process group 初始化后直接进入传输循环，无 numel 校验\n+        # 在 HCCL process group 初始化前调用，不匹配则返回 None 走 fallback\n+        if self.transfer_processed_layout and not validate_transfer_items_numel_against_manifest(\n+            transfer_items, self.transfer_shape_manifest,\n+        ):\n+            logger.error(\"[netloader_p2p] abort recv before HCCL due to numel/manifest mismatch ...\")\n+            return None\n+\n         receiver_pg = stateless_init_process_group(\n             self.master_addr, self.master_port,\n             self.rank, self.world_size, ...)\n \n-        # 直接 _recv_loop()，张量大小不匹配会导致静默内存损坏/挂起\n         self._recv_loop(receiver_pg, transfer_items)\n         ...",
+      "stats": "1 file changed, +30 lines, -2 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

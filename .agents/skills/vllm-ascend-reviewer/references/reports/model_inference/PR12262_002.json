@@ -1,0 +1,58 @@
+{
+  "report_id": "PR12262_002",
+  "pr_number": 12262,
+  "pr_title": "[BugFix][GLM-5.2][SpecDecode] Fix DSpark W8A8 eager acceptance",
+  "pr_status": "merged",
+  "dimension": [
+    "test"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/spec_decode/dspark_proposer.py:41"
+  ],
+  "landing_sha": "7c6b9d0",
+  "source_quote": "I think we could perhaps add a ut for this logic.",
+  "correspondence": [
+    {
+      "review_quote": "drslark: vllm_ascend/spec_decode/dspark_proposer.py:41",
+      "patch_snippet": "评后sha 7c6b9d0 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "7c6b9d0",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "`__init__` 中根据配置（如 `hf_config.*`、`speculative_config.*`）设置 `self.xxx` 派生字段的 if/else 分支，需有参数化 UT 覆盖全部分支，断言相关字段值；且 UT 构造器不能用 `__new__` 绕过初始化逻辑，应 mock 外部依赖后正常执行 `__init__`。",
+    "context": "",
+    "checkpoints": [
+      "检查 `__init__` 中是否有 if/else 分支根据配置设置实例字段",
+      "每一条分支是否有对应 parametrize case 覆盖",
+      "UT 是否真实执行 `__init__`（若父类初始化过重，用 patch 父类 `__init__`，不要 `__new__` 跳过）",
+      "应同时断言字段与其派生量（如 `max_query_tokens = max_batch_size * num_query_per_req`）"
+    ],
+    "antipattern": {
+      "file": "tests/ut/spec_decode/test_dspark_proposer.py",
+      "line": 1,
+      "code": "import pytest\nfrom unittest.mock import patch, MagicMock\nfrom types import SimpleNamespace\nfrom vllm_ascend.spec_decode.dspark_proposer import AscendDSparkProposer\n\n\nclass _DSparkProposerTestBase:\n    @classmethod\n    def _make_proposer(cls, *, max_num_tokens, num_reqs, block_size,\n                       hf_config=None):\n        # 使用 __new__ 绕过构造器，无法验证 __init__ 分支逻辑\n        proposer = AscendDSparkProposer.__new__(AscendDSparkProposer)\n        proposer.num_speculative_tokens = _NUM_SPECULATIVE_TOKENS\n        proposer.max_batch_size = _MAX_BATCH_SIZE\n        # sample_from_anchor / num_query_per_req 分支从未执行\n        return proposer\n\n    @classmethod\n    def _make_vllm_config(cls, hf_config):\n        # 构造最小 vllm_config mock ...\n        pass\n\n\n# 无 TestDSparkInitialization 类\n# 无初始化分支的 parametrize 测试",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "tests/ut/spec_decode/test_dspark_proposer.py",
+      "line": 1,
+      "code": "import pytest\nfrom unittest.mock import patch, MagicMock\nfrom types import SimpleNamespace\nfrom vllm_ascend.spec_decode.dspark_proposer import AscendDSparkProposer\n\n_NUM_SPECULATIVE_TOKENS = 4\n_MAX_NUM_TOKENS = 128\n_MAX_BATCH_SIZE = 32\n\n\ndef _mock_parent_init(self, *args, **kwargs):\n    \"\"\"Mock parent __init__ to avoid heavy dependencies.\"\"\"\n    self.num_speculative_tokens = _NUM_SPECULATIVE_TOKENS\n    self.max_batch_size = _MAX_BATCH_SIZE\n\n\nclass _DSparkProposerTestBase:\n    @classmethod\n    def _make_proposer(cls, *, max_num_tokens, num_reqs, block_size,\n                       hf_config=None):\n        # 不再用 __new__ 绕过，改为 patch 父类 __init__\n        # 使子类 __init__ 真正执行（含 sample_from_anchor 分支）\n        vllm_config = cls._make_vllm_config(hf_config or SimpleNamespace())\n        with patch.object(AscendDSparkProposer.__base__, \"__init__\",\n                          _mock_parent_init):\n            proposer = AscendDSparkProposer(vllm_config, device)\n        return proposer\n\n    @classmethod\n    def _make_vllm_config(cls, hf_config):\n        # 构造最小 vllm_config mock ...\n        pass\n\n\nclass TestDSparkInitialization(_DSparkProposerTestBase):\n    @pytest.mark.parametrize(\n        (\"hf_config\", \"expected_sample_from_anchor\",\n         \"expected_num_query_per_req\"),\n        [\n            (SimpleNamespace(),\n             True, _NUM_SPECULATIVE_TOKENS),\n            (SimpleNamespace(dspark_bonus_anchor=True),\n             False, 1 + _NUM_SPECULATIVE_TOKENS),\n        ],\n    )\n    def test_configures_anchor_sampling(\n        self, hf_config, expected_sample_from_anchor,\n        expected_num_query_per_req,\n    ):\n        proposer = self._make_proposer(\n            max_num_tokens=_MAX_NUM_TOKENS,\n            num_reqs=_MAX_BATCH_SIZE,\n            block_size=_NUM_SPECULATIVE_TOKENS,\n            hf_config=hf_config,\n        )\n        expected_max_query_tokens = (\n            _MAX_BATCH_SIZE * expected_num_query_per_req\n        )\n        assert proposer.sample_from_anchor is expected_sample_from_anchor\n        assert proposer.num_query_per_req == expected_num_query_per_req\n        assert proposer.max_query_tokens == expected_max_query_tokens",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/tests/ut/spec_decode/test_dspark_proposer.py\n+++ b/tests/ut/spec_decode/test_dspark_proposer.py\n@@ -2,17 +2,28 @@\n from unittest.mock import patch, MagicMock\n from types import SimpleNamespace\n from vllm_ascend.spec_decode.dspark_proposer import AscendDSparkProposer\n+\n+_NUM_SPECULATIVE_TOKENS = 4\n+_MAX_NUM_TOKENS = 128\n+_MAX_BATCH_SIZE = 32\n+\n+\n+def _mock_parent_init(self, *args, **kwargs):\n+    \"\"\"Mock parent __init__ to avoid heavy dependencies.\"\"\"\n+    self.num_speculative_tokens = _NUM_SPECULATIVE_TOKENS\n+    self.max_batch_size = _MAX_BATCH_SIZE\n \n \n class _DSparkProposerTestBase:\n     @classmethod\n     def _make_proposer(cls, *, max_num_tokens, num_reqs, block_size,\n                        hf_config=None):\n-        # 使用 __new__ 绕过构造器，无法验证 __init__ 分支逻辑\n-        proposer = AscendDSparkProposer.__new__(AscendDSparkProposer)\n-        proposer.num_speculative_tokens = _NUM_SPECULATIVE_TOKENS\n-        proposer.max_batch_size = _MAX_BATCH_SIZE\n-        # sample_from_anchor / num_query_per_req 分支从未执行\n+        # 不再用 __new__ 绕过，改为 patch 父类 __init__\n+        # 使子类 __init__ 真正执行（含 sample_from_anchor 分支）\n+        vllm_config = cls._make_vllm_config(hf_config or SimpleNamespace())\n+        with patch.object(AscendDSparkProposer.__base__, \"__init__\",\n+                          _mock_parent_init):\n+            proposer = AscendDSparkProposer(vllm_config, device)\n         return proposer\n \n     @classmethod\n@@ -21,5 +32,30 @@\n         pass\n \n \n-# 无 TestDSparkInitialization 类\n-# 无初始化分支的 parametrize 测试\n+class TestDSparkInitialization(_DSparkProposerTestBase):\n+    @pytest.mark.parametrize(\n+        (\"hf_config\", \"expected_sample_from_anchor\",\n+         \"expected_num_query_per_req\"),\n+        [\n+            (SimpleNamespace(),\n+             True, _NUM_SPECULATIVE_TOKENS),\n+            (SimpleNamespace(dspark_bonus_anchor=True),\n+             False, 1 + _NUM_SPECULATIVE_TOKENS),\n+        ],\n+    )\n+    def test_configures_anchor_sampling(\n+        self, hf_config, expected_sample_from_anchor,\n+        expected_num_query_per_req,\n+    ):\n+        proposer = self._make_proposer(\n+            max_num_tokens=_MAX_NUM_TOKENS,\n+            num_reqs=_MAX_BATCH_SIZE,\n+            block_size=_NUM_SPECULATIVE_TOKENS,\n+            hf_config=hf_config,\n+        )\n+        expected_max_query_tokens = (\n+            _MAX_BATCH_SIZE * expected_num_query_per_req\n+        )\n+        assert proposer.sample_from_anchor is expected_sample_from_anchor\n+        assert proposer.num_query_per_req == expected_num_query_per_req\n+        assert proposer.max_query_tokens == expected_max_query_tokens",
+      "stats": "1 file changed, +43 lines, -7 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

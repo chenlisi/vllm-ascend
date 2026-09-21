@@ -1,0 +1,45 @@
+{
+  "report_id": "PR12416_001",
+  "pr_number": 0,
+  "pr_title": "",
+  "pr_status": "unknown",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [],
+  "landing_sha": "",
+  "source_quote": "",
+  "correspondence": [],
+  "verification": {
+    "merged": false,
+    "modified_commit": "",
+    "approvals": 0
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "<!-- docs/source/user_guide/support_matrix/supported_models.md L42-58 -->\n<!-- Atlas Inference Products（Text）表区 -->\n\n| Model | Support | Hardware | Notes | Vendor | Chunked Prefill | APC | Async | W8A8 | LoRA | Fullgraph | Piecewise | Spec Dec | TP | PP | DP | Context |\n|-------|---------|----------|-------|--------|-----------------|-----|-------|------|------|-----------|-----------|----------|----|----|----|---------|\n| Qwen3-Dense      | 🔵 | | ❌ | Atlas inference products | ✅ | ✅ | ✅ | 🟡 | 🟡 | ✅ | ✅ | ❌ | ❌ | ✅ | 20k  |\n| Qwen3-30B-A3B    | 🔵 | | ❌ | Atlas inference products | ✅ | ✅ | ✅ | 🟡 | 🟡 | ✅ | ✅ | ❌ | ❌ | ✅ | 16k  |\n| Qwen3.5-Dense    | 🔵 | | ❌ | Atlas inference products | 🟡 | ✅ | ✅ | 🟡 | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | 16k  |\n| Qwen3.5-35B-A3B  | 🔵 | | ❌ | Atlas inference products | 🟡 | ✅ | ✅ | 🟡 | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | 16k  |\n| Qwen3.6-27B      | 🔵 | | ❌ | Atlas inference products | ✅ | ✅ | ✅ | 🟡 | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | 256k |\n| Qwen3.6-35B-A3B  | 🔵 | | ❌ | Atlas inference products | ✅ | ✅ | ✅ | 🟡 | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | 16k  |\n\n<!-- 问题：Qwen3.5/3.6 系列是多模态模型，不应放在 Text 表区 -->\n<!-- Support 列 🔵 应升级为 ✅，LoRA 🟡 应为 ❌，Piecewise ❌ 应为 ✅ -->",
+      "context": "修改前代码 (markdown)"
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "<!-- docs/source/user_guide/support_matrix/supported_models.md L42-50 -->\n<!-- commit: 185ab4a - docs: address Atlas model matrix review -->\n<!-- Atlas Inference Products（Text）表区 -->\n\n| Model | Support | Hardware | Notes | Vendor | Chunked Prefill | APC | Async | W8A8 | LoRA | Fullgraph | Piecewise | Spec Dec | TP | PP | DP | Context |\n|-------|---------|----------|-------|--------|-----------------|-----|-------|------|------|-----------|-----------|----------|----|----|----|---------|\n| Qwen3-Dense      | ✅ | | ❌ | Atlas inference products | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ | ✅ | ✅ | 20k  |\n| Qwen3-30B-A3B    | ✅ | | ❌ | Atlas inference products | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ | ✅ | ✅ | 16k  |\n\n<!-- 变更：删除 Qwen3.5-Dense/3.5-35B/3.6-27B/3.6-35B-A3B 四行（迁移到 Multimodal） -->\n<!-- Support：🔵→✅ ×2 | LoRA：🟡→❌ ×2 | Piecewise AclGraph：❌→✅ ×2 -->",
+      "context": "修改后代码 (markdown)"
+    },
+    "diff": {
+      "unified": "--- a/file\n+++ b/file\n@@ -1,14 +1,11 @@\n-<!-- docs/source/user_guide/support_matrix/supported_models.md L42-58 -->\n+<!-- docs/source/user_guide/support_matrix/supported_models.md L42-50 -->\n+<!-- commit: 185ab4a - docs: address Atlas model matrix review -->\n <!-- Atlas Inference Products（Text）表区 -->\n \n | Model | Support | Hardware | Notes | Vendor | Chunked Prefill | APC | Async | W8A8 | LoRA | Fullgraph | Piecewise | Spec Dec | TP | PP | DP | Context |\n |-------|---------|----------|-------|--------|-----------------|-----|-------|------|------|-----------|-----------|----------|----|----|----|---------|\n-| Qwen3-Dense      | 🔵 | | ❌ | Atlas inference products | ✅ | ✅ | ✅ | 🟡 | 🟡 | ✅ | ✅ | ❌ | ❌ | ✅ | 20k  |\n-| Qwen3-30B-A3B    | 🔵 | | ❌ | Atlas inference products | ✅ | ✅ | ✅ | 🟡 | 🟡 | ✅ | ✅ | ❌ | ❌ | ✅ | 16k  |\n-| Qwen3.5-Dense    | 🔵 | | ❌ | Atlas inference products | 🟡 | ✅ | ✅ | 🟡 | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | 16k  |\n-| Qwen3.5-35B-A3B  | 🔵 | | ❌ | Atlas inference products | 🟡 | ✅ | ✅ | 🟡 | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | 16k  |\n-| Qwen3.6-27B      | 🔵 | | ❌ | Atlas inference products | ✅ | ✅ | ✅ | 🟡 | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | 256k |\n-| Qwen3.6-35B-A3B  | 🔵 | | ❌ | Atlas inference products | ✅ | ✅ | ✅ | 🟡 | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | 16k  |\n+| Qwen3-Dense      | ✅ | | ❌ | Atlas inference products | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ | ✅ | ✅ | 20k  |\n+| Qwen3-30B-A3B    | ✅ | | ❌ | Atlas inference products | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ | ✅ | ✅ | 16k  |\n \n-<!-- 问题：Qwen3.5/3.6 系列是多模态模型，不应放在 Text 表区 -->\n-<!-- Support 列 🔵 应升级为 ✅，LoRA 🟡 应为 ❌，Piecewise ❌ 应为 ✅ -->\n+<!-- 变更：删除 Qwen3.5-Dense/3.5-35B/3.6-27B/3.6-35B-A3B 四行（迁移到 Multimodal） -->\n+<!-- Support：🔵→✅ ×2 | LoRA：🟡→❌ ×2 | Piecewise AclGraph：❌→✅ ×2 -->",
+      "stats": "1 file changed, +6 lines, -9 lines",
+      "key_changes": [
+        "修改代码逻辑"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

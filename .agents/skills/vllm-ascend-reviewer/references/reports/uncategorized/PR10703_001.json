@@ -1,0 +1,47 @@
+{
+  "report_id": "PR10703_001",
+  "pr_number": 10703,
+  "pr_title": "",
+  "pr_status": "unknown",
+  "merged_at": "",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [],
+  "landing_sha": "",
+  "source_quote": "",
+  "correspondence": [],
+  "verification": {
+    "merged": true,
+    "modified_commit": "",
+    "approvals": 0
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/Qwen3-VL-Embedding.md",
+      "line": 71,
+      "code": "vllm serve Qwen/Qwen3-VL-Embedding-8B ... --max_model_len 1024",
+      "context": "The long option `--max_model_len` uses an underscore, which is invalid for argparse/vLLM CLI parsing. CLI long options must use hyphens (`-`). Change it to `--max-model-len` with hyphen."
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/Qwen3-VL-Embedding.md",
+      "line": 71,
+      "code": "vllm serve Qwen/Qwen3-VL-Embedding-2B ... --max-model-len 1024",
+      "context": "The long option `--max_model_len` uses an underscore, which is invalid for argparse/vLLM CLI parsing. CLI long options must use hyphens (`-`). Change it to `--max-model-len` with hyphen."
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/Qwen3-VL-Embedding.md\n+++ b/docs/source/tutorials/models/Qwen3-VL-Embedding.md\n@@ -1 +1 @@\n-vllm serve Qwen/Qwen3-VL-Embedding-8B ... --max_model_len 1024\n+vllm serve Qwen/Qwen3-VL-Embedding-2B ... --max-model-len 1024",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "修改: --max_model_len → --max-model-len (CLI long option 使用 hyphen)",
+        "修改: Embedding-8B → Embedding-2B (模型名称修正)"
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

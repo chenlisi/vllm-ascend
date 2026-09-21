@@ -1,0 +1,67 @@
+{
+  "report_id": "PR10730_001",
+  "pr_number": 10730,
+  "pr_title": "[Feature] Add rmsnorm dynamic mx quant fusion pass",
+  "pr_status": "merged",
+  "merged_at": "2026-07-03T03:15:01Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/compilation/passes/norm_quant_fusion_pass.py:735"
+  ],
+  "landing_sha": "98c9348",
+  "source_quote": "A5量化，rmsnorm无需bias了，因此所有bias的类均需要删除",
+  "correspondence": [
+    {
+      "review_quote": "ningjingbengxiaohai 指出 A5 量化中 rmsnorm 不再需要 bias，因此所有包含 bias 的模式类都应删除。作者通过 commit `98c9348`（\"Remove the useless WithBias patterns\"）删除了所有 WithBias 模式类，1/1 建议全部落地。",
+      "patch_snippet": "commit `98c9348`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "98c9348",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当硬件平台（如 A5）的算子支持发生变化（如 rmsnorm 不再需要 bias）时，应及时删除相关的旧模式类，避免代码冗余和潜在的误用。",
+    "context": "",
+    "checkpoints": [
+      "融合模式类是否仍适用于目标硬件平台",
+      "是否存在已不再需要的 WithBias/NoBias 变体",
+      "硬件升级后是否清理了过时的模式"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/compilation/passes/norm_quant_fusion_pass.py",
+      "line": 720,
+      "code": "# A5 量化中 rmsnorm 无需 bias，但以下 WithBias 模式类仍然存在\n# （根据评审意见推断）评审人指出应全部删除\n\nclass RMSNormWithBiasQuantFusionPattern(QuantFusionPattern):\n    \"\"\"Pattern for fusing RMSNorm(with bias) + DynamicMxQuant.\"\"\"\n\n    def __init__(self, eps: float):\n        super().__init__()\n        self.eps = eps\n\n    def get_input_node(self):\n        return Node(ops.rms_norm_with_bias, ...)\n\n    def get_output_node(self):\n        return Node(ops.npu_dynamic_mx_quant, ...)\n\n\nclass AddRMSNormWithBiasQuantFusionPattern(QuantFusionPattern):\n    \"\"\"Pattern for fusing AddRMSNorm(with bias) + DynamicMxQuant.\"\"\"\n\n    def __init__(self, eps: float):\n        super().__init__()\n        self.eps = eps\n\n    def get_input_node(self):\n        return Node(ops.add_rms_norm_with_bias, ...)\n\n    def get_output_node(self):\n        return Node(ops.npu_add_rms_norm_dynamic_mx_quant,\n                    epsilon=self.epsilion)  # gemini 发现的 typo\n\n\nclass RMSNormQuantFusionPattern(QuantFusionPattern):\n    \"\"\"Pattern for fusing RMSNorm(no bias) + DynamicMxQuant.\"\"\"\n\n    def __init__(self, eps: float):\n        super().__init__()\n        self.eps = eps",
+      "context": "A5量化，rmsnorm无需bias了，因此所有bias的类均需要删除"
+    },
+    "pattern": {
+      "file": "vllm_ascend/compilation/passes/norm_quant_fusion_pass.py",
+      "line": 720,
+      "code": "# A5 量化中 rmsnorm 无需 bias，已删除所有 WithBias 模式类\n# 仅保留无 bias 的融合模式\n\n# RMSNormWithBiasQuantFusionPattern 已删除\n# AddRMSNormWithBiasQuantFusionPattern 已删除\n\n\nclass RMSNormQuantFusionPattern(QuantFusionPattern):\n    \"\"\"Pattern for fusing RMSNorm(no bias) + DynamicMxQuant.\"\"\"\n\n    def __init__(self, eps: float):\n        super().__init__()\n        self.eps = eps\n\n    def get_input_node(self):\n        return Node(ops.rms_norm, ...)\n\n    def get_output_node(self):\n        return Node(ops.npu_dynamic_mx_quant, ...)\n\n\nclass AddRMSNormQuantFusionPattern(QuantFusionPattern):\n    \"\"\"Pattern for fusing AddRMSNorm(no bias) + DynamicMxQuant.\"\"\"\n\n    def __init__(self, eps: float):\n        super().__init__()\n        self.eps = eps",
+      "context": "A5量化，rmsnorm无需bias了，因此所有bias的类均需要删除"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/compilation/passes/norm_quant_fusion_pass.py\n+++ b/vllm_ascend/compilation/passes/norm_quant_fusion_pass.py\n@@ -1,33 +1,8 @@\n-# A5 量化中 rmsnorm 无需 bias，但以下 WithBias 模式类仍然存在\n-# （根据评审意见推断）评审人指出应全部删除\n+# A5 量化中 rmsnorm 无需 bias，已删除所有 WithBias 模式类\n+# 仅保留无 bias 的融合模式\n \n-class RMSNormWithBiasQuantFusionPattern(QuantFusionPattern):\n-    \"\"\"Pattern for fusing RMSNorm(with bias) + DynamicMxQuant.\"\"\"\n-\n-    def __init__(self, eps: float):\n-        super().__init__()\n-        self.eps = eps\n-\n-    def get_input_node(self):\n-        return Node(ops.rms_norm_with_bias, ...)\n-\n-    def get_output_node(self):\n-        return Node(ops.npu_dynamic_mx_quant, ...)\n-\n-\n-class AddRMSNormWithBiasQuantFusionPattern(QuantFusionPattern):\n-    \"\"\"Pattern for fusing AddRMSNorm(with bias) + DynamicMxQuant.\"\"\"\n-\n-    def __init__(self, eps: float):\n-        super().__init__()\n-        self.eps = eps\n-\n-    def get_input_node(self):\n-        return Node(ops.add_rms_norm_with_bias, ...)\n-\n-    def get_output_node(self):\n-        return Node(ops.npu_add_rms_norm_dynamic_mx_quant,\n-                    epsilon=self.epsilion)  # gemini 发现的 typo\n+# RMSNormWithBiasQuantFusionPattern 已删除\n+# AddRMSNormWithBiasQuantFusionPattern 已删除\n \n \n class RMSNormQuantFusionPattern(QuantFusionPattern):\n@@ -36,3 +11,17 @@\n     def __init__(self, eps: float):\n         super().__init__()\n         self.eps = eps\n+\n+    def get_input_node(self):\n+        return Node(ops.rms_norm, ...)\n+\n+    def get_output_node(self):\n+        return Node(ops.npu_dynamic_mx_quant, ...)\n+\n+\n+class AddRMSNormQuantFusionPattern(QuantFusionPattern):\n+    \"\"\"Pattern for fusing AddRMSNorm(no bias) + DynamicMxQuant.\"\"\"\n+\n+    def __init__(self, eps: float):\n+        super().__init__()\n+        self.eps = eps",
+      "stats": "1 file changed, +18 lines, -29 lines",
+      "key_changes": [
+        "移除: # A5 量化中 rmsnorm 无需 bias，但以下 WithBias 模式类仍然存在",
+        "移除: # （根据评审意见推断）评审人指出应全部删除",
+        "新增: # A5 量化中 rmsnorm 无需 bias，已删除所有 WithBias 模式类",
+        "新增: # 仅保留无 bias 的融合模式",
+        "移除: class RMSNormWithBiasQuantFusionPattern(QuantFusionPattern):",
+        "移除: \"\"\"Pattern for fusing RMSNorm(with bias) + DynamicMxQuant.\"\"\"",
+        "移除: def __init__(self, eps: float):",
+        "移除: super().__init__()",
+        "移除: self.eps = eps",
+        "移除: def get_input_node(self):"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

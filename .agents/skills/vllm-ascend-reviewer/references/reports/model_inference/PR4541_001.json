@@ -1,0 +1,61 @@
+{
+  "report_id": "PR4541_001",
+  "pr_number": 4541,
+  "pr_title": "[quantization] Add w8a16 quantization support",
+  "pr_status": "merged",
+  "merged_at": "2025-12-24T11:49:32Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/e2e/singlecard/test_quantization.py:38",
+    "vllm_ascend/quantization/w8a16.py:95"
+  ],
+  "landing_sha": "733b9aa",
+  "source_quote": "test_qwen3_dense_w8a16",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan 指出测试用例名称需要修改为 `test_qwen3_dense_w8a16`。作者通过 commit `733b9aa` 删除310p相关代码，并通过 commit `2cb1b2a` 增加e2e test精度校验，建议全部落地。",
+      "patch_snippet": "commit `733b9aa`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "733b9aa",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "添加新的量化支持（如 w8a16）时，测试用例名称应准确反映量化方法，且必须包含 e2e 精度校验。",
+    "context": "",
+    "checkpoints": [
+      "测试用例名称是否与量化方法一致（如 `test_qwen3_dense_w8a16`）",
+      "是否包含 e2e 精度校验逻辑",
+      "是否需要清理平台特定代码（如 310p 相关代码）"
+    ],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "from typing import Optional\n\nimport torch\nimport torch_npu\n\nfrom vllm_ascend.utils import is_310p\n\n\nclass AscendW8A16LinearMethod:\n    \"\"\"W8A16 量化线性方法，使用 torch_npu.npu_weight_quant_batchmatmul\n    在 Ascend NPU 上执行 INT8 权重 × FP16/BF16 激活的矩阵乘法。\"\"\"\n\n    def apply(self, layer: torch.nn.Module, x: torch.Tensor,\n              bias: Optional[torch.Tensor] = None) -> torch.Tensor:\n        if is_310p():\n            weight = layer.weight.data.transpose(0, 1)\n            output = torch_npu.npu_weight_quant_batchmatmul(\n                x=x, weight=weight,\n                antiquant_scale=layer.weight_scale,\n                antiquant_offset=layer.weight_offset, bias=bias)\n        else:\n            output = torch_npu.npu_weight_quant_batchmatmul(\n                x=x, weight=layer.weight,\n                antiquant_scale=layer.weight_scale,\n                antiquant_offset=layer.weight_offset, bias=bias)\n        return output",
+      "context": "wangxiyuan: test_qwen3_dense_w8a16"
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "from typing import Optional\n\nimport torch\nimport torch_npu\n\nfrom vllm_ascend.utils import is_310p\n\n\nclass AscendW8A16LinearMethod:\n    \"\"\"W8A16 量化线性方法。\"\"\"\n\n    def apply(self, layer: torch.nn.Module, x: torch.Tensor,\n              bias: Optional[torch.Tensor] = None) -> torch.Tensor:\n        weight = layer.weight\n        if is_310p():\n            weight = layer.weight.data.transpose(0, 1)\n\n        output = torch_npu.npu_weight_quant_batchmatmul(\n            x=x,\n            weight=weight,\n            antiquant_scale=layer.weight_scale,\n            antiquant_offset=layer.weight_offset,\n            bias=bias\n        )\n        return output",
+      "context": "wangxiyuan: test_qwen3_dense_w8a16"
+    },
+    "diff": {
+      "unified": "--- a/a/file\n+++ b/b/file\n@@ -1,26 +1,25 @@\n \n \n class AscendW8A16LinearMethod:\n-    \"\"\"W8A16 量化线性方法，使用 torch_npu.npu_weight_quant_batchmatmul\n-    在 Ascend NPU 上执行 INT8 权重 × FP16/BF16 激活的矩阵乘法。\"\"\"\n+    \"\"\"W8A16 量化线性方法。\"\"\"\n \n     def apply(self, layer: torch.nn.Module, x: torch.Tensor,\n               bias: Optional[torch.Tensor] = None) -> torch.Tensor:\n+        weight = layer.weight\n         if is_310p():\n             weight = layer.weight.data.transpose(0, 1)\n-            output = torch_npu.npu_weight_quant_batchmatmul(\n-                x=x, weight=weight,\n-                antiquant_scale=layer.weight_scale,\n-                antiquant_offset=layer.weight_offset, bias=bias)\n-        else:\n-            output = torch_npu.npu_weight_quant_batchmatmul(\n-                x=x, weight=layer.weight,\n-                antiquant_scale=layer.weight_scale,\n-                antiquant_offset=layer.weight_offset, bias=bias)\n+\n+        output = torch_npu.npu_weight_quant_batchmatmul(\n+            x=x,\n+            weight=weight,\n+            antiquant_scale=layer.weight_scale,\n+            antiquant_offset=layer.weight_offset,\n+            bias=bias\n+        )\n         return output",
+      "stats": "1 file changed, +10 lines, -11 lines",
+      "key_changes": [
+        "修改了第 10-11 行的代码",
+        "在第 14-14 行新增了代码",
+        "修改了第 17-25 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

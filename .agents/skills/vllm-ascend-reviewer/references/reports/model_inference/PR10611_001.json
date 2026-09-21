@@ -1,0 +1,58 @@
+{
+  "report_id": "PR10611_001",
+  "pr_number": 10611,
+  "pr_title": "[Doc] Update doc of Kimi-K2.5",
+  "pr_status": "merged",
+  "merged_at": "2026-06-25T09:54:15Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/models/Kimi-K2.5.md:1015"
+  ],
+  "landing_sha": "e8e85f9",
+  "source_quote": "Subtitle unnecessary.",
+  "correspondence": [
+    {
+      "review_quote": "evakang777 指出 `Kimi-K2.5.md:1015` 处的 subtitle（小标题）是多余的，与上级标题内容重复或没有必要单独存在。作者通过 commit `e8e85f9`（\"fix and optimize\"）移除了该多余小标题，使文档结构更简洁。",
+      "patch_snippet": "commit `e8e85f9`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "e8e85f9",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在模型部署文档中，不应添加与上级标题内容重复或无实质内容区分的嵌套小标题。小标题应当有明确的内容区分，避免层级过深导致阅读体验下降。",
+    "context": "",
+    "checkpoints": [
+      "检查小标题是否有独立的内容支撑，而非仅作为装饰",
+      "检查相邻小标题之间是否存在内容重复",
+      "检查文档层级是否过深（建议不超过 3 级）"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/Kimi-K2.5.md",
+      "line": 1015,
+      "code": "<!-- 文件: docs/source/tutorials/models/Kimi-K2.5.md -->\n<!-- 行号: 1010-1030 -->\n\n## 7. Performance Tuning\n\n本节介绍 Kimi-K2.5 模型在 Ascend NPU 上的性能调优建议。\n\n### 7.1 Recommended Configurations\n\n#### Recommended Configurations\n\n| 配置项 | 推荐值 | 说明 |\n|--------|--------|------|\n| `max_model_len` | 8192 | 根据显存大小调整 |\n| `tensor_parallel_size` | 8 | 8卡并行 |\n| `gpu_memory_utilization` | 0.9 | GPU 显存利用率 |\n| `max_num_seqs` | 256 | 最大并发序列数 |\n| `enable_prefix_caching` | true | 启用前缀缓存 |\n\n#### Tuning Guidelines\n\n- 对于长序列场景，建议降低 `max_num_seqs` 以提高单序列吞吐量\n- 对于短序列高并发场景，建议增大 `max_num_seqs`",
+      "context": "Subtitle unnecessary."
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/Kimi-K2.5.md",
+      "line": 1015,
+      "code": "<!-- 文件: docs/source/tutorials/models/Kimi-K2.5.md -->\n<!-- 行号: 1010-1030 -->\n\n## 7. Performance Tuning\n\n本节介绍 Kimi-K2.5 模型在 Ascend NPU 上的性能调优建议。\n\n### 7.1 Recommended Configurations\n\n| 配置项 | 推荐值 | 说明 |\n|--------|--------|------|\n| `max_model_len` | 8192 | 根据显存大小调整 |\n| `tensor_parallel_size` | 8 | 8卡并行 |\n| `gpu_memory_utilization` | 0.9 | GPU 显存利用率 |\n| `max_num_seqs` | 256 | 最大并发序列数 |\n| `enable_prefix_caching` | true | 启用前缀缓存 |\n\n#### Tuning Guidelines\n\n- 对于长序列场景，建议降低 `max_num_seqs` 以提高单序列吞吐量\n- 对于短序列高并发场景，建议增大 `max_num_seqs`",
+      "context": "Subtitle unnecessary."
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/Kimi-K2.5.md\n+++ b/docs/source/tutorials/models/Kimi-K2.5.md\n@@ -6,8 +6,6 @@\n 本节介绍 Kimi-K2.5 模型在 Ascend NPU 上的性能调优建议。\n \n ### 7.1 Recommended Configurations\n-\n-#### Recommended Configurations\n \n | 配置项 | 推荐值 | 说明 |\n |--------|--------|------|",
+      "stats": "1 file changed, -2 lines",
+      "key_changes": [
+        "移除: #### Recommended Configurations"
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

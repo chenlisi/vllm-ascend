@@ -1,0 +1,59 @@
+{
+  "report_id": "PR5084_001",
+  "pr_number": 5084,
+  "pr_title": "[Doc]Add the user_guide doc file regarding fine-grained TP.",
+  "pr_status": "merged",
+  "merged_at": "2025-12-19T08:37:25Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/user_guide/feature_guide/Fine_grained_TP.md:5",
+    "docs/source/user_guide/feature_guide/Fine_grained_TP.md:45"
+  ],
+  "landing_sha": "fbb5554",
+  "source_quote": "`TP degrees` => `TP sizes` keep the common expression.",
+  "correspondence": [
+    {
+      "review_quote": "jianzs 指出文档中应使用通用表达 `TP sizes` 而非 `TP degrees`，涉及2处修改。作者通过 commit `fbb5554` 统一术语，2/2 建议全部落地。",
+      "patch_snippet": "commit `fbb5554`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "fbb5554",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "技术文档中应使用社区通用术语表达，如 `TP sizes` 而非 `TP degrees`，保持术语一致性。",
+    "context": "",
+    "checkpoints": [
+      "文档中使用社区通用的术语表达",
+      "同一概念在文档中保持统一的命名"
+    ],
+    "antipattern": {
+      "file": "docs/source/user_guide/feature_guide/Fine_grained_TP.md",
+      "line": 0,
+      "code": "Fine-grained Tensor Parallelism (TP) allows you to split model weights\nacross devices with TP degrees granularity. This feature provides\nmore flexible parallelism strategies compared to standard TP.\n\n\nWith TP degrees, you can configure different parallel sizes for\ndifferent layers of the model, enabling more efficient resource\nutilization.",
+      "context": "`TP degrees` => `TP sizes` keep the common expression."
+    },
+    "pattern": {
+      "file": "docs/source/user_guide/feature_guide/Fine_grained_TP.md",
+      "line": 0,
+      "code": "Fine-grained Tensor Parallelism (TP) allows you to split model weights\nacross devices with TP sizes granularity. This feature provides\nmore flexible parallelism strategies compared to standard TP.\n\n\nWith TP sizes, you can configure different parallel sizes for\ndifferent layers of the model, enabling more efficient resource\nutilization.",
+      "context": "`TP degrees` => `TP sizes` keep the common expression."
+    },
+    "diff": {
+      "unified": "--- a/docs/source/user_guide/feature_guide/Fine_grained_TP.md\n+++ b/docs/source/user_guide/feature_guide/Fine_grained_TP.md\n@@ -1,8 +1,8 @@\n Fine-grained Tensor Parallelism (TP) allows you to split model weights\n-across devices with TP degrees granularity. This feature provides\n+across devices with TP sizes granularity. This feature provides\n more flexible parallelism strategies compared to standard TP.\n \n \n-With TP degrees, you can configure different parallel sizes for\n+With TP sizes, you can configure different parallel sizes for\n different layers of the model, enabling more efficient resource\n utilization.",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "修改了第 2-2 行的代码",
+        "修改了第 6-6 行的代码"
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

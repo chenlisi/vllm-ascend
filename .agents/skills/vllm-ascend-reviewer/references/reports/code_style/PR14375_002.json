@@ -1,0 +1,64 @@
+{
+  "report_id": "PR14375_002",
+  "pr_number": 14375,
+  "pr_title": "[Refactor][DSA][4/N] modularize the indexer/compressor of dsa_v1",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/dsa_v1.py:924",
+    "vllm_ascend/attention/context_parallel/dsa_cp.py:1099"
+  ],
+  "landing_sha": "8024ef5",
+  "source_quote": "The `self.swa_cache_layer` attribute is retrieved via `kwargs.get(\"swa_cache_layer\")` but is strictly required by `_get_layer_metadata` (which asserts `self.swa_cache_layer is not None`). Adding an explicit assertion in `__init__` ensures that configuration errors are caught early during initialization rather than failing at runtime during the first forward pass.\nThe `self.swa_cache_layer` attribute is retrieved via `kwargs.get(\"swa_cache_layer\")` but is strictly required by `_get_layer_metadata`. Adding an explicit assertion in `__init__` ensures that configuration errors are caught early during initialization rather than failing at runtime during the first forward pass.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/attention/dsa_v1.py:924",
+      "patch_snippet": "评后sha 8024ef5 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/attention/context_parallel/dsa_cp.py:1099",
+      "patch_snippet": "评后sha 8024ef5 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "8024ef5",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当类的 `__init__` 通过 `kwargs.get(\"xxx\")` 取值（默认 `None`），但该属性在后续方法中被严格依赖（例如 `_get_layer_metadata` 断言其不为 `None`）时，必须在 `__init__` 中显式添加 `assert xxx is not None`，使配置错误在构造期就暴露而非延迟到运行期。",
+    "context": "",
+    "checkpoints": [
+      "检查 `__init__` 中所有 `self.xxx = kwargs.get(\"xxx\")` 的属性",
+      "追踪该属性在后续方法中的使用，是否会出现 `assert self.xxx is not None`、`self.xxx.yyy`（属性访问）等强制非空使用",
+      "若后续方法依赖其非空，则在 `__init__` 中提前 `assert` 断言",
+      "对对称/继承结构的类（如 `AscendDSAImpl` 与 `AscendDSACPImpl`）要同步修改，避免遗漏"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/dsa_v1.py",
+      "line": 924,
+      "code": "# vllm_ascend/attention/dsa_v1.py (AscendDSAImpl.__init__)\nself.indexer = kwargs.get(\"indexer\")\nself.compressor = kwargs.get(\"compressor\")\nself.swa_cache_layer = kwargs.get(\"swa_cache_layer\")\n# ❌ 没有任何校验，若 kwargs 未传 swa_cache_layer 则为 None\n# 后续 _get_layer_metadata 才会抛错（已晚到 forward 阶段）\n\nself.wo_a = kwargs[\"wo_a\"]\nself.wo_b = kwargs[\"wo_b\"]",
+      "context": "vllm_ascend/attention/dsa_v1.py (AscendDSAImpl.__init__) ❌ 没有任何校验，若 kwargs 未传 swa_cache_layer 则为 None 后续 _get_layer_metadata 才会抛错（已晚到 forward 阶段）"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/dsa_v1.py",
+      "line": 924,
+      "code": "# vllm_ascend/attention/dsa_v1.py (AscendDSAImpl.__init__)\nself.indexer = kwargs.get(\"indexer\")\nself.compressor = kwargs.get(\"compressor\")\nself.swa_cache_layer = kwargs.get(\"swa_cache_layer\")\nassert self.swa_cache_layer is not None   # ✅ 构造期立即抛出明确错误\n\nself.wo_a = kwargs[\"wo_a\"]\nself.wo_b = kwargs[\"wo_b\"]",
+      "context": "vllm_ascend/attention/dsa_v1.py (AscendDSAImpl.__init__)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/dsa_v1.py\n+++ b/vllm_ascend/attention/dsa_v1.py\n@@ -2,8 +2,7 @@\n self.indexer = kwargs.get(\"indexer\")\n self.compressor = kwargs.get(\"compressor\")\n self.swa_cache_layer = kwargs.get(\"swa_cache_layer\")\n-# ❌ 没有任何校验，若 kwargs 未传 swa_cache_layer 则为 None\n-# 后续 _get_layer_metadata 才会抛错（已晚到 forward 阶段）\n+assert self.swa_cache_layer is not None   # ✅ 构造期立即抛出明确错误\n \n self.wo_a = kwargs[\"wo_a\"]\n self.wo_b = kwargs[\"wo_b\"]\n",
+      "stats": "1 file changed, +1 lines, -2 lines",
+      "key_changes": [
+        "新增: assert self.swa_cache_layer is not None   # ✅ 构造期立即抛出明确错误"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

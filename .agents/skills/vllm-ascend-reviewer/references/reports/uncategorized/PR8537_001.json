@@ -1,0 +1,85 @@
+{
+  "report_id": "PR8537_001",
+  "pr_number": 8537,
+  "pr_title": "[Doc] add Mixtral-8x7B-Instruct-v0.1 model docs and config",
+  "pr_status": "merged",
+  "merged_at": "2026-05-20T02:00:54Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/models/index.md:37",
+    "tests/e2e/models/configs/accuracy_groups_a2.json:12",
+    "tests/e2e/models/configs/accuracy_groups_a2.json:42",
+    "tests/e2e/models/configs/Mixtral-8x7B-Instruct-v0.1.yaml:29",
+    "tests/e2e/models/configs/Mixtral-8x7B-Instruct-v0.1.yaml:23",
+    "tests/e2e/models/configs/Mixtral-8x7B-Instruct-v0.1.yaml:19"
+  ],
+  "landing_sha": "3d77de0",
+  "source_quote": "Why did you add `Hunyuan-A13B-Instruct` and `Minitron-8B-Base`?\n> Just rebase your branch\nWhy did you remove the existed models?\nPlease revert\nRevert here\nIn english\nIn english\nIn english or remove this line",
+  "correspondence": [
+    {
+      "review_quote": "wjunLu: docs/source/tutorials/models/index.md:37",
+      "patch_snippet": "评后sha 3d77de0 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wjunLu: tests/e2e/models/configs/accuracy_groups_a2.json:12",
+      "patch_snippet": "评后sha 3d77de0 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wjunLu: tests/e2e/models/configs/accuracy_groups_a2.json:42",
+      "patch_snippet": "评后sha 3d77de0 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wjunLu: tests/e2e/models/configs/Mixtral-8x7B-Instruct-v0.1.yaml:29",
+      "patch_snippet": "评后sha 3d77de0 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wjunLu: tests/e2e/models/configs/Mixtral-8x7B-Instruct-v0.1.yaml:23",
+      "patch_snippet": "评后sha 3d77de0 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wjunLu: tests/e2e/models/configs/Mixtral-8x7B-Instruct-v0.1.yaml:19",
+      "patch_snippet": "评后sha 3d77de0 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "3d77de0",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "Why did you add `Hunyuan-A13B-Instruct` and `Minitron-8B-Base`?  Just rebase your branch",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/index.md",
+      "line": 37,
+      "code": "# docs/source/tutorials/models/index.md:37",
+      "context": "Why did you add `Hunyuan-A13B-Instruct` and `Minitron-8B-Base`?\n> Just rebase your branch\nWhy did you remove the existed models?\nPlease revert\nRevert here\nIn english\nIn english\nIn english or remove th"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/index.md",
+      "line": 37,
+      "code": "# 根据评审意见修改后的代码",
+      "context": "Why did you add `Hunyuan-A13B-Instruct` and `Minitron-8B-Base`?\n> Just rebase your branch\nWhy did you remove the existed models?\nPlease revert\nRevert here\nIn english\nIn english\nIn english or remove th"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/index.md\n+++ b/docs/source/tutorials/models/index.md\n@@ -1 +1 @@\n-# docs/source/tutorials/models/index.md:37\n+# 根据评审意见修改后的代码\n",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "-# docs/source/tutorials/models/index.md:37",
+        "+# 根据评审意见修改后的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

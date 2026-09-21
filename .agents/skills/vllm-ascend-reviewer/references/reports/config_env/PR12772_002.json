@@ -1,0 +1,57 @@
+{
+  "report_id": "PR12772_002",
+  "pr_number": 12772,
+  "pr_title": "[Core][BugFix][Test] Fix sequence parallelism for both MoE and dense model",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/compilation/passes/sequence_parallelism.py:113"
+  ],
+  "landing_sha": "b9c124f",
+  "source_quote": "Confirm why it is written this way.",
+  "correspondence": [
+    {
+      "review_quote": "weiguihua2: vllm_ascend/compilation/passes/sequence_parallelism.py:113",
+      "patch_snippet": "评后sha b9c124f 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "b9c124f",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "不要在代码中添加基于魔法值（如 `eps == 1e-6`）的特殊分支而不加说明。这类特判路径使行为依赖于隐含的参数值，难以维护和测试。应统一调用路径，确保所有输入走相同逻辑。",
+    "context": "",
+    "checkpoints": [
+      "检查是否存在基于硬编码数值（如 `1e-6`、`0.001`）的条件分支",
+      "确认该分支是否有注释说明原因，若无则应删除或补充说明",
+      "评估特判分支是否引入了与主路径不一致的行为（如省略参数 vs 显式传参）"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/compilation/passes/sequence_parallelism.py",
+      "line": 0,
+      "code": "import torch\nfrom vllm.config import VllmConfig\n\n\nclass _RMSNormBiasWrapper:\n    \"\"\"Wrapper for npu_add_rms_norm_bias op used in sequence parallelism.\"\"\"\n\n    def __init__(self, eps: float = 1e-6):\n        self.eps = eps\n\n    def __call__(self, input, residual, weight):\n        \"\"\"Call the norm op with the same arity Dynamo emits for its defaults.\"\"\"\n        if self.eps == 1e-6:  # 特判 eps==1e-6 时省略 eps 参数\n            return torch.ops._C_ascend.npu_add_rms_norm_bias(input, residual, weight)\n        return torch.ops._C_ascend.npu_add_rms_norm_bias(input, residual, weight, None, self.eps)\n\n\ndef _get_norm_wrapper(config: VllmConfig):\n    \"\"\"Get the appropriate norm wrapper for sequence parallelism.\"\"\"\n    eps = config.model_config.get_norm_eps()\n    return _RMSNormBiasWrapper(eps=eps)",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/compilation/passes/sequence_parallelism.py",
+      "line": 0,
+      "code": "import torch\nfrom vllm.config import VllmConfig\n\n\nclass _RMSNormBiasWrapper:\n    \"\"\"Wrapper for npu_add_rms_norm_bias op used in sequence parallelism.\"\"\"\n\n    def __init__(self, eps: float = 1e-6):\n        self.eps = eps\n\n    def __call__(self, input, residual, weight):\n        \"\"\"Call the norm op with the same arity Dynamo emits for its defaults.\"\"\"\n        return torch.ops._C_ascend.npu_add_rms_norm_bias(input, residual, weight, None, self.eps)\n\n\ndef _get_norm_wrapper(config: VllmConfig):\n    \"\"\"Get the appropriate norm wrapper for sequence parallelism.\"\"\"\n    eps = config.model_config.get_norm_eps()\n    return _RMSNormBiasWrapper(eps=eps)",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/compilation/passes/sequence_parallelism.py\n+++ b/vllm_ascend/compilation/passes/sequence_parallelism.py\n@@ -10,8 +10,6 @@\n \n     def __call__(self, input, residual, weight):\n         \"\"\"Call the norm op with the same arity Dynamo emits for its defaults.\"\"\"\n-        if self.eps == 1e-6:  # 特判 eps==1e-6 时省略 eps 参数\n-            return torch.ops._C_ascend.npu_add_rms_norm_bias(input, residual, weight)\n         return torch.ops._C_ascend.npu_add_rms_norm_bias(input, residual, weight, None, self.eps)\n \n ",
+      "stats": "1 file changed, +0 lines, -2 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

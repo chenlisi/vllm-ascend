@@ -1,0 +1,57 @@
+{
+  "report_id": "PR12491_004",
+  "pr_number": 12491,
+  "pr_title": "[Doc] add deepseek-v4-flash-dspark cookbook",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "docs/source/tutorials/models/DeepSeek-V4-Flash.md:218"
+  ],
+  "landing_sha": "c721319",
+  "source_quote": "![critical](https://www.gstatic.com/codereviewagent/critical.svg)\n> The trailing backslash `\\` at the end of the command will escape the newline, causing a shell syntax error when the user copies and runs this script. Remove the trailing backslash since this is the last argument of the command.\nfixed",
+  "correspondence": [
+    {
+      "review_quote": "gemini-code-assist[bot]: docs/source/tutorials/models/DeepSeek-V4-Flash.md:218(2026-07-21 08:42:57)",
+      "patch_snippet": "评后sha c721319 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "c721319",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "文档/教程中的多行 shell 命令，最后一行参数末尾不应有续行符 `\\`，否则会转义换行符导致用户复制运行时出现语法错误。",
+    "context": "",
+    "checkpoints": [
+      "检查文档中多行 shell 命令的最后一行参数",
+      "确认最后一行末尾是否有不必要的 `\\`",
+      "行末 `\\` 仅用于续行（表示后面还有参数），最后一行应删除"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/DeepSeek-V4-Flash.md",
+      "line": 205,
+      "code": "    docker run --rm \\\n        --device /dev/davinci0 \\\n        -v /mnt/share/models:/root/.cache/modelscope/hub/models \\\n        $IMAGE \\\n    vllm serve /root/.cache/modelscope/hub/models/UploadWeight/DeepSeek-V4-Flash-DSpark-w4a8-test \\\n        --max-model-len 800000 \\\n        --max-num-batched-tokens 8192 \\\n        --speculative-config '{\"method\": \"dspark\", \"num_speculative_tokens\": 5, \"enforce_eager\": true}' \\\n        ```\n    # ↑ 最后一个参数末尾有反斜杠 \\，会转义换行符导致 shell 语法错误",
+      "context": "修改前代码 (bash)"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/DeepSeek-V4-Flash.md",
+      "line": 205,
+      "code": "    docker run --rm \\\n        --device /dev/davinci0 \\\n        -v /mnt/share/models:/root/.cache/modelscope/hub/models \\\n        $IMAGE \\\n    vllm serve /root/.cache/modelscope/hub/models/UploadWeight/DeepSeek-V4-Flash-DSpark-w4a8-test \\\n        --max-model-len 800000 \\\n        --max-num-batched-tokens 8192 \\\n        --speculative-config '{\"method\": \"dspark\", \"num_speculative_tokens\": 5, \"enforce_eager\": true}'\n        ```\n    # ↑ 已删除末尾反斜杠，最后一个参数不需要续行符",
+      "context": "修改后代码 (bash)"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/DeepSeek-V4-Flash.md\n+++ b/docs/source/tutorials/models/DeepSeek-V4-Flash.md\n@@ -5,6 +5,6 @@\n     vllm serve /root/.cache/modelscope/hub/models/UploadWeight/DeepSeek-V4-Flash-DSpark-w4a8-test \\\n         --max-model-len 800000 \\\n         --max-num-batched-tokens 8192 \\\n-        --speculative-config '{\"method\": \"dspark\", \"num_speculative_tokens\": 5, \"enforce_eager\": true}' \\\n+        --speculative-config '{\"method\": \"dspark\", \"num_speculative_tokens\": 5, \"enforce_eager\": true}'\n         ```\n-    # ↑ 最后一个参数末尾有反斜杠 \\，会转义换行符导致 shell 语法错误\n+    # ↑ 已删除末尾反斜杠，最后一个参数不需要续行符",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "bash",
+    "_status": "pending_llm_extract"
+  }
+}

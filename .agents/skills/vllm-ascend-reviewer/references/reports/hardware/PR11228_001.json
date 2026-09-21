@@ -1,0 +1,72 @@
+{
+  "report_id": "PR11228_001",
+  "pr_number": 11228,
+  "pr_title": "[Feature][Refactor] Support SFA C8 on A3 with unified packed KV cache layout",
+  "pr_status": "merged",
+  "merged_at": "2026-07-11T06:20:06Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/model_runner_v1.py:4401",
+    "vllm_ascend/worker/model_runner_v1.py:4533",
+    "vllm_ascend/envs.py:89",
+    "vllm_ascend/quantization/methods/w8a8_dynamic.py:82",
+    "vllm_ascend/device/device_op.py:543"
+  ],
+  "landing_sha": "3e69352",
+  "source_quote": "plz add note for each branch.",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 建议为 model_runner 的每个分支添加注释，并将 sparse C8 的处理合并到 `self.use_sparse` 分支内。kunpengW-code 指出 SFA C8 与 PROLOG_V3 绑定，不需要独立开关，且 SFA C8 逻辑应放在 `sfa_v1.py` 而非修改公共 Linear 方法。weijinqian0 建议合并 A3 和 A5 的设备操作。作者通过 commit `3e69352` 完成了所有修改，5/5 建议全部落地。",
+      "patch_snippet": "commit `3e69352`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "3e69352",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "特定算子（如 SFA C8）的逻辑应集中在其专用模块（如 `sfa_v1.py`）中实现，不应修改公共的 Linear apply 方法。当两个算子绑定时（如 SFA C8 与 PROLOG_V3），不需要额外的独立开关。不同硬件平台（A3/A5）的相同逻辑应合并统一。",
+    "context": "",
+    "checkpoints": [
+      "特定算子逻辑是否放在专用模块中而非公共方法中",
+      "绑定的算子是否有不必要的独立开关",
+      "不同平台的相同实现是否已合并",
+      "复杂分支逻辑是否有清晰的注释"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 4401,
+      "code": "                    if self.use_sparse and current_sparse_c8:\n                        # sparse C8 分支\n                        (raw_k_tensor,) = kv_cache_raw_tensors[layer_name]\n                        sum_page_size_bytes = raw_k_tensor.numel()\n                    elif self.use_sparse:\n                        # sparse 非 C8 分支\n                        raw_k_tensor, raw_v_tensor = kv_cache_raw_tensors[layer_name]\n                        sum_page_size_bytes = raw_k_tensor.numel() + raw_v_tensor.numel()\n                    else:\n                        # 非 sparse 分支\n                        raw_k_tensor, raw_v_tensor = kv_cache_raw_tensors[layer_name]\n                        sum_page_size_bytes = raw_k_tensor.numel() + raw_v_tensor.numel()",
+      "context": "plz add note for each branch."
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 4401,
+      "code": "                    elif self.use_sparse and \"cache_only_layers\" not in layer_name:\n                        # 合并 sparse 分支，在内部处理 C8 和非 C8 情况\n                        assert isinstance(current_kv_cache_spec, AscendMLAAttentionSpec)\n                        assert current_kv_cache_spec.sparse_head_dim is not None\n                        if current_sparse_c8:\n                            # SFA C8: 仅 packed K tensor\n                            (raw_k_tensor,) = kv_cache_raw_tensors[layer_name]  # type: ignore\n                            sum_page_size_bytes = raw_k_tensor.numel()\n                        else:\n                            # SFA 非 C8: K + V tensor\n                            raw_k_tensor, raw_v_tensor = kv_cache_raw_tensors[layer_name]  # type: ignore\n                            sum_page_size_bytes = raw_k_tensor.numel() + raw_v_tensor.numel()",
+      "context": "plz add note for each branch."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/model_runner_v1.py\n+++ b/vllm_ascend/worker/model_runner_v1.py\n@@ -1,12 +1,12 @@\n-                    if self.use_sparse and current_sparse_c8:\n-                        # sparse C8 分支\n-                        (raw_k_tensor,) = kv_cache_raw_tensors[layer_name]\n-                        sum_page_size_bytes = raw_k_tensor.numel()\n-                    elif self.use_sparse:\n-                        # sparse 非 C8 分支\n-                        raw_k_tensor, raw_v_tensor = kv_cache_raw_tensors[layer_name]\n-                        sum_page_size_bytes = raw_k_tensor.numel() + raw_v_tensor.numel()\n-                    else:\n-                        # 非 sparse 分支\n-                        raw_k_tensor, raw_v_tensor = kv_cache_raw_tensors[layer_name]\n-                        sum_page_size_bytes = raw_k_tensor.numel() + raw_v_tensor.numel()\n+                    elif self.use_sparse and \"cache_only_layers\" not in layer_name:\n+                        # 合并 sparse 分支，在内部处理 C8 和非 C8 情况\n+                        assert isinstance(current_kv_cache_spec, AscendMLAAttentionSpec)\n+                        assert current_kv_cache_spec.sparse_head_dim is not None\n+                        if current_sparse_c8:\n+                            # SFA C8: 仅 packed K tensor\n+                            (raw_k_tensor,) = kv_cache_raw_tensors[layer_name]  # type: ignore\n+                            sum_page_size_bytes = raw_k_tensor.numel()\n+                        else:\n+                            # SFA 非 C8: K + V tensor\n+                            raw_k_tensor, raw_v_tensor = kv_cache_raw_tensors[layer_name]  # type: ignore\n+                            sum_page_size_bytes = raw_k_tensor.numel() + raw_v_tensor.numel()",
+      "stats": "1 file changed, +12 lines, -12 lines",
+      "key_changes": [
+        "移除: if self.use_sparse and current_sparse_c8:",
+        "移除: # sparse C8 分支",
+        "移除: (raw_k_tensor,) = kv_cache_raw_tensors[layer_name]",
+        "移除: sum_page_size_bytes = raw_k_tensor.numel()",
+        "移除: elif self.use_sparse:",
+        "移除: # sparse 非 C8 分支",
+        "移除: raw_k_tensor, raw_v_tensor = kv_cache_raw_tensors[layer_name]",
+        "移除: sum_page_size_bytes = raw_k_tensor.numel() + raw_v_tensor.numel()",
+        "移除: else:",
+        "移除: # 非 sparse 分支"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "report_id": "PR4143_001",
+  "pr_number": 4143,
+  "pr_title": "[feature] Pooling Features and PCP Adaptation",
+  "pr_status": "merged",
+  "merged_at": "2025-11-29T14:07:45Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/distributed/mooncake/config_data.py:26",
+    "vllm_ascend/distributed/mooncake/config_data.py:29",
+    "vllm_ascend/distributed/mooncake/mooncake_engine.py:7"
+  ],
+  "landing_sha": "fdd3863",
+  "source_quote": "Please expand the PCP and DCP abbreviations in the comments.",
+  "correspondence": [
+    {
+      "review_quote": "SlightwindSec 提出三个问题：(1) 注释中的 PCP 和 DCP 缩写需要展开全称以提高可读性；(2) `dcp_rank` 与 `tp_rank` 逻辑重复，建议直接使用 `tp_rank` 并移除 `dcp_rank`；(3) `mooncake_engine.py` 中引用的 `get_xxx` 方法来自私有仓库而非主分支，需要拦截处理。作者通过 commit `fdd3863` 展开了注释缩写，通过 commit `10baba3` 同步代码并处理了冗余字段和私有接口问题。",
+      "patch_snippet": "commit `fdd3863`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "fdd3863",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "代码注释中使用的缩写（如 PCP、DCP）必须在首次出现时展开全称，确保所有开发者都能理解其含义。",
+    "context": "",
+    "checkpoints": [
+      "检查注释中是否有未展开的缩写",
+      "确认缩写全称是否准确",
+      "验证缩写展开后是否影响代码可读性"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/distributed/mooncake/config_data.py",
+      "line": 15,
+      "code": "from dataclasses import dataclass\n\n@dataclass\nclass ConfigData:\n    \"\"\"Configuration data for Mooncake distributed engine.\"\"\"\n    pcp_rank: int = 0\n    dcp_rank: int = 0\n    tp_rank: int = 0\n    pcp_size: int = 1\n    dcp_size: int = 1\n    tp_size: int = 1\n\n    def get_worker_id(self) -> str:\n        return f\"{self.pcp_rank}_{self.dcp_rank}_{self.tp_rank}\"",
+      "context": "Please expand the PCP and DCP abbreviations in the comments."
+    },
+    "pattern": {
+      "file": "vllm_ascend/distributed/mooncake/config_data.py",
+      "line": 15,
+      "code": "from dataclasses import dataclass\n\n@dataclass\nclass ConfigData:\n    \"\"\"Configuration data for Mooncake distributed engine.\"\"\"\n    pcp_rank: int = 0\n    tp_rank: int = 0          # dcp_rank 已移除，复用 tp_rank\n    pcp_size: int = 1\n    dcp_size: int = 1\n    tp_size: int = 1\n\n    def get_worker_id(self) -> str:\n        return f\"{self.pcp_rank}_{self.tp_rank}\"",
+      "context": "Please expand the PCP and DCP abbreviations in the comments."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/distributed/mooncake/config_data.py\n+++ b/vllm_ascend/distributed/mooncake/config_data.py\n@@ -15,14 +15,13 @@\n class ConfigData:\n     \"\"\"Configuration data for Mooncake distributed engine.\"\"\"\n     pcp_rank: int = 0\n-    dcp_rank: int = 0\n-    tp_rank: int = 0\n+    tp_rank: int = 0          # dcp_rank 已移除，复用 tp_rank\n     pcp_size: int = 1\n     dcp_size: int = 1\n     tp_size: int = 1\n \n     def get_worker_id(self) -> str:\n-        return f\"{self.pcp_rank}_{self.dcp_rank}_{self.tp_rank}\"\n+        return f\"{self.pcp_rank}_{self.tp_rank}\"",
+      "stats": "1 file changed, +2 lines, -3 lines",
+      "key_changes": [
+        "修改了第 7-8 行的代码",
+        "修改了第 14-14 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

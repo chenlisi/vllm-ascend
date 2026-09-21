@@ -1,0 +1,62 @@
+{
+  "report_id": "PR12031_001",
+  "pr_number": 12031,
+  "pr_title": "[Refactor] Remove dispatch_gmm_combine_decode ops",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "docs/source/user_guide/release_notes.md:783",
+    "docs/source/user_guide/release_notes.md:782"
+  ],
+  "landing_sha": "8dabea8",
+  "source_quote": "过往版本release-note应保持不变\n删除mode=2，应该加一个防呆设计或者在下一个版本的release-note中进行澄清：\"我们不再支持mode=2\"",
+  "correspondence": [
+    {
+      "review_quote": "Tflowers-0129: docs/source/user_guide/release_notes.md:783",
+      "patch_snippet": "评后sha 8dabea8 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Tflowers-0129: docs/source/user_guide/release_notes.md:782",
+      "patch_snippet": "评后sha 8dabea8 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "8dabea8",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "已发布版本的 release-note 是历史文档，一旦发布不应修改。移除功能或不支持某模式时，应在当前/下一版本的 release-note 中声明，而非修改历史记录。",
+    "context": "",
+    "checkpoints": [
+      "检查 PR diff 是否修改了过往版本的 release-note",
+      "移除功能时，确认在当前版本 release-note 中有相应声明"
+    ],
+    "antipattern": {
+      "file": "docs/source/user_guide/release_notes.md",
+      "line": 783,
+      "code": "<!-- 文件: docs/source/user_guide/release_notes.md -->\n<!-- 行号: 775-795 -->\n## v0.22.0 (Previous Release)\n\n### New Features\n- Added dispatch_gmm_combine_decode fused operator support\n- ...\n\n### Bug Fixes\n- Fixed various stability issues\n\n## v0.23.0 (Current Release)\n\n### Breaking Changes\n- Removed dispatch_gmm_combine_decode ops\n- Removed mode=2 support for VLLM_ASCEND_ENABLE_FUSED_MC2\n- ...",
+      "context": "修改前代码 (markdown)"
+    },
+    "pattern": {
+      "file": "docs/source/user_guide/release_notes.md",
+      "line": 783,
+      "code": "<!-- 文件: docs/source/user_guide/release_notes.md -->\n<!-- 行号: 775-795 -->\n## v0.22.0 (Previous Release)\n\n### New Features\n- Added dispatch_gmm_combine_decode fused operator support\n- ...\n\n### Bug Fixes\n- Fixed various stability issues\n\n## v0.23.0 (Current Release)\n\n### Breaking Changes\n- Removed dispatch_gmm_combine_decode ops\n- No longer support VLLM_ASCEND_ENABLE_FUSED_MC2=2 (mode=2).\n  Please use mode=0 or mode=1 instead.\n- ...",
+      "context": "修改后代码 (markdown)"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/user_guide/release_notes.md\n+++ b/docs/source/user_guide/release_notes.md\n@@ -13,5 +13,6 @@\n \n ### Breaking Changes\n - Removed dispatch_gmm_combine_decode ops\n-- Removed mode=2 support for VLLM_ASCEND_ENABLE_FUSED_MC2\n+- No longer support VLLM_ASCEND_ENABLE_FUSED_MC2=2 (mode=2).\n+  Please use mode=0 or mode=1 instead.\n - ...",
+      "stats": "1 file changed, +2 lines, -1 lines",
+      "key_changes": [
+        "修改代码逻辑"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

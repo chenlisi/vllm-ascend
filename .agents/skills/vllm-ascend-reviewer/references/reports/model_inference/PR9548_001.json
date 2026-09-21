@@ -1,0 +1,86 @@
+{
+  "report_id": "PR9548_001",
+  "pr_number": 9548,
+  "pr_title": "[BugFix] Cap DSv4 DSA admission to startup pool-sizing bound",
+  "pr_status": "merged",
+  "merged_at": "2026-05-26T15:20:25Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "blocker",
+  "affected_files": [
+    "vllm_ascend/core/single_type_kv_cache_manager.py:247",
+    "vllm_ascend/patch/platform/patch_kv_cache_coordinator.py:58",
+    "vllm_ascend/core/single_type_kv_cache_manager.py:243"
+  ],
+  "landing_sha": "0d2b891",
+  "source_quote": "It seems this should add 1 more block instead of `compress_ratio` blocks\nkwargs[\"max_admission_blocks_per_request\"] = cdiv(max_compressed_tokens, block_size) + 1\nvllm_config = get_current_vllm_config()\nself.max_num_batched_tokens = vllm_config.scheduler_config.max_num_batched_tokens\nlet's remove the outdated comment.",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao: vllm_ascend/core/single_type_kv_cache_manager.py:247",
+      "patch_snippet": "评后sha 0d2b891 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/patch/platform/patch_kv_cache_coordinator.py:58",
+      "patch_snippet": "评后sha 0d2b891 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/core/single_type_kv_cache_manager.py:243",
+      "patch_snippet": "评后sha 0d2b891 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "0d2b891",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 compressed-MLA 的准入控制中，`max_admission_blocks_per_request` 的额外 margin 应为 +1（对齐头部空间），而非 +compress_ratio，避免过度准入导致长请求阻塞。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/core/single_type_kv_cache_manager.py",
+      "line": 247,
+      "code": "# vllm_ascend/core/single_type_kv_cache_manager.py:259\n# 完全重写 get_manager_for_kv_cache_spec，未委托上游实现",
+      "context": "It seems this should add 1 more block instead of `compress_ratio` blocks\nkwargs[\"max_admission_blocks_per_request\"] = cdiv(max_compressed_tokens, block_size) + 1\nvllm_config = get_current_vllm_config("
+    },
+    "pattern": {
+      "file": "vllm_ascend/core/single_type_kv_cache_manager.py",
+      "line": 247,
+      "code": "# vllm_ascend/core/single_type_kv_cache_manager.py:259\nif isinstance(kv_cache_spec, MLAAttentionSpec) and kv_cache_spec.compress_ratio > 1:\n    manager_class = CompressAttentionManager\n    if max_model_len is not None:\n        compress_ratio = kv_cache_spec.compress_ratio\n        block_size = kv_cache_spec.block_size\n        max_compressed_tokens = max_model_len // compress_ratio\n        kwargs[\"max_admission_blocks_per_request\"] = (\n            cdiv(max_compressed_tokens, block_size) + compress_ratio\n        )\n    return manager_class(kv_cache_spec, **kwargs)\n\nfrom vllm.v1.core.single_type_kv_cache_manager import (\n    get_manager_for_kv_cache_spec as vllm_get_manager_for_kv_cache_spec,\n)\nreturn vllm_get_manager_for_kv_cache_spec(\n    kv_cache_spec,\n    max_num_batched_tokens=max_num_batched_tokens,\n    max_model_len=max_model_len,\n    **kwargs,\n)",
+      "context": "It seems this should add 1 more block instead of `compress_ratio` blocks\nkwargs[\"max_admission_blocks_per_request\"] = cdiv(max_compressed_tokens, block_size) + 1\nvllm_config = get_current_vllm_config("
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/core/single_type_kv_cache_manager.py\n+++ b/vllm_ascend/core/single_type_kv_cache_manager.py\n@@ -1,2 +1,21 @@\n # vllm_ascend/core/single_type_kv_cache_manager.py:259\n-# 完全重写 get_manager_for_kv_cache_spec，未委托上游实现\n+if isinstance(kv_cache_spec, MLAAttentionSpec) and kv_cache_spec.compress_ratio > 1:\n+    manager_class = CompressAttentionManager\n+    if max_model_len is not None:\n+        compress_ratio = kv_cache_spec.compress_ratio\n+        block_size = kv_cache_spec.block_size\n+        max_compressed_tokens = max_model_len // compress_ratio\n+        kwargs[\"max_admission_blocks_per_request\"] = (\n+            cdiv(max_compressed_tokens, block_size) + compress_ratio\n+        )\n+    return manager_class(kv_cache_spec, **kwargs)\n+\n+from vllm.v1.core.single_type_kv_cache_manager import (\n+    get_manager_for_kv_cache_spec as vllm_get_manager_for_kv_cache_spec,\n+)\n+return vllm_get_manager_for_kv_cache_spec(\n+    kv_cache_spec,\n+    max_num_batched_tokens=max_num_batched_tokens,\n+    max_model_len=max_model_len,\n+    **kwargs,\n+)\n",
+      "stats": "1 file changed, +20 lines, -1 lines",
+      "key_changes": [
+        "-# 完全重写 get_manager_for_kv_cache_spec，未委托上游实现",
+        "+if isinstance(kv_cache_spec, MLAAttentionSpec) and kv_cache_spec.compress_ratio > 1:",
+        "+    manager_class = CompressAttentionManager",
+        "+    if max_model_len is not None:",
+        "+        compress_ratio = kv_cache_spec.compress_ratio",
+        "+        block_size = kv_cache_spec.block_size",
+        "+        max_compressed_tokens = max_model_len // compress_ratio",
+        "+        kwargs[\"max_admission_blocks_per_request\"] = (",
+        "+            cdiv(max_compressed_tokens, block_size) + compress_ratio",
+        "+        )",
+        "+    return manager_class(kv_cache_spec, **kwargs)",
+        "+",
+        "+from vllm.v1.core.single_type_kv_cache_manager import (",
+        "+    get_manager_for_kv_cache_spec as vllm_get_manager_for_kv_cache_spec,",
+        "+)",
+        "+return vllm_get_manager_for_kv_cache_spec(",
+        "+    kv_cache_spec,",
+        "+    max_num_batched_tokens=max_num_batched_tokens,",
+        "+    max_model_len=max_model_len,",
+        "+    **kwargs,",
+        "+)"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

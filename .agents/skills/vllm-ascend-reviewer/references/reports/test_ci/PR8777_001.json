@@ -1,0 +1,58 @@
+{
+  "report_id": "PR8777_001",
+  "pr_number": 8777,
+  "pr_title": "[CI][BugFix] Remove e2e tracker guard on smart e2e",
+  "pr_status": "merged",
+  "merged_at": "2026-04-28T09:17:38Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    ".github/workflows/pr_test_light.yaml:90"
+  ],
+  "landing_sha": "8dd6182",
+  "source_quote": "这里把ut_tracker为true添加上是不是就可以了？避免跳过现在的e2e-filter 的功能。",
+  "correspondence": [
+    {
+      "review_quote": "leo-pony: .github/workflows/pr_test_light.yaml:90",
+      "patch_snippet": "评后sha 8dd6182 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "8dd6182",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在使用 smart e2e 测试的 CI 工作流中，必须设置 `ut_tracker: true`，确保 e2e-filter 功能正常工作，避免意外跳过测试过滤逻辑。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": ".github/workflows/pr_test_light.yaml",
+      "line": 80,
+      "code": "# Smart E2E 步骤缺少 ut_tracker 配置，导致 e2e-filter 功能被跳过\n\nname: PR Test Light\n\non:\n  pull_request:\n    branches: [main]\n\njobs:\n  smart-e2e:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - name: Setup environment\n        run: pip install -r requirements.txt\n      - name: Smart E2E\n        # 未设置 ut_tracker: true，导致 e2e-filter 功能被跳过\n        run: |\n          python scripts/run_smart_e2e.py \\\n            --test-suite e2e \\\n            --filter-config configs/e2e_filter.yaml\n      - name: Upload results\n        uses: actions/upload-artifact@v4",
+      "context": "这里把ut_tracker为true添加上是不是就可以了？避免跳过现在的e2e-filter 的功能。"
+    },
+    "pattern": {
+      "file": ".github/workflows/pr_test_light.yaml",
+      "line": 80,
+      "code": "# commit 8dd6182 \"fix\" (+3/-0)\n# 避免跳过现在的e2e-filter 的功能。\"\n\nname: PR Test Light\n\non:\n  pull_request:\n    branches: [main]\n\njobs:\n  smart-e2e:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - name: Setup environment\n        run: pip install -r requirements.txt\n      - name: Smart E2E\n        ut_tracker: true  # 避免跳过 e2e-filter\n        run: |\n          python scripts/run_smart_e2e.py \\\n            --test-suite e2e \\\n            --filter-config configs/e2e_filter.yaml\n      - name: Upload results\n        uses: actions/upload-artifact@v4",
+      "context": "这里把ut_tracker为true添加上是不是就可以了？避免跳过现在的e2e-filter 的功能。"
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/pr_test_light.yaml\n+++ b/.github/workflows/pr_test_light.yaml\n@@ -1,4 +1,5 @@\n-# Smart E2E 步骤缺少 ut_tracker 配置，导致 e2e-filter 功能被跳过\n+# commit 8dd6182 \"fix\" (+3/-0)\n+# 避免跳过现在的e2e-filter 的功能。\"\n \n name: PR Test Light\n \n@@ -14,7 +15,7 @@\n       - name: Setup environment\n         run: pip install -r requirements.txt\n       - name: Smart E2E\n-        # 未设置 ut_tracker: true，导致 e2e-filter 功能被跳过\n+        ut_tracker: true  # 避免跳过 e2e-filter\n         run: |\n           python scripts/run_smart_e2e.py \\\n             --test-suite e2e \\\n",
+      "stats": "1 file changed, +3 lines, -2 lines",
+      "key_changes": [
+        "-# Smart E2E 步骤缺少 ut_tracker 配置，导致 e2e-filter 功能被跳过",
+        "+# commit 8dd6182 \"fix\" (+3/-0)",
+        "+# 避免跳过现在的e2e-filter 的功能。\"",
+        "-        # 未设置 ut_tracker: true，导致 e2e-filter 功能被跳过",
+        "+        ut_tracker: true  # 避免跳过 e2e-filter"
+      ]
+    },
+    "language": "yaml",
+    "_status": "pending_llm_extract"
+  }
+}

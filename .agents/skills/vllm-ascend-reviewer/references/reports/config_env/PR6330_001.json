@@ -1,0 +1,60 @@
+{
+  "report_id": "PR6330_001",
+  "pr_number": 6330,
+  "pr_title": "[0.13.0][Bugfix] Fix hash conflict due to reset incompatible configuations",
+  "pr_status": "merged",
+  "merged_at": "2026-01-28T14:55:29Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/patch/platform/patch_vllm_config.py:249",
+    "vllm_ascend/platform.py:480",
+    "vllm_ascend/platform.py:470"
+  ],
+  "landing_sha": "5c8f1dd",
+  "source_quote": "remove this change",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan 指出需要移除不必要的变更和冗余检查，并添加 cache_config 的空值保护。作者通过 commit `5c8f1dd` 修复了 hash 冲突问题，2/3 建议在首个 sha 直接落地（67%），其余通过后续处理落地。",
+      "patch_snippet": "commit `5c8f1dd`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "5c8f1dd",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当在 `check_and_update_config` 中已经覆盖了某个配置值时，不应在其他位置重复检查。同时，访问嵌套配置对象前应先检查其是否为 None。",
+    "context": "",
+    "checkpoints": [
+      "配置修复逻辑不应在多处重复",
+      "访问 `cache_config`、`parallel_config` 等嵌套配置前应先判空",
+      "如果值已在 `check_and_update` 中被覆盖，不需要额外检查"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/patch/platform/patch_vllm_config.py",
+      "line": 460,
+      "code": "def __post_init__(self):\n    \"\"\"Fix incompatible configurations for Ascend NPUs.\"\"\"\n    if self.model_config:\n        pass\n\n    if self.parallel_config:\n        if self.cache_config:\n            if getattr(self.cache_config, \"cpu_kvcache_space_bytes\", False):\n                self.cache_config.cpu_kvcache_space_bytes = None",
+      "context": "remove this change"
+    },
+    "pattern": {
+      "file": "vllm_ascend/patch/platform/patch_vllm_config.py",
+      "line": 460,
+      "code": "def __post_init__(self):\n    \"\"\"Fix incompatible configurations for Ascend NPUs.\"\"\"\n    if self.model_config:\n        pass\n\n    if self.parallel_config:\n        pass\n\n    if self.cache_config:\n        if getattr(self.cache_config, \"cpu_kvcache_space_bytes\",\n                    False):\n            logger.warning(\n                \"Parameter 'cpu_kvcache_space_bytes' is tied to cpu backend.\"\n                \" Resetting to None for Ascend.\"\n            )\n            self.cache_config.cpu_kvcache_space_bytes = None",
+      "context": "remove this change"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/patch/platform/patch_vllm_config.py\n+++ b/vllm_ascend/patch/platform/patch_vllm_config.py\n@@ -460,9 +460,16 @@\n         pass\n \n     if self.parallel_config:\n-        if self.cache_config:\n-            if getattr(self.cache_config, \"cpu_kvcache_space_bytes\", False):\n-                self.cache_config.cpu_kvcache_space_bytes = None\n+        pass\n+\n+    if self.cache_config:\n+        if getattr(self.cache_config, \"cpu_kvcache_space_bytes\",\n+                    False):\n+            logger.warning(\n+                \"Parameter 'cpu_kvcache_space_bytes' is tied to cpu backend.\"\n+                \" Resetting to None for Ascend.\"\n+            )\n+            self.cache_config.cpu_kvcache_space_bytes = None",
+      "stats": "1 file changed, +10 lines, -3 lines",
+      "key_changes": [
+        "修改了第 7-9 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

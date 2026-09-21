@@ -1,0 +1,53 @@
+{
+  "report_id": "PR11920_001",
+  "pr_number": 11920,
+  "pr_title": "[Bugfix][310P] Adapt unified spec decoding method and fix spec decoding accuracy issue.",
+  "pr_status": "merged",
+  "dimension": [
+    "design"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/_310p/ops/rotary_embedding.py:34"
+  ],
+  "landing_sha": "6e745a1",
+  "source_quote": "Do not add all variables; implement it in a different way.",
+  "correspondence": [
+    {
+      "review_quote": "weiguihua2（COMMENTEDinline→✅APPROVED）: vllm_ascend/_310p/ops/rotary_embedding.py:34",
+      "patch_snippet": "评后sha 6e745a1 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "6e745a1",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/_310p/ops/rotary_embedding.py",
+      "line": 28,
+      "code": "_mrope_cos_slice: torch.Tensor | None = None\n_mrope_sin_slice: torch.Tensor | None = None\n\n_ROPE_310P_UPDATE_FLAG = False             # ← gemini 建议的全局布尔标志\n\n\ndef set_rope_position_flag_310p(state):    # ← gemini 建议的 global 修改函数\n    global _ROPE_310P_UPDATE_FLAG\n    _ROPE_310P_UPDATE_FLAG = state\n\n\ndef _apply_rotary_mrope_torch(\n    q_rot: torch.Tensor,\n    k_rot: torch.Tensor,\n    cos: torch.Tensor,\n    sin: torch.Tensor,\n) -> tuple[torch.Tensor, torch.Tensor]:\n    \"\"\"Apply rotary embedding using pre-computed cos/sin tensors.\"\"\"\n    ...\n    return q_rot * cos + _rotate_half(q_rot) * sin, \\\n           k_rot * cos + _rotate_half(k_rot) * sin\n\n\ndef _rope_forward_oot(\n    positions: torch.Tensor,\n    query: torch.Tensor,\n    key: torch.Tensor,\n    ...\n):\n    \"\"\"Forward pass for rotary embedding on NPU.\"\"\"\n    ...",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/_310p/ops/rotary_embedding.py",
+      "line": 28,
+      "code": "_mrope_cos_slice: torch.Tensor | None = None\n_mrope_sin_slice: torch.Tensor | None = None\n\n# 全局变量 _ROPE_310P_UPDATE_FLAG 和 set_rope_position_flag_310p() 已删除\n# （根据评审意见 weiguihua2：\"Do not add all variables; implement it in a different way.\"）\n\n\ndef _apply_rotary_mrope_torch(\n    q_rot: torch.Tensor,\n    k_rot: torch.Tensor,\n    cos: torch.Tensor,\n    sin: torch.Tensor,\n) -> tuple[torch.Tensor, torch.Tensor]:\n    \"\"\"Apply rotary embedding using pre-computed cos/sin tensors.\"\"\"\n    ...\n    return q_rot * cos + _rotate_half(q_rot) * sin, \\\n           k_rot * cos + _rotate_half(k_rot) * sin\n\n\ndef _rope_forward_oot(\n    positions: torch.Tensor,\n    query: torch.Tensor,\n    key: torch.Tensor,\n    ...\n):\n    \"\"\"Forward pass for rotary embedding on NPU.\"\"\"\n    ...",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/_310p/ops/rotary_embedding.py\n+++ b/vllm_ascend/_310p/ops/rotary_embedding.py\n@@ -1,12 +1,8 @@\n _mrope_cos_slice: torch.Tensor | None = None\n _mrope_sin_slice: torch.Tensor | None = None\n \n-_ROPE_310P_UPDATE_FLAG = False             # ← gemini 建议的全局布尔标志\n-\n-\n-def set_rope_position_flag_310p(state):    # ← gemini 建议的 global 修改函数\n-    global _ROPE_310P_UPDATE_FLAG\n-    _ROPE_310P_UPDATE_FLAG = state\n+# 全局变量 _ROPE_310P_UPDATE_FLAG 和 set_rope_position_flag_310p() 已删除\n+# （根据评审意见 weiguihua2：\"Do not add all variables; implement it in a different way.\"）\n \n \n def _apply_rotary_mrope_torch(",
+      "stats": "1 file changed, +2 lines, -6 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

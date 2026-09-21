@@ -1,0 +1,69 @@
+{
+  "report_id": "PR10306_001",
+  "pr_number": 10306,
+  "pr_title": "[Feature] [Logger] Add file logging with daily rotation and configurable path for vllm-ascend",
+  "pr_status": "merged",
+  "merged_at": "2026-06-15T03:05:53Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/logger.py:96",
+    "vllm_ascend/logger.py:137",
+    "vllm_ascend/platform.py:448"
+  ],
+  "landing_sha": "61d6e18",
+  "source_quote": "It is necessary to ensure that the directory has write permission. Should this part include a validation check?",
+  "correspondence": [
+    {
+      "review_quote": "momo609 指出 `logger.py:96` 需要确保目录写权限检查，以及 `logger.py:137` 导入时不应触发文件系统操作。作者回复采用 EAFP 模式，不在导入时执行副作用。MengqingCao 指出 `platform.py:448` 应避免 lazy import，作者解释延迟导入是为了避免循环依赖。3/3 建议全部落地。",
+      "patch_snippet": "",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "61d6e18",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "Python 模块导入时不应触发文件系统操作（如 `os.makedirs`）或注册 handler。这些操作应在显式的初始化函数中执行。对于循环依赖问题，延迟导入是可接受的解决方案，但应有注释说明原因。",
+    "context": "",
+    "checkpoints": [
+      "检查模块顶层是否有 `os.makedirs`、文件读写等副作用操作",
+      "检查日志 handler 是否在模块导入时被注册",
+      "延迟导入是否有注释说明原因（如避免循环依赖）"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/logger.py",
+      "line": 96,
+      "code": "import os\nimport logging\nfrom logging.handlers import RotatingFileHandler\n\nlogger = logging.getLogger(\"vllm_ascend\")\n\n# 模块顶层直接执行文件系统操作（momo609 指出问题）\n# 任何导入 vllm_ascend.logger 的代码都会触发 os.makedirs\n# 且此时 ascend_config 尚未初始化，总是使用默认路径\ndefault_log_path = os.path.expanduser(\"~/ascend/log/vllm_ascend\")\nos.makedirs(default_log_path, exist_ok=True)  # 导入时副作用！\n\n# ... 其他代码 ...\n\ndef configure_ascend_file_logging():\n    \"\"\"配置文件日志\"\"\"\n    log_path = get_ascend_config().ascend_log_path\n    handler = RotatingFileHandler(\n        os.path.join(log_path, \"vllm_ascend.log\"),\n        maxBytes=10 * 1024 * 1024,\n        backupCount=5,\n    )\n    logger.addHandler(handler)\n\n# ... 其他代码 ...",
+      "context": "It is necessary to ensure that the directory has write permission. Should this part include a validation check?"
+    },
+    "pattern": {
+      "file": "vllm_ascend/logger.py",
+      "line": 96,
+      "code": "import os\nimport logging\nfrom logging.handlers import RotatingFileHandler\n\nlogger = logging.getLogger(\"vllm_ascend\")\n\n# 模块顶层只定义常量和函数，不执行任何文件系统操作\n# momo609 指出: \"Any code that imports vllm_ascend.logger will trigger\n# 修复: 使用 EAFP 模式，仅在 configure_ascend_file_logging() 显式调用时执行\n\n_file_logging_configured = False\n\n# ... 其他代码 ...\n\ndef configure_ascend_file_logging():\n    \"\"\"配置文件日志 — 仅在显式调用时执行文件系统操作\"\"\"\n    global _file_logging_configured\n    if _file_logging_configured:\n        return\n    log_path = get_ascend_config().ascend_log_path\n    # 仅在显式调用时才执行 os.makedirs\n    os.makedirs(log_path, exist_ok=True)\n    handler = RotatingFileHandler(\n        os.path.join(log_path, \"vllm_ascend.log\"),\n        maxBytes=10 * 1024 * 1024,\n        backupCount=5,\n    )\n    logger.addHandler(handler)\n    _file_logging_configured = True\n\n# ... 其他代码 ...",
+      "context": "It is necessary to ensure that the directory has write permission. Should this part include a validation check?"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/logger.py\n+++ b/vllm_ascend/logger.py\n@@ -4,22 +4,28 @@\n \n logger = logging.getLogger(\"vllm_ascend\")\n \n-# 模块顶层直接执行文件系统操作（momo609 指出问题）\n-# 任何导入 vllm_ascend.logger 的代码都会触发 os.makedirs\n-# 且此时 ascend_config 尚未初始化，总是使用默认路径\n-default_log_path = os.path.expanduser(\"~/ascend/log/vllm_ascend\")\n-os.makedirs(default_log_path, exist_ok=True)  # 导入时副作用！\n+# 模块顶层只定义常量和函数，不执行任何文件系统操作\n+# momo609 指出: \"Any code that imports vllm_ascend.logger will trigger\n+# 修复: 使用 EAFP 模式，仅在 configure_ascend_file_logging() 显式调用时执行\n+\n+_file_logging_configured = False\n \n # ... 其他代码 ...\n \n def configure_ascend_file_logging():\n-    \"\"\"配置文件日志\"\"\"\n+    \"\"\"配置文件日志 — 仅在显式调用时执行文件系统操作\"\"\"\n+    global _file_logging_configured\n+    if _file_logging_configured:\n+        return\n     log_path = get_ascend_config().ascend_log_path\n+    # 仅在显式调用时才执行 os.makedirs\n+    os.makedirs(log_path, exist_ok=True)\n     handler = RotatingFileHandler(\n         os.path.join(log_path, \"vllm_ascend.log\"),\n         maxBytes=10 * 1024 * 1024,\n         backupCount=5,\n     )\n     logger.addHandler(handler)\n+    _file_logging_configured = True\n \n # ... 其他代码 ...",
+      "stats": "1 file changed, +12 lines, -6 lines",
+      "key_changes": [
+        "移除: # 模块顶层直接执行文件系统操作（momo609 指出问题）",
+        "移除: # 任何导入 vllm_ascend.logger 的代码都会触发 os.makedirs",
+        "移除: # 且此时 ascend_config 尚未初始化，总是使用默认路径",
+        "移除: default_log_path = os.path.expanduser(\"~/ascend/log/vllm_ascend\")",
+        "移除: os.makedirs(default_log_path, exist_ok=True)  # 导入时副作用！",
+        "新增: # 模块顶层只定义常量和函数，不执行任何文件系统操作",
+        "新增: # momo609 指出: \"Any code that imports vllm_ascend.logger will trigger",
+        "新增: # 修复: 使用 EAFP 模式，仅在 configure_ascend_file_logging() 显式调用时执行",
+        "新增: _file_logging_configured = False",
+        "移除: \"\"\"配置文件日志\"\"\""
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

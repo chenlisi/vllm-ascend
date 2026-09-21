@@ -1,0 +1,60 @@
+{
+  "report_id": "PR13249_002",
+  "pr_number": 13249,
+  "pr_title": "[Feature]dsv4 dsa_cp support dspark",
+  "pr_status": "merged",
+  "dimension": [
+    "design"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/context_parallel/dsa_cp.py:480"
+  ],
+  "landing_sha": "1158ffd",
+  "source_quote": "maybe we should move this branch into `_build_local_token_metadata`",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/attention/context_parallel/dsa_cp.py:480",
+      "patch_snippet": "评后sha 1158ffd 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "1158ffd",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "当某段对局部数据的条件覆盖逻辑（如 `if is_noncausal:` 改写 `local_seq_lens`）与该数据的构建方法职责重叠时，应将分支下沉到构建方法内部（通过参数控制），而非散落在调用方，保持数据构建逻辑的内聚。",
+    "context": "",
+    "checkpoints": [
+      "识别调用方中对构建方法返回数据的后续条件改写分支",
+      "判断该改写是否属于\"该数据如何构建\"的职责（如是，应内聚）",
+      "将条件以参数形式传入构建方法，在方法内部统一处理"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/context_parallel/dsa_cp.py",
+      "line": 470,
+      "code": "    def build_req_metadata_for_drafting(self, ...):\n        \"\"\"Build metadata for speculative decoding drafting.\"\"\"\n        local_query_start_loc = local_query_start_loc.clone()\n        local_seq_lens = local_seq_lens.clone()\n\n        _, _, _, _, local_query_start_loc_cpu, local_seq_lens_cpu = self._build_local_token_metadata(\n            num_reqs=num_reqs,\n            num_input_tokens=num_input_tokens,\n            query_start_loc=query_start_loc_cpu,\n            seq_lens=self.seq_lens_cpu[:num_reqs],\n        )\n\n        # ❌ 分支在调用方：构建后再条件改写，逻辑分散\n        if is_noncausal:\n            # Causal CP truncates the KV length at this rank's local query end.\n            # DSpark queries must see the whole query block ...\n            local_query_lens = local_query_start_loc[1:] - local_query_start_loc[:-1]\n            local_seq_lens = torch.where(\n                local_query_lens > 0, self.seq_lens[:num_reqs],\n                torch.zeros_like(self.seq_lens[:num_reqs])\n            )\n            local_query_lens_cpu = local_query_start_loc_cpu[1:] - local_query_start_loc_cpu[:-1]\n            local_seq_lens_cpu = torch.where(\n                local_query_lens_cpu > 0,\n                self.seq_lens_cpu[:num_reqs],\n                torch.zeros_like(self.seq_lens_cpu[:num_reqs]),\n            )",
+      "context": "❌ 分支在调用方：构建后再条件改写，逻辑分散 Causal CP truncates the KV length at this rank's local query end. DSpark queries must see the whole query block ..."
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/context_parallel/dsa_cp.py",
+      "line": 470,
+      "code": "    def build_req_metadata_for_drafting(self, ...):\n        \"\"\"Build metadata for speculative decoding drafting.\"\"\"\n        local_query_start_loc = local_query_start_loc.clone()\n        local_seq_lens = local_seq_lens.clone()\n        local_cos = cos.pad_to(num_tokens_pad)[local_start:local_end_with_pad]\n        local_sin = sin.pad_to(num_tokens_pad)[local_start:local_end_with_pad]\n\n        # ✅ is_noncausal 作为参数传入，分支在构建方法内部处理\n        _, _, _, _, local_query_start_loc_cpu, local_seq_lens_cpu = self._build_local_token_metadata(\n            num_reqs=num_reqs,\n            num_input_tokens=num_input_tokens,\n            query_start_loc=query_start_loc_cpu,\n            seq_lens=self.seq_lens_cpu[:num_reqs],\n            is_noncausal=is_noncausal,   # 新增参数\n        )\n        # ✅ is_noncausal 分支已从调用方移除\n\n# _build_local_token_metadata 内新增处理\n    def _build_local_token_metadata(self, ..., is_noncausal=False):\n        \"\"\"Build local token metadata with optional noncausal handling.\"\"\"\n        ...\n        if is_noncausal:\n            local_query_lens = local_query_start_loc[1: num_reqs + 1] - local_query_start_loc[:num_reqs]\n            local_seq_lens.copy_(torch.where(\n                local_query_lens > 0, seq_lens[:num_reqs],\n                torch.zeros_like(seq_lens[:num_reqs])\n            ))\n        return (...)",
+      "context": "✅ is_noncausal 作为参数传入，分支在构建方法内部处理 ✅ is_noncausal 分支已从调用方移除 _build_local_token_metadata 内新增处理"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/context_parallel/dsa_cp.py\n+++ b/vllm_ascend/attention/context_parallel/dsa_cp.py\n@@ -2,26 +2,27 @@\n         \"\"\"Build metadata for speculative decoding drafting.\"\"\"\n         local_query_start_loc = local_query_start_loc.clone()\n         local_seq_lens = local_seq_lens.clone()\n+        local_cos = cos.pad_to(num_tokens_pad)[local_start:local_end_with_pad]\n+        local_sin = sin.pad_to(num_tokens_pad)[local_start:local_end_with_pad]\n \n+        # ✅ is_noncausal 作为参数传入，分支在构建方法内部处理\n         _, _, _, _, local_query_start_loc_cpu, local_seq_lens_cpu = self._build_local_token_metadata(\n             num_reqs=num_reqs,\n             num_input_tokens=num_input_tokens,\n             query_start_loc=query_start_loc_cpu,\n             seq_lens=self.seq_lens_cpu[:num_reqs],\n+            is_noncausal=is_noncausal,   # 新增参数\n         )\n+        # ✅ is_noncausal 分支已从调用方移除\n \n-        # ❌ 分支在调用方：构建后再条件改写，逻辑分散\n+# _build_local_token_metadata 内新增处理\n+    def _build_local_token_metadata(self, ..., is_noncausal=False):\n+        \"\"\"Build local token metadata with optional noncausal handling.\"\"\"\n+        ...\n         if is_noncausal:\n-            # Causal CP truncates the KV length at this rank's local query end.\n-            # DSpark queries must see the whole query block ...\n-            local_query_lens = local_query_start_loc[1:] - local_query_start_loc[:-1]\n-            local_seq_lens = torch.where(\n-                local_query_lens > 0, self.seq_lens[:num_reqs],\n-                torch.zeros_like(self.seq_lens[:num_reqs])\n-            )\n-            local_query_lens_cpu = local_query_start_loc_cpu[1:] - local_query_start_loc_cpu[:-1]\n-            local_seq_lens_cpu = torch.where(\n-                local_query_lens_cpu > 0,\n-                self.seq_lens_cpu[:num_reqs],\n-                torch.zeros_like(self.seq_lens_cpu[:num_reqs]),\n-            )\n+            local_query_lens = local_query_start_loc[1: num_reqs + 1] - local_query_start_loc[:num_reqs]\n+            local_seq_lens.copy_(torch.where(\n+                local_query_lens > 0, seq_lens[:num_reqs],\n+                torch.zeros_like(seq_lens[:num_reqs])\n+            ))\n+        return (...)\n",
+      "stats": "1 file changed, +15 lines, -14 lines",
+      "key_changes": [
+        "移除: local_seq_lens_cpu = torch.where(",
+        "移除: )",
+        "新增: def _build_local_token_metadata(self, ..., is_noncausal=False):",
+        "新增: \"\"\"Build local token metadata with optional noncausal handling.\"\"\""
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

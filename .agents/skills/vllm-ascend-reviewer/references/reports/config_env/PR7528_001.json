@@ -1,0 +1,62 @@
+{
+  "report_id": "PR7528_001",
+  "pr_number": 7528,
+  "pr_title": "[Platform][BugFix] Preserve hybrid block size on Ascend",
+  "pr_status": "merged",
+  "merged_at": "2026-03-21T15:11:55Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/platform.py:181"
+  ],
+  "landing_sha": "91913ec",
+  "source_quote": "由于 v0.18.0 引入了 `cache_config.user_specified_block_size`，应优先保留用户指定的 block size，然后再处理 hybrid model 的逻辑。\nAs `cache_config.user_specified_block_size` is introduced in v0.18.0, I prefer to keep the user specified block size at the first order.",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao: vllm_ascend/platform.py:181",
+      "patch_snippet": "评后sha 91913ec 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "91913ec",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当用户通过命令行参数（如 `--block-size`）显式指定配置时，后端逻辑应优先保留用户指定的值，不应被平台默认逻辑覆盖。检查顺序应为：用户指定 > 模型特定 > 平台默认。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/platform.py",
+      "line": 175,
+      "code": "class NPUPlatform(Platform):\n    \"\"\"Ascend NPU platform implementation.\"\"\"\n\n    def update_block_size_for_backend(\n        self,\n        vllm_config: VllmConfig,\n    ) -> None:\n        \"\"\"Update block size for hybrid models on Ascend.\"\"\"\n        model_config = vllm_config.model_config\n        if model_config.is_hybrid:\n            # For hybrid models (e.g., Attention+Mamba), the block size\n            # is determined by model-specific logic\n            cache_config = vllm_config.cache_config\n            cache_config.block_size = self._get_hybrid_block_size(\n                model_config)\n            return\n        # Default block size for standard models\n        vllm_config.cache_config.block_size = 16",
+      "context": "由于 v0.18.0 引入了 `cache_config.user_specified_block_size`，应优先保留用户指定的 block size，然后再处理 hybrid model 的逻辑。\nAs `cache_config.user_specified_block_size` is introduced in v0.18.0, I prefer to keep the user sp"
+    },
+    "pattern": {
+      "file": "vllm_ascend/platform.py",
+      "line": 175,
+      "code": "class NPUPlatform(Platform):\n    \"\"\"Ascend NPU platform implementation.\"\"\"\n\n    def update_block_size_for_backend(\n        self,\n        vllm_config: VllmConfig,\n    ) -> None:\n        \"\"\"Update block size for hybrid models on Ascend.\"\"\"\n        # First priority: user-specified block size (introduced in v0.18.0)\n        cache_config = vllm_config.cache_config\n        if cache_config.user_specified_block_size:\n            # User specified --block-size; keep it.\n            return\n        # Second priority: model-specific logic for hybrid models\n        model_config = vllm_config.model_config\n        if model_config.is_hybrid:\n            # For hybrid models (e.g., Attention+Mamba), the block size\n            # is determined by model-specific logic\n            cache_config.block_size = self._get_hybrid_block_size(\n                model_config)\n            return\n        # Default block size for standard models\n        cache_config.block_size = 16",
+      "context": "由于 v0.18.0 引入了 `cache_config.user_specified_block_size`，应优先保留用户指定的 block size，然后再处理 hybrid model 的逻辑。\nAs `cache_config.user_specified_block_size` is introduced in v0.18.0, I prefer to keep the user sp"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/platform.py\n+++ b/vllm_ascend/platform.py\n@@ -6,13 +6,18 @@\n         vllm_config: VllmConfig,\n     ) -> None:\n         \"\"\"Update block size for hybrid models on Ascend.\"\"\"\n+        # First priority: user-specified block size (introduced in v0.18.0)\n+        cache_config = vllm_config.cache_config\n+        if cache_config.user_specified_block_size:\n+            # User specified --block-size; keep it.\n+            return\n+        # Second priority: model-specific logic for hybrid models\n         model_config = vllm_config.model_config\n         if model_config.is_hybrid:\n             # For hybrid models (e.g., Attention+Mamba), the block size\n             # is determined by model-specific logic\n-            cache_config = vllm_config.cache_config\n             cache_config.block_size = self._get_hybrid_block_size(\n                 model_config)\n             return\n         # Default block size for standard models\n-        vllm_config.cache_config.block_size = 16\n+        cache_config.block_size = 16\n",
+      "stats": "1 file changed, +7 lines, -2 lines",
+      "key_changes": [
+        "+        # First priority: user-specified block size (introduced in v0.18.0)",
+        "+        cache_config = vllm_config.cache_config",
+        "+        if cache_config.user_specified_block_size:",
+        "+            # User specified --block-size; keep it.",
+        "+            return",
+        "+        # Second priority: model-specific logic for hybrid models",
+        "-            cache_config = vllm_config.cache_config",
+        "-        vllm_config.cache_config.block_size = 16",
+        "+        cache_config.block_size = 16"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

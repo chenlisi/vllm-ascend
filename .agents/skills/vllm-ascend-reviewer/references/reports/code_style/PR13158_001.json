@@ -1,0 +1,62 @@
+{
+  "report_id": "PR13158_001",
+  "pr_number": 13158,
+  "pr_title": "[Refactor] decouple flashcomm and shared expert dp",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/fused_moe/fused_moe.py:798"
+  ],
+  "landing_sha": "5d985ff",
+  "source_quote": "![high]\nUsing `torch.chunk` on `hidden_states` when `original_num_tokens` is `0` (e.g., during empty prompt/generation steps or dummy runs) will return a tuple of length 1. Accessing `[self.moe_config.tp_rank]` (where `tp_rank > 0`) will raise an `IndexError: tuple index out of range`.\n> Additionally, using `F.pad` might raise a `NameError` if `F` is not imported as `torch.nn.functional` in this file.\n> Using `torch.tensor_split` is much safer because it always returns exactly `tp_size` chunks (some of which may be empty) and avoids the `IndexError`. Using `torch.nn.functional.pad` is also safer as `torch` is guaranteed to be imported.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/ops/fused_moe/fused_moe.py:798",
+      "patch_snippet": "评后sha 5d985ff 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "5d985ff",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在 MoE/shared expert 的 token 分片逻辑中，按 `tp_rank` 从分片结果取对应 rank 的 chunk 时，必须用 `torch.tensor_split(tensor, tp_size, dim=0)[tp_rank]` 而非 `torch.chunk(tensor, tp_size)[tp_rank]`。`torch.chunk` 在输入为 0 token（空 prompt/generation step/dummy run）时只返回长度 1 的 tuple，`tp_rank > 0` 时会 `IndexError: tuple index out of range`。`torch.tensor_split` 总是返回恰好 `tp_size` 个 chunk（部分可为空），安全处理 0 token 边界。同时 `F.pad` 必须确保已 `import torch.nn.functional as F`，或用全限定 `torch.nn.functional.pad`。",
+    "context": "",
+    "checkpoints": [
+      "识别 `torch.chunk(tensor, n)[index]` 模式，特别是 index 为 `tp_rank`/`rank_in_group` 时",
+      "确认输入 tensor 是否可能为 0 元素（空 prompt、dummy run、generation step）",
+      "改用 `torch.tensor_split(tensor, n, dim=...)[index]`，总是返回 n 个 chunk",
+      "确认 `F.pad` / `torch.nn.functional.pad` 已 import，避免 NameError",
+      "pad_size 计算用 `(tp_size - num_tokens % tp_size) % tp_size`，0 token 时结果为 0（不 pad）"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/fused_moe/fused_moe.py",
+      "line": 790,
+      "code": "class SharedExpertModule:\n    \"\"\"Shared expert module for MoE.\"\"\"\n\n    def _prepare_local_shared_expert_dp_input(\n        self,\n        hidden_states: torch.Tensor,\n    ) -> torch.Tensor:\n        \"\"\"Prepare input for local shared expert DP.\"\"\"\n        original_num_tokens = hidden_states.shape[0]\n        # ❌ torch.chunk 在 0 token 时返回长度 1 的 tuple\n        # [tp_rank] (tp_rank>0) → IndexError: tuple index out of range\n        # ❌ F.pad 若未 import → NameError\n        hidden_states = torch.chunk(\n            hidden_states, self.moe_config.tp_size, dim=0\n        )[self.moe_config.tp_rank]\n        return hidden_states",
+      "context": "❌ torch.chunk 在 0 token 时返回长度 1 的 tuple [tp_rank] (tp_rank>0) → IndexError: tuple index out of range ❌ F.pad 若未 import → NameError"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/fused_moe/shared_experts.py",
+      "line": 798,
+      "code": "# ✅ 文件顶部已 import: import torch.nn.functional as F\nclass SharedExpertModule:\n    \"\"\"Shared expert module for MoE.\"\"\"\n\n    def _prepare_local_dp_input(\n        self,\n        hidden_states: torch.Tensor,\n    ) -> tuple[torch.Tensor, tuple[int, int]]:\n        \"\"\"Prepare input for local shared expert DP.\"\"\"\n        original_num_tokens = hidden_states.shape[0]\n        # See parallel_mode(): moe_config.tp_size describes routed experts in\n        # EP, while this token split follows the shared-expert TP group.\n        tp_group = self.moe_config.tp_group\n        tp_size = tp_group.world_size\n        pad_size = (tp_size - original_num_tokens % tp_size) % tp_size\n        if pad_size > 0:\n            hidden_states = F.pad(hidden_states, (0, 0, 0, pad_size))  # ✅ F 已 import\n        # ✅ tensor_split 总是返回 tp_size 个 chunk（部分可为空）\n        hidden_states = torch.tensor_split(\n            hidden_states,\n            tp_size,\n            dim=0,\n        )[tp_group.rank_in_group]\n        return hidden_states, (original_num_tokens, pad_size)",
+      "context": "✅ 文件顶部已 import: import torch.nn.functional as F See parallel_mode(): moe_config.tp_size describes routed experts in EP, while this token split follows the shared-expert TP group."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/fused_moe/fused_moe.py\n+++ b/vllm_ascend/ops/fused_moe/fused_moe.py\n@@ -1,16 +1,24 @@\n+# ✅ 文件顶部已 import: import torch.nn.functional as F\n class SharedExpertModule:\n     \"\"\"Shared expert module for MoE.\"\"\"\n \n-    def _prepare_local_shared_expert_dp_input(\n+    def _prepare_local_dp_input(\n         self,\n         hidden_states: torch.Tensor,\n-    ) -> torch.Tensor:\n+    ) -> tuple[torch.Tensor, tuple[int, int]]:\n         \"\"\"Prepare input for local shared expert DP.\"\"\"\n         original_num_tokens = hidden_states.shape[0]\n-        # ❌ torch.chunk 在 0 token 时返回长度 1 的 tuple\n-        # [tp_rank] (tp_rank>0) → IndexError: tuple index out of range\n-        # ❌ F.pad 若未 import → NameError\n-        hidden_states = torch.chunk(\n-            hidden_states, self.moe_config.tp_size, dim=0\n-        )[self.moe_config.tp_rank]\n-        return hidden_states\n+        # See parallel_mode(): moe_config.tp_size describes routed experts in\n+        # EP, while this token split follows the shared-expert TP group.\n+        tp_group = self.moe_config.tp_group\n+        tp_size = tp_group.world_size\n+        pad_size = (tp_size - original_num_tokens % tp_size) % tp_size\n+        if pad_size > 0:\n+            hidden_states = F.pad(hidden_states, (0, 0, 0, pad_size))  # ✅ F 已 import\n+        # ✅ tensor_split 总是返回 tp_size 个 chunk（部分可为空）\n+        hidden_states = torch.tensor_split(\n+            hidden_states,\n+            tp_size,\n+            dim=0,\n+        )[tp_group.rank_in_group]\n+        return hidden_states, (original_num_tokens, pad_size)\n",
+      "stats": "1 file changed, +17 lines, -9 lines",
+      "key_changes": [
+        "移除: return hidden_states",
+        "移除: hidden_states, self.moe_config.tp_size, dim=0",
+        "新增: tp_size,",
+        "新增: hidden_states,"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

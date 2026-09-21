@@ -1,0 +1,58 @@
+{
+  "report_id": "PR12491_001",
+  "pr_number": 12491,
+  "pr_title": "[Doc] add deepseek-v4-flash-dspark cookbook",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "docs/source/tutorials/models/DeepSeek-V4-Flash.md:217"
+  ],
+  "landing_sha": "1d2799a",
+  "source_quote": "Why not use fullgraph?\n> https://github.com/vllm-project/vllm-ascend/pull/12017 has been merged.\nfixed and tested, we can start successful with fullgraph with dspark-nofullgraph @ApsarasX",
+  "correspondence": [
+    {
+      "review_quote": "ApsarasX: docs/source/tutorials/models/DeepSeek-V4-Flash.md:217(2026-07-21 12:30:42)",
+      "patch_snippet": "评后sha 1d2799a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "1d2799a",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当某项性能优化特性（如 fullgraph/cudagraph）已在主线合入并可用时，官方教程文档的启动命令应启用该特性，而非使用 `enforce_eager` 等保守配置，以充分体现推荐部署的性能。",
+    "context": "",
+    "checkpoints": [
+      "检查文档启动命令是否使用了 `enforce_eager: true` 而未配置 cudagraph",
+      "确认相关特性（如 fullgraph）的 PR 是否已合入主线",
+      "如果已合入，添加 `--compilation-config` 启用对应 cudagraph 模式",
+      "确保文档命令经过实际测试可正常启动"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/DeepSeek-V4-Flash.md",
+      "line": 0,
+      "code": "### A2 series\n\nStartup Command:\n\n```bash\n    # deepseek-v4-flash-dspark uses the following image\n    export IMAGE=quay.io/ascend/vllm-ascend:nightly-main\n\n    docker run --rm \\\n        --device /dev/davinci0 \\\n        -v /mnt/share/models:/root/.cache/modelscope/hub/models \\\n        $IMAGE \\\n    vllm serve /root/.cache/modelscope/hub/models/UploadWeight/DeepSeek-V4-Flash-DSpark-w4a8-test \\\n        --max-model-len 800000 \\\n        --max-num-batched-tokens 8192 \\\n        --speculative-config '{\"method\": \"dspark\", \"num_speculative_tokens\": 5, \"enforce_eager\": true}'\n    # ↑ 仅用 enforce_eager，未启用 cudagraph/fullgraph 模式",
+      "context": "修改前代码 (markdown)"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/DeepSeek-V4-Flash.md",
+      "line": 0,
+      "code": "### A2 series\n\nStartup Command:\n\n```bash\n    # deepseek-v4-flash-dspark uses the following image\n    export IMAGE=quay.io/ascend/vllm-ascend:nightly-main\n\n    docker run --rm \\\n        --device /dev/davinci0 \\\n        -v /mnt/share/models:/root/.cache/modelscope/hub/models \\\n        $IMAGE \\\n    vllm serve /root/.cache/modelscope/hub/models/UploadWeight/DeepSeek-V4-Flash-DSpark-w4a8-test \\\n        --max-model-len 800000 \\\n        --max-num-batched-tokens 8192 \\\n        --speculative-config '{\"method\": \"dspark\", \"num_speculative_tokens\": 7, \"enforce_eager\": true}'  \\\n        --compilation-config '{\"cudagraph_mode\": \"FULL_DECODE_ONLY\"}'\n    # ↑ 添加 compilation-config 启用 cudagraph full decode 模式\n    # ↑ num_speculative_tokens 也从 5 调整为 7",
+      "context": "修改后代码 (markdown)"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/DeepSeek-V4-Flash.md\n+++ b/docs/source/tutorials/models/DeepSeek-V4-Flash.md\n@@ -13,5 +13,7 @@\n     vllm serve /root/.cache/modelscope/hub/models/UploadWeight/DeepSeek-V4-Flash-DSpark-w4a8-test \\\n         --max-model-len 800000 \\\n         --max-num-batched-tokens 8192 \\\n-        --speculative-config '{\"method\": \"dspark\", \"num_speculative_tokens\": 5, \"enforce_eager\": true}'\n-    # ↑ 仅用 enforce_eager，未启用 cudagraph/fullgraph 模式\n+        --speculative-config '{\"method\": \"dspark\", \"num_speculative_tokens\": 7, \"enforce_eager\": true}'  \\\n+        --compilation-config '{\"cudagraph_mode\": \"FULL_DECODE_ONLY\"}'\n+    # ↑ 添加 compilation-config 启用 cudagraph full decode 模式\n+    # ↑ num_speculative_tokens 也从 5 调整为 7",
+      "stats": "1 file changed, +4 lines, -2 lines",
+      "key_changes": [
+        "修改代码逻辑"
+      ]
+    },
+    "language": "bash",
+    "_status": "pending_llm_extract"
+  }
+}

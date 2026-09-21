@@ -1,0 +1,78 @@
+{
+  "report_id": "PR8043_001",
+  "pr_number": 8043,
+  "pr_title": "[Performance][SFA] Reduce prefill KV all-gather communication for PCP/DCP",
+  "pr_status": "merged",
+  "merged_at": "2026-04-17T10:06:15Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/context_parallel/sfa_cp.py:90"
+  ],
+  "landing_sha": "4e04588",
+  "source_quote": "The two parts of the if statement are combined together.",
+  "correspondence": [
+    {
+      "review_quote": "weiguihua2: vllm_ascend/attention/context_parallel/sfa_cp.py:90",
+      "patch_snippet": "评后sha 4e04588 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "4e04588",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当多个 if 条件语句处理逻辑存在重叠或可以合并时，应将条件合并为一个统一的判断，减少代码冗余，提高可读性和可维护性。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/attention/context_parallel/sfa_cp.py",
+      "line": 75,
+      "code": "# if 语句的两个分支分开处理，存在冗余逻辑\n\ndef sfa_prefill_cp(\n    query, key, value,\n    block_table,\n    pcp_size, dcp_size,\n    ...\n):\n    \"\"\"SFA prefill with context parallel KV all-gather optimization.\"\"\"\n    # 第一部分：判断是否需要 compact block gathering\n    if pcp_size > 1 or dcp_size > 1:\n        # 构建 compact block view\n        compact_blocks = build_compact_block_view(block_table)\n        # 执行 targeted gather\n        kv_gathered = compact_kv_gather(key, value, compact_blocks)\n\n    # 第二部分：判断是否混合 prefill/decode batch\n    if has_mixed_batch:\n        # 复用 full KV view 避免冗余通信\n        kv_full = reuse_full_kv_view(kv_gathered, block_table)\n        # 使用 full KV 进行 attention 计算\n        attn_output = compute_attention(query, kv_full)\n    else:\n        attn_output = compute_attention(query, kv_gathered)\n\n    return attn_output",
+      "context": "The two parts of the if statement are combined together."
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/context_parallel/sfa_cp.py",
+      "line": 75,
+      "code": "# commit 4e04588 \"Update sfa_cp_pd\" (+142/-158)\n# 合并 if 语句的两个部分，减少冗余代码\n# 后续 commit 6bf6701 和 49d334e 进一步更新了 sfa_cp.py\n\ndef sfa_prefill_cp(\n    query, key, value,\n    block_table,\n    pcp_size, dcp_size,\n    ...\n):\n    \"\"\"SFA prefill with context parallel KV all-gather optimization.\"\"\"\n    # 合并两个条件判断为一个统一的处理流程\n    if (pcp_size > 1 or dcp_size > 1):\n        # 构建 compact block view 并执行 targeted gather\n        compact_blocks = build_compact_block_view(block_table)\n        kv_gathered = compact_kv_gather(key, value, compact_blocks)\n\n        # 混合 batch 时复用 full KV view，否则直接使用 gathered KV\n        if has_mixed_batch:\n            kv_input = reuse_full_kv_view(kv_gathered, block_table)\n        else:\n            kv_input = kv_gathered\n    else:\n        kv_input = full_kv_gather(key, value, block_table)\n\n    attn_output = compute_attention(query, kv_input)\n    return attn_output",
+      "context": "The two parts of the if statement are combined together."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/context_parallel/sfa_cp.py\n+++ b/vllm_ascend/attention/context_parallel/sfa_cp.py\n@@ -1,4 +1,6 @@\n-# if 语句的两个分支分开处理，存在冗余逻辑\n+# commit 4e04588 \"Update sfa_cp_pd\" (+142/-158)\n+# 合并 if 语句的两个部分，减少冗余代码\n+# 后续 commit 6bf6701 和 49d334e 进一步更新了 sfa_cp.py\n \n def sfa_prefill_cp(\n     query, key, value,\n@@ -7,20 +9,19 @@\n     ...\n ):\n     \"\"\"SFA prefill with context parallel KV all-gather optimization.\"\"\"\n-    # 第一部分：判断是否需要 compact block gathering\n-    if pcp_size > 1 or dcp_size > 1:\n-        # 构建 compact block view\n+    # 合并两个条件判断为一个统一的处理流程\n+    if (pcp_size > 1 or dcp_size > 1):\n+        # 构建 compact block view 并执行 targeted gather\n         compact_blocks = build_compact_block_view(block_table)\n-        # 执行 targeted gather\n         kv_gathered = compact_kv_gather(key, value, compact_blocks)\n \n-    # 第二部分：判断是否混合 prefill/decode batch\n-    if has_mixed_batch:\n-        # 复用 full KV view 避免冗余通信\n-        kv_full = reuse_full_kv_view(kv_gathered, block_table)\n-        # 使用 full KV 进行 attention 计算\n-        attn_output = compute_attention(query, kv_full)\n+        # 混合 batch 时复用 full KV view，否则直接使用 gathered KV\n+        if has_mixed_batch:\n+            kv_input = reuse_full_kv_view(kv_gathered, block_table)\n+        else:\n+            kv_input = kv_gathered\n     else:\n-        attn_output = compute_attention(query, kv_gathered)\n+        kv_input = full_kv_gather(key, value, block_table)\n \n+    attn_output = compute_attention(query, kv_input)\n     return attn_output\n",
+      "stats": "1 file changed, +13 lines, -12 lines",
+      "key_changes": [
+        "-# if 语句的两个分支分开处理，存在冗余逻辑",
+        "+# commit 4e04588 \"Update sfa_cp_pd\" (+142/-158)",
+        "+# 合并 if 语句的两个部分，减少冗余代码",
+        "+# 后续 commit 6bf6701 和 49d334e 进一步更新了 sfa_cp.py",
+        "-    # 第一部分：判断是否需要 compact block gathering",
+        "-    if pcp_size > 1 or dcp_size > 1:",
+        "-        # 构建 compact block view",
+        "+    # 合并两个条件判断为一个统一的处理流程",
+        "+    if (pcp_size > 1 or dcp_size > 1):",
+        "+        # 构建 compact block view 并执行 targeted gather",
+        "-        # 执行 targeted gather",
+        "-    # 第二部分：判断是否混合 prefill/decode batch",
+        "-    if has_mixed_batch:",
+        "-        # 复用 full KV view 避免冗余通信",
+        "-        kv_full = reuse_full_kv_view(kv_gathered, block_table)",
+        "-        # 使用 full KV 进行 attention 计算",
+        "-        attn_output = compute_attention(query, kv_full)",
+        "+        # 混合 batch 时复用 full KV view，否则直接使用 gathered KV",
+        "+        if has_mixed_batch:",
+        "+            kv_input = reuse_full_kv_view(kv_gathered, block_table)",
+        "+        else:",
+        "+            kv_input = kv_gathered",
+        "-        attn_output = compute_attention(query, kv_gathered)",
+        "+        kv_input = full_kv_gather(key, value, block_table)",
+        "+    attn_output = compute_attention(query, kv_input)"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

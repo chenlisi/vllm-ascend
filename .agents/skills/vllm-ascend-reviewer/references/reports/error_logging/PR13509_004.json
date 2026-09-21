@@ -1,0 +1,68 @@
+{
+  "report_id": "PR13509_004",
+  "pr_number": 13509,
+  "pr_title": "[Performance][Ops] Integrate Kimi K3 fused norm gate and attention residual",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/triton/kimi_k3/attention_residual.py:68",
+    "vllm_ascend/ops/triton/kimi_k3/attention_residual.py:106"
+  ],
+  "landing_sha": "f1acbea",
+  "source_quote": "In Triton, `tl.arange` requires its size to be a power of two. Since `H` (hidden size, e.g., 7168 in Kimi K3) is not a power of two, `tl.arange(0, H)` will fail to compile. Pass a power-of-two `BLOCK_SIZE` as a constexpr and use a mask to handle non-power-of-two dimensions safely.\nUpdate the launcher to compute and pass the power-of-two `BLOCK_SIZE` to the kernel.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/ops/triton/kimi_k3/attention_residual.py:68",
+      "patch_snippet": "评后sha f1acbea 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/ops/triton/kimi_k3/attention_residual.py:106",
+      "patch_snippet": "评后sha f1acbea 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f1acbea",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "Triton 的 `tl.arange` 要求大小为 power-of-two。对于非 power-of-two 的维度（如 hidden_size=7168），必须使用 `triton.next_power_of_2` 计算最近的 power-of-two 作为 BLOCK_SIZE，并用 mask 处理越界访问。",
+    "context": "",
+    "checkpoints": [
+      "检查 `tl.arange(0, N)` 中 N 是否可能为非 power-of-two（如模型 hidden_size、head_dim）",
+      "确认非 power-of-two 的 N 是否改用 `BLOCK_SIZE = triton.next_power_of_2(N)` + mask",
+      "确认所有 `tl.load`/`tl.store` 在使用 BLOCK_SIZE 时都带了 mask 参数",
+      "确认 launcher 中正确计算并传入了 BLOCK_SIZE constexpr"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/triton/kimi_k3/attention_residual.py",
+      "line": 1,
+      "code": "import triton\nimport triton.language as tl\n\n\n@triton.jit\ndef _apply_attn_res_kernel(\n    block_residual_ptr,\n    prefix_sum_ptr,\n    norm_w_ptr,\n    proj_w_ptr,\n    out_ptr,\n    N,\n    H: tl.constexpr,\n    B,\n    EPS: tl.constexpr,\n    NUM_CORES: tl.constexpr,\n    NB: tl.constexpr,\n):\n    block_size = (N - 1) // NUM_CORES + 1\n    pid = tl.program_id(0)\n    tok0 = pid * block_size\n    if tok0 >= N:\n        return\n    tok1 = tl.minimum(tok0 + block_size, N)\n\n    cols = tl.arange(0, H)        # H 不是 power-of-two，编译失败\n    norm_w = tl.load(norm_w_ptr + cols).to(tl.float32)\n    proj_w = tl.load(proj_w_ptr + cols).to(tl.float32)\n    # ... rest of kernel ...\n\n\ndef apply_attn_res(prefix_sum, block_residual, proj, norm):\n    num_tokens, hidden_size = prefix_sum.shape\n    num_blocks = block_residual.shape[1]\n    # ...\n    _apply_attn_res_kernel[(num_vectorcore,)](\n        ..., H=hidden_size, NB=num_streams,\n    )",
+      "context": "... rest of kernel ..."
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/triton/kimi_k3/attention_residual.py",
+      "line": 1,
+      "code": "import triton\nimport triton.language as tl\n\n\n@triton.jit\ndef _apply_attn_res_kernel(\n    block_residual_ptr,\n    prefix_sum_ptr,\n    norm_w_ptr,\n    proj_w_ptr,\n    out_ptr,\n    N,\n    H: tl.constexpr,\n    B,\n    EPS: tl.constexpr,\n    NUM_CORES: tl.constexpr,\n    NB: tl.constexpr,\n    BLOCK_SIZE: tl.constexpr,    # 新增 power-of-two 参数\n):\n    block_size = (N - 1) // NUM_CORES + 1\n    pid = tl.program_id(0)\n    tok0 = pid * block_size\n    if tok0 >= N:\n        return\n    tok1 = tl.minimum(tok0 + block_size, N)\n\n    cols = tl.arange(0, BLOCK_SIZE)  # power-of-two，编译通过\n    mask = cols < H                   # mask 处理非 power-of-two\n    norm_w = tl.load(norm_w_ptr + cols, mask=mask, other=0.0).to(tl.float32)\n    proj_w = tl.load(proj_w_ptr + cols, mask=mask, other=0.0).to(tl.float32)\n    # ... rest of kernel with mask on all tl.load/tl.store ...\n\n\ndef apply_attn_res(prefix_sum, block_residual, proj, norm):\n    num_tokens, hidden_size = prefix_sum.shape\n    num_blocks = block_residual.shape[1]\n    # ...\n    block_size = triton.next_power_of_2(hidden_size)  # 计算 power-of-two\n    _apply_attn_res_kernel[(num_vectorcore,)](\n        ..., H=hidden_size, NB=num_streams, BLOCK_SIZE=block_size,\n    )",
+      "context": "... rest of kernel with mask on all tl.load/tl.store ..."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/triton/kimi_k3/attention_residual.py\n+++ b/vllm_ascend/ops/triton/kimi_k3/attention_residual.py\n@@ -15,6 +15,7 @@\n     EPS: tl.constexpr,\n     NUM_CORES: tl.constexpr,\n     NB: tl.constexpr,\n+    BLOCK_SIZE: tl.constexpr,    # 新增 power-of-two 参数\n ):\n     block_size = (N - 1) // NUM_CORES + 1\n     pid = tl.program_id(0)\n@@ -23,16 +24,18 @@\n         return\n     tok1 = tl.minimum(tok0 + block_size, N)\n \n-    cols = tl.arange(0, H)        # H 不是 power-of-two，编译失败\n-    norm_w = tl.load(norm_w_ptr + cols).to(tl.float32)\n-    proj_w = tl.load(proj_w_ptr + cols).to(tl.float32)\n-    # ... rest of kernel ...\n+    cols = tl.arange(0, BLOCK_SIZE)  # power-of-two，编译通过\n+    mask = cols < H                   # mask 处理非 power-of-two\n+    norm_w = tl.load(norm_w_ptr + cols, mask=mask, other=0.0).to(tl.float32)\n+    proj_w = tl.load(proj_w_ptr + cols, mask=mask, other=0.0).to(tl.float32)\n+    # ... rest of kernel with mask on all tl.load/tl.store ...\n \n \n def apply_attn_res(prefix_sum, block_residual, proj, norm):\n     num_tokens, hidden_size = prefix_sum.shape\n     num_blocks = block_residual.shape[1]\n     # ...\n+    block_size = triton.next_power_of_2(hidden_size)  # 计算 power-of-two\n     _apply_attn_res_kernel[(num_vectorcore,)](\n-        ..., H=hidden_size, NB=num_streams,\n+        ..., H=hidden_size, NB=num_streams, BLOCK_SIZE=block_size,\n     )\n",
+      "stats": "1 file changed, +8 lines, -5 lines",
+      "key_changes": [
+        "移除: ..., H=hidden_size, NB=num_streams,",
+        "移除: cols = tl.arange(0, H)        # H 不是 power-of-two，编译失败",
+        "新增: cols = tl.arange(0, BLOCK_SIZE)  # power-of-two，编译通过",
+        "新增: ..., H=hidden_size, NB=num_streams, BLOCK_SIZE=block_size,",
+        "新增: norm_w = tl.load(norm_w_ptr + cols, mask=mask, other=0.0).to(tl.float32)"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

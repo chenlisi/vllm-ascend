@@ -1,0 +1,73 @@
+{
+  "report_id": "PR13143_002",
+  "pr_number": 13143,
+  "pr_title": "[Doc][Misc] Update Kimi-K3 deployment configurations",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/models/Kimi-K3.md:195",
+    "docs/source/tutorials/models/Kimi-K3.md:250",
+    "docs/source/tutorials/models/Kimi-K3.md:954"
+  ],
+  "landing_sha": "8786964",
+  "source_quote": "",
+  "correspondence": [
+    {
+      "review_quote": "docs/source/tutorials/models/Kimi-K3.md:195",
+      "patch_snippet": "评后sha 8786964 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "docs/source/tutorials/models/Kimi-K3.md:250",
+      "patch_snippet": "评后sha 8786964 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "docs/source/tutorials/models/Kimi-K3.md:954",
+      "patch_snippet": "评后sha 8786964 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "8786964",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当模型发布包（如 Eco-Tech/Kimi-K3-w4a8、Kimi-K3 ModelSlim 等）已经在 checkpoint 的 `compressed-tensors` / `quant_config` 中声明了量化方式时，vLLM 会自动发现。部署文档应删除 CLI 中的 `--quantization ascend` 这类冗余 flag，以及对应的解释 FAQ，否则用户在升级模型版本后仍带该 flag 可能冲突。",
+    "context": "",
+    "checkpoints": [
+      "检查 vLLM serve 示例命令中是否包含 `--quantization`",
+      "核对 checkpoint 是否自带量化配置（`compressed-tensors`、`config.json` 中 quant_method）",
+      "若自带量化配置，删除所有命令中的该 flag，并同步移除\"何时使用 --quantization\"的 FAQ",
+      "注意：全文档所有 serve 命令 grep 一遍，不要只改评审指出的场景"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/Kimi-K3.md",
+      "line": 190,
+      "code": "## 4-node deployment (w4a8)\n```bash\nvllm serve Eco-Tech/Kimi-K3-w4a8 \\\n    --quantization ascend \\           # ❌ 冗余：checkpoint 自带 compressed-tensors\n    --tensor-parallel-size 16 \\\n    --data-parallel-size 4 \\\n    --max-model-len 131027 \\\n    ...\n```\n\n## 4-node deployment (multimodal)\n```bash\nvllm serve Eco-Tech/Kimi-K3-w4a8 \\\n    --quantization ascend \\           # ❌ 冗余\n    --tensor-parallel-size 16 \\\n    --data-parallel-size 4 \\\n    --limit-mm-per-prompt '{\"vision_chunk\": 2}' \\\n    ...\n```\n\n# ... 共 7 个 serve 命令都带 --quantization ascend \\\n\n# 正文 (~L190):\nThe local implementation supports Kimi K3 ModelSlim quantization\nthrough `--quantization ascend`. This flag enables the Ascend-specific\nquantization kernel for ModelSlim native quantized weights.\n\n# FAQ (~L950):\n## When should `--quantization ascend` be used?\nUse it for ModelSlim native quantized weights (e.g. Eco-Tech/Kimi-K3-w4a8).\nThis enables the Ascend-specific quantization kernel.",
+      "context": "4-node deployment (w4a8) 4-node deployment (multimodal) ... 共 7 个 serve 命令都带 --quantization ascend \\"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/Kimi-K3.md",
+      "line": 190,
+      "code": "## 4-node deployment (w4a8)\n```bash\nvllm serve Eco-Tech/Kimi-K3-w4a8 \\\n    --tensor-parallel-size 16 \\       # ✅ --quantization ascend 已删除\n    --data-parallel-size 4 \\\n    --max-model-len 131072 \\\n    ...\n```\n\n## 4-node deployment (multimodal)\n```bash\nvllm serve Eco-Tech/Kimi-K3-w4a8 \\\n    --tensor-parallel-size 16 \\       # ✅ --quantization ascend 已删除\n    --data-parallel-size 4 \\\n    --limit-mm-per-prompt '{\"vision_chunk\": 2}' \\\n    ...\n```\n\n# ... 共 7 个 serve 命令统一删除 --quantization ascend \\\n\n# ✅ 正文 --quantization ascend 使用说明段落删除\n# ✅ FAQ 中 --quantization ascend 的 Q&A 删除（2处）",
+      "context": "4-node deployment (w4a8) 4-node deployment (multimodal) ... 共 7 个 serve 命令统一删除 --quantization ascend \\"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/Kimi-K3.md\n+++ b/docs/source/tutorials/models/Kimi-K3.md\n@@ -1,31 +1,22 @@\n ## 4-node deployment (w4a8)\n ```bash\n vllm serve Eco-Tech/Kimi-K3-w4a8 \\\n-    --quantization ascend \\           # ❌ 冗余：checkpoint 自带 compressed-tensors\n-    --tensor-parallel-size 16 \\\n+    --tensor-parallel-size 16 \\       # ✅ --quantization ascend 已删除\n     --data-parallel-size 4 \\\n-    --max-model-len 131027 \\\n+    --max-model-len 131072 \\\n     ...\n ```\n \n ## 4-node deployment (multimodal)\n ```bash\n vllm serve Eco-Tech/Kimi-K3-w4a8 \\\n-    --quantization ascend \\           # ❌ 冗余\n-    --tensor-parallel-size 16 \\\n+    --tensor-parallel-size 16 \\       # ✅ --quantization ascend 已删除\n     --data-parallel-size 4 \\\n     --limit-mm-per-prompt '{\"vision_chunk\": 2}' \\\n     ...\n ```\n \n-# ... 共 7 个 serve 命令都带 --quantization ascend \\\n+# ... 共 7 个 serve 命令统一删除 --quantization ascend \\\n \n-# 正文 (~L190):\n-The local implementation supports Kimi K3 ModelSlim quantization\n-through `--quantization ascend`. This flag enables the Ascend-specific\n-quantization kernel for ModelSlim native quantized weights.\n-\n-# FAQ (~L950):\n-## When should `--quantization ascend` be used?\n-Use it for ModelSlim native quantized weights (e.g. Eco-Tech/Kimi-K3-w4a8).\n-This enables the Ascend-specific quantization kernel.\n+# ✅ 正文 --quantization ascend 使用说明段落删除\n+# ✅ FAQ 中 --quantization ascend 的 Q&A 删除（2处）\n",
+      "stats": "1 file changed, +6 lines, -15 lines",
+      "key_changes": [
+        "移除: Use it for ModelSlim native quantized weights (e.g. Eco-Tech/Kimi-K3-w4a8).",
+        "移除: --quantization ascend \\           # ❌ 冗余：checkpoint 自带 compressed-tensors",
+        "移除: --quantization ascend \\           # ❌ 冗余",
+        "新增: --max-model-len 131072 \\"
+      ]
+    },
+    "language": "markdown",
+    "_status": "processed"
+  }
+}

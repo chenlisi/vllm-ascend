@@ -1,0 +1,61 @@
+{
+  "report_id": "PR1995_001",
+  "pr_number": 1995,
+  "pr_title": "[2/N][Refactor] Refactor V1 attention for better extensibility",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/attention_v1.py:218"
+  ],
+  "landing_sha": "e55c60f",
+  "source_quote": "you could make return value of _prepare_build_info as a dataclass to prevent the problem of data dump",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/attention/attention_v1.py:218",
+      "patch_snippet": "评后sha e55c60f 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "e55c60f",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当函数需要返回多个相关值时，应使用 dataclass 或 namedtuple 封装返回值，而非返回裸 tuple，以防止数据传递过程中的顺序错误和类型混淆。",
+    "context": "",
+    "checkpoints": [
+      "函数返回多个值时是否使用了 dataclass/namedtuple 封装",
+      "返回值结构是否清晰、可维护",
+      "是否避免了裸 tuple 导致的顺序依赖问题"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 1,
+      "code": "# _prepare_build_info as a dataclass to prevent the problem of data dump\"\n\nfrom typing import Optional, Tuple\nimport torch\nimport torch.nn as nn\n\nfrom vllm.attention.backends.abstract import AttentionBackend\nfrom vllm.config import CacheConfig\n\nclass AscendAttentionV1:\n    \"\"\"Ascend attention implementation for V1 engine.\"\"\"\n\n    def __init__(self, num_heads: int, head_size: int, ...):\n        self.num_heads = num_heads\n        self.head_size = head_size\n\n    def _prepare_build_info(self, query: torch.Tensor,\n                            key: torch.Tensor,\n                            value: torch.Tensor,\n                            attn_mask: Optional[torch.Tensor]\n                            ) -> Tuple[torch.Tensor, ...]:\n        \"\"\"Prepare build info for attention computation.\n        Returns a raw tuple of tensors - prone to ordering errors.\n        \"\"\"\n        # 返回裸 tuple 或多个独立值，容易在数据传递中出错\n        seq_len = query.shape[1]\n        batch_size = query.shape[0]\n        return query, key, value, attn_mask, seq_len, batch_size\n\n    def forward(self, query, key, value, attn_mask=None):\n        build_info = self._prepare_build_info(query, key, value, attn_mask)\n        # 使用 tuple 索引访问，容易混淆顺序\n        q, k, v, mask = build_info[0], build_info[1], build_info[2], build_info[3]\n        return self._compute_attention(q, k, v, mask)",
+      "context": "_prepare_build_info as a dataclass to prevent the problem of data dump\" 返回裸 tuple 或多个独立值，容易在数据传递中出错 使用 tuple 索引访问，容易混淆顺序"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 1,
+      "code": "# 使用 dataclass 封装返回值，防止数据传递中的顺序错误和类型混淆\n\nfrom typing import Optional, Tuple\nfrom dataclasses import dataclass\nimport torch\nimport torch.nn as nn\n\nfrom vllm.attention.backends.abstract import AttentionBackend\nfrom vllm.config import CacheConfig\n\n@dataclass\nclass AscendBuildInfo:\n    \"\"\"Dataclass to hold attention build info, preventing data dump issues.\"\"\"\n    query: torch.Tensor\n    key: torch.Tensor\n    value: torch.Tensor\n    attn_mask: Optional[torch.Tensor]\n    seq_len: int\n    batch_size: int\n\nclass AscendAttentionV1:\n    \"\"\"Ascend attention implementation for V1 engine.\"\"\"\n\n    def __init__(self, num_heads: int, head_size: int, ...):\n        self.num_heads = num_heads\n        self.head_size = head_size\n\n    def _prepare_build_info(self, query: torch.Tensor,\n                            key: torch.Tensor,\n                            value: torch.Tensor,\n                            attn_mask: Optional[torch.Tensor]\n                            ) -> AscendBuildInfo:\n        \"\"\"Prepare build info for attention computation.\n        Returns a dataclass with named fields for clarity.\n        \"\"\"\n        seq_len = query.shape[1]\n        batch_size = query.shape[0]\n        return AscendBuildInfo(\n            query=query, key=key, value=value,\n            attn_mask=attn_mask, seq_len=seq_len,\n            batch_size=batch_size)\n\n    def forward(self, query, key, value, attn_mask=None):\n        info = self._prepare_build_info(query, key, value, attn_mask)\n        # 使用命名属性访问，清晰不易出错\n        return self._compute_attention(info.query, info.key,\n                                       info.value, info.attn_mask)",
+      "context": "使用 dataclass 封装返回值，防止数据传递中的顺序错误和类型混淆 使用命名属性访问，清晰不易出错"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/attention_v1.py\n+++ b/vllm_ascend/attention/attention_v1.py\n@@ -1,11 +1,22 @@\n-# _prepare_build_info as a dataclass to prevent the problem of data dump\"\n+# 使用 dataclass 封装返回值，防止数据传递中的顺序错误和类型混淆\n \n from typing import Optional, Tuple\n+from dataclasses import dataclass\n import torch\n import torch.nn as nn\n \n from vllm.attention.backends.abstract import AttentionBackend\n from vllm.config import CacheConfig\n+\n+@dataclass\n+class AscendBuildInfo:\n+    \"\"\"Dataclass to hold attention build info, preventing data dump issues.\"\"\"\n+    query: torch.Tensor\n+    key: torch.Tensor\n+    value: torch.Tensor\n+    attn_mask: Optional[torch.Tensor]\n+    seq_len: int\n+    batch_size: int\n \n class AscendAttentionV1:\n     \"\"\"Ascend attention implementation for V1 engine.\"\"\"\n@@ -18,17 +29,19 @@\n                             key: torch.Tensor,\n                             value: torch.Tensor,\n                             attn_mask: Optional[torch.Tensor]\n-                            ) -> Tuple[torch.Tensor, ...]:\n+                            ) -> AscendBuildInfo:\n         \"\"\"Prepare build info for attention computation.\n-        Returns a raw tuple of tensors - prone to ordering errors.\n+        Returns a dataclass with named fields for clarity.\n         \"\"\"\n-        # 返回裸 tuple 或多个独立值，容易在数据传递中出错\n         seq_len = query.shape[1]\n         batch_size = query.shape[0]\n-        return query, key, value, attn_mask, seq_len, batch_size\n+        return AscendBuildInfo(\n+            query=query, key=key, value=value,\n+            attn_mask=attn_mask, seq_len=seq_len,\n+            batch_size=batch_size)\n \n     def forward(self, query, key, value, attn_mask=None):\n-        build_info = self._prepare_build_info(query, key, value, attn_mask)\n-        # 使用 tuple 索引访问，容易混淆顺序\n-        q, k, v, mask = build_info[0], build_info[1], build_info[2], build_info[3]\n-        return self._compute_attention(q, k, v, mask)\n+        info = self._prepare_build_info(query, key, value, attn_mask)\n+        # 使用命名属性访问，清晰不易出错\n+        return self._compute_attention(info.query, info.key,\n+                                       info.value, info.attn_mask)\n",
+      "stats": "1 file changed, +22 lines, -9 lines",
+      "key_changes": [
+        "移除: return query, key, value, attn_mask, seq_len, batch_size",
+        "移除: build_info = self._prepare_build_info(query, key, value, attn_mask)",
+        "移除: Returns a raw tuple of tensors - prone to ordering errors.",
+        "新增: Returns a dataclass with named fields for clarity.",
+        "新增: \"\"\"Dataclass to hold attention build info, preventing data dump issues.\"\"\""
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

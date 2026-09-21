@@ -1,0 +1,71 @@
+{
+  "report_id": "PR7110_001",
+  "pr_number": 7110,
+  "pr_title": "[Feature] support aclgraph for model runner v2",
+  "pr_status": "merged",
+  "merged_at": "",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/ascend_forward_context.py:317"
+  ],
+  "landing_sha": "816d3e9",
+  "source_quote": "",
+  "correspondence": [
+    {
+      "review_quote": "评审点（gemini high）: #(原文语义)",
+      "patch_snippet": "评后sha 作者表态 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "ascend_forward_context.py L317 公共方法名: 1(typo `get_atrr` → 正确 `get_attr`；**同时要求类内部所有调用点一并修正**（不是只改定义）)",
+      "patch_snippet": "评后sha fixed 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "816d3e9",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "公共静态方法/实例方法名如果把 `attribute` 相关缩写拼写错（常见 atrr / atrrib / attib / att rr 把 t/r 写两次），修的时候不能\"只改 `def xxx(...):` 那一行\"——必须在**同一个 commit 内**把 `grep \"wrong_name(\"` 扫到的本模块、本类所有调用点全部改名，否则会出现\"新代码写正确拼写 `get_attr` → AttributeError 找不到方法（因为定义还没合并？不，定义改了但旧调用还在调错名字）\"或者\"新代码继续被迫沿用错误拼写当 team standard → 拼写错长期扩散到外部模块\"两种后果。本类错误因为拼写错太接近肉眼难以 review 出来，reviewer 明确指出\"class 内部也一起改\"的场合一定要 100% 扫干净。",
+    "context": "",
+    "checkpoints": [
+      "所有方法名 typo：`get_atrr` / `set_atrr` / `has_attrib` / `attirbute`（字母顺序颠倒）/ `recieve` / `seperate` 等常见高频拼写错必须用 `rg -i` 正则全仓（至少本 PR 目录）扫：",
+      "修改前后 `rg \"错拼写\"` 计数必须降为 0（本 PR：`get_atrr` 从 12 → 0）",
+      "新增同功能 getter/setter 必须直接用正确拼写（本 PR 新增 `moe_layer_index()` 直接写 `get_attr(...)` = 强信号证据）",
+      "IDE rename refactor 工具如果是 Python 会处理不了 `@staticmethod` 中的字符串调用，因此 grep 是唯一金标准，不能依赖 IDE \"Rename\" 弹出的 \"12 usages found\" 就直接信——要再次 grep 确认"
+    ],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "    @staticmethod\n-   def get_atrr(name: str, default: Any = None):",
+      "context": "There's a typo in the method name. It should be `get_attr` instead of `get_atrr`. This should be cor..."
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "     @staticmethod\n-    def get_atrr(name: str, default: Any = None):\n+    def get_attr(name: str, default: Any = None):\n         forward_context = get_forward_context()\n         if envs_vllm.VLLM_USE_V2_MODEL_RUNNER:\n             return forward_context.additional_kwargs.get(name, default)",
+      "context": "There's a typo in the method name. It should be `get_attr` instead of `get_atrr`. This should be cor..."
+    },
+    "diff": {
+      "unified": "--- a/file\n+++ b/file\n@@ -1,2 +1,6 @@\n-    @staticmethod\n--   def get_atrr(name: str, default: Any = None):\n+     @staticmethod\n+-    def get_atrr(name: str, default: Any = None):\n++    def get_attr(name: str, default: Any = None):\n+         forward_context = get_forward_context()\n+         if envs_vllm.VLLM_USE_V2_MODEL_RUNNER:\n+             return forward_context.additional_kwargs.get(name, default)",
+      "stats": "1 file changed, +6 lines, -2 lines",
+      "key_changes": [
+        "- @staticmethod",
+        "- -   def get_atrr(name: str, default: Any = None):",
+        "+ @staticmethod",
+        "+ -    def get_atrr(name: str, default: Any = None):",
+        "+ +    def get_attr(name: str, default: Any = None):",
+        "+ forward_context = get_forward_context()",
+        "+ if envs_vllm.VLLM_USE_V2_MODEL_RUNNER:",
+        "+ return forward_context.additional_kwargs.get(name, default)"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

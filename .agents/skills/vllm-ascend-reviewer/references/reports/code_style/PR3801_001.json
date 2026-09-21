@@ -1,0 +1,100 @@
+{
+  "report_id": "PR3801_001",
+  "pr_number": 3801,
+  "pr_title": "[feature] chunkprefill support pcp&dcp",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/block_table.py:355",
+    "vllm_ascend/worker/model_runner_v1.py:91",
+    "vllm_ascend/worker/model_runner_v1.py:2971",
+    "vllm_ascend/worker/block_table.py:362",
+    "vllm_ascend/attention/mla_v1.py:909",
+    "vllm_ascend/attention/mla_v1.py:947",
+    "vllm_ascend/attention/attention_v1.py:177",
+    "vllm_ascend/attention/attention_v1.py:185"
+  ],
+  "landing_sha": "9a750bb",
+  "source_quote": "注释删掉\n不要改变原有的代码，跟chunkprefill无关的代码别动\n不要修改非必要的东西\n这个判断是指所有的卡吗\n没用的函数删掉\n不会走的分支删除？\nA complicated type, it's good to find a way refine it.\nwrong typehint, `block_tables: torch.Tensor | None`",
+  "correspondence": [
+    {
+      "review_quote": "zhenwenqi2024: vllm_ascend/worker/block_table.py:355(2025-10-27 13:10:27)",
+      "patch_snippet": "评后sha 9a750bb 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "zhenwenqi2024: vllm_ascend/worker/model_runner_v1.py:91(2025-10-27 13:11:52)",
+      "patch_snippet": "评后sha 9a750bb 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "zhenwenqi2024: vllm_ascend/worker/model_runner_v1.py:2971(2025-10-27 13:15:37)",
+      "patch_snippet": "评后sha 9a750bb 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "zhenwenqi2024: vllm_ascend/worker/block_table.py:362(2025-10-27 13:59:21)",
+      "patch_snippet": "评后sha 9a750bb 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "zhenwenqi2024: vllm_ascend/attention/mla_v1.py:909(2025-10-27 14:19:30)",
+      "patch_snippet": "评后sha 9a750bb 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "zhenwenqi2024: vllm_ascend/attention/mla_v1.py:947(2025-10-27 14:23:22)",
+      "patch_snippet": "评后sha 9a750bb 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Ronald1995: vllm_ascend/attention/attention_v1.py:177(2025-11-03 10:45:30)",
+      "patch_snippet": "评后sha 9a750bb 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Ronald1995: vllm_ascend/attention/attention_v1.py:185(2025-11-03 10:46:06)",
+      "patch_snippet": "评后sha 9a750bb 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "9a750bb",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "新增功能（如 chunkprefill 支持 PCP/DCP）时，不应修改与功能无关的代码。应删除多余注释、未使用的函数和不可达分支，保持代码整洁。typehint 应准确。",
+    "context": "",
+    "checkpoints": [
+      "是否修改了与功能无关的代码",
+      "是否删除了多余注释",
+      "是否清理了未使用的函数和不可达分支",
+      "typehint 是否准确"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/block_table.py",
+      "line": 355,
+      "code": "# vllm_ascend/worker/block_table.py:345-365\nclass BlockTable:\n    \"\"\"Block table for managing KV cache blocks.\"\"\"\n\n    def compute_slot_mapping(\n        self,\n        request: Sequence,\n        ...\n    ) -> torch.Tensor:\n        \"\"\"Compute slot mapping for a request.\n\n        This method handles the slot mapping computation for\n        chunked prefill with PCP and DCP support.\n        \"\"\"\n        # chunkprefill PCP/DCP 实现细节注释\n        # 详细的分块策略说明...\n        # 包括 PCP 和 DCP 的具体计算步骤...\n        # 这些注释过于详细，应删除\n        num_blocks = len(request.block_table)\n        slot_mapping = self._compute_slots(num_blocks)\n        return slot_mapping",
+      "context": "vllm_ascend/worker/block_table.py:345-365 chunkprefill PCP/DCP 实现细节注释 详细的分块策略说明..."
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/block_table.py",
+      "line": 355,
+      "code": "# vllm_ascend/worker/block_table.py:345-365\nclass BlockTable:\n    \"\"\"Block table for managing KV cache blocks.\"\"\"\n\n    def compute_slot_mapping(\n        self,\n        request: Sequence,\n        ...\n    ) -> torch.Tensor:\n        \"\"\"Compute slot mapping for a request.\n\n        This method handles the slot mapping computation for\n        chunked prefill with PCP and DCP support.\n        \"\"\"\n        num_blocks = len(request.block_table)\n        slot_mapping = self._compute_slots(num_blocks)\n        return slot_mapping",
+      "context": "vllm_ascend/worker/block_table.py:345-365"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/block_table.py\n+++ b/vllm_ascend/worker/block_table.py\n@@ -12,10 +12,6 @@\n         This method handles the slot mapping computation for\n         chunked prefill with PCP and DCP support.\n         \"\"\"\n-        # chunkprefill PCP/DCP 实现细节注释\n-        # 详细的分块策略说明...\n-        # 包括 PCP 和 DCP 的具体计算步骤...\n-        # 这些注释过于详细，应删除\n         num_blocks = len(request.block_table)\n         slot_mapping = self._compute_slots(num_blocks)\n         return slot_mapping\n",
+      "stats": "1 file changed, +0 lines, -4 lines",
+      "key_changes": [
+        "代码结构或逻辑调整"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

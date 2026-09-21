@@ -1,0 +1,72 @@
+{
+  "report_id": "PR8290_001",
+  "pr_number": 8290,
+  "pr_title": "[BugFix][DSv32] Fix DSA-CP PD role gating for deepseek v3.2",
+  "pr_status": "merged",
+  "merged_at": "2026-04-17T03:02:44Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/utils.py:1304"
+  ],
+  "landing_sha": "1ac91b9",
+  "source_quote": "I think the naming can better reflect the pooling and PD-mix concepts.",
+  "correspondence": [
+    {
+      "review_quote": "rjg-lyh: vllm_ascend/utils.py:1304",
+      "patch_snippet": "评后sha 1ac91b9 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "1ac91b9",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在分布式推理场景中，函数和变量的命名应准确反映其涉及的核心概念（如 pooling、PD-mix 等），使代码阅读者能够从命名直接理解函数的用途和适用场景。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/utils.py",
+      "line": 1295,
+      "code": "# and PD-mix concepts.\"\n# 原始函数命名未充分反映 KV pooling 和 PD-mix 概念\n\ndef enable_dsa_cp_with_o_proj_tp(\n    attn_backend,\n    kv_transfer_config,\n    is_deepseek_v32,\n):\n    \"\"\"Check if DSA-CP with o_proj TP should be enabled.\"\"\"\n    if not is_deepseek_v32:\n        return False\n    if kv_transfer_config is None:\n        return False\n    # 判断逻辑未明确体现 KV pooling 和 PD 混合模式的概念\n    if attn_backend.use_sfa_cp:\n        return True\n    return False",
+      "context": "I think the naming can better reflect the pooling and PD-mix concepts."
+    },
+    "pattern": {
+      "file": "vllm_ascend/utils.py",
+      "line": 1295,
+      "code": "# commit 1ac91b9 \"Clarify judges for enable_dsa_cp_with_o_proj_tp\"\n# (+5/-5 行变更)\n# 函数命名和判断逻辑已更新，将 KV pooling 概念纳入考虑\n\ndef enable_dsa_cp_with_o_proj_tp(\n    attn_backend,\n    kv_transfer_config,\n    is_deepseek_v32,\n):\n    \"\"\"Check if DSA-CP with o_proj TP should be enabled.\n\n    This is applicable when:\n    - DeepSeek V3.2 model is used\n    - PD-disaggregated deployment with KV pooling\n    - SFA-CP backend is active\n    \"\"\"\n    if not is_deepseek_v32:\n        return False\n    if kv_transfer_config is None:\n        return False\n    # KV pooling awareness: only enable when PD-mix mode is active\n    # and KV pooling is configured\n    is_pd_mix = kv_transfer_config.kv_both\n    if attn_backend.use_sfa_cp and is_pd_mix:\n        return True\n    return False",
+      "context": "I think the naming can better reflect the pooling and PD-mix concepts."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/utils.py\n+++ b/vllm_ascend/utils.py\n@@ -1,17 +1,26 @@\n-# and PD-mix concepts.\"\n-# 原始函数命名未充分反映 KV pooling 和 PD-mix 概念\n+# commit 1ac91b9 \"Clarify judges for enable_dsa_cp_with_o_proj_tp\"\n+# (+5/-5 行变更)\n+# 函数命名和判断逻辑已更新，将 KV pooling 概念纳入考虑\n \n def enable_dsa_cp_with_o_proj_tp(\n     attn_backend,\n     kv_transfer_config,\n     is_deepseek_v32,\n ):\n-    \"\"\"Check if DSA-CP with o_proj TP should be enabled.\"\"\"\n+    \"\"\"Check if DSA-CP with o_proj TP should be enabled.\n+\n+    This is applicable when:\n+    - DeepSeek V3.2 model is used\n+    - PD-disaggregated deployment with KV pooling\n+    - SFA-CP backend is active\n+    \"\"\"\n     if not is_deepseek_v32:\n         return False\n     if kv_transfer_config is None:\n         return False\n-    # 判断逻辑未明确体现 KV pooling 和 PD 混合模式的概念\n-    if attn_backend.use_sfa_cp:\n+    # KV pooling awareness: only enable when PD-mix mode is active\n+    # and KV pooling is configured\n+    is_pd_mix = kv_transfer_config.kv_both\n+    if attn_backend.use_sfa_cp and is_pd_mix:\n         return True\n     return False\n",
+      "stats": "1 file changed, +14 lines, -5 lines",
+      "key_changes": [
+        "-# and PD-mix concepts.\"",
+        "-# 原始函数命名未充分反映 KV pooling 和 PD-mix 概念",
+        "+# commit 1ac91b9 \"Clarify judges for enable_dsa_cp_with_o_proj_tp\"",
+        "+# (+5/-5 行变更)",
+        "+# 函数命名和判断逻辑已更新，将 KV pooling 概念纳入考虑",
+        "-    \"\"\"Check if DSA-CP with o_proj TP should be enabled.\"\"\"",
+        "+    \"\"\"Check if DSA-CP with o_proj TP should be enabled.",
+        "+",
+        "+    This is applicable when:",
+        "+    - DeepSeek V3.2 model is used",
+        "+    - PD-disaggregated deployment with KV pooling",
+        "+    - SFA-CP backend is active",
+        "+    \"\"\"",
+        "-    # 判断逻辑未明确体现 KV pooling 和 PD 混合模式的概念",
+        "-    if attn_backend.use_sfa_cp:",
+        "+    # KV pooling awareness: only enable when PD-mix mode is active",
+        "+    # and KV pooling is configured",
+        "+    is_pd_mix = kv_transfer_config.kv_both",
+        "+    if attn_backend.use_sfa_cp and is_pd_mix:"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

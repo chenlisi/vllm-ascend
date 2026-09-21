@@ -1,0 +1,57 @@
+{
+  "report_id": "PR13069_001",
+  "pr_number": 13069,
+  "pr_title": "[Feature][MRV2] SFA model runner v2 adaptation",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/v2/model_states/default.py:73"
+  ],
+  "landing_sha": "196cb01",
+  "source_quote": "In eager mode or piecewise CUDA graphs, `num_tokens` is set to the unpadded `input_batch.num_tokens`. Passing the unconditionally padded `input_batch.num_tokens_after_padding` as `num_input_tokens` can cause inconsistencies and potential out-of-bounds errors in the attention metadata builder. Pass `num_tokens` instead, which is already correctly set based on the execution mode.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/worker/v2/model_states/default.py:73",
+      "patch_snippet": "评后sha 196cb01 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "196cb01",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 attention metadata 构建中，`num_input_tokens` 应使用与当前执行模式（eager/cudagraph）一致的未 padding 的 `num_tokens`，而非无条件使用 padding 后的 `num_tokens_after_padding`，以避免越界错误。",
+    "context": "",
+    "checkpoints": [
+      "检查 attention metadata builder 的参数是否使用了 `num_tokens_after_padding`",
+      "确认 `num_tokens` 是否已根据执行模式正确设置",
+      "避免对同一参数重复赋值（duplicate assignment）"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/v2/model_states/default.py",
+      "line": 60,
+      "code": "class DefaultModelState:\n    \"\"\"Default model state for Ascend MRV2.\"\"\"\n\n    def prepare_attn(\n        self,\n        input_batch: InputBatch,\n        ...\n    ) -> dict[str, Any]:\n        \"\"\"Prepare attention metadata for the current step.\"\"\"\n        num_tokens = input_batch.num_tokens  # eager/piecewise: unpadded\n        # ...\n        attn_metadata = self.attn_metadata_builder.build(\n            common_prefix_len=0,\n            common_attn_metadata=common_attn_metadata,\n            seq_lens_np=input_batch.seq_lens_np,\n            num_input_tokens=input_batch.num_tokens_after_padding,  # ❌ 无条件使用 padding 后的值\n            positions=input_batch.positions,\n            ...\n        )\n        return attn_metadata",
+      "context": "In eager mode or piecewise CUDA graphs, `num_tokens` is set to the unpadded `input_batch.num_tokens`. Passing the unconditionally padded `input_batch.num_tokens_after_padding` as `num_input_tokens` ca"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/v2/model_states/default.py",
+      "line": 60,
+      "code": "class DefaultModelState:\n    \"\"\"Default model state for Ascend MRV2.\"\"\"\n\n    def prepare_attn(\n        self,\n        input_batch: InputBatch,\n        ...\n    ) -> dict[str, Any]:\n        \"\"\"Prepare attention metadata for the current step.\"\"\"\n        num_tokens = input_batch.num_tokens  # eager/piecewise: unpadded\n        # ...\n        # ✅ num_input_tokens 行已移除 — 正确值已在别处用 num_tokens 设置\n        # commit 196cb01 的 message: \"remove duplicate num_input_tokens\"\n        attn_metadata = self.attn_metadata_builder.build(\n            common_prefix_len=0,\n            common_attn_metadata=common_attn_metadata,\n            seq_lens_np=input_batch.seq_lens_np,\n            positions=input_batch.positions,\n            ...\n        )\n        return attn_metadata",
+      "context": "✅ num_input_tokens 行已移除 — 正确值已在别处用 num_tokens 设置 commit 196cb01 的 message: \"remove duplicate num_input_tokens\""
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/v2/model_states/default.py\n+++ b/vllm_ascend/worker/v2/model_states/default.py\n@@ -9,11 +9,12 @@\n         \"\"\"Prepare attention metadata for the current step.\"\"\"\n         num_tokens = input_batch.num_tokens  # eager/piecewise: unpadded\n         # ...\n+        # ✅ num_input_tokens 行已移除 — 正确值已在别处用 num_tokens 设置\n+        # commit 196cb01 的 message: \"remove duplicate num_input_tokens\"\n         attn_metadata = self.attn_metadata_builder.build(\n             common_prefix_len=0,\n             common_attn_metadata=common_attn_metadata,\n             seq_lens_np=input_batch.seq_lens_np,\n-            num_input_tokens=input_batch.num_tokens_after_padding,  # ❌ 无条件使用 padding 后的值\n             positions=input_batch.positions,\n             ...\n         )\n",
+      "stats": "1 file changed, +2 lines, -1 lines",
+      "key_changes": [
+        "移除: num_input_tokens=input_batch.num_tokens_after_padding,  # ❌ 无条件使用 padding 后的值"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

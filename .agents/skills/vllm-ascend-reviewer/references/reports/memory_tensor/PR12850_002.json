@@ -1,0 +1,56 @@
+{
+  "report_id": "PR12850_002",
+  "pr_number": 12850,
+  "pr_title": "[Feature] Add RoPE switch support to MLA preprocess",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "csrc/mla_preprocess/mla_preprocess_torch_adpt.h:101"
+  ],
+  "landing_sha": "62ee94d",
+  "source_quote": "Using `wuk.size(2)` directly assumes that `wuk` is always a 3D tensor. If `wuk` is 2D (e.g., in folded weight configurations), this will throw a `c10::Error` (Dimension out of range) and crash execution. Since `kv_lora_rank` is always the last dimension of `wuk`, using `wuk.size(-1)` is much safer and works robustly for both 2D and 3D tensor representations.",
+  "correspondence": [
+    {
+      "review_quote": "gemini-code-assist[bot]: csrc/mla_preprocess/mla_preprocess_torch_adpt.h:101",
+      "patch_snippet": "评后sha 62ee94d 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "62ee94d",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "访问张量特定维度时，若该维度始终为最后一维，应使用负索引 `size(-1)` 而非绝对索引 `size(N)`，避免张量秩变化时越界崩溃。",
+    "context": "",
+    "checkpoints": [
+      "检查 `tensor.size(N)` 是否假定张量固定秩数",
+      "若目标维度始终为最后一维，改用 `tensor.size(-1)`"
+    ],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "torch::Tensor mla_preprocess_torch(\n    torch::Tensor q, torch::Tensor kv_lora,\n    torch::Tensor wuk, torch::Tensor wv,\n    torch::Tensor kv_cache_rope,\n    int64_t num_heads, int64_t head_dim) {\n\n    // wuk: weight matrix for KV LoRA projection\n    // kv_cache_rope: RoPE cache tensor\n    int64_t kvLoraRank = wuk.size(2);      // 假定 wuk 始终 3D，2D folded weight 会崩溃\n    int64_t qkRopeHeadDim = kv_cache_rope.size(-1);  // 已用负索引，安全\n    int64_t batchSize = q.size(0);\n    int64_t seqLen = q.size(1);\n\n    // KV LoRA projection: q @ wuk -> kv_lora_proj\n    auto kv_lora_proj = torch::matmul(q, wuk.reshape({-1, kvLoraRank}));\n    ...\n}",
+      "context": "修改前代码 (cpp)"
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "torch::Tensor mla_preprocess_torch(\n    torch::Tensor q, torch::Tensor kv_lora,\n    torch::Tensor wuk, torch::Tensor wv,\n    torch::Tensor kv_cache_rope,\n    int64_t num_heads, int64_t head_dim) {\n\n    // wuk: weight matrix for KV LoRA projection\n    // kv_cache_rope: RoPE cache tensor\n    int64_t kvLoraRank = wuk.size(-1);     // 负索引，2D/3D 均安全\n    int64_t qkRopeHeadDim = kv_cache_rope.size(-1);  // 已用负索引，安全\n    int64_t batchSize = q.size(0);\n    int64_t seqLen = q.size(1);\n\n    // KV LoRA projection: q @ wuk -> kv_lora_proj\n    auto kv_lora_proj = torch::matmul(q, wuk.reshape({-1, kvLoraRank}));\n    ...\n}",
+      "context": "修改后代码 (cpp)"
+    },
+    "diff": {
+      "unified": "--- a/file\n+++ b/file\n@@ -6,7 +6,7 @@\n \n     // wuk: weight matrix for KV LoRA projection\n     // kv_cache_rope: RoPE cache tensor\n-    int64_t kvLoraRank = wuk.size(2);      // 假定 wuk 始终 3D，2D folded weight 会崩溃\n+    int64_t kvLoraRank = wuk.size(-1);     // 负索引，2D/3D 均安全\n     int64_t qkRopeHeadDim = kv_cache_rope.size(-1);  // 已用负索引，安全\n     int64_t batchSize = q.size(0);\n     int64_t seqLen = q.size(1);",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "cpp",
+    "_status": "pending_llm_extract"
+  }
+}

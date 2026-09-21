@@ -1,0 +1,58 @@
+{
+  "report_id": "PR4409_001",
+  "pr_number": 4409,
+  "pr_title": "[CI]Install clang in dokerfile for triton ascend",
+  "pr_status": "merged",
+  "merged_at": "2026-01-22T11:01:28Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "Dockerfile:64",
+    "Dockerfile.a3:63"
+  ],
+  "landing_sha": "05822ea",
+  "source_quote": "Using `bash .sh` in a Dockerfile is not a good idea. For clarity, please write the contents of the `.sh` file directly in the Dockerfile.",
+  "correspondence": [
+    {
+      "review_quote": "wxsIcey 指出 Using `bash .sh` in a Dockerfile is not a good idea. For clarity, please write the contents of the `.sh` file directly i。作者通过 commit `05822ea` 进行了修改，2/5 条建议落地。",
+      "patch_snippet": "commit `05822ea`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "05822ea",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "Using `bash .sh` in a Dockerfile is not a good idea. For clarity, please write the contents of the `.sh` file directly in the Dockerfile.",
+    "context": "",
+    "checkpoints": [
+      "Dockerfile 中避免使用 `bash .sh` 方式执行脚本",
+      "检查 Docker RUN 层中环境变量设置是否生效",
+      "在 Dockerfile 中直接写入命令而非调用外部脚本",
+      "确保 Docker RUN 层中每步操作清晰可追溯"
+    ],
+    "antipattern": {
+      "file": "Dockerfile",
+      "line": 64,
+      "code": "",
+      "context": "Using `bash .sh` in a Dockerfile is not a good idea. For clarity, please write the contents of the `.sh` file directly in the Dockerfile."
+    },
+    "pattern": {
+      "file": "Dockerfile",
+      "line": 64,
+      "code": "",
+      "context": "Using `bash .sh` in a Dockerfile is not a good idea. For clarity, please write the contents of the `.sh` file directly in the Dockerfile."
+    },
+    "diff": {
+      "unified": "",
+      "stats": "1 file changed, +0 lines, -0 lines",
+      "key_changes": []
+    },
+    "language": "sh",
+    "_status": "extracted"
+  }
+}

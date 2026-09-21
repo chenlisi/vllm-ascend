@@ -1,0 +1,55 @@
+{
+  "report_id": "PR7371_001",
+  "pr_number": 7371,
+  "pr_title": "[doc] add doc for Kimi-K2.5.md",
+  "pr_status": "merged",
+  "merged_at": "2026-03-18T07:10:42Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/models/Kimi-K2.5.md:103"
+  ],
+  "landing_sha": "88f227e",
+  "source_quote": "MengqingCao 建议设置 `OMP_NUM_THREADS=1`，与 PR #7296 相同的文档规范建议。",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 建议设置 `OMP_NUM_THREADS=1` 并对文档工作表示感谢。作者通过 commit `88f227e` 采纳了该建议，2/2 建议全部落地。",
+      "patch_snippet": "commit `88f227e`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "88f227e",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "所有模型部署文档在启动推理服务前应统一设置 `export OMP_NUM_THREADS=1`，这是项目文档规范的一部分（参见 PR #7296 和 PR #7371 的评审实践）。",
+    "context": "",
+    "checkpoints": [
+      "模型部署文档中是否包含 `export OMP_NUM_THREADS=1`",
+      "环境变量设置是否在启动命令之前"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/Kimi-K2.5.md",
+      "line": 95,
+      "code": "",
+      "context": "MengqingCao 建议设置 `OMP_NUM_THREADS=1`，与 PR #7296 相同的文档规范建议。"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/Kimi-K2.5.md",
+      "line": 103,
+      "code": "export OMP_NUM_THREADS=1",
+      "context": "MengqingCao 建议设置 `OMP_NUM_THREADS=1`，与 PR #7296 相同的文档规范建议。"
+    },
+    "diff": {
+      "unified": "",
+      "stats": "1 file changed, +0 lines, -0 lines",
+      "key_changes": []
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

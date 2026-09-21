@@ -1,0 +1,57 @@
+{
+  "report_id": "PR12262_001",
+  "pr_number": 12262,
+  "pr_title": "[BugFix][GLM-5.2][SpecDecode] Fix DSpark W8A8 eager acceptance",
+  "pr_status": "merged",
+  "dimension": [
+    "test"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/models/qwen3_dspark.py:34"
+  ],
+  "landing_sha": "7c6b9d0",
+  "source_quote": "`load_weights` can have a ut.",
+  "correspondence": [
+    {
+      "review_quote": "drslark: vllm_ascend/models/qwen3_dspark.py:34",
+      "patch_snippet": "评后sha 7c6b9d0 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "7c6b9d0",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "当模型重写 `load_weights` 并加入自定义预处理（如 QuaRot 矩阵乘、量化重排）时，应补充纯 CPU 可运行的 UT，覆盖：被处理分支（如 FC）是否正确变换、旁路分支（如 embed_tokens）是否原样保留、外部依赖调用参数是否正确。",
+    "context": "",
+    "checkpoints": [
+      "检查模型子类是否 override `load_weights` / 类似 hook",
+      "若有 override，是否有 UT 验证其自定义逻辑（不是只测父类被调用）",
+      "UT 应能在无 GPU/无真实权重下运行（使用 Mock + `__new__` 绕过构造器或最小构造）"
+    ],
+    "antipattern": {
+      "file": "tests/ut/model_executor/test_qwen3_dspark.py",
+      "line": 0,
+      "code": "# 文件不存在或为空\n# drslark 此前要求删除整个 UT 文件，作者已在 commit d9cd4b1 中执行删除\n# 随后 drslark 自我纠正：\"My mistake, some ut could have been retained\"\n# 并点名 load_weights 可以保留/补充 UT",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "tests/ut/model_executor/test_qwen3_dspark.py",
+      "line": 1,
+      "code": "import torch\nfrom unittest.mock import patch\nfrom vllm_ascend.models import qwen3_dspark\n\n\ndef test_load_weights_rotates_only_fc_weights() -> None:\n    \"\"\"Rotate FC weights and preserve all other weights before delegation.\"\"\"\n    model_cls = qwen3_dspark.AscendQwen3DSparkForCausalLM\n    model = model_cls.__new__(model_cls)\n    rotation_path = \"quarot.safetensors\"\n    object.__setattr__(model, \"rotation_path\", rotation_path)\n\n    rotation_matrix = torch.tensor([[0.0, 1.0], [1.0, 0.0]])\n    fc_weight = torch.tensor([[1.0, 2.0], [3.0, 4.0]])\n    non_fc_weight = torch.tensor([[5.0, 6.0]])\n    weights_to_load = [(\"model.fc.weight\", fc_weight),\n                       (\"model.embed_tokens.weight\", non_fc_weight)]\n    expected_fc_weight = torch.matmul(fc_weight, rotation_matrix)\n\n    with (\n        patch.object(qwen3_dspark, \"get_rotataion_matrix\",\n                     return_value=rotation_matrix),\n        patch.object(qwen3_dspark.Qwen3DSparkForCausalLM, \"load_weights\")\n        as mock_parent_load_weights,\n    ):\n        model.load_weights(weights_to_load)\n\n    mock_get_rotation_matrix.assert_called_once_with(rotation_path)\n    mock_parent_load_weights.assert_called_once()\n    processed_weights = mock_parent_load_weights.call_args.args[0]\n    torch.testing.assert_close(processed_weights[0][1], expected_fc_weight)\n    torch.testing.assert_close(processed_weights[1][1], non_fc_weight)",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/tests/ut/model_executor/test_qwen3_dspark.py\n+++ b/tests/ut/model_executor/test_qwen3_dspark.py\n@@ -1,4 +1,32 @@\n-# 文件不存在或为空\n-# drslark 此前要求删除整个 UT 文件，作者已在 commit d9cd4b1 中执行删除\n-# 随后 drslark 自我纠正：\"My mistake, some ut could have been retained\"\n-# 并点名 load_weights 可以保留/补充 UT\n+import torch\n+from unittest.mock import patch\n+from vllm_ascend.models import qwen3_dspark\n+\n+\n+def test_load_weights_rotates_only_fc_weights() -> None:\n+    \"\"\"Rotate FC weights and preserve all other weights before delegation.\"\"\"\n+    model_cls = qwen3_dspark.AscendQwen3DSparkForCausalLM\n+    model = model_cls.__new__(model_cls)\n+    rotation_path = \"quarot.safetensors\"\n+    object.__setattr__(model, \"rotation_path\", rotation_path)\n+\n+    rotation_matrix = torch.tensor([[0.0, 1.0], [1.0, 0.0]])\n+    fc_weight = torch.tensor([[1.0, 2.0], [3.0, 4.0]])\n+    non_fc_weight = torch.tensor([[5.0, 6.0]])\n+    weights_to_load = [(\"model.fc.weight\", fc_weight),\n+                       (\"model.embed_tokens.weight\", non_fc_weight)]\n+    expected_fc_weight = torch.matmul(fc_weight, rotation_matrix)\n+\n+    with (\n+        patch.object(qwen3_dspark, \"get_rotataion_matrix\",\n+                     return_value=rotation_matrix),\n+        patch.object(qwen3_dspark.Qwen3DSparkForCausalLM, \"load_weights\")\n+        as mock_parent_load_weights,\n+    ):\n+        model.load_weights(weights_to_load)\n+\n+    mock_get_rotation_matrix.assert_called_once_with(rotation_path)\n+    mock_parent_load_weights.assert_called_once()\n+    processed_weights = mock_parent_load_weights.call_args.args[0]\n+    torch.testing.assert_close(processed_weights[0][1], expected_fc_weight)\n+    torch.testing.assert_close(processed_weights[1][1], non_fc_weight)",
+      "stats": "1 file changed, +32 lines, -4 lines",
+      "key_changes": [
+        "修改代码逻辑"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

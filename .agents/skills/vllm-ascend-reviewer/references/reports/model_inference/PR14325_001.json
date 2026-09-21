@@ -1,0 +1,57 @@
+{
+  "report_id": "PR14325_001",
+  "pr_number": 14325,
+  "pr_title": "[Doc][Feature] Add Qwen3.8-27B tutorial",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/models/Qwen3.8-27B.md:178"
+  ],
+  "landing_sha": "92676c3",
+  "source_quote": "Why not enable APC?",
+  "correspondence": [
+    {
+      "review_quote": "docs/source/tutorials/models/Qwen3.8-27B.md:178",
+      "patch_snippet": "评后sha 92676c3 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "92676c3",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "对于存在大量重复前缀的推理场景（如多请求共享相同 system prompt 的对话部署），部署教程应推荐启用 APC（`--enable-prefix-caching`），而非显式关闭或忽略，以提升吞吐并降低 TTFT。",
+    "context": "",
+    "checkpoints": [
+      "检查部署教程是否显式设置 `--no-enable-prefix-caching`（通常应移除）",
+      "检查 APC 在该模型/场景下是否适用（如多请求共享前缀的对话场景）",
+      "检查文档中是否对 APC 参数的作用有说明"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/Qwen3.8-27B.md",
+      "line": 178,
+      "code": "# docs/source/tutorials/models/Qwen3.8-27B.md (commit 93d59bc 后)\n        --trust-remote-code \\\n        --gpu-memory-utilization 0.85 \\\n        --speculative-config '{\"method\": \"qwen3_5_mtp\", \"num_speculative_tokens\": 3, \"enforce_eager\": true}' \\",
+      "context": "docs/source/tutorials/models/Qwen3.8-27B.md (commit 93d59bc 后)"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/Qwen3.8-27B.md",
+      "line": 178,
+      "code": "# docs/source/tutorials/models/Qwen3.8-27B.md\n        --trust-remote-code \\\n        --enable-prefix-caching \\\n        --gpu-memory-utilization 0.85 \\\n        --speculative-config '{\"method\": \"qwen3_5_mtp\", \"num_speculative_tokens\": 3, \"enforce_eager\": true}' \\",
+      "context": "docs/source/tutorials/models/Qwen3.8-27B.md"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/Qwen3.8-27B.md\n+++ b/docs/source/tutorials/models/Qwen3.8-27B.md\n@@ -1,4 +1,5 @@\n-# docs/source/tutorials/models/Qwen3.8-27B.md (commit 93d59bc 后)\n+# docs/source/tutorials/models/Qwen3.8-27B.md\n         --trust-remote-code \\\n+        --enable-prefix-caching \\\n         --gpu-memory-utilization 0.85 \\\n         --speculative-config '{\"method\": \"qwen3_5_mtp\", \"num_speculative_tokens\": 3, \"enforce_eager\": true}' \\\n",
+      "stats": "1 file changed, +2 lines, -1 lines",
+      "key_changes": [
+        "新增: --enable-prefix-caching \\"
+      ]
+    },
+    "language": "sh",
+    "_status": "processed"
+  }
+}

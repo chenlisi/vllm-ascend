@@ -1,0 +1,59 @@
+{
+  "report_id": "PR13182_001",
+  "pr_number": 13182,
+  "pr_title": "[BugFix][MRV2]Fix synchronous H2D in UvaBufferWrapper fallback path",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/patch/worker/patch_v2/patch_uva.py:161"
+  ],
+  "landing_sha": "1baf58d",
+  "source_quote": "这里最好加个保护，如果_modified_indices不是连续值，fallback回原来的写法。",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/patch/worker/patch_v2/patch_uva.py:161",
+      "patch_snippet": "评后sha 1baf58d 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "1baf58d",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当性能优化依赖于对数据布局的隐含假设（如连续性、有序性）时，必须添加显式检查并在假设不满足时回退到安全路径。",
+    "context": "",
+    "checkpoints": [
+      "识别优化路径是否依赖隐含假设（如索引连续、数据有序、shape 固定）",
+      "添加显式条件检查验证假设",
+      "提供安全 fallback 路径处理非预期情况"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/patch/worker/patch_v2/patch_uva.py",
+      "line": 150,
+      "code": "class UvaBufferWrapper:\n    \"\"\"Wrapper for UVA buffer with async H2D copy.\"\"\"\n\n    def __init__(self, uva_tensor, cpu_tensor):\n        self._uva = uva_tensor\n        self._cpu = cpu_tensor\n        self._modified_indices: list[int] = []\n\n    def flush(self):\n        \"\"\"Flush modified CPU rows to NPU via async copy.\"\"\"\n        if not self._modified_indices:\n            return\n        # ❌ 隐含假设：_modified_indices 总是 [0..n-1]\n        # 若出现非连续修改，[:n] 会复制错误的数据\n        n = len(self._modified_indices)\n        self._uva[:n].copy_(self._cpu[:n], non_blocking=True)\n        self._modified_indices.clear()",
+      "context": "❌ 隐含假设：_modified_indices 总是 [0..n-1] 若出现非连续修改，[:n] 会复制错误的数据"
+    },
+    "pattern": {
+      "file": "vllm_ascend/patch/worker/patch_v2/patch_uva.py",
+      "line": 150,
+      "code": "class UvaBufferWrapper:\n    \"\"\"Wrapper for UVA buffer with async H2D copy.\"\"\"\n\n    def __init__(self, uva_tensor, cpu_tensor):\n        self._uva = uva_tensor\n        self._cpu = cpu_tensor\n        self._modified_indices: list[int] = []\n\n    def flush(self):\n        \"\"\"Flush modified CPU rows to NPU via async copy.\"\"\"\n        if not self._modified_indices:\n            return\n        # ✅ 显式检查连续性，不满足时 fallback 到 indexed copy\n        dirty_rows = sorted(self._modified_indices)\n        n_dirty = len(dirty_rows)\n        if dirty_rows[0] == 0 and dirty_rows[-1] == n_dirty - 1:\n            # Common path: dirty rows are a contiguous prefix [0..n-1].\n            self._uva[:n_dirty].copy_(\n                self._cpu[:n_dirty], non_blocking=True\n            )\n        else:\n            # Sparse modification pattern — fall back to indexed copy.\n            src = self._cpu[dirty_rows].pin_memory()\n            self._uva[dirty_rows] = src.to(\n                device=\"npu\", non_blocking=True\n            )\n        self._modified_indices.clear()",
+      "context": "✅ 显式检查连续性，不满足时 fallback 到 indexed copy Common path: dirty rows are a contiguous prefix [0..n-1]. Sparse modification pattern — fall back to indexed copy."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/patch/worker/patch_v2/patch_uva.py\n+++ b/vllm_ascend/patch/worker/patch_v2/patch_uva.py\n@@ -10,8 +10,18 @@\n         \"\"\"Flush modified CPU rows to NPU via async copy.\"\"\"\n         if not self._modified_indices:\n             return\n-        # ❌ 隐含假设：_modified_indices 总是 [0..n-1]\n-        # 若出现非连续修改，[:n] 会复制错误的数据\n-        n = len(self._modified_indices)\n-        self._uva[:n].copy_(self._cpu[:n], non_blocking=True)\n+        # ✅ 显式检查连续性，不满足时 fallback 到 indexed copy\n+        dirty_rows = sorted(self._modified_indices)\n+        n_dirty = len(dirty_rows)\n+        if dirty_rows[0] == 0 and dirty_rows[-1] == n_dirty - 1:\n+            # Common path: dirty rows are a contiguous prefix [0..n-1].\n+            self._uva[:n_dirty].copy_(\n+                self._cpu[:n_dirty], non_blocking=True\n+            )\n+        else:\n+            # Sparse modification pattern — fall back to indexed copy.\n+            src = self._cpu[dirty_rows].pin_memory()\n+            self._uva[dirty_rows] = src.to(\n+                device=\"npu\", non_blocking=True\n+            )\n         self._modified_indices.clear()\n",
+      "stats": "1 file changed, +14 lines, -4 lines",
+      "key_changes": [
+        "移除: self._uva[:n].copy_(self._cpu[:n], non_blocking=True)",
+        "新增: device=\"npu\", non_blocking=True",
+        "新增: self._uva[dirty_rows] = src.to("
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "report_id": "PR14254_002",
+  "pr_number": 14254,
+  "pr_title": "[BugFix][KV Offload] Normalize aligned Mamba state block transfer",
+  "pr_status": "merged",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py:851"
+  ],
+  "landing_sha": "ede8aaf",
+  "source_quote": "Could we add a short comment here? Hybrid Mamba on Ascend does not support all mode, so these branches are really distinguishing prefix caching (align) from no prefix caching (none), rather than selecting between cache modes.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py:851",
+      "patch_snippet": "评后sha ede8aaf 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "ede8aaf",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当 `if config.mode == \"A\": ... else: ...` 这类分支的语义不是字面上的\"切换模式\"，而是映射到更具体的业务行为（如 `align` → prefix caching、`none` → no prefix caching、且某些模式如 `all` 不支持），必须在分支上方加注释说明模式与实际行为的映射关系，以及不支持哪些模式。避免后续维护者按字面意思误读分支语义。",
+    "context": "",
+    "checkpoints": [
+      "识别 `if config.<mode_field> == \"<value>\":` 分支，确认 `value` 是否与实际业务行为存在非直觉映射",
+      "若模式值与业务行为不是 1:1 同义（如 `align` 实际指 prefix caching 而非\"对齐\"本身），加注释说明映射",
+      "显式列出不支持的模式值（如 `all` 不支持），避免维护者误用",
+      "若模式影响数据形状/长度语义，配套测试用真实形状（如 1 running + N speculative 块）验证分支行为"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py",
+      "line": 851,
+      "code": "# vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py\n            else:\n                if self.mamba_cache_mode == \"align\":\n                    if len(remote_group_block_ids) != 1:\n                        raise RuntimeError(...)\n                    remote_state_block_id = remote_group_block_ids[0]\n                else:\n                    transfer_block_idx = len(remote_group_block_ids) - self.num_speculative_tokens - 1\n                    ...",
+      "context": "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py"
+    },
+    "pattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py",
+      "line": 851,
+      "code": "# vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py\n            else:\n                # Ascend Hybrid Mamba supports \"align\" (prefix caching) and\n                # \"none\" (no prefix caching), but not \"all\".\n                if self.mamba_cache_mode == \"align\":\n                    if len(remote_group_block_ids) != 1:\n                        raise RuntimeError(...)\n                    remote_state_block_id = remote_group_block_ids[0]\n                else:\n                    transfer_block_idx = len(remote_group_block_ids) - self.num_speculative_tokens - 1\n                    ...",
+      "context": "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py Ascend Hybrid Mamba supports \"align\" (prefix caching) and \"none\" (no prefix caching), but not \"all\"."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py\n+++ b/vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py\n@@ -1,5 +1,7 @@\n # vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py\n             else:\n+                # Ascend Hybrid Mamba supports \"align\" (prefix caching) and\n+                # \"none\" (no prefix caching), but not \"all\".\n                 if self.mamba_cache_mode == \"align\":\n                     if len(remote_group_block_ids) != 1:\n                         raise RuntimeError(...)\n",
+      "stats": "1 file changed, +2 lines, -0 lines",
+      "key_changes": [
+        "代码结构或逻辑调整"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

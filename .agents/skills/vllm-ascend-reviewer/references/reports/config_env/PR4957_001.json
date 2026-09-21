@@ -1,0 +1,56 @@
+{
+  "report_id": "PR4957_001",
+  "pr_number": 4957,
+  "pr_title": "[Doc] Upgrade outdated doc",
+  "pr_status": "merged",
+  "merged_at": "2025-12-12T07:38:30Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/user_guide/feature_guide/sleep_mode.md:44"
+  ],
+  "landing_sha": "befde14",
+  "source_quote": "+1（赞同 gemini 的建议：环境变量键名应使用字符串字面量 `\"VLLM_ASCEND_ENABLE_NZ\"` 而非未定义的变量）",
+  "correspondence": [
+    {
+      "review_quote": "gemini 指出文档示例代码中环境变量键名使用了未定义变量，应改为字符串字面量 `\"VLLM_ASCEND_ENABLE_NZ\"`。wangxiyuan 表示赞同（+1）。作者通过 commit `befde14` fix typo 修复，1/1 建议已处理。",
+      "patch_snippet": "commit `befde14`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "befde14",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "文档中的示例代码必须是可运行的，环境变量键名等必须使用字符串字面量而非未定义的变量名。",
+    "context": "",
+    "checkpoints": [
+      "文档示例代码中的环境变量键名是否使用字符串字面量（如 `\"VLLM_ASCEND_ENABLE_NZ\"`）",
+      "文档示例代码是否可以直接复制运行而不产生 `NameError`",
+      "文档中的 import 路径和环境变量设置是否与当前版本一致"
+    ],
+    "antipattern": {
+      "file": "docs/source/user_guide/feature_guide/sleep_mode.md",
+      "line": 38,
+      "code": "",
+      "context": "wangxiyuan: +1（赞同 gemini 的建议：环境变量键名应使用字符串字面量 `\"VLLM_ASCEND_ENABLE_NZ\"` 而非未定义的变量）"
+    },
+    "pattern": {
+      "file": "docs/source/user_guide/feature_guide/sleep_mode.md",
+      "line": 44,
+      "code": "# Sleep Mode 使用示例\n\n```python\nimport os\n\n# 配置 sleep mode 相关环境变量\nos.environ[\"VLLM_ASCEND_ENABLE_SLEEP_MODE\"] = \"1\"\n# 错误：VLLM_ASCEND_ENABLE_NZ 未定义为变量，会导致 NameError\nos.environ[VLLM_ASCEND_ENABLE_NZ] = \"0\"\n\nfrom vllm import LLM\nllm = LLM(model=\"...\")",
+      "context": "wangxiyuan: +1（赞同 gemini 的建议：环境变量键名应使用字符串字面量 `\"VLLM_ASCEND_ENABLE_NZ\"` 而非未定义的变量）"
+    },
+    "diff": {
+      "unified": "",
+      "stats": "1 file changed, +0 lines, -0 lines",
+      "key_changes": []
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

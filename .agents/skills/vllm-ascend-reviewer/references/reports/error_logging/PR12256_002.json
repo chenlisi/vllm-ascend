@@ -1,0 +1,58 @@
+{
+  "report_id": "PR12256_002",
+  "pr_number": 12256,
+  "pr_title": "[Feature] add synthetic mode for speculative decode",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/sample/rejection_sampler.py:500"
+  ],
+  "landing_sha": "4d7d506",
+  "source_quote": "Raise error instead? Maybe users will incorrectly use them. But, more importantly, I think the `using_block_verify` and `using_entropy_verify` flags are also weird. Why do we judge them in runtime instead of `__init__`? That makes your runtime modification `using_block_verify = False` become weird, too.",
+  "correspondence": [
+    {
+      "review_quote": "slippersss: vllm_ascend/sample/rejection_sampler.py:500",
+      "patch_snippet": "评后sha 4d7d506 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "4d7d506",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当两个模式/标志/配置在实现层面语义互斥（例如 synthetic 要求 first-reject 逐 token，但 block_verify 走 cumprod 联合；又如 `--pipeline-parallel-size > 1` + `--single-device`）时，**不得**在运行时静默把某一方\"强制覆盖为 False / 默认值\"。若降级是安全的（语义能保持一致、只是性能下降），也必须在改 flag 前用 `logger.warning_once` 明确告知用户：\"你配的 A 与 B 冲突，已自动把 A 降级为 X\"。若降级不可安全推导（可能静默出错或行为不可预期），应直接 `raise ValueError` 并给出解决步骤。",
+    "context": "",
+    "checkpoints": [
+      "搜索 `if FEATURE_A: flag_b = False`、`if MODE_X: cfg.enable_y = None` 这种\"在函数体中部静默改外部 / 局部 flag\"的写法",
+      "重点区域：sampler / kernel launch wrapper / engine initialization / patch 代码 (monkey patch 里经常\"如果有冲突就悄悄跳过\")",
+      "检查 raise/logger 覆盖：抛错的信息是否包含 \"what conflicted\", \"why incompatible (one line)\", \"how to fix — which flag to turn off / which alternative\" 三段",
+      "对 `using_block_verify = ... and get_config().enable_X` 这种\"每步 forward 重新 get_config\"的 bool 解析，评估是否能提至 init 级别"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/sample/rejection_sampler.py",
+      "line": 480,
+      "code": "def rejection_sample(\n    # ... 参数列表 ...\n    draft_token_ids: torch.Tensor,\n    max_spec_len: int,\n    synthetic_mode: bool,\n    # ...\n) -> torch.Tensor:\n    from vllm_ascend.config import get_ascend_config\n\n    using_block_verify = (\n        max_spec_len >= 3\n        and bool(get_ascend_config().rejection_sampler_config.enable_block_verify)\n    )\n    using_entropy_verify = bool(\n        get_ascend_config().rejection_sampler_config.enable_entropy_verify\n    )\n\n    # 静默降级：用户不知道自己的 block_verify 被关掉了\n    if synthetic_mode:\n        using_block_verify = False\n\n    if using_block_verify:\n        # block verify 路径 ...\n        return _block_verify_sample(draft_token_ids, ...)\n    elif using_entropy_verify:\n        # entropy verify 路径 ...\n        return _entropy_verify_sample(draft_token_ids, ...)\n    else:\n        # 标准随机采样路径 ...\n        return _standard_random_sample(draft_token_ids, ...)",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/sample/rejection_sampler.py",
+      "line": 480,
+      "code": "def rejection_sample(\n    # ... 参数列表 ...\n    draft_token_ids: torch.Tensor,\n    max_spec_len: int,\n    synthetic_mode: bool,\n    # ...\n) -> torch.Tensor:\n    from vllm_ascend.config import get_ascend_config\n\n    using_block_verify = (\n        max_spec_len >= 3\n        and bool(get_ascend_config().rejection_sampler_config.enable_block_verify)\n    )\n    using_entropy_verify = bool(\n        get_ascend_config().rejection_sampler_config.enable_entropy_verify\n    )\n\n    # Synthetic mode uses per-token rate acceptance with first-rejection\n    # semantics, which is incompatible with block-verify's joint (cumprod)\n    # verification. Raise error instead of silently disabling.\n    if synthetic_mode and using_block_verify:\n        raise ValueError(\n            \"synthetic_mode is incompatible with block-verify \"\n            \"(joint verification). Please disable block-verify when \"\n            \"using synthetic rejection sampling. Synthetic acceptance \"\n            \"requires the standard per-token random kernel.\"\n        )\n\n    if using_block_verify:\n        # block verify 路径 ...\n        return _block_verify_sample(draft_token_ids, ...)\n    elif using_entropy_verify:\n        # entropy verify 路径 ...\n        return _entropy_verify_sample(draft_token_ids, ...)\n    else:\n        # 标准随机采样路径 ...\n        return _standard_random_sample(draft_token_ids, ...)",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/sample/rejection_sampler.py\n+++ b/vllm_ascend/sample/rejection_sampler.py\n@@ -15,9 +15,16 @@\n         get_ascend_config().rejection_sampler_config.enable_entropy_verify\n     )\n \n-    # 静默降级：用户不知道自己的 block_verify 被关掉了\n-    if synthetic_mode:\n-        using_block_verify = False\n+    # Synthetic mode uses per-token rate acceptance with first-rejection\n+    # semantics, which is incompatible with block-verify's joint (cumprod)\n+    # verification. Raise error instead of silently disabling.\n+    if synthetic_mode and using_block_verify:\n+        raise ValueError(\n+            \"synthetic_mode is incompatible with block-verify \"\n+            \"(joint verification). Please disable block-verify when \"\n+            \"using synthetic rejection sampling. Synthetic acceptance \"\n+            \"requires the standard per-token random kernel.\"\n+        )\n \n     if using_block_verify:\n         # block verify 路径 ...",
+      "stats": "1 file changed, +10 lines, -3 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "report_id": "PR10590_001",
+  "pr_number": 10590,
+  "pr_title": "[Feature] Mooncake support hybrid attention with PCP/DCP",
+  "pr_status": "merged",
+  "merged_at": "2026-07-02T08:12:14Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py:764"
+  ],
+  "landing_sha": "d05df91",
+  "source_quote": "remote scale actually only has a few fixed values(in Qwen3.5). We can store them in a table, perform the calculation first, and then directly look up the table.",
+  "correspondence": [
+    {
+      "review_quote": "nwpu-zxr 指出 remote scale 在 Qwen3.5 等模型中只有少数固定值，建议预先计算并存储在查找表中，直接查表代替每次实时计算，从而减少运行时开销。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "d05df91",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当某个计算结果只有少数固定值且被频繁使用时，应预先计算这些值并存储在查找表中，通过查表代替实时计算，以减少运行时开销。",
+    "context": "",
+    "checkpoints": [
+      "检查是否存在频繁重复计算相同值的场景",
+      "确认计算结果的可能值集合是否有限",
+      "评估是否可以通过预计算+查表替代实时计算"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py",
+      "line": 764,
+      "code": "# （根据评审意见推断）\n# 每次传输时实时计算 remote scale，但实际只有少数固定值（如 Qwen3.5）\n    def _get_kv_split_metadata(self, req_meta, ...):\n        \"\"\"Compute KV transfer metadata for a request.\"\"\"\n        block_size = self.block_size\n        remote_block_size = req_meta[\"remote_block_size\"]\n        ...\n        # 每次传输都实时计算 remote_scale\n        # 但在 Qwen3.5 等模型中 remote_scale 实际上只有少数固定值\n        remote_scale = compute_remote_scale(block_size, remote_block_size)\n        local_block_ids = expand_local_block_ids(\n            remote_block_size, local_kernel_size,\n            local_group_block_ids, chunk_starts)\n        ...\n        return local_block_ids_list, remote_block_ids_list, remote_scale",
+      "context": "remote scale actually only has a few fixed values(in Qwen3.5). We can store them in a table, perform the calculation first, and then directly look up the table."
+    },
+    "pattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py",
+      "line": 764,
+      "code": "# （根据评审意见推断）\n# 预先计算 remote scale 的固定值并存储在查找表中，直接使用查表代替实时计算\n# 减少重复计算开销\n# remote scale 在 Qwen3.5 等模型中只有少数固定值\nREMOTE_SCALE_TABLE = {\n    (16, 8): 2.0,\n    (8, 16): 0.5,\n    (16, 16): 1.0,\n    ...\n}\n\n    def _get_kv_split_metadata(self, req_meta, ...):\n        \"\"\"Compute KV transfer metadata for a request.\"\"\"\n        block_size = self.block_size\n        remote_block_size = req_meta[\"remote_block_size\"]\n        ...\n        # 使用查找表替代实时计算\n        remote_scale = REMOTE_SCALE_TABLE.get(\n            (block_size, remote_block_size),\n            compute_remote_scale(block_size, remote_block_size))\n        local_block_ids = expand_local_block_ids(\n            remote_block_size, local_kernel_size,\n            local_group_block_ids, chunk_starts)\n        ...\n        return local_block_ids_list, remote_block_ids_list, remote_scale",
+      "context": "remote scale actually only has a few fixed values(in Qwen3.5). We can store them in a table, perform the calculation first, and then directly look up the table."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py\n+++ b/vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py\n@@ -1,13 +1,23 @@\n # （根据评审意见推断）\n-# 每次传输时实时计算 remote scale，但实际只有少数固定值（如 Qwen3.5）\n+# 预先计算 remote scale 的固定值并存储在查找表中，直接使用查表代替实时计算\n+# 减少重复计算开销\n+# remote scale 在 Qwen3.5 等模型中只有少数固定值\n+REMOTE_SCALE_TABLE = {\n+    (16, 8): 2.0,\n+    (8, 16): 0.5,\n+    (16, 16): 1.0,\n+    ...\n+}\n+\n     def _get_kv_split_metadata(self, req_meta, ...):\n         \"\"\"Compute KV transfer metadata for a request.\"\"\"\n         block_size = self.block_size\n         remote_block_size = req_meta[\"remote_block_size\"]\n         ...\n-        # 每次传输都实时计算 remote_scale\n-        # 但在 Qwen3.5 等模型中 remote_scale 实际上只有少数固定值\n-        remote_scale = compute_remote_scale(block_size, remote_block_size)\n+        # 使用查找表替代实时计算\n+        remote_scale = REMOTE_SCALE_TABLE.get(\n+            (block_size, remote_block_size),\n+            compute_remote_scale(block_size, remote_block_size))\n         local_block_ids = expand_local_block_ids(\n             remote_block_size, local_kernel_size,\n             local_group_block_ids, chunk_starts)",
+      "stats": "1 file changed, +14 lines, -4 lines",
+      "key_changes": [
+        "移除: # 每次传输时实时计算 remote scale，但实际只有少数固定值（如 Qwen3.5）",
+        "新增: # 预先计算 remote scale 的固定值并存储在查找表中，直接使用查表代替实时计算",
+        "新增: # 减少重复计算开销",
+        "新增: # remote scale 在 Qwen3.5 等模型中只有少数固定值",
+        "新增: REMOTE_SCALE_TABLE = {",
+        "新增: (16, 8): 2.0,",
+        "新增: (8, 16): 0.5,",
+        "新增: (16, 16): 1.0,",
+        "新增: ...",
+        "新增: }"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

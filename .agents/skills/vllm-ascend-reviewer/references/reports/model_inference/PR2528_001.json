@@ -1,0 +1,75 @@
+{
+  "report_id": "PR2528_001",
+  "pr_number": 2528,
+  "pr_title": "[Feat]attention add sliding windows size",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/attention_v1.py:313",
+    "vllm_ascend/attention/attention_v1.py:274",
+    "vllm_ascend/attention/attention_v1.py:271",
+    "tests/ut/attention/test_attention_v1.py:458"
+  ],
+  "landing_sha": "60c94f3",
+  "source_quote": "Does this operator support chunked prefill? It seems like a limit support on swa\nthe unpack of hidden_states.shape should contains batch, which means `batch, num_key_value_heads, slen, head_dim = hidden_states.shape`.\nit's better to explain why you define a new function but not use `torch.repeat_interleave` in the docstring.\ndoesn't `mock_npu_reshape_and_cache` should be called in swa?",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/attention/attention_v1.py:313",
+      "patch_snippet": "评后sha 60c94f3 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/attention/attention_v1.py:274",
+      "patch_snippet": "评后sha 60c94f3 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/attention/attention_v1.py:271",
+      "patch_snippet": "评后sha 60c94f3 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "tests/ut/attention/test_attention_v1.py:458",
+      "patch_snippet": "评后sha 60c94f3 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "60c94f3",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在对 tensor 进行 shape 解包时，应确保包含所有维度，特别是 batch 维度，避免因维度遗漏导致的形状错误或计算错误。",
+    "context": "",
+    "checkpoints": [
+      "shape 解包是否包含 batch 维度",
+      "解包后的变量名是否清晰表达含义",
+      "是否考虑了不同 batch size 的情况"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 260,
+      "code": "# 评审人 Ronald1995: \"the unpack of hidden_states.shape should contains batch,\n#   which means `batch, num_key_value_heads, slen, head_dim = hidden_states.shape`.\"\n# 评审人 Ronald1995: \"it's better to explain why you define a new function\n#   but not use `torch.repeat_interleave` in the docstring.\"\n\nfrom typing import Optional\nimport torch\nimport torch.nn as nn\n\nfrom vllm.attention.backends.abstract import AttentionBackend\n\nclass AscendAttentionV1:\n    \"\"\"Ascend attention implementation for V1 engine.\"\"\"\n\n    def _repeat_kv(self, hidden_states, n_rep):\n        # 自定义函数缺少文档说明为何不使用 torch.repeat_interleave\n        batch_size, num_heads, slen, head_dim = hidden_states.shape\n        # shape unpack 缺少 batch 维度\n        num_key_value_heads, slen, head_dim = hidden_states.shape\n        return hidden_states.repeat_interleave(n_rep, dim=1)\n\n    def _apply_swa(self, query, key, value, ...):\n        \"\"\"Apply sliding window attention.\"\"\"\n        # 未说明 chunked prefill 支持情况\n        result = torch_npu.npu_flash_attention(query, key, value, ...)\n        return result",
+      "context": "评审人 Ronald1995: \"the unpack of hidden_states.shape should contains batch, which means `batch, num_key_value_heads, slen, head_dim = hidden_states.shape`.\" 评审人 Ronald1995: \"it's better to explain why y"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 260,
+      "code": "# shape unpack 包含 batch 维度，添加文档说明\n\nfrom typing import Optional\nimport torch\nimport torch.nn as nn\n\nfrom vllm.attention.backends.abstract import AttentionBackend\n\nclass AscendAttentionV1:\n    \"\"\"Ascend attention implementation for V1 engine.\"\"\"\n\n    def _repeat_kv(self, hidden_states, n_rep):\n        \"\"\"Repeat key/value heads to match query heads count.\n        Custom implementation instead of torch.repeat_interleave because\n        the NPU-optimized version provides better performance on Ascend hardware.\n        \"\"\"\n        batch_size, num_heads, slen, head_dim = hidden_states.shape\n        # shape unpack 包含 batch 维度\n        batch, num_key_value_heads, slen, head_dim = hidden_states.shape\n        return hidden_states.repeat_interleave(n_rep, dim=1)\n\n    def _apply_swa(self, query, key, value, ...):\n        \"\"\"Apply sliding window attention.\n        Note: chunked prefill is NOT supported for SWA at this time.\n        \"\"\"\n        result = torch_npu.npu_flash_attention(query, key, value, ...)\n        return result",
+      "context": "shape unpack 包含 batch 维度，添加文档说明 shape unpack 包含 batch 维度"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/attention_v1.py\n+++ b/vllm_ascend/attention/attention_v1.py\n@@ -1,7 +1,4 @@\n-# 评审人 Ronald1995: \"the unpack of hidden_states.shape should contains batch,\n-#   which means `batch, num_key_value_heads, slen, head_dim = hidden_states.shape`.\"\n-# 评审人 Ronald1995: \"it's better to explain why you define a new function\n-#   but not use `torch.repeat_interleave` in the docstring.\"\n+# shape unpack 包含 batch 维度，添加文档说明\n \n from typing import Optional\n import torch\n@@ -13,14 +10,18 @@\n     \"\"\"Ascend attention implementation for V1 engine.\"\"\"\n \n     def _repeat_kv(self, hidden_states, n_rep):\n-        # 自定义函数缺少文档说明为何不使用 torch.repeat_interleave\n+        \"\"\"Repeat key/value heads to match query heads count.\n+        Custom implementation instead of torch.repeat_interleave because\n+        the NPU-optimized version provides better performance on Ascend hardware.\n+        \"\"\"\n         batch_size, num_heads, slen, head_dim = hidden_states.shape\n-        # shape unpack 缺少 batch 维度\n-        num_key_value_heads, slen, head_dim = hidden_states.shape\n+        # shape unpack 包含 batch 维度\n+        batch, num_key_value_heads, slen, head_dim = hidden_states.shape\n         return hidden_states.repeat_interleave(n_rep, dim=1)\n \n     def _apply_swa(self, query, key, value, ...):\n-        \"\"\"Apply sliding window attention.\"\"\"\n-        # 未说明 chunked prefill 支持情况\n+        \"\"\"Apply sliding window attention.\n+        Note: chunked prefill is NOT supported for SWA at this time.\n+        \"\"\"\n         result = torch_npu.npu_flash_attention(query, key, value, ...)\n         return result\n",
+      "stats": "1 file changed, +10 lines, -9 lines",
+      "key_changes": [
+        "新增: \"\"\""
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

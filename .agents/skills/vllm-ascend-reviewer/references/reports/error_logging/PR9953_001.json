@@ -1,0 +1,69 @@
+{
+  "report_id": "PR9953_001",
+  "pr_number": 9953,
+  "pr_title": "[Misc][310P] 310P Log Rectification",
+  "pr_status": "merged",
+  "merged_at": "2026-06-08T08:03:34Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/_310p/quantization/modelslim_config.py:62"
+  ],
+  "landing_sha": "a1dcad6",
+  "source_quote": "\"Instead of standard shotgun surgery, I suggest using a LoggerAdapter to inject the [310P] prefix dynamically. This would keep the codebase much cleaner and easier to maintain.\"",
+  "correspondence": [
+    {
+      "review_quote": "Ronald1995: vllm_ascend/_310p/quantization/modelslim_config.py:62(2026-06-04 09:07:29)",
+      "patch_snippet": "评后sha a1dcad6 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "a1dcad6",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当需要为特定平台（如 310P）的所有日志添加统一前缀时，应使用 `LoggerAdapter` 动态注入前缀，而非在每个日志调用处手动添加（避免 shotgun surgery）。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/_310p/quantization/modelslim_config.py",
+      "line": 55,
+      "code": "import json\nimport logging\nfrom typing import Any, Dict, Optional\n\nlogger = logging.getLogger(__name__)\n\n\nclass ModelSlimConfig:\n    \"\"\"Configuration for 310P model slim quantization.\"\"\"\n\n    def __init__(self, config: Dict[str, Any]):\n        self.config = config\n        logger.info(\"[310P] Loading modelslim config...\")\n        self.quant_method = config.get(\"quant_method\", None)\n        self.scheme = config.get(\"scheme\", None)\n        logger.info(\"[310P] Applying quantization config...\")\n\n    def get_quant_params(self) -> Dict[str, Any]:\n        if not self.quant_method:\n            logger.warning(\"[310P] No quant method specified\")\n            return {}\n        ...",
+      "context": "\"Instead of standard shotgun surgery, I suggest using a LoggerAdapter to inject the [310P] prefix dynamically. This would keep the codebase much cleaner and easier to maintain.\""
+    },
+    "pattern": {
+      "file": "vllm_ascend/_310p/quantization/modelslim_config.py",
+      "line": 55,
+      "code": "import json\nimport logging\nfrom typing import Any, Dict, Optional\n\n# Use LoggerAdapter to dynamically inject [310P] prefix\n# (Ronald1995: \"Instead of standard shotgun surgery, I suggest using\n#  a LoggerAdapter to inject the [310P] prefix dynamically. This would\n#  keep the codebase much cleaner and easier to maintain.\")\nclass _PrefixLoggerAdapter(logging.LoggerAdapter):\n    def process(self, msg, kwargs):\n        return f\"[310P] {msg}\", kwargs\n\nlogger = _PrefixLoggerAdapter(logging.getLogger(__name__), {})\n\n\nclass ModelSlimConfig:\n    \"\"\"Configuration for 310P model slim quantization.\"\"\"\n\n    def __init__(self, config: Dict[str, Any]):\n        self.config = config\n        logger.info(\"Loading modelslim config...\")  # 自动添加 [310P] 前缀\n        self.quant_method = config.get(\"quant_method\", None)\n        self.scheme = config.get(\"scheme\", None)\n        logger.info(\"Applying quantization config...\")\n\n    def get_quant_params(self) -> Dict[str, Any]:\n        if not self.quant_method:\n            logger.warning(\"No quant method specified\")\n            return {}\n        ...",
+      "context": "\"Instead of standard shotgun surgery, I suggest using a LoggerAdapter to inject the [310P] prefix dynamically. This would keep the codebase much cleaner and easier to maintain.\""
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/_310p/quantization/modelslim_config.py\n+++ b/vllm_ascend/_310p/quantization/modelslim_config.py\n@@ -2,7 +2,15 @@\n import logging\n from typing import Any, Dict, Optional\n \n-logger = logging.getLogger(__name__)\n+# Use LoggerAdapter to dynamically inject [310P] prefix\n+# (Ronald1995: \"Instead of standard shotgun surgery, I suggest using\n+#  a LoggerAdapter to inject the [310P] prefix dynamically. This would\n+#  keep the codebase much cleaner and easier to maintain.\")\n+class _PrefixLoggerAdapter(logging.LoggerAdapter):\n+    def process(self, msg, kwargs):\n+        return f\"[310P] {msg}\", kwargs\n+\n+logger = _PrefixLoggerAdapter(logging.getLogger(__name__), {})\n \n \n class ModelSlimConfig:\n@@ -10,13 +18,13 @@\n \n     def __init__(self, config: Dict[str, Any]):\n         self.config = config\n-        logger.info(\"[310P] Loading modelslim config...\")\n+        logger.info(\"Loading modelslim config...\")  # 自动添加 [310P] 前缀\n         self.quant_method = config.get(\"quant_method\", None)\n         self.scheme = config.get(\"scheme\", None)\n-        logger.info(\"[310P] Applying quantization config...\")\n+        logger.info(\"Applying quantization config...\")\n \n     def get_quant_params(self) -> Dict[str, Any]:\n         if not self.quant_method:\n-            logger.warning(\"[310P] No quant method specified\")\n+            logger.warning(\"No quant method specified\")\n             return {}\n         ...\n",
+      "stats": "1 file changed, +12 lines, -4 lines",
+      "key_changes": [
+        "-logger = logging.getLogger(__name__)",
+        "+# Use LoggerAdapter to dynamically inject [310P] prefix",
+        "+# (Ronald1995: \"Instead of standard shotgun surgery, I suggest using",
+        "+#  a LoggerAdapter to inject the [310P] prefix dynamically. This would",
+        "+#  keep the codebase much cleaner and easier to maintain.\")",
+        "+class _PrefixLoggerAdapter(logging.LoggerAdapter):",
+        "+    def process(self, msg, kwargs):",
+        "+        return f\"[310P] {msg}\", kwargs",
+        "+",
+        "+logger = _PrefixLoggerAdapter(logging.getLogger(__name__), {})",
+        "-        logger.info(\"[310P] Loading modelslim config...\")",
+        "+        logger.info(\"Loading modelslim config...\")  # 自动添加 [310P] 前缀",
+        "-        logger.info(\"[310P] Applying quantization config...\")",
+        "+        logger.info(\"Applying quantization config...\")",
+        "-            logger.warning(\"[310P] No quant method specified\")",
+        "+            logger.warning(\"No quant method specified\")"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

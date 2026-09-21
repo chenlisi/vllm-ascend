@@ -1,0 +1,68 @@
+{
+  "report_id": "PR10217_001",
+  "pr_number": 10217,
+  "pr_title": "[BugFix] Align AscendStore grouped hash lookup encoding",
+  "pr_status": "merged",
+  "merged_at": "2026-06-10T02:44:53Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py:483"
+  ],
+  "landing_sha": "c973b7b",
+  "source_quote": "why just do noting when there is an exception? don't we need to raise it?",
+  "correspondence": [
+    {
+      "review_quote": "Ronald1995 质疑为什么在 hex 解码异常时只是静默地 `pass`，不抛出异常。作者随后修复了该问题：不再使用 try-except 来尝试 hex 解码，而是先显式检查字符串长度是否为 64（SHA-256 哈希的 hex 表示长度），只有满足条件时才尝试 hex 解码，不满足的字符串直接使用 UTF-8 编码。这样避免了短 mock 字符串（如 \"beef\"、\"dead\"）被意外 hex 解码的问题。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "c973b7b",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当使用 try-except 处理可能的异常时，不应在 except 块中仅使用 `pass` 静默吞掉错误。应改为显式的条件判断（如检查字符串长度），避免依赖异常控制流来处理正常的业务逻辑分支。",
+    "context": "",
+    "checkpoints": [
+      "检查 except 块中是否存在仅 `pass` 的情况",
+      "确认是否可以用显式条件判断替代 try-except",
+      "验证异常吞掉后是否会导致难以排查的隐式错误",
+      "检查 hex 解码等转换是否限制了输入范围（如 SHA-256 为 64 字符）"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py",
+      "line": 483,
+      "code": "import hashlib\nfrom typing import Optional\n\n# ... 其他代码 ...\n\nclass AscendStoreConfig:\n    # ... 其他方法 ...\n\n    @staticmethod\n    def _block_hash_to_bytes(block_hash: str) -> bytes:\n        \"\"\"将 block hash 字符串转换为 bytes。\n        尝试 hex 解码，失败则回退到 UTF-8 编码。\n        \"\"\"\n        try:\n            return bytes.fromhex(block_hash)\n        except ValueError:\n            pass  # 静默吞掉异常，不做任何处理\n        return block_hash.encode(\"utf-8\")\n\n    # ... 其他方法 ...",
+      "context": "why just do noting when there is an exception? don't we need to raise it?"
+    },
+    "pattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py",
+      "line": 483,
+      "code": "import hashlib\nfrom typing import Optional\n\n# ... 其他代码 ...\n\nclass AscendStoreConfig:\n    # ... 其他方法 ...\n\n    @staticmethod\n    def _block_hash_to_bytes(block_hash: str) -> bytes:\n        \"\"\"将 block hash 字符串转换为 bytes。\n        vLLM 中 block hash 为 SHA-256 哈希，hex 表示恰好 64 字符。\n        仅对 64 字符的字符串尝试 hex 解码，避免短 mock 字符串\n        （如 \"beef\"、\"dead\"）被意外 hex 解码。\n        \"\"\"\n        if len(block_hash) == 64:\n            try:\n                return bytes.fromhex(block_hash)\n            except ValueError:\n                pass\n        # 非 hex 字符串使用 UTF-8 编码\n        return block_hash.encode(\"utf-8\")\n\n    # ... 其他方法 ...",
+      "context": "why just do noting when there is an exception? don't we need to raise it?"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py\n+++ b/vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py\n@@ -9,12 +9,16 @@\n     @staticmethod\n     def _block_hash_to_bytes(block_hash: str) -> bytes:\n         \"\"\"将 block hash 字符串转换为 bytes。\n-        尝试 hex 解码，失败则回退到 UTF-8 编码。\n+        vLLM 中 block hash 为 SHA-256 哈希，hex 表示恰好 64 字符。\n+        仅对 64 字符的字符串尝试 hex 解码，避免短 mock 字符串\n+        （如 \"beef\"、\"dead\"）被意外 hex 解码。\n         \"\"\"\n-        try:\n-            return bytes.fromhex(block_hash)\n-        except ValueError:\n-            pass  # 静默吞掉异常，不做任何处理\n+        if len(block_hash) == 64:\n+            try:\n+                return bytes.fromhex(block_hash)\n+            except ValueError:\n+                pass\n+        # 非 hex 字符串使用 UTF-8 编码\n         return block_hash.encode(\"utf-8\")\n \n     # ... 其他方法 ...",
+      "stats": "1 file changed, +9 lines, -5 lines",
+      "key_changes": [
+        "移除: 尝试 hex 解码，失败则回退到 UTF-8 编码。",
+        "新增: vLLM 中 block hash 为 SHA-256 哈希，hex 表示恰好 64 字符。",
+        "新增: 仅对 64 字符的字符串尝试 hex 解码，避免短 mock 字符串",
+        "新增: （如 \"beef\"、\"dead\"）被意外 hex 解码。",
+        "移除: try:",
+        "移除: return bytes.fromhex(block_hash)",
+        "移除: except ValueError:",
+        "移除: pass  # 静默吞掉异常，不做任何处理",
+        "新增: if len(block_hash) == 64:",
+        "新增: try:"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "report_id": "PR10616_001",
+  "pr_number": 10616,
+  "pr_title": "[Doc][Misc] Update Qwen3.5-27B documents",
+  "pr_status": "merged",
+  "merged_at": "2026-06-27T03:04:25Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/models/Qwen3.5-27B-Qwen3.6-27B.md:9",
+    "docs/source/tutorials/models/Qwen3.5-27B-Qwen3.6-27B.md:11",
+    "docs/source/tutorials/models/Qwen3.5-27B-Qwen3.6-27B.md:45",
+    "docs/source/user_guide/support_matrix/supported_models.md:31"
+  ],
+  "landing_sha": "e258e7f",
+  "source_quote": "it is recommended to use the latest release candidate version or official version.",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 提出 4 条意见：\n1. 第 9 行处应推荐使用最新的 release candidate 或正式版本，而非指定旧版本\n2. 第 11 行处同上（ditto）\n3. 第 45 行处的章节应引导用户到最新的 release candidate 版本\n4. 第 31 行处质疑为何移除 GLM-5.2 条目\n\n作者通过 commit `e258e7f`（\"fix\"）将所有版本引用更新为推荐最新版本，并处理了 supported_models 矩阵中的条目问题。",
+      "patch_snippet": "commit `e258e7f`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "e258e7f",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "模型部署文档中的版本引用应推荐使用最新的 release candidate 版本或正式版本，而非硬编码特定旧版本号。当版本升级时，文档应同步更新。同时，supported_models 矩阵中移除条目需要有明确理由。",
+    "context": "",
+    "checkpoints": [
+      "检查文档中的版本号是否指向最新的 release candidate 或正式版本",
+      "检查安装指引中的版本引用是否与当前最新版本一致",
+      "检查章节跳转链接是否指向最新版本的内容",
+      "检查 supported_models 矩阵中移除条目是否有合理说明"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/Qwen3.5-27B-Qwen3.6-27B.md",
+      "line": 9,
+      "code": "<!-- 文件: docs/source/tutorials/models/Qwen3.5-27B-Qwen3.6-27B.md -->\n<!-- 行号: 1-55 -->\n\n# Qwen3.5-27B / Qwen3.6-27B Deployment Guide\n\n## Introduction\n\nQwen3.5-27B 和 Qwen3.6-27B 是通义千问系列的大规模语言模型。\n\n## Prerequisites\n\n请使用 vLLM Ascend v0.1.0 版本进行部署。\n\n确保已安装 vLLM Ascend v0.1.0 版本。\n如未安装，请参考 [安装指南](../installation/index.md)。\n\n## Hardware Requirements\n\n| 项目 | 要求 |\n|------|------|\n| NPU 类型 | Ascend 910B |\n| 最少卡数 | 8 |\n| CANN 版本 | >= 8.0 |\n\n## Installation\n\n### Docker 安装\n\n...\n\n## Deployment Steps\n\n## 部署步骤\n按照以下步骤进行部署，使用 vLLM Ascend v0.1.0 版本...\n\n### 单节点部署\n\n启动命令示例...",
+      "context": "it is recommended to use the latest release candidate version or official version."
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/Qwen3.5-27B-Qwen3.6-27B.md",
+      "line": 9,
+      "code": "<!-- 文件: docs/source/tutorials/models/Qwen3.5-27B-Qwen3.6-27B.md -->\n<!-- 行号: 1-55 -->\n\n# Qwen3.5-27B / Qwen3.6-27B Deployment Guide\n\n## Introduction\n\nQwen3.5-27B 和 Qwen3.6-27B 是通义千问系列的大规模语言模型。\n\n## Prerequisites\n\n请使用最新的 release candidate 版本或正式版本进行部署。\n\n确保已安装最新的 vLLM Ascend release candidate 版本或正式版本。\n如未安装，请参考 [安装指南](../installation/index.md)。\n\n## Hardware Requirements\n\n| 项目 | 要求 |\n|------|------|\n| NPU 类型 | Ascend 910B |\n| 最少卡数 | 8 |\n| CANN 版本 | >= 8.0 |\n\n## Installation\n\n### Docker 安装\n\n...\n\n## Deployment Steps\n\n以下章节将引导您到最新的 release candidate 版本进行部署...\n\n### 单节点部署\n\n启动命令示例...",
+      "context": "it is recommended to use the latest release candidate version or official version."
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/Qwen3.5-27B-Qwen3.6-27B.md\n+++ b/docs/source/tutorials/models/Qwen3.5-27B-Qwen3.6-27B.md\n@@ -9,9 +9,9 @@\n \n ## Prerequisites\n \n-请使用 vLLM Ascend v0.1.0 版本进行部署。\n+请使用最新的 release candidate 版本或正式版本进行部署。\n \n-确保已安装 vLLM Ascend v0.1.0 版本。\n+确保已安装最新的 vLLM Ascend release candidate 版本或正式版本。\n 如未安装，请参考 [安装指南](../installation/index.md)。\n \n ## Hardware Requirements\n@@ -30,8 +30,7 @@\n \n ## Deployment Steps\n \n-## 部署步骤\n-按照以下步骤进行部署，使用 vLLM Ascend v0.1.0 版本...\n+以下章节将引导您到最新的 release candidate 版本进行部署...\n \n ### 单节点部署\n ",
+      "stats": "1 file changed, +3 lines, -4 lines",
+      "key_changes": [
+        "移除: 请使用 vLLM Ascend v0.1.0 版本进行部署。",
+        "新增: 请使用最新的 release candidate 版本或正式版本进行部署。",
+        "移除: 确保已安装 vLLM Ascend v0.1.0 版本。",
+        "新增: 确保已安装最新的 vLLM Ascend release candidate 版本或正式版本。",
+        "移除: ## 部署步骤",
+        "移除: 按照以下步骤进行部署，使用 vLLM Ascend v0.1.0 版本...",
+        "新增: 以下章节将引导您到最新的 release candidate 版本进行部署..."
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

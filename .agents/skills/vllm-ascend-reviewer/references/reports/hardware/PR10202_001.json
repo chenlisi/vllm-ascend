@@ -1,0 +1,68 @@
+{
+  "report_id": "PR10202_001",
+  "pr_number": 10202,
+  "pr_title": "[BugFix] Fix layer index mapping and block ID flattening in Mooncake connector",
+  "pr_status": "merged",
+  "merged_at": "2026-06-16T01:40:20Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py:1594"
+  ],
+  "landing_sha": "4cb61bb",
+  "source_quote": "Was this issue introduced by the previous PR? @liziyu179",
+  "correspondence": [
+    {
+      "review_quote": "LCAIZJ 询问 `_build_kv_group2layeridx` 函数中的问题是否由之前的 PR 引入。liziyu179 解释说该函数为所有 PP groups 构建 layer-to-group 信息，在后续传输过程中使用这些全局信息来获取 layer name 对应的 layer index。作者在 commit `4cb61bb` 中修复了该映射问题，确保在 PP 和 MTP 场景下 layer index 正确分配。",
+      "patch_snippet": "commit `4cb61bb`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "4cb61bb",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在构建 KV cache 的 layer-to-group 映射时，必须正确处理 Pipeline Parallel (PP) 和 Multi-Token Prediction (MTP) 场景下的 layer index 分配，确保全局信息在所有 PP groups 中一致。",
+    "context": "",
+    "checkpoints": [
+      "检查 `_build_kv_group2layeridx` 是否正确处理所有 PP groups",
+      "确认 MTP 层的 index 是否与 base 层正确区分",
+      "验证 layer name 到 index 的映射在传输过程中是否一致",
+      "检查 `next_mtp_layer_idx` 等变量是否已正确初始化"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py",
+      "line": 1594,
+      "code": "# vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py\n# liziyu179：\"The function _build_kv_group2layeridx constructs the\n# layer-to-group information for all PP groups.\"\n\ndef _build_kv_group2layeridx(self):\n    \"\"\"Build KV group to layer index mapping for all PP groups.\"\"\"\n    # ... 前置的 base layer 映射逻辑 ...\n    max_base_idx = max(base_layer_indices) if base_layer_indices else -1\n    # global_next_mtp 已计算但未被使用\n\n    # gemini-code-assist[bot] critical：next_mtp_layer_idx 在循环中被引用和递增\n    # 但从未定义或初始化，运行时将抛出 NameError\n    # \"name 'next_mtp_layer_idx' is not defined\"\n    for group in kv_groups:\n        if is_mtp_layer(group):\n            # 使用未初始化的变量 → NameError\n            layer_idx = next_mtp_layer_idx\n            next_mtp_layer_idx += 1\n            self.kv_group2layeridx[group.id] = layer_idx",
+      "context": "Was this issue introduced by the previous PR? @liziyu179"
+    },
+    "pattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py",
+      "line": 1594,
+      "code": "# vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py\n\ndef _build_kv_group2layeridx(self):\n    \"\"\"Build KV group to layer index mapping for all PP groups.\"\"\"\n    # ... 前置的 base layer 映射逻辑 ...\n    max_base_idx = max(base_layer_indices) if base_layer_indices else -1\n\n    # gemini-code-assist[bot] critical suggestion：\n    # 使用 max(self.total_layers, max_base_idx + 1) 初始化\n    # 确保 MTP 层的 index 不与 base 层冲突\n    next_mtp_layer_idx = max(self.total_layers, max_base_idx + 1)\n\n    for group in kv_groups:\n        if is_mtp_layer(group):\n            layer_idx = next_mtp_layer_idx\n            next_mtp_layer_idx += 1\n            self.kv_group2layeridx[group.id] = layer_idx",
+      "context": "Was this issue introduced by the previous PR? @liziyu179"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py\n+++ b/vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py\n@@ -1,19 +1,17 @@\n # vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py\n-# liziyu179：\"The function _build_kv_group2layeridx constructs the\n-# layer-to-group information for all PP groups.\"\n \n def _build_kv_group2layeridx(self):\n     \"\"\"Build KV group to layer index mapping for all PP groups.\"\"\"\n     # ... 前置的 base layer 映射逻辑 ...\n     max_base_idx = max(base_layer_indices) if base_layer_indices else -1\n-    # global_next_mtp 已计算但未被使用\n \n-    # gemini-code-assist[bot] critical：next_mtp_layer_idx 在循环中被引用和递增\n-    # 但从未定义或初始化，运行时将抛出 NameError\n-    # \"name 'next_mtp_layer_idx' is not defined\"\n+    # gemini-code-assist[bot] critical suggestion：\n+    # 使用 max(self.total_layers, max_base_idx + 1) 初始化\n+    # 确保 MTP 层的 index 不与 base 层冲突\n+    next_mtp_layer_idx = max(self.total_layers, max_base_idx + 1)\n+\n     for group in kv_groups:\n         if is_mtp_layer(group):\n-            # 使用未初始化的变量 → NameError\n             layer_idx = next_mtp_layer_idx\n             next_mtp_layer_idx += 1\n             self.kv_group2layeridx[group.id] = layer_idx",
+      "stats": "1 file changed, +5 lines, -7 lines",
+      "key_changes": [
+        "移除: # liziyu179：\"The function _build_kv_group2layeridx constructs the",
+        "移除: # layer-to-group information for all PP groups.\"",
+        "移除: # global_next_mtp 已计算但未被使用",
+        "移除: # gemini-code-assist[bot] critical：next_mtp_layer_idx 在循环中被引用和递增",
+        "移除: # 但从未定义或初始化，运行时将抛出 NameError",
+        "移除: # \"name 'next_mtp_layer_idx' is not defined\"",
+        "新增: # gemini-code-assist[bot] critical suggestion：",
+        "新增: # 使用 max(self.total_layers, max_base_idx + 1) 初始化",
+        "新增: # 确保 MTP 层的 index 不与 base 层冲突",
+        "新增: next_mtp_layer_idx = max(self.total_layers, max_base_idx + 1)"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

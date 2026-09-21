@@ -1,0 +1,68 @@
+{
+  "report_id": "PR10491_001",
+  "pr_number": 10491,
+  "pr_title": "[Feature] Add swiglustep_and_mul activation for SwigluStep models（Step3.7 Flash）",
+  "pr_status": "merged",
+  "merged_at": "2026-06-22T12:35:32Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/activation.py:78"
+  ],
+  "landing_sha": "464e6d4",
+  "source_quote": "pLz check if swiglustep_and_mul is implemented in AscendSiluAndMulWithClamp.",
+  "correspondence": [
+    {
+      "review_quote": "weijinqian0 要求确认 `swiglustep_and_mul` 是否已在 `AscendSiluAndMulWithClamp` 中实现。作者回复说明两者实现不同：`AscendSiluAndMulWithClamp` 是 `clamp(silu(g)) · clamp(u)`，而 `swiglustep_and_mul` 是 `silu(clamp(g)) · clamp(u)`，因此需要独立实现。ZT-AIA 建议将函数名中的 \"step\" 替换为 \"clamp\"，但作者解释命名与 vLLM 主仓的 `swiglustep_and_mul_triton` 对齐，保持一致性更好。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "464e6d4",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "新增激活函数时，需要确认是否与已有的类似实现（如 `AscendSiluAndMulWithClamp`）存在差异，明确数学语义区别（如 clamp 的位置），并与上游命名保持一致。",
+    "context": "",
+    "checkpoints": [
+      "检查新激活函数的数学语义是否与已有实现不同",
+      "确认函数命名是否与上游 vLLM 主仓对齐",
+      "验证 `activation` 参数是否可能是 Enum 类型（需用 `getattr(activation, \"value\", activation)` 处理）",
+      "确认 `swiglu_limit` 配置参数是否被正确传递"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/activation.py",
+      "line": 50,
+      "code": "# 未实现 swiglustep_and_mul，使用通用的 npu_swiglu 作为 fallback\n# weijinqian0 评审: \"pLz check if swiglustep_and_mul is implemented in AscendSiluAndMulWithClamp\"\n# ZT-AIA 建议: \"replace 'step' with 'clamp' in the function name\"\n# 作者回复: 命名与 vLLM 主仓的 swiglustep_and_mul_triton 对齐\n\nimport torch\nimport torch_npu\nfrom torch import Tensor\n\ndef silu_and_mul(hidden_states: Tensor) -> Tensor:\n    \"\"\"Standard SiLU and Mul activation.\"\"\"\n    return torch_npu.npu_swiglu(hidden_states)\n\nclass AscendSiluAndMulWithClamp(torch.nn.Module):\n    \"\"\"Clamp(silu(g)) * clamp(u) - different from swiglustep_and_mul.\"\"\"\n    def __init__(self, limit: float = 7.0):\n        super().__init__()\n        self.limit = limit\n\n    def forward(self, hidden_states: Tensor) -> Tensor:\n        gate, up = hidden_states.chunk(2, dim=-1)\n        return torch.clamp(torch.nn.functional.silu(gate), -self.limit, self.limit) * \\\n               torch.clamp(up, -self.limit, self.limit)\n\n# 此处缺少 swiglustep_and_mul 实现\n# Step3.7 Flash 模型会 fallback 到通用 npu_swiglu，导致数值溢出",
+      "context": "pLz check if swiglustep_and_mul is implemented in AscendSiluAndMulWithClamp."
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/activation.py",
+      "line": 50,
+      "code": "# 新增 swiglustep_and_mul 激活函数，支持 Step3.7 Flash 模型\n# 作者解释: AscendSiluAndMulWithClamp 是 clamp(silu(g)) · clamp(u)\n#          swiglustep_and_mul 是 silu(clamp(g)) · clamp(u)，语义不同\n\nimport torch\nimport torch_npu\nfrom torch import Tensor\n\ndef silu_and_mul(hidden_states: Tensor) -> Tensor:\n    \"\"\"Standard SiLU and Mul activation.\"\"\"\n    return torch_npu.npu_swiglu(hidden_states)\n\nclass AscendSiluAndMulWithClamp(torch.nn.Module):\n    \"\"\"Clamp(silu(g)) * clamp(u) - different from swiglustep_and_mul.\"\"\"\n    def __init__(self, limit: float = 7.0):\n        super().__init__()\n        self.limit = limit\n\n    def forward(self, hidden_states: Tensor) -> Tensor:\n        gate, up = hidden_states.chunk(2, dim=-1)\n        return torch.clamp(torch.nn.functional.silu(gate), -self.limit, self.limit) * \\\n               torch.clamp(up, -self.limit, self.limit)\n\n# FIX: 新增 swiglustep_and_mul: silu(clamp(g)) * clamp(u)\n# 命名与 vLLM 主仓 swiglustep_and_mul_triton 保持一致\ndef swiglustep_and_mul(hidden_states: Tensor, limit: float = 7.0) -> Tensor:\n    \"\"\"SwigluStep activation: silu(clamp(g)) * clamp(u).\n    Different from AscendSiluAndMulWithClamp which is clamp(silu(g)) * clamp(u).\n    \"\"\"\n    gate, up = hidden_states.chunk(2, dim=-1)\n    clamped_gate = torch.clamp(gate, -limit, limit)\n    clamped_up = torch.clamp(up, -limit, limit)\n    return torch.nn.functional.silu(clamped_gate) * clamped_up",
+      "context": "pLz check if swiglustep_and_mul is implemented in AscendSiluAndMulWithClamp."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/activation.py\n+++ b/vllm_ascend/ops/activation.py\n@@ -1,7 +1,6 @@\n-# 未实现 swiglustep_and_mul，使用通用的 npu_swiglu 作为 fallback\n-# weijinqian0 评审: \"pLz check if swiglustep_and_mul is implemented in AscendSiluAndMulWithClamp\"\n-# ZT-AIA 建议: \"replace 'step' with 'clamp' in the function name\"\n-# 作者回复: 命名与 vLLM 主仓的 swiglustep_and_mul_triton 对齐\n+# 新增 swiglustep_and_mul 激活函数，支持 Step3.7 Flash 模型\n+# 作者解释: AscendSiluAndMulWithClamp 是 clamp(silu(g)) · clamp(u)\n+#          swiglustep_and_mul 是 silu(clamp(g)) · clamp(u)，语义不同\n \n import torch\n import torch_npu\n@@ -22,5 +21,13 @@\n         return torch.clamp(torch.nn.functional.silu(gate), -self.limit, self.limit) * \\\n                torch.clamp(up, -self.limit, self.limit)\n \n-# 此处缺少 swiglustep_and_mul 实现\n-# Step3.7 Flash 模型会 fallback 到通用 npu_swiglu，导致数值溢出\n+# FIX: 新增 swiglustep_and_mul: silu(clamp(g)) * clamp(u)\n+# 命名与 vLLM 主仓 swiglustep_and_mul_triton 保持一致\n+def swiglustep_and_mul(hidden_states: Tensor, limit: float = 7.0) -> Tensor:\n+    \"\"\"SwigluStep activation: silu(clamp(g)) * clamp(u).\n+    Different from AscendSiluAndMulWithClamp which is clamp(silu(g)) * clamp(u).\n+    \"\"\"\n+    gate, up = hidden_states.chunk(2, dim=-1)\n+    clamped_gate = torch.clamp(gate, -limit, limit)\n+    clamped_up = torch.clamp(up, -limit, limit)\n+    return torch.nn.functional.silu(clamped_gate) * clamped_up",
+      "stats": "1 file changed, +13 lines, -6 lines",
+      "key_changes": [
+        "移除: # 未实现 swiglustep_and_mul，使用通用的 npu_swiglu 作为 fallback",
+        "移除: # weijinqian0 评审: \"pLz check if swiglustep_and_mul is implemented in AscendSiluA",
+        "移除: # ZT-AIA 建议: \"replace 'step' with 'clamp' in the function name\"",
+        "移除: # 作者回复: 命名与 vLLM 主仓的 swiglustep_and_mul_triton 对齐",
+        "新增: # 新增 swiglustep_and_mul 激活函数，支持 Step3.7 Flash 模型",
+        "新增: # 作者解释: AscendSiluAndMulWithClamp 是 clamp(silu(g)) · clamp(u)",
+        "新增: #          swiglustep_and_mul 是 silu(clamp(g)) · clamp(u)，语义不同",
+        "移除: # 此处缺少 swiglustep_and_mul 实现",
+        "移除: # Step3.7 Flash 模型会 fallback 到通用 npu_swiglu，导致数值溢出",
+        "新增: # FIX: 新增 swiglustep_and_mul: silu(clamp(g)) * clamp(u)"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

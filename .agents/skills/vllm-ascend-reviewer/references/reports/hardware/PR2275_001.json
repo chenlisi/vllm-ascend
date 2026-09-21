@@ -1,0 +1,92 @@
+{
+  "report_id": "PR2275_001",
+  "pr_number": 2275,
+  "pr_title": "[main] Fuse GroupedMatmul, Swiglu and DynamicQuant in `W8A8_DYNAMIC` quantized MoE layers",
+  "pr_status": "merged",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/quantization/w8a8_dynamic.py:978",
+    "vllm_ascend/quantization/w8a8_dynamic.py:169",
+    "vllm_ascend/quantization/w8a8_dynamic.py:79",
+    "vllm_ascend/quantization/w8a8_dynamic.py:247",
+    "vllm_ascend/quantization/w8a8_dynamic.py:200",
+    "vllm_ascend/quantization/w8a8_dynamic.py:124"
+  ],
+  "landing_sha": "e02305c",
+  "source_quote": "I think the weight should be formatted during `process_weights_after_loading`\nThe code in this place needs to be reviewed by @realliujiaxu\nThe parameter `group_list` of `torch_npu.npu_grouped_matmul_swiglu_quant` only supports cumsum, which corresponds to the scenario where `group_list_type=0` in the original code. Therefore, it is necessary to check the value of `group_list_type` here.\nneed to modify fused_experts_with_mc2(): pass `expert_token_nums_type=1` to `npu_moe_distribute_dispatch()` and pass `group_list_type = 0` to apply_mlp_decode()\nDoes torchair not support npu_grouped_matmul_swiglu_quant?\nThank you for removing the relevant redundant code.\nDoes torchair not support these operators?",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/quantization/w8a8_dynamic.py:978",
+      "patch_snippet": "评后sha e02305c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/quantization/w8a8_dynamic.py:169",
+      "patch_snippet": "评后sha e02305c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/quantization/w8a8_dynamic.py:169",
+      "patch_snippet": "评后sha e02305c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/quantization/w8a8_dynamic.py:79",
+      "patch_snippet": "评后sha e02305c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/quantization/w8a8_dynamic.py:247",
+      "patch_snippet": "评后sha e02305c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/quantization/w8a8_dynamic.py:200",
+      "patch_snippet": "评后sha e02305c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/quantization/w8a8_dynamic.py:124",
+      "patch_snippet": "评后sha e02305c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "e02305c",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "调用硬件特定融合算子（如 `npu_grouped_matmul_swiglu_quant`）时，必须验证参数是否满足算子的约束条件（如 `group_list_type` 的值），避免因参数不匹配导致错误。",
+    "context": "",
+    "checkpoints": [
+      "融合算子的参数是否满足硬件约束",
+      "weight 格式化是否在正确的生命周期阶段执行",
+      "是否明确了不同运行模式（eager/graph/torchair）下的算子支持情况"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/quantization/w8a8_dynamic.py",
+      "line": 155,
+      "code": "# 评审人 realliujiaxu: \"The parameter `group_list` of\n#   `torch_npu.npu_grouped_matmul_swiglu_quant` only supports cumsum,\n#   which corresponds to the scenario where `group_list_type=0` in the\n#   original code. Therefore, it is necessary to check the value of\n#   `group_list_type` here.\"\n\nfrom typing import Optional, List\nimport torch\nimport torch_npu\n\nfrom vllm_ascend.ops.layers.moe_mlp import apply_mlp_decode\n\ndef fused_grouped_matmul_swiglu_quant(\n    x: torch.Tensor,\n    group_list: torch.Tensor,\n    group_list_type: int = 0,\n    ...\n) -> torch.Tensor:\n    \"\"\"Fuse grouped matmul, swiglu and dynamic quant.\"\"\"\n    # 未检查 group_list_type 就直接调用融合算子\n    # npu_grouped_matmul_swiglu_quant 的 group_list 参数只支持 cumsum\n    result = torch_npu.npu_grouped_matmul_swiglu_quant(\n        x, group_list, ...)\n    return result",
+      "context": "评审人 realliujiaxu: \"The parameter `group_list` of `torch_npu.npu_grouped_matmul_swiglu_quant` only supports cumsum, which corresponds to the scenario where `group_list_type=0` in the"
+    },
+    "pattern": {
+      "file": "vllm_ascend/quantization/w8a8_dynamic.py",
+      "line": 155,
+      "code": "# 添加 group_list_type 检查:\n# 当 group_list_type == 0 时调用融合算子 npu_grouped_matmul_swiglu_quant\n# 当 group_list_type == 1 时调用原有算子\n\nfrom typing import Optional, List\nimport torch\nimport torch_npu\n\nfrom vllm_ascend.ops.layers.moe_mlp import apply_mlp_decode\n\ndef fused_grouped_matmul_swiglu_quant(\n    x: torch.Tensor,\n    group_list: torch.Tensor,\n    group_list_type: int = 0,\n    ...\n) -> torch.Tensor:\n    \"\"\"Fuse grouped matmul, swiglu and dynamic quant.\"\"\"\n    # 检查 group_list_type，只有 cumsum 格式(type=0)才能调用融合算子\n    if group_list_type == 0:\n        result = torch_npu.npu_grouped_matmul_swiglu_quant(\n            x, group_list, ...)\n    else:\n        # group_list_type == 1 时调用原有算子\n        result = apply_mlp_decode(x, group_list, ...)\n    return result",
+      "context": "添加 group_list_type 检查: 当 group_list_type == 0 时调用融合算子 npu_grouped_matmul_swiglu_quant 当 group_list_type == 1 时调用原有算子"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/quantization/w8a8_dynamic.py\n+++ b/vllm_ascend/quantization/w8a8_dynamic.py\n@@ -1,8 +1,6 @@\n-# 评审人 realliujiaxu: \"The parameter `group_list` of\n-#   `torch_npu.npu_grouped_matmul_swiglu_quant` only supports cumsum,\n-#   which corresponds to the scenario where `group_list_type=0` in the\n-#   original code. Therefore, it is necessary to check the value of\n-#   `group_list_type` here.\"\n+# 添加 group_list_type 检查:\n+# 当 group_list_type == 0 时调用融合算子 npu_grouped_matmul_swiglu_quant\n+# 当 group_list_type == 1 时调用原有算子\n \n from typing import Optional, List\n import torch\n@@ -17,8 +15,11 @@\n     ...\n ) -> torch.Tensor:\n     \"\"\"Fuse grouped matmul, swiglu and dynamic quant.\"\"\"\n-    # 未检查 group_list_type 就直接调用融合算子\n-    # npu_grouped_matmul_swiglu_quant 的 group_list 参数只支持 cumsum\n-    result = torch_npu.npu_grouped_matmul_swiglu_quant(\n-        x, group_list, ...)\n+    # 检查 group_list_type，只有 cumsum 格式(type=0)才能调用融合算子\n+    if group_list_type == 0:\n+        result = torch_npu.npu_grouped_matmul_swiglu_quant(\n+            x, group_list, ...)\n+    else:\n+        # group_list_type == 1 时调用原有算子\n+        result = apply_mlp_decode(x, group_list, ...)\n     return result\n",
+      "stats": "1 file changed, +10 lines, -9 lines",
+      "key_changes": [
+        "新增: result = torch_npu.npu_grouped_matmul_swiglu_quant("
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

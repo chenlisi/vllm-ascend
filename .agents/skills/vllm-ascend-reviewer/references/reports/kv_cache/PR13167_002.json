@@ -1,0 +1,67 @@
+{
+  "report_id": "PR13167_002",
+  "pr_number": 13167,
+  "pr_title": "[CI] Extend bisect parameters through AOP workflows",
+  "pr_status": "merged",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/e2e/nightly/multi_node/scripts/run.sh:443",
+    "tests/e2e/nightly/multi_node/scripts/run.sh:376"
+  ],
+  "landing_sha": "44b7ffe",
+  "source_quote": "if/else/fi indentation confusion\nif/else/fi indentation confusion",
+  "correspondence": [
+    {
+      "review_quote": "tests/e2e/nightly/multi_node/scripts/run.sh:443",
+      "patch_snippet": "评后sha 44b7ffe 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "tests/e2e/nightly/multi_node/scripts/run.sh:376",
+      "patch_snippet": "评后sha 44b7ffe 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "44b7ffe",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "Shell 脚本中 if/else/fi 块内的代码必须缩进到对应层级，使控制流结构清晰可读。else 块内的代码缩进应与 then 块内的代码保持一致。",
+    "context": "",
+    "checkpoints": [
+      "检查 if/elif/else/fi 块内的代码缩进是否与控制结构层级一致",
+      "确认 else 块内的代码没有遗漏缩进（常见于从其他位置粘贴代码时）",
+      "确认嵌套 if/else 的缩进逐层递增"
+    ],
+    "antipattern": {
+      "file": "tests/e2e/nightly/multi_node/scripts/run.sh",
+      "line": 370,
+      "code": "    if [ -n \"${BISECT_GOOD_COMMIT:-}\" ]; then\n        echo \"  Explicit good commit supplied; skipping good-table lookup and age gate\"\n    else\n    echo \"  Looking up: ${case_name}\"          # ❌ 缺少缩进\n    if [ ! -f \"$table\" ]; then                  # ❌ 缺少缩进\n        echo \"  Table file not found: ${table}\"\n        echo \"  Decision: no table → SKIP\"\n        return 1\n    fi\n    age_gate=$(stat -c %Y \"$table\" 2>/dev/null || echo 0)\n    if [ \"$age_gate\" -lt \"$MIN_TABLE_AGE\" ]; then\n        echo \"  Table too young (${age_gate}s < ${MIN_TABLE_AGE}s) → SKIP\"\n        return 1\n    fi\n    # ... else 块内所有代码都没有缩进\n    fi\n\n    if [ \"$condition\" = \"true\" ]; then\n        echo \"  true branch\"\n    else\n    echo \"  false branch\"                      # ❌ 缺少缩进\n    if [ \"$sub\" = \"yes\" ]; then                # ❌ 缺少缩进\n        echo \"  nested\"\n    fi\n    fi",
+      "context": "... else 块内所有代码都没有缩进"
+    },
+    "pattern": {
+      "file": "tests/e2e/nightly/multi_node/scripts/run.sh",
+      "line": 370,
+      "code": "    if [ -n \"${BISECT_GOOD_COMMIT:-}\" ]; then\n        echo \"  Explicit good commit supplied; skipping good-table lookup and age gate\"\n    else\n        echo \"  Looking up: ${case_name}\"      # ✅ 正确缩进\n        if [ ! -f \"$table\" ]; then              # ✅ 正确缩进\n            echo \"  Table file not found: ${table}\"\n            echo \"  Decision: no table → SKIP\"\n            return 1\n        fi\n        age_gate=$(stat -c %Y \"$table\" 2>/dev/null || echo 0)\n        if [ \"$age_gate\" -lt \"$MIN_TABLE_AGE\" ]; then\n            echo \"  Table too young (${age_gate}s < ${MIN_TABLE_AGE}s) → SKIP\"\n            return 1\n        fi\n        # ... else 块内所有代码都有正确缩进\n    fi\n\n    if [ \"$condition\" = \"true\" ]; then\n        echo \"  true branch\"\n    else\n        echo \"  false branch\"                  # ✅ 正确缩进\n        if [ \"$sub\" = \"yes\" ]; then            # ✅ 正确缩进\n            echo \"  nested\"\n        fi\n    fi",
+      "context": "... else 块内所有代码都有正确缩进"
+    },
+    "diff": {
+      "unified": "--- a/tests/e2e/nightly/multi_node/scripts/run.sh\n+++ b/tests/e2e/nightly/multi_node/scripts/run.sh\n@@ -1,25 +1,25 @@\n     if [ -n \"${BISECT_GOOD_COMMIT:-}\" ]; then\n         echo \"  Explicit good commit supplied; skipping good-table lookup and age gate\"\n     else\n-    echo \"  Looking up: ${case_name}\"          # ❌ 缺少缩进\n-    if [ ! -f \"$table\" ]; then                  # ❌ 缺少缩进\n-        echo \"  Table file not found: ${table}\"\n-        echo \"  Decision: no table → SKIP\"\n-        return 1\n-    fi\n-    age_gate=$(stat -c %Y \"$table\" 2>/dev/null || echo 0)\n-    if [ \"$age_gate\" -lt \"$MIN_TABLE_AGE\" ]; then\n-        echo \"  Table too young (${age_gate}s < ${MIN_TABLE_AGE}s) → SKIP\"\n-        return 1\n-    fi\n-    # ... else 块内所有代码都没有缩进\n+        echo \"  Looking up: ${case_name}\"      # ✅ 正确缩进\n+        if [ ! -f \"$table\" ]; then              # ✅ 正确缩进\n+            echo \"  Table file not found: ${table}\"\n+            echo \"  Decision: no table → SKIP\"\n+            return 1\n+        fi\n+        age_gate=$(stat -c %Y \"$table\" 2>/dev/null || echo 0)\n+        if [ \"$age_gate\" -lt \"$MIN_TABLE_AGE\" ]; then\n+            echo \"  Table too young (${age_gate}s < ${MIN_TABLE_AGE}s) → SKIP\"\n+            return 1\n+        fi\n+        # ... else 块内所有代码都有正确缩进\n     fi\n \n     if [ \"$condition\" = \"true\" ]; then\n         echo \"  true branch\"\n     else\n-    echo \"  false branch\"                      # ❌ 缺少缩进\n-    if [ \"$sub\" = \"yes\" ]; then                # ❌ 缺少缩进\n-        echo \"  nested\"\n+        echo \"  false branch\"                  # ✅ 正确缩进\n+        if [ \"$sub\" = \"yes\" ]; then            # ✅ 正确缩进\n+            echo \"  nested\"\n+        fi\n     fi\n-    fi\n",
+      "stats": "1 file changed, +16 lines, -16 lines",
+      "key_changes": [
+        "移除: echo \"  Table file not found: ${table}\"",
+        "移除: echo \"  nested\"",
+        "新增: fi",
+        "新增: echo \"  Table file not found: ${table}\"",
+        "新增: if [ \"$age_gate\" -lt \"$MIN_TABLE_AGE\" ]; then"
+      ]
+    },
+    "language": "sh",
+    "_status": "processed"
+  }
+}

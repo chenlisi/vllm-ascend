@@ -1,0 +1,70 @@
+{
+  "report_id": "PR10565_001",
+  "pr_number": 10565,
+  "pr_title": "[BugFix]Mamba pooling&mtp",
+  "pr_status": "merged",
+  "merged_at": "2026-06-26T13:56:20Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py:582",
+    "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py:641",
+    "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py:648",
+    "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/pool_worker.py:515"
+  ],
+  "landing_sha": "0ef512e",
+  "source_quote": "缺少一些测试用例\n需要解释一下，为什么需要额外减1，添加到注释中；以及 `num_speculative_blocks` 是指block数还是token数呢？你在注释中说：\n```\n# spec blocks for mamba cache group\nint = 0\n```\n但是实际上来自`vllm_config.speculative_config.num_speculative_tokens`\n不会取到 -1 吗？\n补充相关的验证",
+  "correspondence": [
+    {
+      "review_quote": "Tflowers-0129 提出 4 条意见：(1) 缺少测试用例；(2) `num_speculative_blocks` 命名与实际来源（`num_speculative_tokens`）不一致，需添加注释解释减1原因；(3) 质疑索引是否会取到 -1；(4) pool_worker 中需补充验证逻辑。作者通过后续 commit 补充了注释和验证。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "0ef512e",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当配置字段从上游（如 `speculative_config`）获取值时，字段命名应准确反映其含义（block 数 vs token 数），避免命名误导。如果命名无法更改，必须在注释中明确说明实际含义和来源。",
+    "context": "",
+    "checkpoints": [
+      "检查 `num_speculative_blocks` 等字段名是否与其实际来源和含义一致",
+      "确认注释是否清晰解释了字段含义和计算逻辑",
+      "对于从上游获取的值，注释中应标明来源"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py",
+      "line": 598,
+      "code": "# 使用负数索引和动态 end 索引，当 mask_spec_count == num_speculative_blocks 时\n# end 索引为 0，导致切片为空，赋值变为插入而非替换\n    def update_mamba_spec_blocks(self, kv_cache_group_id: int,\n                                  block_ids: list[int], mask: bool) -> None:\n        \"\"\"Update mamba speculative block tracking for a given KV cache group.\"\"\"\n        if not self.allocated_block_ids_by_group:\n            return\n        # 当 mask_spec_count == self.num_speculative_blocks 时\n        # mask_spec_count - self.num_speculative_blocks == 0\n        # Python 切片 [−N:0] 为空，赋值变为插入而非替换！\n        if self.mamba_group_ids and kv_cache_group_id in self.mamba_group_ids and self.num_speculative_blocks > 0:\n            mask_spec_count = min(len(block_ids) - 1, self.num_speculative_blocks)\n            group_block_ids = self.allocated_block_ids_by_group[kv_cache_group_id]\n            group_block_ids[-self.num_speculative_blocks:mask_spec_count - self.num_speculative_blocks] = [0] * mask_spec_count",
+      "context": "需要解释一下，为什么需要额外减1，添加到注释中；以及 `num_speculative_blocks` 是指block数还是token数呢？你在注释中说："
+    },
+    "pattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py",
+      "line": 598,
+      "code": "# 使用正数索引确保切片替换行为正确\n    def update_mamba_spec_blocks(self, kv_cache_group_id: int,\n                                  block_ids: list[int], mask: bool) -> None:\n        \"\"\"Update mamba speculative block tracking for a given KV cache group.\"\"\"\n        if not self.allocated_block_ids_by_group:\n            return\n        if self.mamba_group_ids and kv_cache_group_id in self.mamba_group_ids and self.num_speculative_blocks > 0:\n            mask_spec_count = min(len(block_ids) - 1, self.num_speculative_blocks)\n            group_block_ids = self.allocated_block_ids_by_group[kv_cache_group_id]\n            # 使用正数索引避免 Python 切片语义陷阱\n            group_len = len(group_block_ids)\n            start_idx = max(0, group_len - self.num_speculative_blocks)\n            end_idx = min(group_len, start_idx + mask_spec_count)\n            actual_mask_count = end_idx - start_idx\n            if actual_mask_count > 0:\n                group_block_ids[start_idx:end_idx] = [0] * actual_mask_count",
+      "context": "需要解释一下，为什么需要额外减1，添加到注释中；以及 `num_speculative_blocks` 是指block数还是token数呢？你在注释中说："
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py\n+++ b/vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py\n@@ -1,14 +1,16 @@\n-# 使用负数索引和动态 end 索引，当 mask_spec_count == num_speculative_blocks 时\n-# end 索引为 0，导致切片为空，赋值变为插入而非替换\n+# 使用正数索引确保切片替换行为正确\n     def update_mamba_spec_blocks(self, kv_cache_group_id: int,\n                                   block_ids: list[int], mask: bool) -> None:\n         \"\"\"Update mamba speculative block tracking for a given KV cache group.\"\"\"\n         if not self.allocated_block_ids_by_group:\n             return\n-        # 当 mask_spec_count == self.num_speculative_blocks 时\n-        # mask_spec_count - self.num_speculative_blocks == 0\n-        # Python 切片 [−N:0] 为空，赋值变为插入而非替换！\n         if self.mamba_group_ids and kv_cache_group_id in self.mamba_group_ids and self.num_speculative_blocks > 0:\n             mask_spec_count = min(len(block_ids) - 1, self.num_speculative_blocks)\n             group_block_ids = self.allocated_block_ids_by_group[kv_cache_group_id]\n-            group_block_ids[-self.num_speculative_blocks:mask_spec_count - self.num_speculative_blocks] = [0] * mask_spec_count\n+            # 使用正数索引避免 Python 切片语义陷阱\n+            group_len = len(group_block_ids)\n+            start_idx = max(0, group_len - self.num_speculative_blocks)\n+            end_idx = min(group_len, start_idx + mask_spec_count)\n+            actual_mask_count = end_idx - start_idx\n+            if actual_mask_count > 0:\n+                group_block_ids[start_idx:end_idx] = [0] * actual_mask_count",
+      "stats": "1 file changed, +8 lines, -6 lines",
+      "key_changes": [
+        "移除: # 使用负数索引和动态 end 索引，当 mask_spec_count == num_speculative_blocks 时",
+        "移除: # end 索引为 0，导致切片为空，赋值变为插入而非替换",
+        "新增: # 使用正数索引确保切片替换行为正确",
+        "移除: # 当 mask_spec_count == self.num_speculative_blocks 时",
+        "移除: # mask_spec_count - self.num_speculative_blocks == 0",
+        "移除: # Python 切片 [−N:0] 为空，赋值变为插入而非替换！",
+        "移除: group_block_ids[-self.num_speculative_blocks:mask_spec_count - self.num_speculat",
+        "新增: # 使用正数索引避免 Python 切片语义陷阱",
+        "新增: group_len = len(group_block_ids)",
+        "新增: start_idx = max(0, group_len - self.num_speculative_blocks)"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

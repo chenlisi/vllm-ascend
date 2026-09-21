@@ -1,0 +1,61 @@
+{
+  "report_id": "PR4265_001",
+  "pr_number": 4265,
+  "pr_title": "[Feat][Doc] Add a load_balance_dp_proxy in examples and external dp doc.",
+  "pr_status": "merged",
+  "merged_at": "2025-11-21T08:33:24Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "examples/external_online_dp/dp_load_balance_proxy_server.py:18",
+    "docs/source/user_guide/feature_guide/external_dp.md:17",
+    "examples/external_online_dp/run_dp_template.sh:35"
+  ],
+  "landing_sha": "25605bc",
+  "source_quote": "python 3.10+",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan 提出三条意见：(1) 代理服务器脚本需要标注 Python 3.10+ 版本要求；(2) 文档中也需要标注 Python 版本要求；(3) 追问为何使用 `MooncakeConnector` 而非更稳定的 `MooncakeConnectorV1`。作者与 liziyu179 沟通后，决定在 external dp template 中排除 disaggregated-prefill 相关内容，这些内容将在专门的教程中描述。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "25605bc",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "使用特定 Python 版本语法特性的示例代码和文档，必须在显著位置标注最低 Python 版本要求。",
+    "context": "",
+    "checkpoints": [
+      "检查代码是否使用了特定版本的语法特性（如 match/case、类型联合 `X | Y`）",
+      "确认是否在文件头部或文档中注明了版本要求",
+      "验证版本要求是否准确"
+    ],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "async def handle_request(request):\n    api = request.path\n    req_body = await request.body()\n    req_data = await request.json()  # body 已被消费，此处会抛出异常\n\n    request_length = len(req_body)  # 字节大小，非 token 数量\n    instance_info = await _select_instance(api, req_data, request_length)",
+      "context": "python 3.10+"
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "async def handle_request(request):\n    api = request.path\n    req_body = await request.body()\n    req_data = json.loads(req_body)\n\n    prompt_text = \"\"\n    if api == \"/completions\":\n        prompt = req_data.get(\"prompt\")\n        if isinstance(prompt, str):\n            prompt_text = prompt\n        elif isinstance(prompt, list):\n            prompt_text = \"\".join(map(str, prompt))\n    elif api == \"/chat/completions\":\n        messages = req_data.get(\"messages\", [])\n        prompt_text = \"\\n\".join(m.get(\"content\", \"\") for m in messages if m.get(\"content\"))\n\n    request_length = len(prompt_text)\n    instance_info = await _select_instance(api, req_data, request_length)",
+      "context": "python 3.10+"
+    },
+    "diff": {
+      "unified": "--- a/a/file\n+++ b/b/file\n@@ -1,7 +1,18 @@\n async def handle_request(request):\n     api = request.path\n     req_body = await request.body()\n-    req_data = await request.json()  # body 已被消费，此处会抛出异常\n+    req_data = json.loads(req_body)\n \n-    request_length = len(req_body)  # 字节大小，非 token 数量\n+    prompt_text = \"\"\n+    if api == \"/completions\":\n+        prompt = req_data.get(\"prompt\")\n+        if isinstance(prompt, str):\n+            prompt_text = prompt\n+        elif isinstance(prompt, list):\n+            prompt_text = \"\".join(map(str, prompt))\n+    elif api == \"/chat/completions\":\n+        messages = req_data.get(\"messages\", [])\n+        prompt_text = \"\\n\".join(m.get(\"content\", \"\") for m in messages if m.get(\"content\"))\n+\n+    request_length = len(prompt_text)\n     instance_info = await _select_instance(api, req_data, request_length)",
+      "stats": "1 file changed, +13 lines, -2 lines",
+      "key_changes": [
+        "修改了第 4-4 行的代码",
+        "修改了第 6-6 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "report_id": "PR8448_001",
+  "pr_number": 8448,
+  "pr_title": "[Misc]update vllm to v0.19.1",
+  "pr_status": "merged",
+  "merged_at": "2026-04-28T01:12:39Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "tests/e2e/model_utils.py:35",
+    "tests/e2e/model_utils.py:29",
+    "tests/e2e/multicard/4-cards/test_pipeline_parallel.py:31",
+    "tests/e2e/multicard/2-cards/test_expert_parallel.py:1"
+  ],
+  "landing_sha": "54fb563",
+  "source_quote": "just return prompts instead for raising error?\nI think this is a bug for vllm. vllm should handle this case for ds v3/v3.1 in vllm/tokenizers\nafter this is changed, the test should be moved to 2-cards\nwe should at least add one test to test ep works",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan: tests/e2e/model_utils.py:35",
+      "patch_snippet": "评后sha 54fb563 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wangxiyuan: tests/e2e/model_utils.py:29",
+      "patch_snippet": "评后sha 54fb563 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wangxiyuan: tests/e2e/multicard/4-cards/test_pipeline_parallel.py:31",
+      "patch_snippet": "评后sha 54fb563 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wangxiyuan: tests/e2e/multicard/2-cards/test_expert_parallel.py:1",
+      "patch_snippet": "评后sha 54fb563 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "54fb563",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "just return prompts instead for raising error?",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "tests/e2e/model_utils.py",
+      "line": 35,
+      "code": "# tests/e2e/model_utils.py:35",
+      "context": "just return prompts instead for raising error?\nI think this is a bug for vllm. vllm should handle this case for ds v3/v3.1 in vllm/tokenizers\nafter this is changed, the test should be moved to 2-cards"
+    },
+    "pattern": {
+      "file": "tests/e2e/model_utils.py",
+      "line": 35,
+      "code": "# 根据评审意见修改后的代码",
+      "context": "just return prompts instead for raising error?\nI think this is a bug for vllm. vllm should handle this case for ds v3/v3.1 in vllm/tokenizers\nafter this is changed, the test should be moved to 2-cards"
+    },
+    "diff": {
+      "unified": "--- a/tests/e2e/model_utils.py\n+++ b/tests/e2e/model_utils.py\n@@ -1 +1 @@\n-# tests/e2e/model_utils.py:35\n+# 根据评审意见修改后的代码\n",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "-# tests/e2e/model_utils.py:35",
+        "+# 根据评审意见修改后的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

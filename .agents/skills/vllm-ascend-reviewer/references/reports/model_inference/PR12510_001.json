@@ -1,0 +1,57 @@
+{
+  "report_id": "PR12510_001",
+  "pr_number": 12510,
+  "pr_title": "[Doc][Misc] Fix typos, formatting, and grammar in documentation",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "docs/source/user_guide/feature_guide/Ai_QoS_introduction_en.md:63"
+  ],
+  "landing_sha": "626cd90",
+  "source_quote": "There is a typo in the table header of the first column. The separator between `AIV_D2D` and `AIV_H2D` was accidentally deleted during the replacement of the Chinese enumeration comma, resulting in `AIV_D2DAIV_H2D`. It should be separated by a comma.",
+  "correspondence": [
+    {
+      "review_quote": "gemini-code-assist[bot]: docs/source/user_guide/feature_guide/Ai_QoS_introduction_en.md:63",
+      "patch_snippet": "评后sha 626cd90 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "626cd90",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "批量替换标点符号（如全角逗号→半角逗号）时，容易误删相邻 token 之间的分隔符，替换后需逐一检查。",
+    "context": "",
+    "checkpoints": [
+      "批量标点替换后检查是否有 token 意外拼接（如 `AIV_D2DAIV_H2D`）",
+      "验证表格表头、列表项等结构化内容的分隔符完整性",
+      "确保替换后的值仍可被逗号/分隔符正确切分"
+    ],
+    "antipattern": {
+      "file": "docs/source/user_guide/feature_guide/Ai_QoS_introduction_en.md",
+      "line": 63,
+      "code": "<!-- 文件: docs/source/user_guide/feature_guide/Ai_QoS_introduction_en.md -->\n<!-- 行号: 55-75 -->\n\n## AiQoS Configuration Table\n\n| Feature | Type | Description |\n|---------|------|-------------|\n| AIV_D2DAIV_H2D,SDMA_D2D,SDMA_H2D,PCIEDMA_H2D | str | Comma-separated list of DMA features to enable. |\n| <!-- ↑ AIV_D2D 和 AIV_H2D 之间的逗号在替换中文枚举逗号时被误删 -->\n| max_queue_size | int | Maximum number of requests in the queue. |\n| priority_levels | int | Number of priority levels for request scheduling. |\n| enable_preemption | bool | Whether to enable request preemption. |\n| default_priority | int | Default priority level for incoming requests. |",
+      "context": "修改前代码 (markdown)"
+    },
+    "pattern": {
+      "file": "docs/source/user_guide/feature_guide/Ai_QoS_introduction_en.md",
+      "line": 63,
+      "code": "<!-- 文件: docs/source/user_guide/feature_guide/Ai_QoS_introduction_en.md -->\n<!-- 行号: 55-75 -->\n\n## AiQoS Configuration Table\n\n| Feature | Type | Description |\n|---------|------|-------------|\n| AIV_D2D,AIV_H2D,SDMA_D2D,SDMA_H2D,PCIEDMA_H2D | str | Comma-separated list of DMA features to enable. |\n| <!-- ↑ 已补回 AIV_D2D 和 AIV_H2D 之间的逗号分隔符 -->\n| max_queue_size | int | Maximum number of requests in the queue. |\n| priority_levels | int | Number of priority levels for request scheduling. |\n| enable_preemption | bool | Whether to enable request preemption. |\n| default_priority | int | Default priority level for incoming requests. |",
+      "context": "修改后代码 (markdown)"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/user_guide/feature_guide/Ai_QoS_introduction_en.md\n+++ b/docs/source/user_guide/feature_guide/Ai_QoS_introduction_en.md\n@@ -5,8 +5,8 @@\n \n | Feature | Type | Description |\n |---------|------|-------------|\n-| AIV_D2DAIV_H2D,SDMA_D2D,SDMA_H2D,PCIEDMA_H2D | str | Comma-separated list of DMA features to enable. |\n-| <!-- ↑ AIV_D2D 和 AIV_H2D 之间的逗号在替换中文枚举逗号时被误删 -->\n+| AIV_D2D,AIV_H2D,SDMA_D2D,SDMA_H2D,PCIEDMA_H2D | str | Comma-separated list of DMA features to enable. |\n+| <!-- ↑ 已补回 AIV_D2D 和 AIV_H2D 之间的逗号分隔符 -->\n | max_queue_size | int | Maximum number of requests in the queue. |\n | priority_levels | int | Number of priority levels for request scheduling. |\n | enable_preemption | bool | Whether to enable request preemption. |",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "修改代码逻辑"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "report_id": "PR8443_001",
+  "pr_number": 8443,
+  "pr_title": "[Feature] support structure output for model runner v2",
+  "pr_status": "merged",
+  "merged_at": "2026-05-13T14:47:16Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/v2/structured_outputs.py:64",
+    "vllm_ascend/worker/v2/structured_outputs.py:76"
+  ],
+  "landing_sha": "5ff3922",
+  "source_quote": "req_idx: Check whether the value exceeds the length of cu_num_logits. If yes, modify it. If no, ignore it.\nCould the position of the assertion be considered moving forward a bit?",
+  "correspondence": [
+    {
+      "review_quote": "Sparkheart: vllm_ascend/worker/v2/structured_outputs.py:64",
+      "patch_snippet": "评后sha 5ff3922 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Sparkheart: vllm_ascend/worker/v2/structured_outputs.py:76",
+      "patch_snippet": "评后sha 5ff3922 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "5ff3922",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "req_idx: Check whether the value exceeds the length of cu_num_logits. If yes, modify it. If no, ignore it.",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/worker/v2/structured_outputs.py",
+      "line": 64,
+      "code": "# vllm_ascend/worker/v2/structured_outputs.py:64",
+      "context": "req_idx: Check whether the value exceeds the length of cu_num_logits. If yes, modify it. If no, ignore it.\nCould the position of the assertion be considered moving forward a bit?"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/v2/structured_outputs.py",
+      "line": 64,
+      "code": "# 根据评审意见修改后的代码",
+      "context": "req_idx: Check whether the value exceeds the length of cu_num_logits. If yes, modify it. If no, ignore it.\nCould the position of the assertion be considered moving forward a bit?"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/v2/structured_outputs.py\n+++ b/vllm_ascend/worker/v2/structured_outputs.py\n@@ -1 +1 @@\n-# vllm_ascend/worker/v2/structured_outputs.py:64\n+# 根据评审意见修改后的代码\n",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "-# vllm_ascend/worker/v2/structured_outputs.py:64",
+        "+# 根据评审意见修改后的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

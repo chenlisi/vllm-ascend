@@ -1,0 +1,61 @@
+{
+  "report_id": "PR7221_001",
+  "pr_number": 7221,
+  "pr_title": "[model_runner_v2]optimize the performance of the _topk_log_softmax_kernel",
+  "pr_status": "merged",
+  "merged_at": "2026-03-16T08:49:11Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/v2/sample/logprob.py:54"
+  ],
+  "landing_sha": "e852a16",
+  "source_quote": "add some comments to explain the difference between vllm and vllm-ascend.",
+  "correspondence": [
+    {
+      "review_quote": "Ronald1995 要求添加注释说明 vllm 和 vllm-ascend 之间的差异。作者通过 commit `e852a16` 添加了相关注释，1/1 建议全部落地。",
+      "patch_snippet": "commit `e852a16`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "e852a16",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当从 vllm 上游复制代码并进行 Ascend 特定修改时，必须在代码中添加注释说明与上游的差异及修改原因，以便后续维护者理解修改背景。",
+    "context": "",
+    "checkpoints": [
+      "检查从上游复制的代码是否有注释说明差异",
+      "确认修改原因是否清晰记录",
+      "验证注释是否说明了 Ascend 特定的优化点",
+      "确认性能提升的数据是否有记录"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/v2/sample/logprob.py",
+      "line": 40,
+      "code": "import triton\nimport triton.language as tl\n\n\n@triton.jit\ndef _topk_log_softmax_kernel(\n    row_ptr,\n    token_ids_ptr,\n    output_ptr,\n    vocab_size,\n    top_k_ptr,\n    top_k_num,\n    BLOCK_SIZE: tl.constexpr,\n):\n    row_idx = tl.program_id(0)\n    row_ptr = row_ptr + row_idx * vocab_size\n    max_val = tl.max(tl.load(row_ptr + tl.arange(0, BLOCK_SIZE)))\n    se = 0.0\n    for i in range(0, vocab_size, BLOCK_SIZE):\n        block = i + tl.arange(0, BLOCK_SIZE)\n        logits = tl.load(row_ptr + block, mask=block < vocab_size, other=0.0)\n        logits = tl.where(block < vocab_size, logits, float(\"-inf\"))\n        logits = logits.to(tl.float32)\n        e = tl.exp(logits - max_val)\n        se += tl.sum(e)",
+      "context": "add some comments to explain the difference between vllm and vllm-ascend."
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/v2/sample/logprob.py",
+      "line": 40,
+      "code": "import triton\nimport triton.language as tl\n\n\n@triton.jit\ndef _topk_log_softmax_kernel(\n    row_ptr,\n    token_ids_ptr,\n    output_ptr,\n    vocab_size,\n    top_k_ptr,\n    top_k_num,\n    BLOCK_SIZE: tl.constexpr,\n):\n    row_idx = tl.program_id(0)\n    row_ptr = row_ptr + row_idx * vocab_size\n    max_val = tl.max(tl.load(row_ptr + tl.arange(0, BLOCK_SIZE)))\n    se = 0.0\n    for i in range(0, vocab_size, BLOCK_SIZE):\n        block = i + tl.arange(0, BLOCK_SIZE)\n        logits = tl.load(row_ptr + block, mask=block < vocab_size, other=float(\"-inf\"))\n        logits = logits.to(tl.float32)\n        e = tl.exp(logits - max_val)\n        se += tl.sum(e)",
+      "context": "add some comments to explain the difference between vllm and vllm-ascend."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/v2/sample/logprob.py\n+++ b/vllm_ascend/worker/v2/sample/logprob.py\n@@ -40,25 +40,24 @@\n     se = 0.0\n     for i in range(0, vocab_size, BLOCK_SIZE):\n         block = i + tl.arange(0, BLOCK_SIZE)\n-        logits = tl.load(row_ptr + block, mask=block < vocab_size, other=0.0)\n-        logits = tl.where(block < vocab_size, logits, float(\"-inf\"))\n+        logits = tl.load(row_ptr + block, mask=block < vocab_size, other=float(\"-inf\"))\n         logits = logits.to(tl.float32)\n         e = tl.exp(logits - max_val)\n         se += tl.sum(e)",
+      "stats": "1 file changed, +1 lines, -2 lines",
+      "key_changes": [
+        "- logits = tl.load(row_ptr + block, mask=block < vocab_size, other=0.0)",
+        "- logits = tl.where(block < vocab_size, logits, float(\"-inf\"))",
+        "+ logits = tl.load(row_ptr + block, mask=block < vocab_size, other=float(\"-inf\"))"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

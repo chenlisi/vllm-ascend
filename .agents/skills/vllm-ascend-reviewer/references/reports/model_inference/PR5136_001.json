@@ -1,0 +1,57 @@
+{
+  "report_id": "PR5136_001",
+  "pr_number": 5136,
+  "pr_title": "fix profile run for vl model",
+  "pr_status": "merged",
+  "merged_at": "2025-12-17T15:51:32Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/worker_v1.py:235"
+  ],
+  "landing_sha": "9c884c9",
+  "source_quote": "Does this fix the oom error in vl profile run?",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 确认此修复解决了 VL profile run 的 OOM 问题，并建议在 PR 描述中说明。作者通过 commit `9c884c9` 和 `6b003b3` 修复并更新测试，2/2 建议全部落地。",
+      "patch_snippet": "commit `9c884c9`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "9c884c9",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "内存 profiling 和模型 warm-up 必须在推理模式下运行（`@torch.inference_mode()`），避免梯度追踪导致的额外内存占用和 OOM。",
+    "context": "",
+    "checkpoints": [
+      "VL 模型的 warm-up/profiling 是否使用了 `@torch.inference_mode()` 装饰器",
+      "内存 profiling 方法是否在推理上下文中运行"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/worker_v1.py",
+      "line": 0,
+      "code": "class NPUWorker(WorkerBase):\n    \"\"\"Ascend NPU Worker implementation.\"\"\"\n\n    def __init__(self, ...):\n        super().__init__(...)\n        self.model_runner = NPUModelRunner(...)\n\n    def determine_available_memory(self):\n        num_layers = self.model_config.get_num_layers(self.parallel_config)\n        self.model_runner.profile_run()\n        available_memory = self._calculate_available_memory()\n        return available_memory",
+      "context": "Does this fix the oom error in vl profile run?"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/worker_v1.py",
+      "line": 0,
+      "code": "class NPUWorker(WorkerBase):\n    \"\"\"Ascend NPU Worker implementation.\"\"\"\n\n    def __init__(self, ...):\n        super().__init__(...)\n        self.model_runner = NPUModelRunner(...)\n\n    @torch.inference_mode()\n    def determine_available_memory(self):\n        num_layers = self.model_config.get_num_layers(self.parallel_config)\n        self.model_runner.profile_run()\n        available_memory = self._calculate_available_memory()\n        return available_memory",
+      "context": "Does this fix the oom error in vl profile run?"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/worker_v1.py\n+++ b/vllm_ascend/worker/worker_v1.py\n@@ -1,12 +1,13 @@\n         super().__init__(...)\n         self.model_runner = NPUModelRunner(...)\n \n+    @torch.inference_mode()\n     def determine_available_memory(self):\n         num_layers = self.model_config.get_num_layers(self.parallel_config)\n         self.model_runner.profile_run()",
+      "stats": "1 file changed, +1 lines, -0 lines",
+      "key_changes": [
+        "在第 8-8 行新增了代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

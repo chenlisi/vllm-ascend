@@ -1,0 +1,54 @@
+{
+  "report_id": "PR4058_001",
+  "pr_number": 4058,
+  "pr_title": "[BugFix] Fixes Qwen3-Next enable nz accuracy problem",
+  "pr_status": "merged",
+  "merged_at": "2025-11-10T12:54:57Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/utils.py:79"
+  ],
+  "landing_sha": "b175ec5",
+  "source_quote": "use `model_type` to check the model, not name.",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan: utils.py:79(2025-11-10 10:35:07)",
+      "patch_snippet": "评后sha `b175ec5` fix 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "b175ec5",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/utils.py",
+      "line": 70,
+      "code": "def is_qwen3_next(model_config) -> bool:\n    model_name = model_config.model.lower()\n    return \"qwen3\" in model_name and \"next\" in model_name",
+      "context": "use `model_type` to check the model, not name."
+    },
+    "pattern": {
+      "file": "vllm_ascend/utils.py",
+      "line": 70,
+      "code": "def is_qwen3_next(model_config) -> bool:\n    return model_config.model_type == \"qwen3_next\"",
+      "context": "use `model_type` to check the model, not name."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/utils.py\n+++ b/vllm_ascend/utils.py\n@@ -70,3 +70,2 @@\n def is_qwen3_next(model_config) -> bool:\n-    model_name = model_config.model.lower()\n-    return \"qwen3\" in model_name and \"next\" in model_name\n+    return model_config.model_type == \"qwen3_next\"",
+      "stats": "1 file changed, +1 lines, -2 lines",
+      "key_changes": [
+        "修改了第 2-3 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

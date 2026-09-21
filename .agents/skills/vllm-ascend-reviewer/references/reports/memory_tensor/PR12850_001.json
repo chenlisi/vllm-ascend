@@ -1,0 +1,57 @@
+{
+  "report_id": "PR12850_001",
+  "pr_number": 12850,
+  "pr_title": "[Feature] Add RoPE switch support to MLA preprocess",
+  "pr_status": "merged",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "csrc/mla_preprocess/op_kernel/mla_preprocess_mix_bf16.hpp:186"
+  ],
+  "landing_sha": "62ee94d",
+  "source_quote": "In `ProcessRawQ()`, there are no vector (V) instructions executed. Routing the pipeline synchronization through the V unit (`MTE2 -> V` and then `V -> MTE3`) is redundant and introduces unnecessary latency. Synchronizing `MTE2 -> MTE3` directly using `EVENT_ID1` avoids involving the V unit entirely. Additionally, placing the scalar calculations for `outQOffset` and `outQOffset2` between `SET_FLAG` and `WAIT_FLAG` allows them to run in parallel with the MTE2 data copy, further optimizing performance.",
+  "correspondence": [
+    {
+      "review_quote": "gemini-code-assist[bot]: csrc/mla_preprocess/op_kernel/mla_preprocess_mix_bf16.hpp:186",
+      "patch_snippet": "评后sha 62ee94d 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "62ee94d",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当流水线同步路径中转的单元（如 V）在该代码段无任何指令执行时，应使用直连同步（如 `MTE2 -> MTE3`）而非经中转单元（`MTE2 -> V -> MTE3`），并将可并行的标量计算置于 SET_FLAG/WAIT_FLAG 之间隐藏延迟。",
+    "context": "",
+    "checkpoints": [
+      "检查 `SET_FLAG`/`WAIT_FLAG` 链是否经过无指令执行的单元中转",
+      "若起止单元间可直连，移除中转并合并为单条直连同步",
+      "将独立标量计算置于 SET_FLAG 与 WAIT_FLAG 之间以重叠执行"
+    ],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "template <bool isNzToNZ, typename T>\n__aicore__ inline void AscendCMLAPreprocessMixBF16<T>::ProcessRawQ(\n    uint32_t startHead, uint32_t headBlockLen, uint32_t loopN,\n    uint64_t qOffset, uint64_t outLineOffset) {\n    AscendC::LocalTensor<T> inputQ = this->inputQ_.Get(\n        inLocalTensorOffset, {loopN * headBlockLen * this->qkNopeHeadDim_});\n\n    // DataCopy from global to local for Q\n    AscendC::DataCopy(inputQ, this->qGm_[qOffset],\n                      {loopN, headBlockLen, static_cast<uint16_t>(qkNopeHeadDim_ / 16), 0});\n    // 经 V 单元中转：冗余，因为 ProcessRawQ 无 V 指令\n    SET_FLAG(MTE2, V, EVENT_ID1);\n    WAIT_FLAG(MTE2, V, EVENT_ID1);\n\n    // 标量计算在等待之后串行执行\n    uint64_t outQOffset = startHead * outLineOffset + this->concatSize;\n    uint64_t outQOffset2 = startHead * this->headDim;\n    SET_FLAG(V, MTE3, EVENT_ID1);\n    WAIT_FLAG(V, MTE3, EVENT_ID1);\n\n    // DataCopy from local to global for output Q\n    AscendC::DataCopy(this->outQGm_[outQOffset], inputQ,\n                      {loopN, headBlockLen, static_cast<uint16_t>(qkNopeHeadDim_ / 16), 0});\n}",
+      "context": "修改前代码 (cpp)"
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "template <bool isNzToNZ, typename T>\n__aicore__ inline void AscendCMLAPreprocessMixBF16<T>::ProcessRawQ(\n    uint32_t startHead, uint32_t headBlockLen, uint32_t loopN,\n    uint64_t qOffset, uint64_t outLineOffset) {\n    AscendC::LocalTensor<T> inputQ = this->inputQ_.Get(\n        inLocalTensorOffset, {loopN * headBlockLen * this->qkNopeHeadDim_});\n\n    // DataCopy from global to local for Q\n    AscendC::DataCopy(inputQ, this->qGm_[qOffset],\n                      {loopN, headBlockLen, static_cast<uint16_t>(qkNopeHeadDim_ / 16), 0});\n    // MTE2 -> MTE3 直连：避免经 V 单元中转\n    SET_FLAG(MTE2, MTE3, EVENT_ID1);\n    // 标量计算夹在 SET_FLAG 和 WAIT_FLAG 之间，与 MTE2 数据拷贝并行\n    uint64_t outQOffset = startHead * outLineOffset + this->concatSize;\n    uint64_t outQOffset2 = startHead * this->headDim;\n    WAIT_FLAG(MTE2, MTE3, EVENT_ID1);\n\n    // DataCopy from local to global for output Q\n    AscendC::DataCopy(this->outQGm_[outQOffset], inputQ,\n                      {loopN, headBlockLen, static_cast<uint16_t>(qkNopeHeadDim_ / 16), 0});\n}",
+      "context": "修改后代码 (cpp)"
+    },
+    "diff": {
+      "unified": "--- a/file\n+++ b/file\n@@ -8,15 +8,12 @@\n     // DataCopy from global to local for Q\n     AscendC::DataCopy(inputQ, this->qGm_[qOffset],\n                       {loopN, headBlockLen, static_cast<uint16_t>(qkNopeHeadDim_ / 16), 0});\n-    // 经 V 单元中转：冗余，因为 ProcessRawQ 无 V 指令\n-    SET_FLAG(MTE2, V, EVENT_ID1);\n-    WAIT_FLAG(MTE2, V, EVENT_ID1);\n-\n-    // 标量计算在等待之后串行执行\n+    // MTE2 -> MTE3 直连：避免经 V 单元中转\n+    SET_FLAG(MTE2, MTE3, EVENT_ID1);\n+    // 标量计算夹在 SET_FLAG 和 WAIT_FLAG 之间，与 MTE2 数据拷贝并行\n     uint64_t outQOffset = startHead * outLineOffset + this->concatSize;\n     uint64_t outQOffset2 = startHead * this->headDim;\n-    SET_FLAG(V, MTE3, EVENT_ID1);\n-    WAIT_FLAG(V, MTE3, EVENT_ID1);\n+    WAIT_FLAG(MTE2, MTE3, EVENT_ID1);\n \n     // DataCopy from local to global for output Q\n     AscendC::DataCopy(this->outQGm_[outQOffset], inputQ,",
+      "stats": "1 file changed, +4 lines, -7 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "cpp",
+    "_status": "pending_llm_extract"
+  }
+}

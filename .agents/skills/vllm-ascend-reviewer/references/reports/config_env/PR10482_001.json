@@ -1,0 +1,63 @@
+{
+  "report_id": "PR10482_001",
+  "pr_number": 10482,
+  "pr_title": "[Ops][Misc] Modify triton ops logs",
+  "pr_status": "merged",
+  "merged_at": "2026-06-17T13:42:22Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/triton/mamba/causal_conv1d.py:656"
+  ],
+  "landing_sha": "5d7104e",
+  "source_quote": "@ZT-AIA please take a look at this change. If it's fine, the comment can be removed then.",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan 要求 ZT-AIA 检查 causal_conv1d.py:656 处的变更，确认如果没问题则移除相关 comment。ZT-AIA 确认 \"it's fine\"。该修改涉及将 triton ops 中的硬编码 vector core 数量替换为动态获取方式 `get_vectorcore_num()`，同时改进了错误日志格式，添加了操作名前缀以便调试。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "5d7104e",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "Triton 操作中不应使用硬编码的硬件参数（如 vector core 数量），应通过动态查询接口获取，以适配不同硬件配置。",
+    "context": "",
+    "checkpoints": [
+      "检查 triton ops 中是否存在硬编码的硬件参数（如 core 数量、内存大小等）",
+      "确认是否使用了动态查询接口（如 `get_vectorcore_num()`）替代硬编码值",
+      "错误日志是否包含操作名前缀以便调试定位"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/triton/mamba/causal_conv1d.py",
+      "line": 645,
+      "code": "import triton\nimport triton.language as tl\nfrom vllm_ascend.ops.triton.utils import get_vectorcore_num\n\n\ndef causal_conv1d_update_npu(\n    x: torch.Tensor,\n    conv_state: torch.Tensor,\n    weight: torch.Tensor,\n    bias: torch.Tensor | None = None,\n) -> torch.Tensor:\n    \"\"\"NPU-optimized causal conv1d update using Triton kernels.\n\n    Args:\n        x: Input tensor of shape (batch, dim, 1).\n        conv_state: Convolution state tensor.\n        weight: Convolution weight tensor.\n        bias: Optional bias tensor.\n\n    Returns:\n        Output tensor after conv1d update.\n    \"\"\"\n    batch, dim, _ = x.shape\n    # 硬编码 vector core 数量为 40\n    # 问题：不同 NPU 硬件（310P/910B/950）的 vector core 数量不同\n    # 硬编码会导致在非 910B 硬件上性能下降或运行失败\n    num_cores = 40  # TODO: use get_vectorcore_num() instead\n    block_size = triton.next_power_of_2(dim // num_cores)\n    # ... triton kernel launch with num_cores ...",
+      "context": "@ZT-AIA please take a look at this change. If it's fine, the comment can be removed then."
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/triton/mamba/causal_conv1d.py",
+      "line": 645,
+      "code": "import triton\nimport triton.language as tl\nfrom vllm_ascend.ops.triton.utils import get_vectorcore_num\n\n\ndef causal_conv1d_update_npu(\n    x: torch.Tensor,\n    conv_state: torch.Tensor,\n    weight: torch.Tensor,\n    bias: torch.Tensor | None = None,\n) -> torch.Tensor:\n    \"\"\"NPU-optimized causal conv1d update using Triton kernels.\n\n    Args:\n        x: Input tensor of shape (batch, dim, 1).\n        conv_state: Convolution state tensor.\n        weight: Convolution weight tensor.\n        bias: Optional bias tensor.\n\n    Returns:\n        Output tensor after conv1d update.\n    \"\"\"\n    batch, dim, _ = x.shape\n    # 动态查询 vector core 数量，适配不同 NPU 硬件\n    num_cores = get_vectorcore_num()\n    block_size = triton.next_power_of_2(dim // num_cores)\n    # ... triton kernel launch with num_cores ...",
+      "context": "@ZT-AIA please take a look at this change. If it's fine, the comment can be removed then."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/triton/mamba/causal_conv1d.py\n+++ b/vllm_ascend/ops/triton/mamba/causal_conv1d.py\n@@ -21,9 +21,7 @@\n         Output tensor after conv1d update.\n     \"\"\"\n     batch, dim, _ = x.shape\n-    # 硬编码 vector core 数量为 40\n-    # 问题：不同 NPU 硬件（310P/910B/950）的 vector core 数量不同\n-    # 硬编码会导致在非 910B 硬件上性能下降或运行失败\n-    num_cores = 40  # TODO: use get_vectorcore_num() instead\n+    # 动态查询 vector core 数量，适配不同 NPU 硬件\n+    num_cores = get_vectorcore_num()\n     block_size = triton.next_power_of_2(dim // num_cores)\n     # ... triton kernel launch with num_cores ...",
+      "stats": "1 file changed, +2 lines, -4 lines",
+      "key_changes": [
+        "移除: # 硬编码 vector core 数量为 40",
+        "移除: # 问题：不同 NPU 硬件（310P/910B/950）的 vector core 数量不同",
+        "移除: # 硬编码会导致在非 910B 硬件上性能下降或运行失败",
+        "移除: num_cores = 40  # TODO: use get_vectorcore_num() instead",
+        "新增: # 动态查询 vector core 数量，适配不同 NPU 硬件",
+        "新增: num_cores = get_vectorcore_num()"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

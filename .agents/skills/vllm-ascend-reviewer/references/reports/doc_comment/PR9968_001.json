@@ -1,0 +1,87 @@
+{
+  "report_id": "PR9968_001",
+  "pr_number": 9968,
+  "pr_title": "[Doc][Misc] Prepare v0.21.0rc1 release notes",
+  "pr_status": "merged",
+  "merged_at": "2026-06-16T13:41:07Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "docs/source/community/versioning_policy.md:76",
+    "docs/source/user_guide/release_notes.md:3",
+    "docs/source/community/versioning_policy.md:26",
+    "docs/source/user_guide/release_notes.md:110",
+    "docs/source/user_guide/release_notes.md:133"
+  ],
+  "landing_sha": "bc3353b",
+  "source_quote": "06.09 don't forget to update the time\nditto\nmooncake version should be added as well\nHere.\nHere.\nShould we update the date?",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan: docs/source/community/versioning_policy.md:76(2026-06-09 02:22:54)",
+      "patch_snippet": "评后sha bc3353b 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wangxiyuan: docs/source/user_guide/release_notes.md:3(2026-06-09 02:22:58)",
+      "patch_snippet": "评后sha bc3353b 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wangxiyuan: docs/source/community/versioning_policy.md:26(2026-06-09 02:23:15)",
+      "patch_snippet": "评后sha bc3353b 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "yiz-liu: docs/source/user_guide/release_notes.md:110(2026-06-12 09:07:01)",
+      "patch_snippet": "评后sha bc3353b 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "yiz-liu: docs/source/user_guide/release_notes.md:133(2026-06-12 09:07:12)",
+      "patch_snippet": "评后sha bc3353b 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "QwertyJack: docs/source/community/versioning_policy.md:76(2026-06-15 09:39:23)",
+      "patch_snippet": "评后sha bc3353b 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "bc3353b",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "发布说明文档中的版本兼容性矩阵应包含所有关键依赖的版本信息（如 Mooncake、HDK、CANN 等），并确保日期与实际发布日期一致。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "docs/source/community/versioning_policy.md",
+      "line": 70,
+      "code": "## Version Compatibility Matrix\n\n| vLLM-Ascend | Release Date | vLLM | CANN | Mooncake | HDK |\n|-------------|-------------|------|------|----------|-----|\n| v0.21.0rc1  | 2026.06.XX  | v0.21.0 | 8.5.0 | -    | -   |\n<!-- wangxiyuan: \"06.09 don't forget to update the time\" -->\n<!-- wangxiyuan: \"mooncake version should be added as well\" -->\n\n## Release Cadence\n...",
+      "context": "06.09 don't forget to update the time\nditto\nmooncake version should be added as well\nHere.\nHere.\nShould we update the date?"
+    },
+    "pattern": {
+      "file": "docs/source/community/versioning_policy.md",
+      "line": 70,
+      "code": "## Version Compatibility Matrix\n\n| vLLM-Ascend | Release Date | vLLM | CANN | Mooncake | HDK |\n|-------------|-------------|------|------|----------|-----|\n| v0.21.0rc1  | 2026.06.09  | v0.21.0 | 8.5.0 | v0.3.9 | 25.5.1+ |\n<!-- 日期已更新为 2026.06.09，Mooncake v0.3.9 已添加 -->\n\n## Release Cadence\n...",
+      "context": "06.09 don't forget to update the time\nditto\nmooncake version should be added as well\nHere.\nHere.\nShould we update the date?"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/community/versioning_policy.md\n+++ b/docs/source/community/versioning_policy.md\n@@ -2,9 +2,8 @@\n \n | vLLM-Ascend | Release Date | vLLM | CANN | Mooncake | HDK |\n |-------------|-------------|------|------|----------|-----|\n-| v0.21.0rc1  | 2026.06.XX  | v0.21.0 | 8.5.0 | -    | -   |\n-<!-- wangxiyuan: \"06.09 don't forget to update the time\" -->\n-<!-- wangxiyuan: \"mooncake version should be added as well\" -->\n+| v0.21.0rc1  | 2026.06.09  | v0.21.0 | 8.5.0 | v0.3.9 | 25.5.1+ |\n+<!-- 日期已更新为 2026.06.09，Mooncake v0.3.9 已添加 -->\n \n ## Release Cadence\n ...\n",
+      "stats": "1 file changed, +2 lines, -3 lines",
+      "key_changes": [
+        "-| v0.21.0rc1  | 2026.06.XX  | v0.21.0 | 8.5.0 | -    | -   |",
+        "-<!-- wangxiyuan: \"06.09 don't forget to update the time\" -->",
+        "-<!-- wangxiyuan: \"mooncake version should be added as well\" -->",
+        "+| v0.21.0rc1  | 2026.06.09  | v0.21.0 | 8.5.0 | v0.3.9 | 25.5.1+ |",
+        "+<!-- 日期已更新为 2026.06.09，Mooncake v0.3.9 已添加 -->"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

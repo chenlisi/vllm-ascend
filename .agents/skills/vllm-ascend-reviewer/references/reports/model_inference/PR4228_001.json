@@ -1,0 +1,61 @@
+{
+  "report_id": "PR4228_001",
+  "pr_number": 4228,
+  "pr_title": "vllm-ascend support Ascend950 with Qwen dense model.",
+  "pr_status": "merged",
+  "merged_at": "2025-12-12T07:50:57Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/attention_v1.py:1481",
+    "vllm_ascend/attention/attention_v1.py:1475"
+  ],
+  "landing_sha": "335b346",
+  "source_quote": "This cumsum runs every forward step and recomputes the prefix sums. Consider precomputing and caching actual_seq_qlen during attention-metadata build, then reuse it in forward to avoid redundant work.",
+  "correspondence": [
+    {
+      "review_quote": "maoxx241 指出 `cumsum` 在每次 forward 步骤中都会重新计算前缀和，建议在 attention-metadata 构建阶段预计算并缓存 `actual_seq_qlen`，以避免冗余计算。weijinqian0 追问为何不使用 `npu_fused_infer_attention_score_v2` 接口。作者表示将在后续 PR 中优化 cumsum 性能问题。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "335b346",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "在模型前向推理的热路径中，应避免重复计算可在初始化或 metadata 构建阶段预计算的值（如 cumsum），以减少不必要的计算开销。",
+    "context": "",
+    "checkpoints": [
+      "检查 forward 方法中是否有可预计算的重复操作",
+      "确认 metadata 构建阶段是否可以缓存中间结果",
+      "验证缓存值的生命周期是否正确"
+    ],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "def _forward_ascend_950(self, ...):\n    if has_prefill:\n        if is_A5():\n            torch_npu.npu_scatter_pa_kv_cache(\n                key=key,\n                value=value.contiguous(),\n                slot_mapping=attn_metadata.slot_mapping,\n                out=(self.key_cache, self.value_cache)\n            )\n\ndef _attention_forward(self, ...):\n    output = torch_npu.npu_fused_infer_attention_score_v2(...)\n    assert output is not None",
+      "context": "This cumsum runs every forward step and recomputes the prefix sums. Consider precomputing and caching actual_seq_qlen during attention-metadata build, then reuse it in forward to avoid redundant work."
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "def _forward_ascend_950(self, ...):\n    if has_prefill:\n        if is_A5():  # 这里代码变动较大需要重新适配\n            start_idx = self.pcp_size * num_decode_tokens\n            end_idx = attn_metadata.num_actual_tokens_pcp_padded\n            torch_npu.npu_scatter_pa_kv_cache(\n                key=key[start_idx:end_idx],\n                value=value[start_idx:end_idx].contiguous(),\n                slot_mapping=attn_metadata.slot_mapping[start_idx:end_idx],\n                out=(self.key_cache, self.value_cache)\n            )\n\ndef _attention_forward(self, ...):\n    output = torch_npu.npu_fused_infer_attention_score_v2(...)\n    if output is None:\n        raise RuntimeError(\"npu_fused_infer_attention_score_v2 returned None\")",
+      "context": "This cumsum runs every forward step and recomputes the prefix sums. Consider precomputing and caching actual_seq_qlen during attention-metadata build, then reuse it in forward to avoid redundant work."
+    },
+    "diff": {
+      "unified": "--- a/a/file\n+++ b/b/file\n@@ -1,13 +1,16 @@\n def _forward_ascend_950(self, ...):\n     if has_prefill:\n-        if is_A5():\n+        if is_A5():  # 这里代码变动较大需要重新适配\n+            start_idx = self.pcp_size * num_decode_tokens\n+            end_idx = attn_metadata.num_actual_tokens_pcp_padded\n             torch_npu.npu_scatter_pa_kv_cache(\n-                key=key,\n-                value=value.contiguous(),\n-                slot_mapping=attn_metadata.slot_mapping,\n+                key=key[start_idx:end_idx],\n+                value=value[start_idx:end_idx].contiguous(),\n+                slot_mapping=attn_metadata.slot_mapping[start_idx:end_idx],\n                 out=(self.key_cache, self.value_cache)\n             )\n \n def _attention_forward(self, ...):\n     output = torch_npu.npu_fused_infer_attention_score_v2(...)\n-    assert output is not None\n+    if output is None:\n+        raise RuntimeError(\"npu_fused_infer_attention_score_v2 returned None\")",
+      "stats": "1 file changed, +8 lines, -5 lines",
+      "key_changes": [
+        "修改了第 3-3 行的代码",
+        "修改了第 5-7 行的代码",
+        "修改了第 13-13 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

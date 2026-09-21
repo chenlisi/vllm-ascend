@@ -1,0 +1,57 @@
+{
+  "report_id": "PR12308_001",
+  "pr_number": 12308,
+  "pr_title": "[Doc][Misc] Disable flashcomm1 in Qwen3-Omni-30B-A3B-Thinking tutorial",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "docs/source/tutorials/models/GLM5.2.md:1513"
+  ],
+  "landing_sha": "43fa48d",
+  "source_quote": "This is a bit weird, see to it later @qijiajin",
+  "correspondence": [
+    {
+      "review_quote": "yiz-liu: docs/source/tutorials/models/GLM5.2.md:1513",
+      "patch_snippet": "评后sha 43fa48d 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "43fa48d",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "文档文件应通过 markdown lint 检查，不应存在格式异常或\"看起来奇怪\"的内容。修改文档时应确保整体格式一致性。",
+    "context": "",
+    "checkpoints": [
+      "检查文档是否通过 markdown lint",
+      "确认修改未引入格式异常",
+      "注意表格对齐、列表缩进等格式细节"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/GLM5.2.md",
+      "line": 1500,
+      "code": "## 常见问题\n\n### 模型加载失败\n\n如果遇到模型加载失败的问题，请检查以下几点：\n\n1. 确保模型路径正确\n2. 确保有足够的显存\n3. 检查 torch_npu 版本兼容性\n\n| 参数 | 默认值 | 说明 |\n|---|---|---|\n| max-model-len | 4096 | 最大序列长度  |\n| tensor-parallel-size | 1 | 张量并行度  |\n| gpu-memory-utilization | 0.9 | 显存利用率  |\n\n### 性能优化建议\n\n以下是一些性能优化的建议：",
+      "context": "修改前代码 (markdown)"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/GLM5.2.md",
+      "line": 1500,
+      "code": "## 常见问题\n\n### 模型加载失败\n\n如果遇到模型加载失败的问题，请检查以下几点：\n\n1. 确保模型路径正确\n2. 确保有足够的显存\n3. 检查 torch_npu 版本兼容性\n\n| 参数 | 默认值 | 说明 |\n|------|------|------|\n| max-model-len | 4096 | 最大序列长度 |\n| tensor-parallel-size | 1 | 张量并行度 |\n| gpu-memory-utilization | 0.9 | 显存利用率 |\n\n### 性能优化建议\n\n以下是一些性能优化的建议：",
+      "context": "修改后代码 (markdown)"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/GLM5.2.md\n+++ b/docs/source/tutorials/models/GLM5.2.md\n@@ -9,10 +9,10 @@\n 3. 检查 torch_npu 版本兼容性\n \n | 参数 | 默认值 | 说明 |\n-|---|---|---|\n-| max-model-len | 4096 | 最大序列长度  |\n-| tensor-parallel-size | 1 | 张量并行度  |\n-| gpu-memory-utilization | 0.9 | 显存利用率  |\n+|------|------|------|\n+| max-model-len | 4096 | 最大序列长度 |\n+| tensor-parallel-size | 1 | 张量并行度 |\n+| gpu-memory-utilization | 0.9 | 显存利用率 |\n \n ### 性能优化建议\n ",
+      "stats": "1 file changed, +4 lines, -4 lines",
+      "key_changes": [
+        "修改代码逻辑"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

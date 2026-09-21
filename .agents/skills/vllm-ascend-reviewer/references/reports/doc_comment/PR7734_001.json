@@ -1,0 +1,52 @@
+{
+  "report_id": "PR7734_001",
+  "pr_number": 7734,
+  "pr_title": "[Doc] link updates and formatting fixes",
+  "pr_status": "merged",
+  "merged_at": "2026-03-27T09:21:23Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/installation.md:237"
+  ],
+  "landing_sha": "98f9a87",
+  "source_quote": "do not change this",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan: docs/source/installation.md:237",
+      "patch_snippet": "评后sha 98f9a87 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "98f9a87",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在进行文档链接更新和格式修复时，应注意不要修改特定的配置内容或安装说明，这些内容可能有特殊的用途或依赖关系。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "docs/source/installation.md",
+      "line": 225,
+      "code": "## Installation\n\n### Prerequisites\n\n- Ubuntu 22.04 LTS\n- Python >= 3.9\n- CANN >= 8.1.RC1\n\n### Install from source",
+      "context": "do not change this"
+    },
+    "pattern": {
+      "file": "docs/source/installation.md",
+      "line": 225,
+      "code": "## Installation\n\n### Prerequisites\n\n- Ubuntu 22.04 LTS\n- Python >= 3.9\n- CANN >= 8.1.RC1\n\n### Install from source",
+      "context": "do not change this"
+    },
+    "diff": {
+      "unified": "",
+      "stats": "1 file changed, +0 lines, -0 lines",
+      "key_changes": []
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

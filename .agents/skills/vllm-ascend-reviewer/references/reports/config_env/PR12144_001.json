@@ -1,0 +1,57 @@
+{
+  "report_id": "PR12144_001",
+  "pr_number": 12144,
+  "pr_title": "[Doc][Misc] Update num_speculative_tokens to 1 in model tutorials",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "docs/source/tutorials/models/GLM5.2.md:650"
+  ],
+  "landing_sha": "208162c",
+  "source_quote": "mtp configuration modifications in A2 documentation are missing.",
+  "correspondence": [
+    {
+      "review_quote": "linfeng-yuan: docs/source/tutorials/models/GLM5.2.md:650",
+      "patch_snippet": "评后sha 208162c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "208162c",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "更新模型教程中的 speculative decoding 配置时，应确保所有硬件系列（A2、A3 等）的配置示例都被同步更新，避免遗漏某个系列。",
+    "context": "",
+    "checkpoints": [
+      "检查文档中是否存在多个硬件系列的配置段落",
+      "确认 `num_speculative_tokens` 等参数在所有系列中一致更新",
+      "特别注意 PD disaggregation 场景下 prefill 节点的配置"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/DeepSeek-V4-Flash.md",
+      "line": 200,
+      "code": "### A2 series\n\nStartup Command:\n\n```bash\n    # deepseek-v4-flash-dspark uses the following image\n    export IMAGE=quay.io/ascend/vllm-ascend:nightly-main\n\n    docker run --rm \\\n        --device /dev/davinci0 \\\n        -v /mnt/share/models:/root/.cache/modelscope/hub/models \\\n        $IMAGE \\\n    vllm serve /root/.cache/modelscope/hub/models/UploadWeight/DeepSeek-V4-Flash-DSpark-w4a8-test \\\n        --max-model-len 800000 \\\n        --max-num-batched-tokens 8192 \\\n        --speculative-config '{\"method\": \"dspark\", \"num_speculative_tokens\": 5, \"enforce_eager\": true}'\n    # ↑ 仅用 enforce_eager，未启用 cudagraph/fullgraph 模式\n```",
+      "context": "修改前代码 (bash)"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/DeepSeek-V4-Flash.md",
+      "line": 200,
+      "code": "### A2 series\n\nStartup Command:\n\n```bash\n    # deepseek-v4-flash-dspark uses the following image\n    export IMAGE=quay.io/ascend/vllm-ascend:nightly-main\n\n    docker run --rm \\\n        --device /dev/davinci0 \\\n        -v /mnt/share/models:/root/.cache/modelscope/hub/models \\\n        $IMAGE \\\n    vllm serve /root/.cache/modelscope/hub/models/UploadWeight/DeepSeek-V4-Flash-DSpark-w4a8-test \\\n        --max-model-len 800000 \\\n        --max-num-batched-tokens 8192 \\\n        --speculative-config '{\"method\": \"dspark\", \"num_speculative_tokens\": 7, \"enforce_eager\": true}'  \\\n        --compilation-config '{\"cudagraph_mode\": \"FULL_DECODE_ONLY\"}'\n    # ↑ 添加 compilation-config 启用 cudagraph full decode 模式\n    # ↑ num_speculative_tokens 也从 5 调整为 7\n```",
+      "context": "修改后代码 (bash)"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/DeepSeek-V4-Flash.md\n+++ b/docs/source/tutorials/models/DeepSeek-V4-Flash.md\n@@ -13,6 +13,8 @@\n     vllm serve /root/.cache/modelscope/hub/models/UploadWeight/DeepSeek-V4-Flash-DSpark-w4a8-test \\\n         --max-model-len 800000 \\\n         --max-num-batched-tokens 8192 \\\n-        --speculative-config '{\"method\": \"dspark\", \"num_speculative_tokens\": 5, \"enforce_eager\": true}'\n-    # ↑ 仅用 enforce_eager，未启用 cudagraph/fullgraph 模式\n+        --speculative-config '{\"method\": \"dspark\", \"num_speculative_tokens\": 7, \"enforce_eager\": true}'  \\\n+        --compilation-config '{\"cudagraph_mode\": \"FULL_DECODE_ONLY\"}'\n+    # ↑ 添加 compilation-config 启用 cudagraph full decode 模式\n+    # ↑ num_speculative_tokens 也从 5 调整为 7\n ```",
+      "stats": "1 file changed, +4 lines, -2 lines",
+      "key_changes": [
+        "修改代码逻辑"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

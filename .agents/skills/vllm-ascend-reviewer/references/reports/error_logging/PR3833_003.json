@@ -1,0 +1,61 @@
+{
+  "report_id": "PR3833_003",
+  "pr_number": 3833,
+  "pr_title": "[Model] Add LongCat-Flash",
+  "pr_status": "merged",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/fused_moe/experts_selector.py:208"
+  ],
+  "landing_sha": "f8ae1a3",
+  "source_quote": "`npu_moe_gating_top_k` op can support longcat, you can give it a try.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/ops/fused_moe/experts_selector.py:208",
+      "patch_snippet": "评后sha f8ae1a3 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f8ae1a3",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当存在可用的 NPU 融合算子（如 `npu_moe_gating_top_k`）时，应优先使用融合算子替代手写的 Python 层选择逻辑，以获得更好的性能和正确性保证。",
+    "context": "",
+    "checkpoints": [
+      "检查 MoE experts 选择是否使用了手写逻辑而非融合算子",
+      "确认是否有对应的 `npu_moe_gating_top_k` 等融合算子可用",
+      "验证融合算子的参数（bias、renorm、norm_type 等）是否正确传递"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/fused_moe/experts_selector.py",
+      "line": 208,
+      "code": "# vllm_ascend/ops/fused_moe/experts_selector.py\n# 使用 npu_moe_gating_top_k_softmax（旧 API）\ntopk_weights, topk_ids, _ = torch_npu.npu_moe_gating_top_k_softmax(\n    x=router_logits, finished=None, k=top_k)\ntopk_ids = topk_ids.to(torch.int32)",
+      "context": "vllm_ascend/ops/fused_moe/experts_selector.py 使用 npu_moe_gating_top_k_softmax（旧 API）"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/fused_moe/experts_selector.py",
+      "line": 208,
+      "code": "# vllm_ascend/ops/fused_moe/experts_selector.py\n# 使用 npu_moe_gating_top_k（新 API，支持 longcat）\ntopk_weights, topk_ids, _ = torch_npu.npu_moe_gating_top_k(\n    x=router_logits,\n    k=top_k,\n    bias=e_score_correction_bias,\n    k_group=1,\n    group_count=1,\n    group_select_mode=0,\n    renorm=0,\n    norm_type=0,\n    routed_scaling_factor=routed_scaling_factor,\n    eps=float(1e-20))",
+      "context": "vllm_ascend/ops/fused_moe/experts_selector.py 使用 npu_moe_gating_top_k（新 API，支持 longcat）"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/fused_moe/experts_selector.py\n+++ b/vllm_ascend/ops/fused_moe/experts_selector.py\n@@ -1,5 +1,13 @@\n # vllm_ascend/ops/fused_moe/experts_selector.py\n-# 使用 npu_moe_gating_top_k_softmax（旧 API）\n-topk_weights, topk_ids, _ = torch_npu.npu_moe_gating_top_k_softmax(\n-    x=router_logits, finished=None, k=top_k)\n-topk_ids = topk_ids.to(torch.int32)\n+# 使用 npu_moe_gating_top_k（新 API，支持 longcat）\n+topk_weights, topk_ids, _ = torch_npu.npu_moe_gating_top_k(\n+    x=router_logits,\n+    k=top_k,\n+    bias=e_score_correction_bias,\n+    k_group=1,\n+    group_count=1,\n+    group_select_mode=0,\n+    renorm=0,\n+    norm_type=0,\n+    routed_scaling_factor=routed_scaling_factor,\n+    eps=float(1e-20))\n",
+      "stats": "1 file changed, +12 lines, -4 lines",
+      "key_changes": [
+        "移除: topk_weights, topk_ids, _ = torch_npu.npu_moe_gating_top_k_softmax(",
+        "移除: topk_ids = topk_ids.to(torch.int32)",
+        "新增: k_group=1,",
+        "新增: group_count=1,",
+        "新增: group_select_mode=0,"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

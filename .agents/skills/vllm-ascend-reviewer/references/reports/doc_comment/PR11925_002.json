@@ -1,0 +1,57 @@
+{
+  "report_id": "PR11925_002",
+  "pr_number": 11925,
+  "pr_title": "[Feature] change ngram spec deode to triton op",
+  "pr_status": "merged",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/worker/model_runner_v1.py:1825"
+  ],
+  "landing_sha": "8639709",
+  "source_quote": "这个注释可以删除",
+  "correspondence": [
+    {
+      "review_quote": "ningjingbengxiaohai: vllm_ascend/worker/model_runner_v1.py:1825",
+      "patch_snippet": "评后sha 8639709 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "8639709",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "PR diff 中不得提交/保留形如 `# # 旧代码说明` 或被整块 `if False:` 的死代码。历史代码在重构后如果迁移到了别处或逻辑失效，应从源代码中物理删除，而不是在原位置\"打 `# #` 注释存档\"——版本控制已经记录历史，源码中留存只会误导后续维护者。",
+    "context": "",
+    "checkpoints": [
+      "`# #` 双重 `#` 开头的代码行（典型\"删了但又不完全删\"痕迹）",
+      "整块被注释掉的逻辑迁移（如 `async_scheduling` 旧设置路径）",
+      "是否能从 git blame / 历史 commit 找到删除正当性（逻辑已有替代实现）"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 1810,
+      "code": "    def propose_draft_token_ids(\n        self,\n        token_ids_padded: torch.Tensor,\n        num_scheduled_tokens: dict[str, int],\n        sampled_token_ids: torch.Tensor,\n        discard_request_mask: torch.Tensor,\n        valid_sampled_tokens_count: torch.Tensor,\n    ) -> tuple[torch.Tensor, ...]:\n        \"\"\"Propose draft token ids using the configured drafter.\"\"\"\n        ...\n        vocab_size = self.model_config.get_vocab_size()\n\n        next_token_ids, draft_token_ids, valid_sampled, raw_valid_count = \\\n            self.drafter(\n                token_ids_padded,\n                num_scheduled_tokens,\n                sampled_token_ids,\n                discard_request_mask,\n                vocab_size=vocab_size,\n                min_n=self.drafter.min_n,\n                max_n=self.drafter.max_n,\n                k=self.drafter.k,\n            )\n\n        # # only async scheduling, set prev_sampled_token_ids，\n        # if self.use_async_scheduling:\n        #     self.input_batch.prev_sampled_token_ids = \\\n        #         next_token_ids.unsqueeze(1)\n        #\n\n        # Communicate verified token count to scheduler for async scheduling.\n        self._copy_valid_sampled_token_count(\n            next_token_ids, valid_sampled_tokens_count\n        )\n        return next_token_ids, draft_token_ids, valid_sampled, raw_valid_count",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 1810,
+      "code": "    def propose_draft_token_ids(\n        self,\n        token_ids_padded: torch.Tensor,\n        num_scheduled_tokens: dict[str, int],\n        sampled_token_ids: torch.Tensor,\n        discard_request_mask: torch.Tensor,\n        valid_sampled_tokens_count: torch.Tensor,\n    ) -> tuple[torch.Tensor, ...]:\n        \"\"\"Propose draft token ids using the configured drafter.\"\"\"\n        ...\n        vocab_size = self.model_config.get_vocab_size()\n\n        next_token_ids, draft_token_ids, valid_sampled, raw_valid_count = \\\n            self.drafter(\n                token_ids_padded,\n                num_scheduled_tokens,\n                sampled_token_ids,\n                discard_request_mask,\n                vocab_size=vocab_size,\n                min_n=self.drafter.min_n,\n                max_n=self.drafter.max_n,\n                k=self.drafter.k,\n            )\n\n        # Communicate verified token count to scheduler for async scheduling.\n        self._copy_valid_sampled_token_count(\n            next_token_ids, valid_sampled_tokens_count\n        )\n        return next_token_ids, draft_token_ids, valid_sampled, raw_valid_count",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/model_runner_v1.py\n+++ b/vllm_ascend/worker/model_runner_v1.py\n@@ -22,12 +22,6 @@\n                 k=self.drafter.k,\n             )\n \n-        # # only async scheduling, set prev_sampled_token_ids，\n-        # if self.use_async_scheduling:\n-        #     self.input_batch.prev_sampled_token_ids = \\\n-        #         next_token_ids.unsqueeze(1)\n-        #\n-\n         # Communicate verified token count to scheduler for async scheduling.\n         self._copy_valid_sampled_token_count(\n             next_token_ids, valid_sampled_tokens_count",
+      "stats": "1 file changed, +0 lines, -6 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

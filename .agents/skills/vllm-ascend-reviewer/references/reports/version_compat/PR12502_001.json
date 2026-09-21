@@ -1,0 +1,77 @@
+{
+  "report_id": "PR12502_001",
+  "pr_number": 12502,
+  "pr_title": "[CI] Main2main: upgrade vLLM commit to 0717",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/coordinator.py:386",
+    "tests/e2e/pull_request/one_card/model_runner_v2/test_basic.py:39",
+    "vllm_ascend/core/single_type_kv_cache_manager.py:68",
+    "vllm_ascend/patch/platform/patch_mamba_manager.py:51"
+  ],
+  "landing_sha": "9eb5d8e",
+  "source_quote": "Is this try-catch block intended to handle different input parameter lists? if so, could we remove this now?\ndone\nplz add a todo to drop this code when dropping the 0.25.1 maintenance\nwe will add it\nadd a todo here to remove this assertion when 0.25.1 is droped\nwe will add it\nThis will break the pcp/dcp support for hybrid model with mamba.\nThis was carried over from the earlier PR #12218 where hardcoding =1 served as a conservative safe default while the upstream MambaManager.find_longest_cache_hit API was still in flux (before vllm#46384/vllm#47782 were finalized). … Now that upstream has stabilized and the method properly scales block size by dcp_world_size * pcp_world_size when > 1, the parameters should be forwarded. Fixed — changed to dcp_world_size=dcp_world_size, pcp_world_size=pcp_world_size.",
+  "correspondence": [
+    {
+      "review_quote": "gemini-code-assist[bot]🤖/MengqingCao/zhangxinyuehfad/wxsIcey/nwpu-zxr: vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/coordinator.py:386",
+      "patch_snippet": "评后sha 9eb5d8e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "gemini-code-assist[bot]🤖/MengqingCao/zhangxinyuehfad/wxsIcey/nwpu-zxr: tests/e2e/pull_request/one_card/model_runner_v2/test_basic.py:39",
+      "patch_snippet": "评后sha 9eb5d8e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "gemini-code-assist[bot]🤖/MengqingCao/zhangxinyuehfad/wxsIcey/nwpu-zxr: vllm_ascend/core/single_type_kv_cache_manager.py:68",
+      "patch_snippet": "评后sha 9eb5d8e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "gemini-code-assist[bot]🤖/MengqingCao/zhangxinyuehfad/wxsIcey/nwpu-zxr: vllm_ascend/patch/platform/patch_mamba_manager.py:51",
+      "patch_snippet": "评后sha 9eb5d8e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "9eb5d8e",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "当 main2main 升级 PR（如\"upgrade vLLM commit to 0717\"）同时包含 API 兼容变更、hash 算法迁移、补丁层重构时，评审人的修改建议分两类：① 可以在本 PR 立即改完的（TODO 补置、无效 try-catch 移除、硬编码→参数转发 等 30 行以内改动）必须在本 PR 评后 commit 里完成，不能推给 follow-up 让后续接手人背锅；② 必须跨 PR 合作（feature owner 在另一个分支）或改动过大影响合并窗口的，必须在 APPROVED 后的\"合并收尾留言\"中以清单形式明确列出 follow-up 的主题和 @对应 owner，不能靠后续回忆或口头约定。",
+    "context": "",
+    "checkpoints": [
+      "main2main PR 必须先盘点：哪些 30 行以内的 TODO/try-catch/硬编码 可以在本 PR 立即改完 → 计入评后 commit",
+      "follow-up 清单必须编号列出 + @ assignee GitHub 账号，不能只写\"后续做\"",
+      "作者 inline 回复 \"done\"/\"Fixed\"必须与评后 commit diff 逐行对应，不能只口头 done 没改代码",
+      "回复\"we will add it\"必须在评后 commit 里实际加入 TODO，不能合并后空留承诺",
+      "patch 层（`patch/platform/patch_*.py`）的参数硬编码（=1）在 review 时要反问：上游 API 是否已经 finalize，若 finalize 则须立刻改回转发真实 world_size"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/coordinator.py",
+      "line": 370,
+      "code": "    def _find_cache_hit(self, manager_cls, **kwargs):\n        \"\"\"Find longest cache hit using the appropriate manager.\"\"\"\n        # 上游 API 曾经历 drop_eagle_block→use_eagle 参数重命名\n        # 此处 try-catch 仅为兼容过渡期，API 已稳定\n        try:\n            hit_result = manager_cls.find_longest_cache_hit(**kwargs)\n        except TypeError as exc:\n            if \"drop_eagle_block\" not in str(exc):\n                raise\n            kwargs[\"use_eagle\"] = kwargs.pop(\"drop_eagle_block\")\n            hit_result = manager_cls.find_longest_cache_hit(**kwargs)\n        # ❌ try-catch 仅为兼容上游参数重命名，API 已稳定后应移除\n        return hit_result",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/coordinator.py",
+      "line": 370,
+      "code": "    def _find_cache_hit(self, manager_cls, **kwargs):\n        \"\"\"Find longest cache hit using the appropriate manager.\"\"\"\n        # 上游 API 已稳定，直接调用不再需要 try-catch 兼容层\n        hit_result = manager_cls.find_longest_cache_hit(**kwargs)\n        # ✅ 直接调用，不再重试 try-catch；对应 zhangxinyuehfad inline 答\"done\"\n        return hit_result",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/coordinator.py\n+++ b/vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/coordinator.py\n@@ -1,13 +1,6 @@\n     def _find_cache_hit(self, manager_cls, **kwargs):\n         \"\"\"Find longest cache hit using the appropriate manager.\"\"\"\n-        # 上游 API 曾经历 drop_eagle_block→use_eagle 参数重命名\n-        # 此处 try-catch 仅为兼容过渡期，API 已稳定\n-        try:\n-            hit_result = manager_cls.find_longest_cache_hit(**kwargs)\n-        except TypeError as exc:\n-            if \"drop_eagle_block\" not in str(exc):\n-                raise\n-            kwargs[\"use_eagle\"] = kwargs.pop(\"drop_eagle_block\")\n-            hit_result = manager_cls.find_longest_cache_hit(**kwargs)\n-        # ❌ try-catch 仅为兼容上游参数重命名，API 已稳定后应移除\n+        # 上游 API 已稳定，直接调用不再需要 try-catch 兼容层\n+        hit_result = manager_cls.find_longest_cache_hit(**kwargs)\n+        # ✅ 直接调用，不再重试 try-catch；对应 zhangxinyuehfad inline 答\"done\"\n         return hit_result",
+      "stats": "1 file changed, +3 lines, -10 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "report_id": "PR5053_001",
+  "pr_number": 5053,
+  "pr_title": "Upgrade vllm commit hash to 1216",
+  "pr_status": "merged",
+  "merged_at": "2025-12-17T00:48:37Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/platform.py:366"
+  ],
+  "landing_sha": "45e23ee",
+  "source_quote": "use_sparse应该是6 index下标",
+  "correspondence": [
+    {
+      "review_quote": "leo-pony 指出 use_sparse 应该使用第6个 index 下标。作者通过 commit `45e23ee` 修正下标，1/1 建议全部落地。",
+      "patch_snippet": "commit `45e23ee`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "45e23ee",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "升级依赖版本或适配上游变更时，涉及数组/元组下标访问的代码必须仔细核对下标是否正确，尤其是上游接口发生变更时。",
+    "context": "",
+    "checkpoints": [
+      "升级 vllm commit hash 后，检查所有涉及下标访问的代码是否仍然正确",
+      "特别注意新增或删除字段后下标的偏移"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/platform.py",
+      "line": 0,
+      "code": "    @classmethod\n    def get_ascend_config(cls) -> dict:\n        \"\"\"Get ascend config from environment.\"\"\"\n        config_str = os.environ.get(\"VLLM_ASCEND_CONFIG\", \"\")\n        if config_str:\n            config = config_str.split(\",\")\n            use_sparse = config[5]  # 错误下标\n            other_param = config[7]\n            return {\n                \"use_sparse\": use_sparse,\n                \"other_param\": other_param,\n            }\n        return {}",
+      "context": "use_sparse应该是6 index下标"
+    },
+    "pattern": {
+      "file": "vllm_ascend/platform.py",
+      "line": 0,
+      "code": "    @classmethod\n    def get_ascend_config(cls) -> dict:\n        \"\"\"Get ascend config from environment.\"\"\"\n        config_str = os.environ.get(\"VLLM_ASCEND_CONFIG\", \"\")\n        if config_str:\n            config = config_str.split(\",\")\n            use_sparse = config[6]  # 正确下标\n            other_param = config[7]\n            return {\n                \"use_sparse\": use_sparse,\n                \"other_param\": other_param,\n            }\n        return {}",
+      "context": "use_sparse应该是6 index下标"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/platform.py\n+++ b/vllm_ascend/platform.py\n@@ -1,13 +1,13 @@\n         config_str = os.environ.get(\"VLLM_ASCEND_CONFIG\", \"\")\n         if config_str:\n             config = config_str.split(\",\")\n-            use_sparse = config[5]  # 错误下标\n+            use_sparse = config[6]  # 正确下标\n             other_param = config[7]\n             return {\n                 \"use_sparse\": use_sparse,",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "修改了第 7-7 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

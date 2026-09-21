@@ -1,0 +1,90 @@
+{
+  "report_id": "PR3892_001",
+  "pr_number": 3892,
+  "pr_title": "[Feat] Support MTP to running in full graph mode",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ascend_forward_context.py:162",
+    "vllm_ascend/attention/mla_v1.py:1403",
+    "vllm_ascend/compilation/acl_graph.py:290",
+    "vllm_ascend/patch/worker/patch_deepseek_mtp.py:96",
+    "vllm_ascend/spec_decode/mtp_proposer.py:889",
+    "vllm_ascend/attention/mla_v1.py:385",
+    "vllm_ascend/attention/mla_v1.py:342"
+  ],
+  "landing_sha": "2d74ce3",
+  "source_quote": "We should try to remove this flag in the future.\nGraph params is also deviating from its initial design and having more and more if-else.\nIf we can delete this, then `is_mtp_model` is no longer necessary right?\nMaybe try slim this.\nRemove this line after #4233 being merged.\nThe function name `pad_actual_seq_len_q_mtp_disable_pad` looks confusing to me. If the function is used to pad `actual_seq_len_q`, why the name ended with diable_pad?\nditto\n**注意**: pr/ 数据中仅包含文字评审意见，无代码 diff 块或 suggestion 代码块。以下修改根据评审位置、评审意见及 commit 信息推断，标注\"（pr/ 数据不足，待补充）\"。",
+  "correspondence": [
+    {
+      "review_quote": "yiz-liu: vllm_ascend/ascend_forward_context.py:162(2025-11-17 09:13:46)",
+      "patch_snippet": "评后sha 2d74ce3 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "yiz-liu: vllm_ascend/attention/mla_v1.py:1403(2025-11-17 09:15:31)",
+      "patch_snippet": "评后sha 2d74ce3 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "yiz-liu: vllm_ascend/compilation/acl_graph.py:290(2025-11-17 09:16:58)",
+      "patch_snippet": "评后sha 2d74ce3 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "yiz-liu: vllm_ascend/patch/worker/patch_deepseek_mtp.py:96(2025-11-17 09:22:42)",
+      "patch_snippet": "评后sha 2d74ce3 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "yiz-liu: vllm_ascend/spec_decode/mtp_proposer.py:889(2025-11-18 09:10:08)",
+      "patch_snippet": "评后sha 2d74ce3 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "whx-sjtu: vllm_ascend/attention/mla_v1.py:385(2025-11-19 02:49:27)",
+      "patch_snippet": "评后sha 2d74ce3 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "whx-sjtu: vllm_ascend/attention/mla_v1.py:342(2025-11-19 02:49:37)",
+      "patch_snippet": "评后sha 2d74ce3 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "2d74ce3",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [
+      "函数名中包含的修饰词（如 `disable_pad`、`enable_pad`）应与其实际行为一致，避免因缩写或截断导致语义混淆。",
+      "当函数名过长需要缩写时，应确保缩写后的名称不会引起歧义。"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ascend_forward_context.py",
+      "line": 162,
+      "code": "",
+      "context": "We should try to remove this flag in the future.\nGraph params is also deviating from its initial design and having more and more if-else.\nIf we can delete this, then `is_mtp_model` is no longer necess"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ascend_forward_context.py",
+      "line": 162,
+      "code": "",
+      "context": "We should try to remove this flag in the future.\nGraph params is also deviating from its initial design and having more and more if-else.\nIf we can delete this, then `is_mtp_model` is no longer necess"
+    },
+    "diff": {
+      "unified": "",
+      "stats": "",
+      "key_changes": []
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

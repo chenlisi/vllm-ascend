@@ -1,0 +1,86 @@
+{
+  "report_id": "PR11602_001",
+  "pr_number": 11602,
+  "pr_title": "[Feature][MRV2] Add qwen dspark support for mrv2",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/worker/v2/spec_decode/dspark/__init__.py:1",
+    "vllm_ascend/worker/v2/spec_decode/dspark/speculator.py:31",
+    "tests/e2e/pull_request/one_card/model_runner_v2/test_basic.py:225",
+    "vllm_ascend/worker/v2/spec_decode/dflash/speculator.py:211",
+    "vllm_ascend/worker/v2/spec_decode/dspark/speculator.py:33"
+  ],
+  "landing_sha": "2b26965",
+  "source_quote": "Why do you need comment in an empty file?\nWhy `AscendDSparkSpeculator` extends `DSparkSpeculator`, but not `AscendDFlashSpeculator`?\nDo we need to have a baseline for each location to determine whether the acceptance rate is acceptable?\n@yiz-liu Please confirm whether this `patch` is applicable to `v2`.\nIs it correct that _context_slot_mappings is initialized twice?\nFine.",
+  "correspondence": [
+    {
+      "review_quote": "drslark: vllm_ascend/worker/v2/spec_decode/dspark/__init__.py:1",
+      "patch_snippet": "评后sha 2b26965 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "zhenwenqi2024: vllm_ascend/worker/v2/spec_decode/dspark/speculator.py:31",
+      "patch_snippet": "评后sha 2b26965 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "drslark: tests/e2e/pull_request/one_card/model_runner_v2/test_basic.py:225",
+      "patch_snippet": "评后sha 2b26965 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "drslark: vllm_ascend/worker/v2/spec_decode/dflash/speculator.py:211",
+      "patch_snippet": "评后sha 2b26965 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "drslark: vllm_ascend/worker/v2/spec_decode/dspark/speculator.py:33",
+      "patch_snippet": "评后sha 2b26965 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "drslark: vllm_ascend/worker/v2/spec_decode/dspark/speculator.py:31",
+      "patch_snippet": "评后sha 2b26965 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "2b26965",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在类的 `__init__` 方法中，不应对同一实例变量进行两次赋值。如果需要对变量做类型转换，应使用 `.to()` 等方法进行转换而非重新赋值。",
+    "context": "",
+    "checkpoints": [
+      "检查 `__init__` 中是否存在对同一属性的重复赋值",
+      "确认类型转换是否使用了原地转换（`.to()`）而非重复初始化",
+      "空 `__init__.py` 文件不应包含不必要的注释"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/v2/spec_decode/dspark/__init__.py",
+      "line": 0,
+      "code": "# This module implements the Ascend DSpark speculator for\n# speculative decoding on Ascend NPUs.\n# It provides the AscendDSparkSpeculator class which extends\n# DSparkSpeculator with Ascend-specific optimizations.",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/v2/spec_decode/dspark/__init__.py",
+      "line": 1,
+      "code": "# (empty file — comments removed)",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/v2/spec_decode/dspark/__init__.py\n+++ b/vllm_ascend/worker/v2/spec_decode/dspark/__init__.py\n@@ -1,4 +1 @@\n-# This module implements the Ascend DSpark speculator for\n-# speculative decoding on Ascend NPUs.\n-# It provides the AscendDSparkSpeculator class which extends\n-# DSparkSpeculator with Ascend-specific optimizations.\n+# (empty file — comments removed)",
+      "stats": "1 file changed, +1 lines, -4 lines",
+      "key_changes": [
+        "添加注释说明"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

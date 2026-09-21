@@ -1,0 +1,57 @@
+{
+  "report_id": "PR12718_001",
+  "pr_number": 12718,
+  "pr_title": "[Doc][Misc] Add Ascend950DT support documentation for DeepSeek-V3.1",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "docs/source/tutorials/models/DeepSeek-V3.1.md:51"
+  ],
+  "landing_sha": "a48ef44",
+  "source_quote": "The image tag contains a `#TODO` placeholder and uses incorrect template syntax `|vllm_ascend_version|`. It should use the standard Jinja template syntax `{{ vllm_ascend_version }}` used elsewhere in this file and remove the `#TODO` comment.",
+  "correspondence": [
+    {
+      "review_quote": "gemini-code-assist[bot]: docs/source/tutorials/models/DeepSeek-V3.1.md:51",
+      "patch_snippet": "评后sha a48ef44 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "a48ef44",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "部署文档中的 docker 镜像标签、版本号等引用不得残留 `#TODO` 等占位符；模板变量必须使用项目统一的 Jinja 语法 `{{ var }}`，不得使用 `|var|` 等非标准写法。",
+    "context": "",
+    "checkpoints": [
+      "检查文档中是否存在 `#TODO`、`#FIXME`、`XXX` 等占位符",
+      "检查模板变量是否使用统一的 Jinja 语法 `{{ var }}`（而非 `|var|`、`<var>`、`$var` 等）",
+      "检查同一文档中相同变量的写法是否一致（与文档其他位置对照）"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/DeepSeek-V3.1.md",
+      "line": 51,
+      "code": "## Launch the container\n\nBefore starting, ensure that the Ascend NPU driver and firmware are properly\ninstalled on your host machine. You can verify the NPU status by running:\n\n```bash\nnpu-smi info\n```\n\nSet the environment variables and pull the Docker image:\n\n```bash\n# Set the vLLM Ascend version\nexport IMAGE=quay.io/ascend/vllm-ascend:{{vllm_ascend_version}}-#TODO\n\n# Pull the image\ndocker pull ${IMAGE}\n```",
+      "context": "修改前代码 (markdown)"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/DeepSeek-V3.1.md",
+      "line": 51,
+      "code": "## Launch the container\n\nBefore starting, ensure that the Ascend NPU driver and firmware are properly\ninstalled on your host machine. You can verify the NPU status by running:\n\n```bash\nnpu-smi info\n```\n\nSet the environment variables and pull the Docker image:\n\n```bash\n# Set the vLLM Ascend version\nexport IMAGE=quay.io/ascend/vllm-ascend:{{vllm_ascend_version}}\n\n# Pull the image\ndocker pull ${IMAGE}\n```",
+      "context": "修改后代码 (markdown)"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/DeepSeek-V3.1.md\n+++ b/docs/source/tutorials/models/DeepSeek-V3.1.md\n@@ -11,7 +11,7 @@\n \n ```bash\n # Set the vLLM Ascend version\n-export IMAGE=quay.io/ascend/vllm-ascend:{{vllm_ascend_version}}-#TODO\n+export IMAGE=quay.io/ascend/vllm-ascend:{{vllm_ascend_version}}\n \n # Pull the image\n docker pull ${IMAGE}",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "移除 Docker 镜像标签中的 #TODO 占位符"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

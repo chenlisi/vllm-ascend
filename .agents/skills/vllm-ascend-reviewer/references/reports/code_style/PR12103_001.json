@@ -1,0 +1,57 @@
+{
+  "report_id": "PR12103_001",
+  "pr_number": 12103,
+  "pr_title": "[BugFix][CI] Add E2E for kv sliding window; fix block size input bug",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/spec_decode/llm_base_proposer.py:344"
+  ],
+  "landing_sha": "3c4ee3a",
+  "source_quote": "I think you should add a check to see if the drafter's backend is FIA.",
+  "correspondence": [
+    {
+      "review_quote": "drslark: vllm_ascend/spec_decode/llm_base_proposer.py:344",
+      "patch_snippet": "评后sha 3c4ee3a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "3c4ee3a",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 speculative decoding 中启用特定功能（如 KV sliding window）时，应检查 drafter 的 backend 类型是否兼容，避免在不支持的 backend 下出现运行时错误。",
+    "context": "",
+    "checkpoints": [
+      "检查功能是否仅在特定 backend 下可用",
+      "确认添加了 backend 类型的前置检查",
+      "对于不兼容的情况，提供清晰的错误提示"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/spec_decode/llm_base_proposer.py",
+      "line": 0,
+      "code": "# vllm_ascend/spec_decode/llm_base_proposer.py L330-L355\n# load_model 方法中 sliding window 初始化段（commit 3c4ee3a 之前）\ndef load_model(self, model_config: ModelConfig) -> None:\n    \"\"\"Load the model and initialize the sliding window adapter.\"\"\"\n    # ... model loading logic ...\n    self.model = get_model(model_config)\n\n    # KV sliding window: initialize draft attention adapter\n    # No backend check — applied unconditionally to all drafter backends\n    if self.use_sliding_window:\n        self.draft_window_size = self.runner.model_config.hf_config.get(\n            \"sliding_window_size\", None\n        )\n        self.sliding_window = self.runner.model_config.hf_config.get(\n            \"sliding_window\", None\n        )\n        # Initialize sliding window draft attention adapter\n        # using kernel_block_size for block size\n        block_size = self.runner.block_size\n        self.draft_attn_adapter = SlidingWindowDraftAttentionAdapter(\n            draft_window_size=self.draft_window_size,\n            block_size=block_size,\n        )\n        # ↑↑ 问题：未检查 drafter backend 是否为 FIA（Flash Inference Attention）\n        #    非 FIA backend 下应用 sliding window 会导致运行时错误",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/spec_decode/llm_base_proposer.py",
+      "line": 0,
+      "code": "# vllm_ascend/spec_decode/llm_base_proposer.py L330-L360\n# load_model 方法中 sliding window 初始化段（commit 3c4ee3a 添加 backend 检查）\ndef load_model(self, model_config: ModelConfig) -> None:\n    \"\"\"Load the model and initialize the sliding window adapter.\"\"\"\n    # ... model loading logic ...\n    self.model = get_model(model_config)\n\n    # KV sliding window: initialize draft attention adapter\n    # Now checks drafter backend compatibility before applying\n    if self.use_sliding_window:\n        drafter_backend = self.get_drafter_backend()\n        if drafter_backend != \"FIA\":\n            logger.warning(\n                \"KV sliding window is only supported with FIA \"\n                \"(Flash Inference Attention) backend. \"\n                \"Current backend: %s. Skipping sliding window.\",\n                drafter_backend,\n            )\n            self.use_sliding_window = False\n        else:\n            self.draft_window_size = self.runner.model_config.hf_config.get(\n                \"sliding_window_size\", None\n            )\n            self.sliding_window = self.runner.model_config.hf_config.get(\n                \"sliding_window\", None\n            )\n            block_size = self.runner.block_size\n            self.draft_attn_adapter = SlidingWindowDraftAttentionAdapter(\n                draft_window_size=self.draft_window_size,\n                block_size=block_size,\n            )",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/spec_decode/llm_base_proposer.py\n+++ b/vllm_ascend/spec_decode/llm_base_proposer.py\n@@ -1,25 +1,31 @@\n-# vllm_ascend/spec_decode/llm_base_proposer.py L330-L355\n-# load_model 方法中 sliding window 初始化段（commit 3c4ee3a 之前）\n+# vllm_ascend/spec_decode/llm_base_proposer.py L330-L360\n+# load_model 方法中 sliding window 初始化段（commit 3c4ee3a 添加 backend 检查）\n def load_model(self, model_config: ModelConfig) -> None:\n     \"\"\"Load the model and initialize the sliding window adapter.\"\"\"\n     # ... model loading logic ...\n     self.model = get_model(model_config)\n \n     # KV sliding window: initialize draft attention adapter\n-    # No backend check — applied unconditionally to all drafter backends\n+    # Now checks drafter backend compatibility before applying\n     if self.use_sliding_window:\n-        self.draft_window_size = self.runner.model_config.hf_config.get(\n-            \"sliding_window_size\", None\n-        )\n-        self.sliding_window = self.runner.model_config.hf_config.get(\n-            \"sliding_window\", None\n-        )\n-        # Initialize sliding window draft attention adapter\n-        # using kernel_block_size for block size\n-        block_size = self.runner.block_size\n-        self.draft_attn_adapter = SlidingWindowDraftAttentionAdapter(\n-            draft_window_size=self.draft_window_size,\n-            block_size=block_size,\n-        )\n-        # ↑↑ 问题：未检查 drafter backend 是否为 FIA（Flash Inference Attention）\n-        #    非 FIA backend 下应用 sliding window 会导致运行时错误\n+        drafter_backend = self.get_drafter_backend()\n+        if drafter_backend != \"FIA\":\n+            logger.warning(\n+                \"KV sliding window is only supported with FIA \"\n+                \"(Flash Inference Attention) backend. \"\n+                \"Current backend: %s. Skipping sliding window.\",\n+                drafter_backend,\n+            )\n+            self.use_sliding_window = False\n+        else:\n+            self.draft_window_size = self.runner.model_config.hf_config.get(\n+                \"sliding_window_size\", None\n+            )\n+            self.sliding_window = self.runner.model_config.hf_config.get(\n+                \"sliding_window\", None\n+            )\n+            block_size = self.runner.block_size\n+            self.draft_attn_adapter = SlidingWindowDraftAttentionAdapter(\n+                draft_window_size=self.draft_window_size,\n+                block_size=block_size,\n+            )",
+      "stats": "1 file changed, +24 lines, -18 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

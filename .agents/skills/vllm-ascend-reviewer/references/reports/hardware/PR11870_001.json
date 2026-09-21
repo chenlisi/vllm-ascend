@@ -1,0 +1,57 @@
+{
+  "report_id": "PR11870_001",
+  "pr_number": 11870,
+  "pr_title": "[Feature][SFA] Support C8 SFA with DCP replicated indexer",
+  "pr_status": "merged",
+  "dimension": [
+    "design"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/device/device_op.py:508"
+  ],
+  "landing_sha": "a1d269d",
+  "source_quote": "plz move this to sfa_cp.py. device_op is not responsible for abstracting operator APIs, but only for distinguishing device differences.",
+  "correspondence": [
+    {
+      "review_quote": "weijinqian0: vllm_ascend/device/device_op.py:508",
+      "patch_snippet": "评后sha a1d269d 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "a1d269d",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "`DeviceOperator` 仅负责封装设备差异（不同 NPU 路径、operator 调用差异），不应承载业务逻辑（如 LSE 合并、shape 变换等）。业务逻辑应由上层调用方实现。",
+    "context": "",
+    "checkpoints": [
+      "检查 `device_op.py` 中是否包含与设备无关的业务逻辑（如张量变换、数据合并算法）",
+      "业务逻辑应放在调用方（如 `sfa_cp.py`），device_op 只做透传/解包/路径选择",
+      "评估 `device_op.py` 中新增函数是否仅为了\"区分设备\"，而非\"抽象业务 API\""
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/device/device_op.py",
+      "line": 495,
+      "code": "    @staticmethod\n    def execute_sparse_flash_attention_process(\n        query: torch.Tensor,\n        key: torch.Tensor,\n        value: torch.Tensor,\n        seqlens: list[int],\n        sparse_mode: int,\n        return_lse: bool = False,\n        **kwargs,\n    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:\n        \"\"\"Execute sparse flash attention on NPU.\"\"\"\n        ...\n        result = torch_npu.npu_sparse_flash_attention(\n            query, key, value, seqlens,\n            sparse_mode=sparse_mode,\n            return_softmax_lse=return_lse,\n        )\n        return DeviceOperator._format_sparse_flash_attention_output(\n            result, return_lse=return_lse)\n\n    @staticmethod\n    def _format_sparse_flash_attention_output(\n        attn_output: torch.Tensor,\n        softmax_max: torch.Tensor,\n        softmax_sum: torch.Tensor,\n        return_lse: bool,\n    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:\n        if not return_lse:\n            return attn_output\n        # LSE 计算逻辑放在 DeviceOperator 中（职责越界）\n        softmax_lse = softmax_max.to(torch.float32) + torch.log(\n            softmax_sum.to(torch.float32))\n        softmax_lse = softmax_lse.permute(1, 0, 2).reshape(\n            softmax_lse.shape[1], -1, 1)\n        return attn_output, softmax_lse",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/device/device_op.py",
+      "line": 495,
+      "code": "    @staticmethod\n    def execute_sparse_flash_attention_process(\n        query: torch.Tensor,\n        key: torch.Tensor,\n        value: torch.Tensor,\n        seqlens: list[int],\n        sparse_mode: int,\n        return_lse: bool = False,\n        **kwargs,\n    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor, torch.Tensor]:\n        \"\"\"Execute sparse flash attention on NPU.\"\"\"\n        ...\n        result = torch_npu.npu_sparse_flash_attention(\n            query, key, value, seqlens,\n            sparse_mode=sparse_mode,\n            return_softmax_lse=return_lse,\n        )\n        # DeviceOperator 只做 tuple 解包与返回，不做业务计算\n        return DeviceOperator._format_sparse_flash_attention_output(\n            result, return_lse=return_lse)\n\n    @staticmethod\n    def _format_sparse_flash_attention_output(\n        result: torch.Tensor | tuple[torch.Tensor, torch.Tensor, torch.Tensor],\n        return_lse: bool,\n    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor, torch.Tensor]:\n        if not isinstance(result, tuple):\n            if return_lse:\n                raise RuntimeError(\n                    \"Sparse flash attention did not return softmax \"\n                    \"max/sum for DCP LSE merge.\")\n            return result\n        if return_lse:\n            return result\n        else:\n            return result[0]",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/device/device_op.py\n+++ b/vllm_ascend/device/device_op.py\n@@ -7,7 +7,7 @@\n         sparse_mode: int,\n         return_lse: bool = False,\n         **kwargs,\n-    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:\n+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor, torch.Tensor]:\n         \"\"\"Execute sparse flash attention on NPU.\"\"\"\n         ...\n         result = torch_npu.npu_sparse_flash_attention(\n@@ -15,21 +15,22 @@\n             sparse_mode=sparse_mode,\n             return_softmax_lse=return_lse,\n         )\n+        # DeviceOperator 只做 tuple 解包与返回，不做业务计算\n         return DeviceOperator._format_sparse_flash_attention_output(\n             result, return_lse=return_lse)\n \n     @staticmethod\n     def _format_sparse_flash_attention_output(\n-        attn_output: torch.Tensor,\n-        softmax_max: torch.Tensor,\n-        softmax_sum: torch.Tensor,\n+        result: torch.Tensor | tuple[torch.Tensor, torch.Tensor, torch.Tensor],\n         return_lse: bool,\n-    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:\n-        if not return_lse:\n-            return attn_output\n-        # LSE 计算逻辑放在 DeviceOperator 中（职责越界）\n-        softmax_lse = softmax_max.to(torch.float32) + torch.log(\n-            softmax_sum.to(torch.float32))\n-        softmax_lse = softmax_lse.permute(1, 0, 2).reshape(\n-            softmax_lse.shape[1], -1, 1)\n-        return attn_output, softmax_lse\n+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor, torch.Tensor]:\n+        if not isinstance(result, tuple):\n+            if return_lse:\n+                raise RuntimeError(\n+                    \"Sparse flash attention did not return softmax \"\n+                    \"max/sum for DCP LSE merge.\")\n+            return result\n+        if return_lse:\n+            return result\n+        else:\n+            return result[0]",
+      "stats": "1 file changed, +14 lines, -13 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

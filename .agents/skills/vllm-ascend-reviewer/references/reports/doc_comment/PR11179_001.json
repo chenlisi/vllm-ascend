@@ -1,0 +1,69 @@
+{
+  "report_id": "PR11179_001",
+  "pr_number": 11179,
+  "pr_title": "[DOC][310P] Update Atlas 200I Pro container startup method",
+  "pr_status": "merged",
+  "merged_at": "2026-06-30T11:54:45Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/hardwares/310p.md:148",
+    "docs/source/tutorials/hardwares/310p.md:81",
+    "docs/source/tutorials/hardwares/310p.md:195"
+  ],
+  "landing_sha": "8bcedbd",
+  "source_quote": "这些和当时dockerfile的更改有啥关联？",
+  "correspondence": [
+    {
+      "review_quote": "herizhen 指出应使用 tab-set 标记语法将不同操作系统的容器启动命令分组为标签页，提高文档可读性。Tflowers-0129 询问文档更改与 dockerfile 更改的关联。作者通过 commit `8bcedbd` 使用 tab-set 语法重组了文档内容，3/3 建议全部落地。",
+      "patch_snippet": "commit `8bcedbd`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "8bcedbd",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "当文档中需要展示多个平台/操作系统的配置命令时，应使用 Sphinx 的 `tab-set` 标记语法将不同平台的内容分组到标签页中，提高可读性和可维护性。同时避免硬编码版本号，使用 substitution 变量保持自动更新。",
+    "context": "",
+    "checkpoints": [
+      "多平台文档是否使用了 tab-set 语法分组",
+      "Docker 镜像版本号是否使用了 `|vllm_ascend_version|` substitution 变量而非硬编码",
+      "文档更改是否与对应的 Dockerfile 更改保持一致"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/hardwares/310p.md",
+      "line": 148,
+      "code": ".. 文件: docs/source/tutorials/hardwares/310p.md\n.. 行号: 约第75-130行\n\n### Start Container\n\nPull the Docker image and start the container:\n\n.. code-block:: bash\n   :substitutions:\n\n   export IMAGE=quay.io/ascend/vllm-ascend:v0.18.0-310p\n\n   docker run -itd --name=vllm_env \\\n       --device /dev/davinci0 \\\n       --device /dev/davinci_manager \\\n       --device /dev/hisi_hdc \\\n       -v /usr/local/Ascend:/usr/local/Ascend \\\n       -v /usr/local/dcmi:/usr/local/dcmi \\\n       $IMAGE /bin/bash\n\nFor openEuler:\n\n.. code-block:: bash\n   :substitutions:\n\n   export IMAGE=quay.io/ascend/vllm-ascend:v0.18.0-310p-openeuler\n\n   docker run -itd --name=vllm_env \\\n       --device /dev/davinci0 \\\n       --device /dev/davinci_manager \\\n       --device /dev/hisi_hdc \\\n       -v /usr/local/Ascend:/usr/local/Ascend \\\n       $IMAGE /bin/bash",
+      "context": "这些和当时dockerfile的更改有啥关联？"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/hardwares/310p.md",
+      "line": 148,
+      "code": ".. 文件: docs/source/tutorials/hardwares/310p.md\n.. 行号: 约第75-130行\n\n### Start Container\n\nPull the Docker image and start the container:\n\n.. tab-set::\n\n   .. tab-item:: Ubuntu 24.04\n\n      .. code-block:: bash\n         :substitutions:\n\n         export IMAGE=quay.io/ascend/vllm-ascend:|vllm_ascend_version|-310p\n\n         docker run -itd --name=vllm_env \\\n             --device /dev/davinci0 \\\n             --device /dev/davinci_manager \\\n             --device /dev/hisi_hdc \\\n             -v /usr/local/Ascend:/usr/local/Ascend \\\n             -v /usr/local/dcmi:/usr/local/dcmi \\\n             $IMAGE /bin/bash\n\n   .. tab-item:: openEuler 24.03\n\n      .. code-block:: bash\n         :substitutions:\n\n         export IMAGE=quay.io/ascend/vllm-ascend:|vllm_ascend_version|-310p-openeuler\n\n         docker run -itd --name=vllm_env \\\n             --device /dev/davinci0 \\\n             --device /dev/davinci_manager \\\n             --device /dev/hisi_hdc \\\n             -v /usr/local/Ascend:/usr/local/Ascend \\\n             $IMAGE /bin/bash",
+      "context": "这些和当时dockerfile的更改有啥关联？"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/hardwares/310p.md\n+++ b/docs/source/tutorials/hardwares/310p.md\n@@ -5,29 +5,33 @@\n \n Pull the Docker image and start the container:\n \n-.. code-block:: bash\n-   :substitutions:\n+.. tab-set::\n \n-   export IMAGE=quay.io/ascend/vllm-ascend:v0.18.0-310p\n+   .. tab-item:: Ubuntu 24.04\n \n-   docker run -itd --name=vllm_env \\\n-       --device /dev/davinci0 \\\n-       --device /dev/davinci_manager \\\n-       --device /dev/hisi_hdc \\\n-       -v /usr/local/Ascend:/usr/local/Ascend \\\n-       -v /usr/local/dcmi:/usr/local/dcmi \\\n-       $IMAGE /bin/bash\n+      .. code-block:: bash\n+         :substitutions:\n \n-For openEuler:\n+         export IMAGE=quay.io/ascend/vllm-ascend:|vllm_ascend_version|-310p\n \n-.. code-block:: bash\n-   :substitutions:\n+         docker run -itd --name=vllm_env \\\n+             --device /dev/davinci0 \\\n+             --device /dev/davinci_manager \\\n+             --device /dev/hisi_hdc \\\n+             -v /usr/local/Ascend:/usr/local/Ascend \\\n+             -v /usr/local/dcmi:/usr/local/dcmi \\\n+             $IMAGE /bin/bash\n \n-   export IMAGE=quay.io/ascend/vllm-ascend:v0.18.0-310p-openeuler\n+   .. tab-item:: openEuler 24.03\n \n-   docker run -itd --name=vllm_env \\\n-       --device /dev/davinci0 \\\n-       --device /dev/davinci_manager \\\n-       --device /dev/hisi_hdc \\\n-       -v /usr/local/Ascend:/usr/local/Ascend \\\n-       $IMAGE /bin/bash\n+      .. code-block:: bash\n+         :substitutions:\n+\n+         export IMAGE=quay.io/ascend/vllm-ascend:|vllm_ascend_version|-310p-openeuler\n+\n+         docker run -itd --name=vllm_env \\\n+             --device /dev/davinci0 \\\n+             --device /dev/davinci_manager \\\n+             --device /dev/hisi_hdc \\\n+             -v /usr/local/Ascend:/usr/local/Ascend \\\n+             $IMAGE /bin/bash",
+      "stats": "1 file changed, +24 lines, -20 lines",
+      "key_changes": [
+        "移除: .. code-block:: bash",
+        "移除: :substitutions:",
+        "新增: .. tab-set::",
+        "移除: export IMAGE=quay.io/ascend/vllm-ascend:v0.18.0-310p",
+        "新增: .. tab-item:: Ubuntu 24.04",
+        "移除: docker run -itd --name=vllm_env \\",
+        "移除: --device /dev/davinci0 \\",
+        "移除: --device /dev/davinci_manager \\",
+        "移除: --device /dev/hisi_hdc \\",
+        "移除: -v /usr/local/Ascend:/usr/local/Ascend \\"
+      ]
+    },
+    "language": "rst",
+    "_status": "extracted"
+  }
+}

@@ -1,0 +1,100 @@
+{
+  "report_id": "PR11495_001",
+  "pr_number": 11495,
+  "pr_title": "[Feature] Printing of the reserved and allocated values after warmup",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/worker/worker.py:862",
+    "vllm_ascend/worker/worker.py:856",
+    "vllm_ascend/worker/worker.py:669",
+    "vllm_ascend/worker/worker.py:663",
+    "vllm_ascend/worker/worker.py:835",
+    "vllm_ascend/worker/worker.py:570",
+    "vllm_ascend/worker/worker.py:574",
+    "vllm_ascend/worker/worker.py:781"
+  ],
+  "landing_sha": "69555c4",
+  "source_quote": "删除空行\n可以删除 profile_torch_peak。原因：该值是warmup中，是计算 kv cache和graph capture之前的值，不能给推理过程中作为基线；而且已经打印 peak_activation，此处的 profile_torch_peak 值含义类似。\ntorch peak allocated memory，和前文保持一致。\ntorch peak allocated memory，和前文保持一致。\n将这行放到859行的 logger.info(msg) 之后，并增加注释说明增加这行的原因：Reset peak memory after warmup to make sure get correct peak memory during inference.\n不需要增加self，恢复\n不需要增加self，恢复\nAfter warmup, torch reserved memory: x GiB, torch allocated memory: x GiB.",
+  "correspondence": [
+    {
+      "review_quote": "voidvelocity: vllm_ascend/worker/worker.py:862",
+      "patch_snippet": "评后sha 69555c4 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "voidvelocity: vllm_ascend/worker/worker.py:856",
+      "patch_snippet": "评后sha 69555c4 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "voidvelocity: vllm_ascend/worker/worker.py:669",
+      "patch_snippet": "评后sha 69555c4 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "voidvelocity: vllm_ascend/worker/worker.py:663",
+      "patch_snippet": "评后sha 69555c4 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "voidvelocity: vllm_ascend/worker/worker.py:835",
+      "patch_snippet": "评后sha 69555c4 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "voidvelocity: vllm_ascend/worker/worker.py:570",
+      "patch_snippet": "评后sha 69555c4 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "voidvelocity: vllm_ascend/worker/worker.py:574",
+      "patch_snippet": "评后sha 69555c4 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "voidvelocity: vllm_ascend/worker/worker.py:781",
+      "patch_snippet": "评后sha 69555c4 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "69555c4",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "warmup 后的内存日志应当：(1) 使用统一的描述格式（\"torch peak allocated memory\"）与前文保持一致；(2) 不应保留含义重复的变量（如 `profile_torch_peak` 与 `peak_activation`）；(3) peak memory reset 应放在正确的位置（warmup 日志输出之后），并添加注释说明原因；(4) 不需要将局部变量提升为实例变量（`self`）。",
+    "context": "",
+    "checkpoints": [
+      "日志描述字符串是否与同文件内的其他类似日志保持一致",
+      "是否存在含义重复的内存统计变量",
+      "peak memory reset 操作是否在正确的时间点执行",
+      "局部变量是否被不必要地提升为 `self.xxx`"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/worker.py",
+      "line": 560,
+      "code": "    def compile_or_warm_up_model(self):\n        \"\"\"Warm up the model and establish memory baseline.\"\"\"\n        ...\n        # 不必要地将局部变量提升为实例变量\n        self.infer_baseline_peak = torch.npu.memory_stats(\n            self.device).get(\"allocated_bytes.all.current\", 0)\n        self.profile_torch_peak = torch.npu.memory_stats(\n            self.device).get(\"allocated_bytes.all.peak\", 0)\n        # 这些值仅在 warmup 阶段使用，不需要 self 前缀\n        ...",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/worker.py",
+      "line": 560,
+      "code": "    def compile_or_warm_up_model(self):\n        \"\"\"Warm up the model and establish memory baseline.\"\"\"\n        ...\n        # 意见6/7落地：恢复为局部变量，不需要 self 前缀\n        infer_baseline_peak = torch.npu.memory_stats(\n            self.device).get(\"allocated_bytes.all.current\", 0)\n        # 意见2落地：删除 profile_torch_peak（含义与 peak_activation 重复，\n        # 且该值是 warmup 中 kv cache/graph capture 之前的值，不能作为推理基线）\n        ...",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/worker.py\n+++ b/vllm_ascend/worker/worker.py\n@@ -1,10 +1,9 @@\n     def compile_or_warm_up_model(self):\n         \"\"\"Warm up the model and establish memory baseline.\"\"\"\n         ...\n-        # 不必要地将局部变量提升为实例变量\n-        self.infer_baseline_peak = torch.npu.memory_stats(\n+        # 意见6/7落地：恢复为局部变量，不需要 self 前缀\n+        infer_baseline_peak = torch.npu.memory_stats(\n             self.device).get(\"allocated_bytes.all.current\", 0)\n-        self.profile_torch_peak = torch.npu.memory_stats(\n-            self.device).get(\"allocated_bytes.all.peak\", 0)\n-        # 这些值仅在 warmup 阶段使用，不需要 self 前缀\n+        # 意见2落地：删除 profile_torch_peak（含义与 peak_activation 重复，\n+        # 且该值是 warmup 中 kv cache/graph capture 之前的值，不能作为推理基线）\n         ...",
+      "stats": "1 file changed, +4 lines, -5 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

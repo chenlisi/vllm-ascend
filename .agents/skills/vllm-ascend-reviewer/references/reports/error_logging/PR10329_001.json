@@ -1,0 +1,66 @@
+{
+  "report_id": "PR10329_001",
+  "pr_number": 10329,
+  "pr_title": "[MISC][KV Pool] Avoid logging KV store keys at error level",
+  "pr_status": "merged",
+  "merged_at": "2026-06-17T08:23:27Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/mooncake_backend.py:239"
+  ],
+  "landing_sha": "e402171",
+  "source_quote": "You can place `failed_count = sum(1 for value in res_list if value < 0)` before line 233 so that it can be reused in line 239.",
+  "correspondence": [
+    {
+      "review_quote": "LCAIZJ 指出 `mooncake_backend.py:239` 处的 `failed_count` 计算可以提前到第233行之前，以便复用。作者确认并修复，commit `e402171`（\"Reuse Mooncake get failure count\"）将失败计数提前计算并复用，1/1 建议全部落地。",
+      "patch_snippet": "commit `e402171`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "e402171",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当同一计算结果在多处使用时，应提前计算并存储为变量，避免重复计算。特别是在日志记录和错误处理中，应将统计计算提前到需要使用的代码之前。",
+    "context": "",
+    "checkpoints": [
+      "检查是否有重复的统计计算（如 `sum`、`count`）",
+      "检查变量是否在使用前已计算好"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/mooncake_backend.py",
+      "line": 239,
+      "code": "import logging\nfrom typing import Optional\n\nlogger = logging.getLogger(__name__)\n\n# ... 其他代码 ...\n\nclass MooncakeBackend:\n    # ... 其他方法 ...\n\n    def batch_get(\n        self,\n        keys: list[str],\n        # ... 其他参数 ...\n    ) -> list[bytes]:\n        \"\"\"批量获取 KV 数据\"\"\"\n        # ... 执行 batch get 操作 ...\n        res_list = self._mooncake_batch_get(keys)\n\n        # 第233行: 先执行某些操作\n        result = self._process_results(res_list, keys)\n\n        # 第239行: 重新计算 failed_count\n        # LCAIZJ: \"You can place failed_count before line 233\n        # so that it can be reused in line 239\"\n        failed_count = sum(1 for value in res_list if value < 0)\n        if failed_count > 0:\n            logger.error(\n                \"Mooncake batch_get failed %d/%d keys\",\n                failed_count, len(keys))\n\n        return result\n\n    # ... 其他方法 ...",
+      "context": "You can place `failed_count = sum(1 for value in res_list if value < 0)` before line 233 so that it can be reused in line 239."
+    },
+    "pattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/mooncake_backend.py",
+      "line": 239,
+      "code": "import logging\nfrom typing import Optional\n\nlogger = logging.getLogger(__name__)\n\n# ... 其他代码 ...\n\nclass MooncakeBackend:\n    # ... 其他方法 ...\n\n    def batch_get(\n        self,\n        keys: list[str],\n        # ... 其他参数 ...\n    ) -> list[bytes]:\n        \"\"\"批量获取 KV 数据\"\"\"\n        # ... 执行 batch get 操作 ...\n        res_list = self._mooncake_batch_get(keys)\n\n        # 将 failed_count 计算提前到第233行之前，以便复用\n        # commit e402171: \"Reuse Mooncake get failure count\"\n        failed_count = sum(1 for value in res_list if value < 0)\n\n        # 第233行: 使用 failed_count\n        result = self._process_results(res_list, keys, failed_count)\n\n        # 第239行: 直接复用 failed_count，无需重复计算\n        if failed_count > 0:\n            logger.error(\n                \"Mooncake batch_get failed %d/%d keys\",\n                failed_count, len(keys))\n\n        return result\n\n    # ... 其他方法 ...",
+      "context": "You can place `failed_count = sum(1 for value in res_list if value < 0)` before line 233 so that it can be reused in line 239."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/mooncake_backend.py\n+++ b/vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/mooncake_backend.py\n@@ -17,13 +17,14 @@\n         # ... 执行 batch get 操作 ...\n         res_list = self._mooncake_batch_get(keys)\n \n-        # 第233行: 先执行某些操作\n-        result = self._process_results(res_list, keys)\n+        # 将 failed_count 计算提前到第233行之前，以便复用\n+        # commit e402171: \"Reuse Mooncake get failure count\"\n+        failed_count = sum(1 for value in res_list if value < 0)\n \n-        # 第239行: 重新计算 failed_count\n-        # LCAIZJ: \"You can place failed_count before line 233\n-        # so that it can be reused in line 239\"\n-        failed_count = sum(1 for value in res_list if value < 0)\n+        # 第233行: 使用 failed_count\n+        result = self._process_results(res_list, keys, failed_count)\n+\n+        # 第239行: 直接复用 failed_count，无需重复计算\n         if failed_count > 0:\n             logger.error(\n                 \"Mooncake batch_get failed %d/%d keys\",",
+      "stats": "1 file changed, +7 lines, -6 lines",
+      "key_changes": [
+        "移除: # 第233行: 先执行某些操作",
+        "移除: result = self._process_results(res_list, keys)",
+        "新增: # 将 failed_count 计算提前到第233行之前，以便复用",
+        "新增: # commit e402171: \"Reuse Mooncake get failure count\"",
+        "新增: failed_count = sum(1 for value in res_list if value < 0)",
+        "移除: # 第239行: 重新计算 failed_count",
+        "移除: # LCAIZJ: \"You can place failed_count before line 233",
+        "移除: # so that it can be reused in line 239\"",
+        "移除: failed_count = sum(1 for value in res_list if value < 0)",
+        "新增: # 第233行: 使用 failed_count"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

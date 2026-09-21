@@ -1,0 +1,61 @@
+{
+  "report_id": "PR4359_001",
+  "pr_number": 4359,
+  "pr_title": "[refact] unified soc_version code",
+  "pr_status": "merged",
+  "merged_at": "2025-11-26T06:28:55Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/utils.py:711",
+    "setup.py:108",
+    "setup.py:130",
+    "setup.py:141",
+    "vllm_ascend/utils.py:700"
+  ],
+  "landing_sha": "f9898ee",
+  "source_quote": "A variable name starting with `_` generally indicates private usage, but the `_310P` here is actually directly used by other modules. Why use `_310P` instead of `310P` here?",
+  "correspondence": [
+    {
+      "review_quote": "1. whx-sjtu 质疑 `_310P` 变量命名 → 作者解释 Python 变量名不能以数字开头，`_` 前缀是必要的\n2. whx-sjtu 建议添加 `SOC_VERSION` 不匹配时的警告 → 增加了用户设置与 `get_chip_info()` 检测结果不一致时的 warning\n3. whx-sjtu 指出 `SOC_VERSION` 格式错误时会导致 KeyError → 增加了合法性验证和明确的错误提示\n4. whx-sjtu 认为 `300I` 映射值容易混淆 → 改为使用更清晰的 `310P` 标识",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f9898ee",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "**检查点**: 从环境变量获取的值用作字典 key 前，必须检查该值是否存在于字典中",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "def get_chip_info():\n    return line.split(':')[-1]\n\ndef get_soc_version():\n    chip_count = get_value_from_lines(...)\n    return \"ascend910b\" if chip_count == 1 else \"ascend910_93\"  # 永远返回 \"ascend910_93\"\n\nsoc_version = os.environ.get(\"SOC_VERSION\", ...)\nsoc_version_dict = {\n    \"ascend310p\": \"300I\",  # whx-sjtu: \"300I is confused because there are machines like 300I A2\"\n    \"ascend910b\": \"A2\",\n    \"ascend910_93\": \"A3\",\n}\nresult = soc_version_dict[soc_version]  # 非法值导致 KeyError",
+      "context": "A variable name starting with `_` generally indicates private usage, but the `_310P` here is actually directly used by other modules. Why use `_310P` instead of `310P` here?"
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "def get_chip_info():\n    return line.split(':')[-1].strip()\n\ndef get_soc_version():\n    chip_count = get_value_from_lines(...)\n    return \"ascend910b\" if chip_count == '1' else \"ascend910_93\"\n\nsoc_version = os.environ.get(\"SOC_VERSION\", ...)\nsoc_version_dict = {\n    \"ascend310p\": \"310P\",   # whx-sjtu: 改为 \"310P\" 替代 \"300I\"，避免混淆\n    \"ascend910b\": \"A2\",\n    \"ascend910_93\": \"A3\",\n}\nif soc_version not in soc_version_dict:\n    raise ValueError(\n        f\"Unsupported SOC_VERSION: {soc_version}. Supported versions are: \"\n        f\"{list(soc_version_dict.keys())}\")\n\nif user_soc_version != get_chip_info():\n    logger.warning(\"SOC_VERSION doesn't match with detected chip info\")",
+      "context": "A variable name starting with `_` generally indicates private usage, but the `_310P` here is actually directly used by other modules. Why use `_310P` instead of `310P` here?"
+    },
+    "diff": {
+      "unified": "--- a/a/file\n+++ b/b/file\n@@ -1,14 +1,20 @@\n def get_chip_info():\n-    return line.split(':')[-1]\n+    return line.split(':')[-1].strip()\n \n def get_soc_version():\n     chip_count = get_value_from_lines(...)\n-    return \"ascend910b\" if chip_count == 1 else \"ascend910_93\"  # 永远返回 \"ascend910_93\"\n+    return \"ascend910b\" if chip_count == '1' else \"ascend910_93\"\n \n soc_version = os.environ.get(\"SOC_VERSION\", ...)\n soc_version_dict = {\n-    \"ascend310p\": \"300I\",  # whx-sjtu: \"300I is confused because there are machines like 300I A2\"\n+    \"ascend310p\": \"310P\",   # whx-sjtu: 改为 \"310P\" 替代 \"300I\"，避免混淆\n     \"ascend910b\": \"A2\",\n     \"ascend910_93\": \"A3\",\n }\n-result = soc_version_dict[soc_version]  # 非法值导致 KeyError\n+if soc_version not in soc_version_dict:\n+    raise ValueError(\n+        f\"Unsupported SOC_VERSION: {soc_version}. Supported versions are: \"\n+        f\"{list(soc_version_dict.keys())}\")\n+\n+if user_soc_version != get_chip_info():\n+    logger.warning(\"SOC_VERSION doesn't match with detected chip info\")",
+      "stats": "1 file changed, +10 lines, -4 lines",
+      "key_changes": [
+        "修改了第 2-2 行的代码",
+        "修改了第 6-6 行的代码",
+        "修改了第 10-10 行的代码",
+        "修改了第 14-14 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

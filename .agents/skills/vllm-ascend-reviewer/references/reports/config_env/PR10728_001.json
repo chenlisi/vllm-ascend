@@ -1,0 +1,67 @@
+{
+  "report_id": "PR10728_001",
+  "pr_number": 10728,
+  "pr_title": "[Doc][Misc] Update Qwen3-Dense & Qwen3-235B-A22B documentation",
+  "pr_status": "merged",
+  "merged_at": "2026-06-29T09:08:38Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/models/Qwen3-235B-A22B.md:666",
+    "docs/source/tutorials/models/Qwen3-235B-A22B.md:37",
+    "docs/source/tutorials/models/Qwen3-235B-A22B.md:65",
+    "docs/source/tutorials/models/Qwen3-235B-A22B.md:908",
+    "docs/source/tutorials/models/Qwen3-Dense.md:50",
+    "docs/source/tutorials/models/Qwen3-Dense.md:339",
+    "docs/source/tutorials/models/Qwen3-235B-A22B.md:9"
+  ],
+  "landing_sha": "83b5e3d",
+  "source_quote": "The section title should be changed to \"Performance Evaluation\" to align with the template.",
+  "correspondence": [
+    {
+      "review_quote": "herizhen 指出章节标题应改为 \"Performance Evaluation\" 以对齐模板、\"Optional\" 是模板写作指令应删除、句末缺少句号、不同硬件系列的启动命令应使用 tab-set 语法。MengqingCao 建议推荐用户使用最新的 release candidate 版本和正式版本。作者通过 commit `83b5e3d` 及后续 commit 完成修改，8/8 建议全部落地。",
+      "patch_snippet": "commit `83b5e3d`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "83b5e3d",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "模型部署文档应严格遵循项目模板：章节标题使用 \"Performance Evaluation\"、删除模板中的 \"Optional\" 等写作指令、使用 tab-set 展示多硬件平台内容、推荐用户使用最新版本。",
+    "context": "",
+    "checkpoints": [
+      "章节标题是否与模板一致（如 \"Performance Evaluation\"）",
+      "模板写作指令（如 \"Optional\"）是否已从最终文档中删除",
+      "多硬件平台内容是否使用 tab-set 语法",
+      "是否推荐用户使用最新 release candidate 或正式版本",
+      "句末标点是否完整"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/Qwen3-235B-A22B.md",
+      "line": 666,
+      "code": "<!-- 文件: docs/source/tutorials/models/Qwen3-235B-A22B.md -->\n<!-- 行号: 655-680 -->\n## 7 Accuracy Evaluation\n\nThis section describes the accuracy evaluation results for the Qwen3-235B-A22B\nmodel on vLLM-Ascend platform.\n\n| Benchmark | vLLM-Ascend | vLLM (H100) | Delta  |\n|-----------|-------------|-------------|--------|\n| MMLU      | 86.2        | 86.5        | -0.3%  |\n| GSM8K     | 91.3        | 91.5        | -0.2%  |\n\n## Performance Test\n\nThis section evaluates the inference performance of Qwen3-235B-A22B.\n\n| Input Length | Batch Size | Throughput (tokens/s) | Latency P50 (ms) |\n|-------------|-----------|----------------------|-------------------|\n| 512         | 1         | 1250                 | 45.2              |\n| 1024        | 4         | 4800                 | 88.6              |\n| 2048        | 8         | 9200                 | 178.3             |",
+      "context": "The section title should be changed to \"Performance Evaluation\" to align with the template."
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/Qwen3-235B-A22B.md",
+      "line": 666,
+      "code": "<!-- 文件: docs/source/tutorials/models/Qwen3-235B-A22B.md -->\n<!-- 行号: 655-680 -->\n## 7 Accuracy Evaluation\n\nThis section describes the accuracy evaluation results for the Qwen3-235B-A22B\nmodel on vLLM-Ascend platform.\n\n| Benchmark | vLLM-Ascend | vLLM (H100) | Delta  |\n|-----------|-------------|-------------|--------|\n| MMLU      | 86.2        | 86.5        | -0.3%  |\n| GSM8K     | 91.3        | 91.5        | -0.2%  |\n\n## 8 Performance Evaluation\n\nThis section evaluates the inference performance of Qwen3-235B-A22B.\n\n| Input Length | Batch Size | Throughput (tokens/s) | Latency P50 (ms) |\n|-------------|-----------|----------------------|-------------------|\n| 512         | 1         | 1250                 | 45.2              |\n| 1024        | 4         | 4800                 | 88.6              |\n| 2048        | 8         | 9200                 | 178.3             |",
+      "context": "The section title should be changed to \"Performance Evaluation\" to align with the template."
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/Qwen3-235B-A22B.md\n+++ b/docs/source/tutorials/models/Qwen3-235B-A22B.md\n@@ -10,7 +10,7 @@\n | MMLU      | 86.2        | 86.5        | -0.3%  |\n | GSM8K     | 91.3        | 91.5        | -0.2%  |\n \n-## Performance Test\n+## 8 Performance Evaluation\n \n This section evaluates the inference performance of Qwen3-235B-A22B.\n ",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "移除: ## Performance Test",
+        "新增: ## 8 Performance Evaluation"
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "report_id": "PR13509_003",
+  "pr_number": 13509,
+  "pr_title": "[Performance][Ops] Integrate Kimi K3 fused norm gate and attention residual",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/triton/kda/fused_norm_gate.py:162"
+  ],
+  "landing_sha": "f1acbea",
+  "source_quote": "Avoid referencing `block_mean` on the dead branch of the inline `if-else` when `IS_RMS_NORM` is True, as it is undefined and can cause compilation errors. Use static `if-else` blocks instead.\n> ```suggestion\nif not IS_RMS_NORM:\nblock_x_hat = (block_x - block_mean[:, None]) * block_rstd[:, None]\nelse:\nblock_x_hat = block_x * block_rstd[:, None]",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/ops/triton/kda/fused_norm_gate.py:162",
+      "patch_snippet": "评后sha f1acbea 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f1acbea",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "在 Triton kernel 中使用 inline `if-else` 表达式时，两个分支都会被求值。如果某个分支引用了在当前条件下未定义的变量（如 RMS norm 时 `mean` 未定义），会导致编译错误。应使用 static `if-else` 块替代。",
+    "context": "",
+    "checkpoints": [
+      "检查 Triton kernel 中的 inline `if-else` 表达式是否引用了条件相关的变量",
+      "确认 `IS_RMS_NORM` 为 True 时 `mean` 变量是否未定义但仍被引用",
+      "将 inline `if-else` 改为 `if-else` 块以避免 dead branch 求值"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/triton/kda/fused_norm_gate.py",
+      "line": 140,
+      "code": "@triton.jit\ndef layer_norm_gated_fwd_kernel(\n    X_ptr, Y_ptr, W_ptr, B_ptr,\n    mean_ptr, rstd_ptr,\n    N, eps,\n    IS_RMS_NORM: tl.constexpr,\n    BLOCK_SIZE: tl.constexpr,\n):\n    pid = tl.program_id(0)\n    x_ptr = X_ptr + pid * N\n    y_ptr = Y_ptr + pid * N\n    cols = tl.arange(0, BLOCK_SIZE)\n    mask = cols < N\n\n    x = tl.load(x_ptr + cols, mask=mask, other=0.0).to(tl.float32)\n\n    if not IS_RMS_NORM:\n        b_mean = tl.load(mean_ptr + pid)\n        b_rstd = tl.load(rstd_ptr + pid)\n    else:\n        # RMS norm: b_mean 未定义\n        b_rstd = tl.load(rstd_ptr + pid)\n\n    # inline if-else — 两个分支都会求值，IS_RMS_NORM=True 时 b_mean 未定义\n    b_x_hat = (b_x - b_mean[:, None]) * b_rstd[:, None] if not IS_RMS_NORM else b_x * b_rstd[:, None]\n    b_y = b_x_hat * tl.load(W_ptr + cols, mask=mask, other=0.0) + tl.load(B_ptr + cols, mask=mask, other=0.0)\n    tl.store(y_ptr + cols, b_y.to(Y_ptr.dtype.element_ty), mask=mask)\n\n\n@triton.jit\ndef layer_norm_gated_fwd_kernel1(\n    # ... similar params ...\n    IS_RMS_NORM: tl.constexpr,\n):\n    # ...\n    # 第二处：同样的 inline if-else 问题\n    b_x_hat = (b_x - b_mean) * b_rstd if not IS_RMS_NORM else b_x * b_rstd",
+      "context": "RMS norm: b_mean 未定义 inline if-else — 两个分支都会求值，IS_RMS_NORM=True 时 b_mean 未定义 ... similar params ..."
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/triton/kda/fused_norm_gate.py",
+      "line": 140,
+      "code": "@triton.jit\ndef layer_norm_gated_fwd_kernel(\n    X_ptr, Y_ptr, W_ptr, B_ptr,\n    mean_ptr, rstd_ptr,\n    N, eps,\n    IS_RMS_NORM: tl.constexpr,\n    BLOCK_SIZE: tl.constexpr,\n):\n    pid = tl.program_id(0)\n    x_ptr = X_ptr + pid * N\n    y_ptr = Y_ptr + pid * N\n    cols = tl.arange(0, BLOCK_SIZE)\n    mask = cols < N\n\n    x = tl.load(x_ptr + cols, mask=mask, other=0.0).to(tl.float32)\n\n    if not IS_RMS_NORM:\n        b_mean = tl.load(mean_ptr + pid)\n        b_rstd = tl.load(rstd_ptr + pid)\n    else:\n        b_rstd = tl.load(rstd_ptr + pid)\n\n    # static if-else — 只有对应分支会被执行，避免 dead branch 引用未定义变量\n    if IS_RMS_NORM:\n        b_x_hat = b_x * b_rstd[:, None]\n    else:\n        b_x_hat = (b_x - b_mean[:, None]) * b_rstd[:, None]\n    b_y = b_x_hat * tl.load(W_ptr + cols, mask=mask, other=0.0) + tl.load(B_ptr + cols, mask=mask, other=0.0)\n    tl.store(y_ptr + cols, b_y.to(Y_ptr.dtype.element_ty), mask=mask)\n\n\n@triton.jit\ndef layer_norm_gated_fwd_kernel1(\n    # ... similar params ...\n    IS_RMS_NORM: tl.constexpr,\n):\n    # ...\n    # 第二处：同样改为 static if-else\n    if IS_RMS_NORM:\n        b_x_hat = b_x * b_rstd\n    else:\n        b_x_hat = (b_x - b_mean) * b_rstd",
+      "context": "static if-else — 只有对应分支会被执行，避免 dead branch 引用未定义变量 ... similar params ... 第二处：同样改为 static if-else"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/triton/kda/fused_norm_gate.py\n+++ b/vllm_ascend/ops/triton/kda/fused_norm_gate.py\n@@ -18,11 +18,13 @@\n         b_mean = tl.load(mean_ptr + pid)\n         b_rstd = tl.load(rstd_ptr + pid)\n     else:\n-        # RMS norm: b_mean 未定义\n         b_rstd = tl.load(rstd_ptr + pid)\n \n-    # inline if-else — 两个分支都会求值，IS_RMS_NORM=True 时 b_mean 未定义\n-    b_x_hat = (b_x - b_mean[:, None]) * b_rstd[:, None] if not IS_RMS_NORM else b_x * b_rstd[:, None]\n+    # static if-else — 只有对应分支会被执行，避免 dead branch 引用未定义变量\n+    if IS_RMS_NORM:\n+        b_x_hat = b_x * b_rstd[:, None]\n+    else:\n+        b_x_hat = (b_x - b_mean[:, None]) * b_rstd[:, None]\n     b_y = b_x_hat * tl.load(W_ptr + cols, mask=mask, other=0.0) + tl.load(B_ptr + cols, mask=mask, other=0.0)\n     tl.store(y_ptr + cols, b_y.to(Y_ptr.dtype.element_ty), mask=mask)\n \n@@ -33,5 +35,8 @@\n     IS_RMS_NORM: tl.constexpr,\n ):\n     # ...\n-    # 第二处：同样的 inline if-else 问题\n-    b_x_hat = (b_x - b_mean) * b_rstd if not IS_RMS_NORM else b_x * b_rstd\n+    # 第二处：同样改为 static if-else\n+    if IS_RMS_NORM:\n+        b_x_hat = b_x * b_rstd\n+    else:\n+        b_x_hat = (b_x - b_mean) * b_rstd\n",
+      "stats": "1 file changed, +10 lines, -5 lines",
+      "key_changes": [
+        "新增: b_x_hat = (b_x - b_mean) * b_rstd",
+        "新增: if IS_RMS_NORM:",
+        "新增: b_x_hat = b_x * b_rstd"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

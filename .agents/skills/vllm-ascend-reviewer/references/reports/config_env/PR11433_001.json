@@ -1,0 +1,69 @@
+{
+  "report_id": "PR11433_001",
+  "pr_number": 11433,
+  "pr_title": "[BugFix] Exclude MTP draft from FlashComm2 o_proj and align all-to-all buffer shape",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "tests/ut/ops/test_linear.py:177",
+    "vllm_ascend/ops/linear_op.py:727",
+    "vllm_ascend/ops/linear_op.py:360"
+  ],
+  "landing_sha": "c19294e",
+  "source_quote": "What functionality does this UT cover? Don't add this kind of code.\nIs mtp_block universal across all models?\nIs continuous required?",
+  "correspondence": [
+    {
+      "review_quote": "zhenwenqi2024: tests/ut/ops/test_linear.py:177",
+      "patch_snippet": "评后sha c19294e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "zhenwenqi2024: vllm_ascend/ops/linear_op.py:727",
+      "patch_snippet": "评后sha c19294e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "zhenwenqi2024: vllm_ascend/ops/linear_op.py:360",
+      "patch_snippet": "评后sha c19294e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "c19294e",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "单元测试应有明确的功能覆盖范围说明，不应添加功能不清晰的测试代码。对于排除特定前缀的逻辑，应确认其在所有模型中的通用性。",
+    "context": "",
+    "checkpoints": [
+      "UT 是否有明确的功能覆盖说明",
+      "排除特定前缀（如 mtp_block）的逻辑是否考虑了通用性",
+      "contiguous 调用是否有明确的性能或正确性原因"
+    ],
+    "antipattern": {
+      "file": "tests/ut/ops/test_linear.py",
+      "line": 170,
+      "code": "import pytest\nimport torch\nfrom unittest.mock import patch, MagicMock\n\nfrom vllm_ascend.ops.linear_op import (\n    _get_row_parallel_op,\n    _get_column_parallel_op,\n)\n\n\nclass TestFlashcomm2OpDispatch:\n    \"\"\"Tests for FlashComm2 operator dispatching logic.\"\"\"\n\n    def test_o_proj_normal_dispatch(self):\n        \"\"\"Test that o_proj uses Flashcomm2OProjRowParallelOp.\"\"\"\n        # ... test implementation ...\n        pass\n\n    def test_unclear_dispatch_scenario(self):  # 功能覆盖不清晰的 UT\n        \"\"\"Test dispatch with ambiguous prefix.\"\"\"\n        prefix = \"model.layers.0.self_attn.o_proj\"\n        with patch('vllm_ascend.ops.linear_op.get_flashcomm2_enabled',\n                    return_value=True):\n            op = _get_row_parallel_op(prefix, input_size=4096,\n                                       output_size=4096)\n            # 未明确验证什么功能\n            assert op is not None\n\n    def test_mtp_block_excluded(self):\n        \"\"\"Test that mtp_block prefix is excluded from Flashcomm2.\"\"\"\n        # ... test implementation ...\n        pass",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "tests/ut/ops/test_linear.py",
+      "line": 170,
+      "code": "import pytest\nimport torch\nfrom unittest.mock import patch, MagicMock\n\nfrom vllm_ascend.ops.linear_op import (\n    _get_row_parallel_op,\n    _get_column_parallel_op,\n)\n\n\nclass TestFlashcomm2OpDispatch:\n    \"\"\"Tests for FlashComm2 operator dispatching logic.\"\"\"\n\n    def test_o_proj_normal_dispatch(self):\n        \"\"\"Test that o_proj uses Flashcomm2OProjRowParallelOp.\"\"\"\n        # ... test implementation ...\n        pass\n\n    # test_unclear_dispatch_scenario 已删除（功能覆盖不清晰）\n\n    def test_mtp_block_excluded(self):\n        \"\"\"Test that mtp_block prefix is excluded from Flashcomm2.\"\"\"\n        # ... test implementation ...\n        pass",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/tests/ut/ops/test_linear.py\n+++ b/tests/ut/ops/test_linear.py\n@@ -16,15 +16,7 @@\n         # ... test implementation ...\n         pass\n \n-    def test_unclear_dispatch_scenario(self):  # 功能覆盖不清晰的 UT\n-        \"\"\"Test dispatch with ambiguous prefix.\"\"\"\n-        prefix = \"model.layers.0.self_attn.o_proj\"\n-        with patch('vllm_ascend.ops.linear_op.get_flashcomm2_enabled',\n-                    return_value=True):\n-            op = _get_row_parallel_op(prefix, input_size=4096,\n-                                       output_size=4096)\n-            # 未明确验证什么功能\n-            assert op is not None\n+    # test_unclear_dispatch_scenario 已删除（功能覆盖不清晰）\n \n     def test_mtp_block_excluded(self):\n         \"\"\"Test that mtp_block prefix is excluded from Flashcomm2.\"\"\"",
+      "stats": "1 file changed, +1 lines, -9 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

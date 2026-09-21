@@ -1,0 +1,59 @@
+{
+  "report_id": "PR5154_001",
+  "pr_number": 5154,
+  "pr_title": "[BugFix]Fix wrong _cos, _sin instantiation",
+  "pr_status": "merged",
+  "merged_at": "",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/rotary_embedding.py:83"
+  ],
+  "landing_sha": "cd1eb3b",
+  "source_quote": "If there are three or more conditions, you can abstract a function.",
+  "correspondence": [
+    {
+      "review_quote": "weijinqian0 指出当条件超过三个时应抽象为函数以提高代码可读性。作者通过 commit `cd1eb3b` 进行了修复，1/1 建议落地。",
+      "patch_snippet": "commit `cd1eb3b`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "cd1eb3b",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当 if/elif 语句中包含三个或更多条件时，应将这些条件抽象为独立的函数，以提高代码可读性和可维护性。",
+    "context": "",
+    "checkpoints": [
+      "if/elif 条件是否超过三个",
+      "是否可以将复杂条件抽取为语义清晰的函数",
+      "抽象后的函数是否有明确的命名"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/rotary_embedding.py",
+      "line": 0,
+      "code": "def forward(self, positions, ...):\n    model_config = vllm_config.model_config\n\n    if hasattr(model_config.hf_text_config, \"rope_parameters\") and \\\n       \"mrope_section\" in model_config.hf_text_config.rope_parameters:\n        cos = self.cos_sin_cache[positions].view(-1, -1)\n    elif \"mrope_section\" not in model_config.hf_text_config.rope_parameters and not vllm_config.model_config.use_mla:\n        cos = self.cos_sin_cache[positions].view(-1, -1)\n        sin = self.cos_sin_cache[positions].view(-1, -1)\n    else:\n        pass",
+      "context": "If there are three or more conditions, you can abstract a function."
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/rotary_embedding.py",
+      "line": 0,
+      "code": "def forward(self, positions, ...):\n    model_config = vllm_config.model_config\n\n    if hasattr(model_config.hf_text_config, \"rope_parameters\") and \\\n       \"mrope_section\" in model_config.hf_text_config.rope_parameters:\n        cos = self.cos_sin_cache[positions].view(-1, -1)\n    elif _should_apply_standard_rope(model_config, vllm_config):\n        cos = self.cos_sin_cache[positions].view(-1, -1)\n        sin = self.cos_sin_cache[positions].view(-1, -1)\n    else:\n        pass\n\n\ndef _should_apply_standard_rope(model_config, vllm_config):\n    \"\"\"判断是否使用标准 rope（将复杂条件抽象为函数）\"\"\"\n    rope_params = getattr(model_config.hf_text_config, \"rope_parameters\", {})\n    return \"mrope_section\" not in rope_params and not vllm_config.model_config.use_mla",
+      "context": "If there are three or more conditions, you can abstract a function."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/rotary_embedding.py\n+++ b/vllm_ascend/ops/rotary_embedding.py\n@@ -1,11 +1,17 @@\n     if hasattr(model_config.hf_text_config, \"rope_parameters\") and \\\n        \"mrope_section\" in model_config.hf_text_config.rope_parameters:\n         cos = self.cos_sin_cache[positions].view(-1, -1)\n-    elif \"mrope_section\" not in model_config.hf_text_config.rope_parameters and not vllm_config.model_config.use_mla:\n+    elif _should_apply_standard_rope(model_config, vllm_config):\n         cos = self.cos_sin_cache[positions].view(-1, -1)\n         sin = self.cos_sin_cache[positions].view(-1, -1)\n     else:\n         pass\n+\n+\n+def _should_apply_standard_rope(model_config, vllm_config):\n+    \"\"\"判断是否使用标准 rope（将复杂条件抽象为函数）\"\"\"\n+    rope_params = getattr(model_config.hf_text_config, \"rope_parameters\", {})\n+    return \"mrope_section\" not in rope_params and not vllm_config.model_config.use_mla",
+      "stats": "1 file changed, +7 lines, -1 lines",
+      "key_changes": [
+        "修改了第 7-7 行的代码",
+        "在第 12-17 行新增了代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

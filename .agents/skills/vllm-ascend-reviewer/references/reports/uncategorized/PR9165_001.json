@@ -1,0 +1,110 @@
+{
+  "report_id": "PR9165_001",
+  "pr_number": 9165,
+  "pr_title": "[Feature]add fiav2 into acl_graph",
+  "pr_status": "merged",
+  "merged_at": "2026-05-22T09:24:50Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/attention/attention_v1.py:833",
+    "vllm_ascend/worker/model_runner_v1.py:3321",
+    "vllm_ascend/worker/model_runner_v1.py:1881",
+    "vllm_ascend/worker/model_runner_v1.py:3320",
+    "vllm_ascend/worker/model_runner_v1.py:277",
+    "vllm_ascend/attention/attention_v1.py:1055",
+    "tests/ut/attention/test_attention_v1.py:204",
+    "tests/ut/attention/test_attention_v1.py:193",
+    "docs/source/tutorials/models/gpt-oss-120b.md:112",
+    "docs/source/tutorials/models/gpt-oss-120b.md:130"
+  ],
+  "landing_sha": "190b6c5",
+  "source_quote": "If _get_fia_params already returns actual_seq_lengths_kv, the subsequent assignment makes the first return value meaningless.\nSuggestion: Either use the return value from _get_fia_params directly or remove the redundant second assignment.\nUsing \"sink\" in name as the detection condition is too broad and may falsely match parameters containing \"sink\" as a substring (e.g., \"sinking\", \"unsinkable\").\nSuggestion: Use more precise pattern matching such as name.endswith(\".sink\") or \"sink_weight\" in name.\nWhile the current instances are correct, please ensure consistent spacing around = operators throughout the file.\nThis TODO appears in multiple locations but lacks a specific merge plan or tracking issue.\nSuggestion: Create a related issue and reference it in the TODO, or specify an estimated completion timeline.\n_has_sinks is initialized to False in __init__, but the actual detection logic is in mock_true (after model loading).\nIf mock_true is not called (in certain code paths), _has_sinks remains False, which may cause functional issues.\nSuggestion: Ensure sink detection is performed in all model loading paths, or move the detection logic to a more appropriate location.\nself.sinks is typed as Optional[torch.Tensor], but in full_graph_fia_v2 it's directly passed as learnable_sink parameter.\nSuggestion: Add type checking or assertions to ensure self.sinks is a valid tensor before passing to the NPU operator.\nUsing negative values for sink may not reflect actual model parameter ranges.\nSuggestion: Use values closer to actual model parameters, or add comments explaining the source of test values.\nMissing tests for the edge case where _has_sinks=True but sinks is None in the attention implementation.\n/{PWD} should be ${PWD} or $PWD.\nSuggestion: Fix to export TIKTOKEN_ENCODINGS_BASE=${PWD}/tiktoken_encodings.\n\"ford\" should be \"for\".",
+  "correspondence": [
+    {
+      "review_quote": "nakairika: vllm_ascend/attention/attention_v1.py:833",
+      "patch_snippet": "评后sha 190b6c5 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "nakairika: vllm_ascend/worker/model_runner_v1.py:3321",
+      "patch_snippet": "评后sha 190b6c5 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "nakairika: vllm_ascend/worker/model_runner_v1.py:1881",
+      "patch_snippet": "评后sha 190b6c5 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "nakairika: vllm_ascend/worker/model_runner_v1.py:3320",
+      "patch_snippet": "评后sha 190b6c5 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "nakairika: vllm_ascend/worker/model_runner_v1.py:277",
+      "patch_snippet": "评后sha 190b6c5 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "nakairika: vllm_ascend/attention/attention_v1.py:1055",
+      "patch_snippet": "评后sha 190b6c5 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "nakairika: tests/ut/attention/test_attention_v1.py:204",
+      "patch_snippet": "评后sha 190b6c5 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "nakairika: tests/ut/attention/test_attention_v1.py:193",
+      "patch_snippet": "评后sha 190b6c5 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "nakairika: docs/source/tutorials/models/gpt-oss-120b.md:112",
+      "patch_snippet": "评后sha 190b6c5 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "nakairika: docs/source/tutorials/models/gpt-oss-120b.md:130",
+      "patch_snippet": "评后sha 190b6c5 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "190b6c5",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "If _get_fia_params already returns actual_seq_lengths_kv, the subsequent assignment makes the first return value meaningless. Suggestion: Either use the return value from _get_fia_params directly or r",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 833,
+      "code": "        softmax_lse = torch.empty(1, dtype=query.dtype, device=query.device)",
+      "context": "If _get_fia_params already returns actual_seq_lengths_kv, the subsequent assignment makes the first return value meaningless.\nSuggestion: Either use the return value from _get_fia_params directly or r"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 833,
+      "code": "# gemini-code-assist suggestion:\n        softmax_lse = torch.empty((num_tokens, self.num_heads), dtype=query.dtype, device=query.device)",
+      "context": "If _get_fia_params already returns actual_seq_lengths_kv, the subsequent assignment makes the first return value meaningless.\nSuggestion: Either use the return value from _get_fia_params directly or r"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/attention_v1.py\n+++ b/vllm_ascend/attention/attention_v1.py\n@@ -1 +1,2 @@\n-        softmax_lse = torch.empty(1, dtype=query.dtype, device=query.device)\n+# gemini-code-assist suggestion:\n+        softmax_lse = torch.empty((num_tokens, self.num_heads), dtype=query.dtype, device=query.device)\n",
+      "stats": "1 file changed, +2 lines, -1 lines",
+      "key_changes": [
+        "-        softmax_lse = torch.empty(1, dtype=query.dtype, device=query.device)",
+        "+# gemini-code-assist suggestion:",
+        "+        softmax_lse = torch.empty((num_tokens, self.num_heads), dtype=query.dtype, device=query.device)"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

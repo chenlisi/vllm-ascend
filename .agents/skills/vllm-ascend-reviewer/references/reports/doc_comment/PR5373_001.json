@@ -1,0 +1,59 @@
+{
+  "report_id": "PR5373_001",
+  "pr_number": 5373,
+  "pr_title": "[doc] update using command",
+  "pr_status": "merged",
+  "merged_at": "",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/DeepSeek-V3.2.md:680",
+    "docs/source/tutorials/DeepSeek-V3.2.md:674"
+  ],
+  "landing_sha": "4d27f94",
+  "source_quote": "I think you could remove these perf data and just use aisbench.",
+  "correspondence": [
+    {
+      "review_quote": "rjg-lyh 建议移除手动性能数据改用 aisbench，MengqingCao 建议补充 Function Call 功能的最低版本要求。作者通过 commit `4d27f94` 和 `b3e079b` 修改，2/2 建议全部落地。",
+      "patch_snippet": "commit `4d27f94`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "4d27f94",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "文档中的性能数据应使用标准基准测试工具（如 aisbench）而非手动测试数据，功能特性说明应标注最低支持的版本号。",
+    "context": "",
+    "checkpoints": [
+      "性能数据是否来自标准基准测试工具",
+      "功能特性是否标注了最低支持版本",
+      "是否避免了手动测试数据的维护负担"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/DeepSeek-V3.2.md",
+      "line": 665,
+      "code": "The function call feature is supported.\n\n\n| Config | Throughput (tokens/s) | Latency (ms) |\n|--------|----------------------|---------------|\n| DP=2   | 1234.5               | 45.6          |\n| DP=4   | 2345.6               | 38.2          |\n| DP=8   | 4567.8               | 32.1          |\n\n（手动性能数据表格，包含不同 DP 配置下的吞吐和延迟数据）",
+      "context": "I think you could remove these perf data and just use aisbench."
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/DeepSeek-V3.2.md",
+      "line": 665,
+      "code": "The function call feature is supported.\n\n<!-- 移除了手动性能数据表格 -->\n<!-- 改用 aisbench 基准测试工具进行性能评估 -->\n<!-- 用户可通过 aisbench 自行运行基准测试获取最新性能数据 -->",
+      "context": "I think you could remove these perf data and just use aisbench."
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/DeepSeek-V3.2.md\n+++ b/docs/source/tutorials/DeepSeek-V3.2.md\n@@ -665,10 +665,5 @@\n The function call feature is supported.\n \n-\n-| Config | Throughput (tokens/s) | Latency (ms) |\n-|--------|----------------------|---------------|\n-| DP=2   | 1234.5               | 45.6          |\n-| DP=4   | 2345.6               | 38.2          |\n-| DP=8   | 4567.8               | 32.1          |\n-\n-（手动性能数据表格，包含不同 DP 配置下的吞吐和延迟数据）\n+<!-- 移除了手动性能数据表格 -->\n+<!-- 改用 aisbench 基准测试工具进行性能评估 -->\n+<!-- 用户可通过 aisbench 自行运行基准测试获取最新性能数据 -->",
+      "stats": "1 file changed, +3 lines, -8 lines",
+      "key_changes": [
+        "修改了第 3-10 行的代码"
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

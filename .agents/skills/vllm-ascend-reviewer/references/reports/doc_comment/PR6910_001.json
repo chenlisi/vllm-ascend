@@ -1,0 +1,70 @@
+{
+  "report_id": "PR6910_001",
+  "pr_number": 6910,
+  "pr_title": "[Feature] Add docs of batch invariance and make some extra operators patch",
+  "pr_status": "merged",
+  "merged_at": "",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/user_guide/feature_guide/batch_invariance.md:3"
+  ],
+  "landing_sha": "b949c71",
+  "source_quote": "",
+  "correspondence": [
+    {
+      "review_quote": "评审点（wangxiyuan 👤 L3）: #(原文语义)",
+      "patch_snippet": "评后sha 作者表态 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "docs/source/user_guide/feature_guide/batch_invariance.md:3 note block: 1(附 RTD 预览链接，直接指出 \"note here doesn't work\"（MkDocs `!!!` 语法在 Sphinx MyST 不渲染 admonition）)",
+      "patch_snippet": "评后sha fixed 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "b949c71",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当前 vllm-ascend 文档栈是 **Sphinx（构建器）+ MyST Parser（markdown 引擎）+ ReadTheDocs（托管）**，不是 MkDocs Material。写 admonition（note / warning / tip / important / seealso 等）时，**绝对禁止写 `!!! note`**（MkDocs Material 私有语法），必须统一使用 MyST 官方支持的 fenced 语法：```` ```{note} ````（三重反引号 + 大括号包裹 admonition 类型名 + 正文 + 三重反引号收尾）。写错了 Sphinx 不会报错，但 RTD 上 admonition 不会渲染成卡片，只会显示成普通文本（视觉上没有高亮边框和图标，关键 Beta 警告 / 性能提示直接被用户忽略）。",
+    "context": "",
+    "checkpoints": [
+      "所有新建的 `.md` 文档（尤其是 feature_guide 下的新功能说明）在提交 PR 后，**必须点开 RTD preview 链接（`https://vllm--<PR#>.org.readthedocs.build/projects/ascend/en/<PR#>/...`）肉眼确认 admonition 渲染**——本 PR 就是 wangxiyuan 点了 preview 直接发现的问题，静态 grep 看不出来",
+      "本仓库 Grep 门禁：`rg \"^!!! (note|warning|tip|important|seealso|danger|caution)\" docs/` 计数必须为 0——出现任何一处直接视为语法错",
+      "如果一个文件有 2 处 admonition，修的时候**必须同文件 Grep 扫完所有 admonition 类型一起修**（note/warning/tip/important 所有前缀都要扫），避免只修了第一个第二个仍然不渲染",
+      "MyST admonition 的正确三要素（缺一不可）："
+    ],
+    "antipattern": {
+      "file": "docs/source/user_guide/feature_guide/batch_invariance.md",
+      "line": 3,
+      "code": "# Batch Invariance\n\n!!! note\n    Batch invariance is currently in beta. Some features are still under active development.\n    Track progress and planned improvements at <https://github.com/vllm-project/vllm-ascend/issues/5487>",
+      "context": ""
+    },
+    "pattern": {
+      "file": "docs/source/user_guide/feature_guide/batch_invariance.md",
+      "line": 3,
+      "code": "# Batch Invariance\n\n```{note}\nBatch invariance is currently in beta. Some features are still under active development.\nTrack progress and planned improvements at <https://github.com/vllm-project/vllm-ascend/issues/5487>\n```",
+      "context": ""
+    },
+    "diff": {
+      "unified": "--- a/docs/source/user_guide/feature_guide/batch_invariance.md\n+++ b/docs/source/user_guide/feature_guide/batch_invariance.md\n@@ -1,5 +1,6 @@\n # Batch Invariance\n \n-!!! note\n-    Batch invariance is currently in beta. Some features are still under active development.\n-    Track progress and planned improvements at <https://github.com/vllm-project/vllm-ascend/issues/5487>\n+```{note}\n+Batch invariance is currently in beta. Some features are still under active development.\n+Track progress and planned improvements at <https://github.com/vllm-project/vllm-ascend/issues/5487>\n+```",
+      "stats": "1 file changed, +4 lines, -3 lines",
+      "key_changes": [
+        "- !!! note",
+        "- Batch invariance is currently in beta. Some features are still under active development.",
+        "- Track progress and planned improvements at <https://github.com/vllm-project/vllm-ascend/issues/5487>",
+        "+ ```{note}",
+        "+ Batch invariance is currently in beta. Some features are still under active development.",
+        "+ Track progress and planned improvements at <https://github.com/vllm-project/vllm-ascend/issues/5487>",
+        "+ ```"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

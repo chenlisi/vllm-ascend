@@ -1,0 +1,83 @@
+{
+  "report_id": "PR8333_001",
+  "pr_number": 8333,
+  "pr_title": "[CI] Cache build artifacts with GitHub Actions-Caches",
+  "pr_status": "merged",
+  "merged_at": "2026-04-21T09:41:33Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "important",
+  "affected_files": [
+    ".github/workflows/schedule_build_vllm_ascend_cache.yaml:126"
+  ],
+  "landing_sha": "8416caa",
+  "source_quote": "The same workflow should not be repeated; a matrix with different image should be added.",
+  "correspondence": [
+    {
+      "review_quote": "Potabk: .github/workflows/schedule_build_vllm_ascend_cache.yaml:126",
+      "patch_snippet": "评后sha 8416caa 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "8416caa",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当多个 CI 工作流 job 执行相同的步骤但使用不同的参数（如不同的 Docker image）时，应使用 GitHub Actions 的 matrix 策略来消除重复定义，提高工作流的可维护性。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": ".github/workflows/schedule_build_vllm_ascend_cache.yaml",
+      "line": 115,
+      "code": "# a matrix with different image should be added.\"\n# 相同的工作流被重复定义，每个 image 一个独立 job\n\nname: Schedule Build vLLM Ascend Cache\n\non:\n  schedule:\n    - cron: '0 2 * * *'\n  workflow_dispatch:\n\njobs:\n  build-image-cann-10.0:\n    runs-on: ubuntu-latest\n    container:\n      image: quay.io/ascend/cann:10.0\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/cache@v4\n        with:\n          path: ~/.cache/pip\n          key: cann-10.0-${{ hashFiles('**/requirements.txt') }}\n      - name: Build wheel\n        run: pip wheel --no-deps -w dist .\n\n  build-image-cann-11.0:\n    runs-on: ubuntu-latest\n    container:\n      image: quay.io/ascend/cann:11.0\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/cache@v4\n        with:\n          path: ~/.cache/pip\n          key: cann-11.0-${{ hashFiles('**/requirements.txt') }}\n      - name: Build wheel\n        run: pip wheel --no-deps -w dist .",
+      "context": "The same workflow should not be repeated; a matrix with different image should be added."
+    },
+    "pattern": {
+      "file": ".github/workflows/schedule_build_vllm_ascend_cache.yaml",
+      "line": 115,
+      "code": "# commit 8416caa \"Cache build artifacts with GitHub Actions\"\n# 使用 matrix 策略，不同 image 通过参数区分\n\nname: Schedule Build vLLM Ascend Cache\n\non:\n  schedule:\n    - cron: '0 2 * * *'\n  workflow_dispatch:\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n    strategy:\n      matrix:\n        include:\n          - image: quay.io/ascend/cann:10.0\n            cache_key: cann-10.0\n          - image: quay.io/ascend/cann:11.0\n            cache_key: cann-11.0\n    container:\n      image: ${{ matrix.image }}\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/cache@v4\n        with:\n          path: ~/.cache/pip\n          key: ${{ matrix.cache_key }}-${{ hashFiles('**/requirements.txt') }}\n      - name: Build wheel\n        run: pip wheel --no-deps -w dist .",
+      "context": "The same workflow should not be repeated; a matrix with different image should be added."
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/schedule_build_vllm_ascend_cache.yaml\n+++ b/.github/workflows/schedule_build_vllm_ascend_cache.yaml\n@@ -1,5 +1,5 @@\n-# a matrix with different image should be added.\"\n-# 相同的工作流被重复定义，每个 image 一个独立 job\n+# commit 8416caa \"Cache build artifacts with GitHub Actions\"\n+# 使用 matrix 策略，不同 image 通过参数区分\n \n name: Schedule Build vLLM Ascend Cache\n \n@@ -9,28 +9,22 @@\n   workflow_dispatch:\n \n jobs:\n-  build-image-cann-10.0:\n+  build:\n     runs-on: ubuntu-latest\n+    strategy:\n+      matrix:\n+        include:\n+          - image: quay.io/ascend/cann:10.0\n+            cache_key: cann-10.0\n+          - image: quay.io/ascend/cann:11.0\n+            cache_key: cann-11.0\n     container:\n-      image: quay.io/ascend/cann:10.0\n+      image: ${{ matrix.image }}\n     steps:\n       - uses: actions/checkout@v4\n       - uses: actions/cache@v4\n         with:\n           path: ~/.cache/pip\n-          key: cann-10.0-${{ hashFiles('**/requirements.txt') }}\n+          key: ${{ matrix.cache_key }}-${{ hashFiles('**/requirements.txt') }}\n       - name: Build wheel\n         run: pip wheel --no-deps -w dist .\n-\n-  build-image-cann-11.0:\n-    runs-on: ubuntu-latest\n-    container:\n-      image: quay.io/ascend/cann:11.0\n-    steps:\n-      - uses: actions/checkout@v4\n-      - uses: actions/cache@v4\n-        with:\n-          path: ~/.cache/pip\n-          key: cann-11.0-${{ hashFiles('**/requirements.txt') }}\n-      - name: Build wheel\n-        run: pip wheel --no-deps -w dist .\n",
+      "stats": "1 file changed, +12 lines, -18 lines",
+      "key_changes": [
+        "-# a matrix with different image should be added.\"",
+        "-# 相同的工作流被重复定义，每个 image 一个独立 job",
+        "+# commit 8416caa \"Cache build artifacts with GitHub Actions\"",
+        "+# 使用 matrix 策略，不同 image 通过参数区分",
+        "-  build-image-cann-10.0:",
+        "+  build:",
+        "+    strategy:",
+        "+      matrix:",
+        "+        include:",
+        "+          - image: quay.io/ascend/cann:10.0",
+        "+            cache_key: cann-10.0",
+        "+          - image: quay.io/ascend/cann:11.0",
+        "+            cache_key: cann-11.0",
+        "-      image: quay.io/ascend/cann:10.0",
+        "+      image: ${{ matrix.image }}",
+        "-          key: cann-10.0-${{ hashFiles('**/requirements.txt') }}",
+        "+          key: ${{ matrix.cache_key }}-${{ hashFiles('**/requirements.txt') }}",
+        "-",
+        "-  build-image-cann-11.0:",
+        "-    runs-on: ubuntu-latest",
+        "-    container:",
+        "-      image: quay.io/ascend/cann:11.0",
+        "-    steps:",
+        "-      - uses: actions/checkout@v4",
+        "-      - uses: actions/cache@v4",
+        "-        with:",
+        "-          path: ~/.cache/pip",
+        "-          key: cann-11.0-${{ hashFiles('**/requirements.txt') }}",
+        "-      - name: Build wheel",
+        "-        run: pip wheel --no-deps -w dist ."
+      ]
+    },
+    "language": "yaml",
+    "_status": "pending_llm_extract"
+  }
+}

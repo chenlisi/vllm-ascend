@@ -1,0 +1,57 @@
+{
+  "report_id": "PR12152_001",
+  "pr_number": 12152,
+  "pr_title": "[Doc][Misc] Update num_speculative_tokens to 1 in model tutorials",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "docs/source/tutorials/models/GLM5.2.md:746"
+  ],
+  "landing_sha": "9c12504",
+  "source_quote": "Please also modify the A2 documentation in PD disaggregation prefill scenarios.",
+  "correspondence": [
+    {
+      "review_quote": "linfeng-yuan: docs/source/tutorials/models/GLM5.2.md:746",
+      "patch_snippet": "评后sha 9c12504 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "9c12504",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "更新 speculative decoding 配置时，除了标准的 decode 节点配置，还应检查 PD disaggregation 场景下 prefill 节点的配置是否需要同步修改。在 PD 分离架构中，prefill 节点不执行 speculative generation，`num_speculative_tokens` 应设为 1。",
+    "context": "",
+    "checkpoints": [
+      "检查文档中是否存在 PD disaggregation 场景的配置段落",
+      "确认 prefill 节点的 `num_speculative_tokens` 已设为 1",
+      "覆盖所有硬件系列（A2、A3 等）的 PD 配置"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/GLM5.2.md",
+      "line": 746,
+      "code": "## PD Disaggregation 部署\n\n### A3 系列 Prefill 节点配置\n\n在 PD 分离架构中，prefill 节点不执行 speculative generation，\n`num_speculative_tokens` 应设为 1：\n\n```bash\nvllm serve /path/to/glm5.2 \\\n    --tensor-parallel-size 2 \\\n    --num-speculative-tokens 1 \\\n    --enable-prefix-caching \\\n    --kv-transfer-config '{\"kv_connector\":\"PyNcclConnector\",...}'\n```\n\n### A2 系列 Prefill 节点配置\n\nA2 系列在 PD disaggregation prefill 场景下的配置：\n\n```bash\nvllm serve /path/to/glm5.2 \\\n    --tensor-parallel-size 2 \\\n    --num-speculative-tokens 3 \\    # ← linfeng-yuan: A2 PD prefill 配置遗漏未更新\n    --enable-prefix-caching \\\n    --kv-transfer-config '{\"kv_connector\":\"PyNcclConnector\",...}'\n```",
+      "context": "修改前代码 (markdown)"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/GLM5.2.md",
+      "line": 746,
+      "code": "## PD Disaggregation 部署\n\n### A3 系列 Prefill 节点配置\n\n在 PD 分离架构中，prefill 节点不执行 speculative generation，\n`num_speculative_tokens` 应设为 1：\n\n```bash\nvllm serve /path/to/glm5.2 \\\n    --tensor-parallel-size 2 \\\n    --num-speculative-tokens 1 \\\n    --enable-prefix-caching \\\n    --kv-transfer-config '{\"kv_connector\":\"PyNcclConnector\",...}'\n```\n\n### A2 系列 Prefill 节点配置\n\nA2 系列在 PD disaggregation prefill 场景下的配置：\n\n```bash\nvllm serve /path/to/glm5.2 \\\n    --tensor-parallel-size 2 \\\n    --num-speculative-tokens 1 \\    # ← 已更新为 1，与 A3 保持一致\n    --enable-prefix-caching \\\n    --kv-transfer-config '{\"kv_connector\":\"PyNcclConnector\",...}'\n```",
+      "context": "修改后代码 (markdown)"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/GLM5.2.md\n+++ b/docs/source/tutorials/models/GLM5.2.md\n@@ -20,7 +20,7 @@\n ```bash\n vllm serve /path/to/glm5.2 \\\n     --tensor-parallel-size 2 \\\n-    --num-speculative-tokens 3 \\    # ← linfeng-yuan: A2 PD prefill 配置遗漏未更新\n+    --num-speculative-tokens 1 \\    # ← 已更新为 1，与 A3 保持一致\n     --enable-prefix-caching \\\n     --kv-transfer-config '{\"kv_connector\":\"PyNcclConnector\",...}'\n ```",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "A2 系列 PD prefill 的 num-speculative-tokens 从 3 修正为 1，与 A3 保持一致"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

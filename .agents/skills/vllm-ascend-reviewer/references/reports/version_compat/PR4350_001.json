@@ -1,0 +1,56 @@
+{
+  "report_id": "PR4350_001",
+  "pr_number": 4350,
+  "pr_title": "[main]Upgrade cann to 8.3rc2",
+  "pr_status": "merged",
+  "merged_at": "2025-11-28T06:06:01Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/multi_npu_qwen3_next.md:54",
+    "tests/e2e/multicard/test_aclgraph_capture_replay.py:106",
+    "tests/e2e/multicard/test_aclgraph_capture_replay.py:136"
+  ],
+  "landing_sha": "6f70d9e",
+  "source_quote": "It seems we can also remove this doc, right? If so, pls address in followup new PR.",
+  "correspondence": [
+    {
+      "review_quote": "1. Yikun 指出 `multi_npu_qwen3_next.md` 文档可以移除，作者确认将在后续 PR 中处理 → commit `6f70d9e` 更新了文档\n2. MengqingCao 要求 revert 测试文件中对 `test_aclgraph_capture_replay.py:106` 的修改 → commit `c33c092` revert dpsk change\n3. MengqingCao 质疑添加 `HCCL_BUFFER_SIZE` 的必要性，Potabk 解释 A3 硬件需要更多通信内存 → 该变更在 revert 中被回退",
+      "patch_snippet": "commit `6f70d9e`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "c33c092",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "**检查点**: 升级 CANN 等核心依赖版本时，不应随意修改与版本升级无直接关系的测试配置（如 HCCL_BUFFER_SIZE）",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "wget \"https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/.../Ascend-cann-toolkit_8.3.RC1_linux-aarch64.run\"\nwget \"https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/.../Ascend-cann-kernels-910b_8.3.RC1_linux-aarch64.run\"\nwget \"https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/.../Ascend-cann-nnal_8.3.RC1_linux-aarch64.run\"",
+      "context": "It seems we can also remove this doc, right? If so, pls address in followup new PR."
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "CANN_VERSION=\"8.3.RC2\"\nARCH=\"$(uname -i)\"\nTOOLKIT_PKG=\"Ascend-cann-toolkit_${CANN_VERSION}_linux-${ARCH}.run\"\nKERNELS_PKG=\"Ascend-cann-kernels-910b_${CANN_VERSION}_linux-${ARCH}.run\"\nNNAL_PKG=\"Ascend-cann-nnal_${CANN_VERSION}_linux-${ARCH}.run\"\n\nwget --header=\"Referer: https://www.hiascend.com/\" \\\n    \"https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/.../${TOOLKIT_PKG}\"\nchmod +x ./${TOOLKIT_PKG}\n./${TOOLKIT_PKG} --full",
+      "context": "It seems we can also remove this doc, right? If so, pls address in followup new PR."
+    },
+    "diff": {
+      "unified": "--- a/a/file\n+++ b/b/file\n@@ -1,3 +1,10 @@\n-wget \"https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/.../Ascend-cann-toolkit_8.3.RC1_linux-aarch64.run\"\n-wget \"https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/.../Ascend-cann-kernels-910b_8.3.RC1_linux-aarch64.run\"\n-wget \"https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/.../Ascend-cann-nnal_8.3.RC1_linux-aarch64.run\"\n+CANN_VERSION=\"8.3.RC2\"\n+ARCH=\"$(uname -i)\"\n+TOOLKIT_PKG=\"Ascend-cann-toolkit_${CANN_VERSION}_linux-${ARCH}.run\"\n+KERNELS_PKG=\"Ascend-cann-kernels-910b_${CANN_VERSION}_linux-${ARCH}.run\"\n+NNAL_PKG=\"Ascend-cann-nnal_${CANN_VERSION}_linux-${ARCH}.run\"\n+\n+wget --header=\"Referer: https://www.hiascend.com/\" \\\n+    \"https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/.../${TOOLKIT_PKG}\"\n+chmod +x ./${TOOLKIT_PKG}\n+./${TOOLKIT_PKG} --full",
+      "stats": "1 file changed, +10 lines, -3 lines",
+      "key_changes": [
+        "修改了第 1-3 行的代码"
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "report_id": "PR12648_001",
+  "pr_number": 0,
+  "pr_title": "",
+  "pr_status": "unknown",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "",
+  "source_quote": "",
+  "correspondence": [],
+  "verification": {
+    "merged": false,
+    "modified_commit": "",
+    "approvals": 0
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/worker/v2/spec_decode/dflash/speculator.py",
+      "line": 0,
+      "code": "import torch\nimport torch.nn.functional as F\nfrom vllm.v1.spec_decode.dflash import DFlashSpeculator\nfrom vllm_ascend.worker.v2.attn_utils import build_attn_metadata_wrapper\n\nclass AscendDFlashSpeculator(DFlashSpeculator):\n\n    def __init__(self, vllm_config: VllmConfig, device: torch.device):\n        super().__init__(vllm_config, device)\n        ...\n\n    def build_draft_attn_metadatas(self, num_reqs_padded):\n        \"\"\"Build draft attention metadata for dflash speculator.\"\"\"\n        num_tokens_padded = num_reqs_padded * self.num_query_per_req\n        # 从 self.input_batch 取 upper_bound\n        upper_bound = self.input_batch.seq_lens_cpu_upper_bound\n        # 做一个\"长度不够就 F.pad 到 num_reqs_padded\"的补偿\n        if upper_bound.shape[0] < num_reqs_padded:\n            upper_bound = torch.nn.functional.pad(\n                upper_bound,\n                (0, num_reqs_padded - upper_bound.shape[0]),\n            )\n        with build_attn_metadata_wrapper():\n            attn_metadata = self._build_draft_attn_metadata(\n                num_reqs=num_reqs_padded,\n                num_reqs_padded=num_reqs_padded,\n                num_tokens_padded=num_tokens_padded,\n                seq_lens_cpu_upper_bound=upper_bound,  # 喂的是 pad 后的副本\n                step=self.num_query_per_req,\n                causal=self._group_causal,\n            )\n        ...\n\n    def propose(self, input_batch, ...):\n        self.input_batch = input_batch   # 无条件缓存（0.25.1 不需要也写了）\n        with build_attn_metadata_wrapper():\n            return super().propose(input_batch, ...)",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/v2/spec_decode/dflash/speculator.py",
+      "line": 0,
+      "code": "import torch\nfrom vllm.v1.spec_decode.dflash import DFlashSpeculator\nfrom vllm_ascend.utils import vllm_version_is\nfrom vllm_ascend.worker.v2.attn_utils import build_attn_metadata_wrapper\n\nclass AscendDFlashSpeculator(DFlashSpeculator):\n\n    def __init__(self, vllm_config: VllmConfig, device: torch.device):\n        super().__init__(vllm_config, device)\n        ...\n\n    def build_draft_attn_metadatas(self, num_reqs_padded, seq_lens_cpu_upper_bound):\n        \"\"\"Build draft attention metadata for dflash speculator.\"\"\"\n        num_tokens_padded = num_reqs_padded * self.num_query_per_req\n        # 删除：不再从 self.input_batch 取 upper_bound，不再做 F.pad\n        with build_attn_metadata_wrapper():\n            attn_metadata = self._build_draft_attn_metadata(\n                num_reqs=num_reqs_padded,\n                num_reqs_padded=num_reqs_padded,\n                num_tokens_padded=num_tokens_padded,\n                seq_lens_cpu_upper_bound=seq_lens_cpu_upper_bound,  # 形参直接传\n                step=self.num_query_per_req,\n                causal=self._group_causal,\n            )\n        ...\n\n    def propose(self, input_batch, ...):\n        # TODO: Remove the if not vllm_version_is guard when dropping v0.25.1.\n        # input_batch is cached here so that DFlashAclGraphManager can access\n        # seq_lens_cpu_upper_bound during full-graph replay.\n        if not vllm_version_is(\"0.25.1\"):\n            self.input_batch = input_batch\n        with build_attn_metadata_wrapper():\n            return super().propose(input_batch, ...)",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/v2/spec_decode/dflash/speculator.py\n+++ b/vllm_ascend/worker/v2/spec_decode/dflash/speculator.py\n@@ -1,6 +1,6 @@\n import torch\n-import torch.nn.functional as F\n from vllm.v1.spec_decode.dflash import DFlashSpeculator\n+from vllm_ascend.utils import vllm_version_is\n from vllm_ascend.worker.v2.attn_utils import build_attn_metadata_wrapper\n \n class AscendDFlashSpeculator(DFlashSpeculator):\n@@ -9,29 +9,26 @@\n         super().__init__(vllm_config, device)\n         ...\n \n-    def build_draft_attn_metadatas(self, num_reqs_padded):\n+    def build_draft_attn_metadatas(self, num_reqs_padded, seq_lens_cpu_upper_bound):\n         \"\"\"Build draft attention metadata for dflash speculator.\"\"\"\n         num_tokens_padded = num_reqs_padded * self.num_query_per_req\n-        # 从 self.input_batch 取 upper_bound\n-        upper_bound = self.input_batch.seq_lens_cpu_upper_bound\n-        # 做一个\"长度不够就 F.pad 到 num_reqs_padded\"的补偿\n-        if upper_bound.shape[0] < num_reqs_padded:\n-            upper_bound = torch.nn.functional.pad(\n-                upper_bound,\n-                (0, num_reqs_padded - upper_bound.shape[0]),\n-            )\n+        # 删除：不再从 self.input_batch 取 upper_bound，不再做 F.pad\n         with build_attn_metadata_wrapper():\n             attn_metadata = self._build_draft_attn_metadata(\n                 num_reqs=num_reqs_padded,\n                 num_reqs_padded=num_reqs_padded,\n                 num_tokens_padded=num_tokens_padded,\n-                seq_lens_cpu_upper_bound=upper_bound,  # 喂的是 pad 后的副本\n+                seq_lens_cpu_upper_bound=seq_lens_cpu_upper_bound,  # 形参直接传\n                 step=self.num_query_per_req,\n                 causal=self._group_causal,\n             )\n         ...\n \n     def propose(self, input_batch, ...):\n-        self.input_batch = input_batch   # 无条件缓存（0.25.1 不需要也写了）\n+        # TODO: Remove the if not vllm_version_is guard when dropping v0.25.1.\n+        # input_batch is cached here so that DFlashAclGraphManager can access\n+        # seq_lens_cpu_upper_bound during full-graph replay.\n+        if not vllm_version_is(\"0.25.1\"):\n+            self.input_batch = input_batch\n         with build_attn_metadata_wrapper():\n             return super().propose(input_batch, ...)",
+      "stats": "1 file changed, +9 lines, -12 lines",
+      "key_changes": [
+        "添加 TODO 注释说明",
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

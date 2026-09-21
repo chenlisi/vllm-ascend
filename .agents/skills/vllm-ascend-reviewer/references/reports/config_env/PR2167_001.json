@@ -1,0 +1,114 @@
+{
+  "report_id": "PR2167_001",
+  "pr_number": 2167,
+  "pr_title": "[feat]: oproj tensor parallelism in pure DP and graph-mode scenarios.",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/linear.py:131",
+    "vllm_ascend/quantization/quant_config.py:233",
+    "vllm_ascend/ops/linear.py:315",
+    "tests/ut/distributed/test_parallel_state.py:7",
+    "mypy.ini:8",
+    "vllm_ascend/torchair/models/torchair_deepseek_v2.py:531",
+    "vllm_ascend/ops/linear.py:153",
+    "vllm_ascend/ops/linear.py:206",
+    "vllm_ascend/utils.py:507",
+    "vllm_ascend/patch/worker/patch_common/patch_lora.py:1"
+  ],
+  "landing_sha": "10c110e",
+  "source_quote": "This function seems to be identical with that of `RowParallelLinear`, why do we need to rewrite it here?\nWhat means `tp_rank = 0`?\nregister custom ops like other does https://github.com/vllm-project/vllm-ascend/blob/main/vllm_ascend/utils.py#L466\nBetter not import global variables directly from other files.\nWhy do we need to update these configurations? If this is a bug in the repo, I suggest creating a separate PR to fix it.\nIs it still not possible to eliminate these if-else branches even with CustomOp? @wangxiyuan @Yikun\nIs adding more if-else conditions the way to extend support for new models?\nThis part use dict format may be more extensible. The same logic applies as mentioned above.\nIf this component is enabled by default, modifications to the original vLLM repository will require ongoing maintenance and updates. What is the long-term maintenance strategy for this?\nlooks that these 3 file can merged into one",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/ops/linear.py:131",
+      "patch_snippet": "评后sha 10c110e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/quantization/quant_config.py:233",
+      "patch_snippet": "评后sha 10c110e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/ops/linear.py:315",
+      "patch_snippet": "评后sha 10c110e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "tests/ut/distributed/test_parallel_state.py:7",
+      "patch_snippet": "评后sha 10c110e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "mypy.ini:8",
+      "patch_snippet": "评后sha 10c110e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/torchair/models/torchair_deepseek_v2.py:531",
+      "patch_snippet": "评后sha 10c110e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/ops/linear.py:153",
+      "patch_snippet": "评后sha 10c110e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/ops/linear.py:206",
+      "patch_snippet": "评后sha 10c110e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/utils.py:507",
+      "patch_snippet": "评后sha 10c110e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/patch/worker/patch_common/patch_lora.py:1",
+      "patch_snippet": "评后sha 10c110e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "10c110e",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "PR 应专注于单一功能或修复。如果发现了仓库级别的配置问题（如 mypy 配置），应创建独立的 PR 处理，不应在当前 PR 中混入。",
+    "context": "",
+    "checkpoints": [
+      "PR 中的修改是否都与 PR 目标相关",
+      "配置文件的修改是否属于当前 PR 范围",
+      "是否避免了重复代码（应复用已有实现）",
+      "扩展新功能时是否避免了 if-else 堆砌"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/linear.py",
+      "line": 120,
+      "code": "# 评审人 sdmyzlp: \"This function seems to be identical with that of\n# RowParallelLinear, why do we need to rewrite it here?\"\n\nfrom typing import Optional, Dict\nimport torch\nimport torch.nn as nn\n\nfrom vllm.model_executor.layers.linear import (\n    RowParallelLinear,\n    ColumnParallelLinear,\n)\nfrom vllm.distributed import (\n    get_tensor_model_parallel_rank,\n    get_tensor_model_parallel_world_size,\n)\n\nclass OprojColumnParallelLinear(ColumnParallelLinear):\n    \"\"\"Custom ColumnParallelLinear for oproj with TP comm group.\"\"\"\n\n    def __init__(self, ...):\n        super().__init__(...)\n        self.tp_rank = get_tensor_model_parallel_rank()\n        self.tp_size = get_tensor_model_parallel_world_size()\n\n    def weight_loader(self, param, loaded_weight):\n        # 评审人指出：此函数与 RowParallelLinear 的实现完全相同\n        tp_rank = get_tensor_model_parallel_rank()\n        tp_size = get_tensor_model_parallel_world_size()\n        # 需要替换为自定义 comm group\n        tp_rank = self.tp_rank\n        tp_size = self.tp_size\n        # ... 重复的 weight_loader 逻辑",
+      "context": "评审人 sdmyzlp: \"This function seems to be identical with that of RowParallelLinear, why do we need to rewrite it here?\" 评审人指出：此函数与 RowParallelLinear 的实现完全相同"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/linear.py",
+      "line": 120,
+      "code": "# 移除了重复的 RowParallelLinear 实现\n# 使用 register custom_ops 方式注册（参考 utils.py#L466）\n\nfrom typing import Optional, Dict\nimport torch\nimport torch.nn as nn\n\nfrom vllm.model_executor.layers.linear import (\n    RowParallelLinear,\n    ColumnParallelLinear,\n)\nfrom vllm.distributed import (\n    get_tensor_model_parallel_rank,\n    get_tensor_model_parallel_world_size,\n)\n\nclass AscendRowParallelLinear(RowParallelLinear):\n    \"\"\"Ascend-specific RowParallelLinear with custom TP comm group.\"\"\"\n\n    def __init__(self, ...):\n        super().__init__(...)\n        self.tp_rank = get_tensor_model_parallel_rank()\n        self.tp_size = get_tensor_model_parallel_world_size()\n        # 通过注册 custom ops 方式生效",
+      "context": "移除了重复的 RowParallelLinear 实现 使用 register custom_ops 方式注册（参考 utils.py#L466） 通过注册 custom ops 方式生效"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/linear.py\n+++ b/vllm_ascend/ops/linear.py\n@@ -1,5 +1,5 @@\n-# 评审人 sdmyzlp: \"This function seems to be identical with that of\n-# RowParallelLinear, why do we need to rewrite it here?\"\n+# 移除了重复的 RowParallelLinear 实现\n+# 使用 register custom_ops 方式注册（参考 utils.py#L466）\n \n from typing import Optional, Dict\n import torch\n@@ -14,19 +14,11 @@\n     get_tensor_model_parallel_world_size,\n )\n \n-class OprojColumnParallelLinear(ColumnParallelLinear):\n-    \"\"\"Custom ColumnParallelLinear for oproj with TP comm group.\"\"\"\n+class AscendRowParallelLinear(RowParallelLinear):\n+    \"\"\"Ascend-specific RowParallelLinear with custom TP comm group.\"\"\"\n \n     def __init__(self, ...):\n         super().__init__(...)\n         self.tp_rank = get_tensor_model_parallel_rank()\n         self.tp_size = get_tensor_model_parallel_world_size()\n-\n-    def weight_loader(self, param, loaded_weight):\n-        # 评审人指出：此函数与 RowParallelLinear 的实现完全相同\n-        tp_rank = get_tensor_model_parallel_rank()\n-        tp_size = get_tensor_model_parallel_world_size()\n-        # 需要替换为自定义 comm group\n-        tp_rank = self.tp_rank\n-        tp_size = self.tp_size\n-        # ... 重复的 weight_loader 逻辑\n+        # 通过注册 custom ops 方式生效\n",
+      "stats": "1 file changed, +5 lines, -13 lines",
+      "key_changes": [
+        "移除: tp_size = self.tp_size",
+        "移除: def weight_loader(self, param, loaded_weight):",
+        "新增: \"\"\"Ascend-specific RowParallelLinear with custom TP comm group.\"\"\""
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

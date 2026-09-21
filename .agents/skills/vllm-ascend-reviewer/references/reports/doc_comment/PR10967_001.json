@@ -1,0 +1,59 @@
+{
+  "report_id": "PR10967_001",
+  "pr_number": 10967,
+  "pr_title": "[CI] Move accuracy-group-2 to weekly single node configs",
+  "pr_status": "merged",
+  "merged_at": "2026-06-26T09:35:30Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    ".github/workflows/schedule_weekly_test_a2.yaml:254"
+  ],
+  "landing_sha": "2806747",
+  "source_quote": "Follow Weekly-A3, rename it.",
+  "correspondence": [
+    {
+      "review_quote": "zhangxinyuehfad 指出该 weekly 工作流的 artifact 名称仍为 `nightly-a2`，应参照 `Weekly-A3` 命名改为 `weekly-a2`，使产物名与执行周期一致。作者将 `name` 改为 `weekly-a2`，作者回复 \"Modified\"。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "2806747",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "将测试用例从 nightly 迁移到 weekly 工作流后，上传 artifact 的 `name` 前缀须同步从 `nightly-*` 改为 `weekly-*`，与同类 weekly 工作流（如 Weekly-A3）命名保持一致，便于按周期归档与检索。",
+    "context": "",
+    "checkpoints": [
+      "检查用例在 nightly/weekly 工作流间迁移后，artifact `name` 前缀是否同步更新",
+      "weekly 工作流产物不应残留 `nightly-` 前缀",
+      "同周期同类工作流命名风格应统一（如 `weekly-a2` 对齐 `weekly-a3`）"
+    ],
+    "antipattern": {
+      "file": ".github/workflows/schedule_weekly_test_a2.yaml",
+      "line": 245,
+      "code": "  upload-benchmark-results:\n    if: always()\n    runs-on: ubuntu-latest\n    steps:\n      - name: Download all benchmark artifacts\n        uses: actions/download-artifact@v4\n        with:\n          pattern: nightly-test-benchmark-results-*\n          merge-multiple: true\n          path: ./benchmark-results\n\n      - name: Upload merged benchmark results\n        continue-on-error: true\n        uses: actions/upload-artifact/merge@v7\n        with:\n          name: nightly-a2\n          pattern: nightly-test-benchmark-results-*\n          compression-level: 0\n          delete-merged: true",
+      "context": "Follow Weekly-A3, rename it."
+    },
+    "pattern": {
+      "file": ".github/workflows/schedule_weekly_test_a2.yaml",
+      "line": 245,
+      "code": "  upload-benchmark-results:\n    if: always()\n    runs-on: ubuntu-latest\n    steps:\n      - name: Download all benchmark artifacts\n        uses: actions/download-artifact@v4\n        with:\n          pattern: nightly-test-benchmark-results-*\n          merge-multiple: true\n          path: ./benchmark-results\n\n      - name: Upload merged benchmark results\n        continue-on-error: true\n        uses: actions/upload-artifact/merge@v7\n        with:\n          name: weekly-a2\n          pattern: nightly-test-benchmark-results-*\n          compression-level: 0\n          delete-merged: true",
+      "context": "Follow Weekly-A3, rename it."
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/schedule_weekly_test_a2.yaml\n+++ b/.github/workflows/schedule_weekly_test_a2.yaml\n@@ -13,7 +13,7 @@\n         continue-on-error: true\n         uses: actions/upload-artifact/merge@v7\n         with:\n-          name: nightly-a2\n+          name: weekly-a2\n           pattern: nightly-test-benchmark-results-*\n           compression-level: 0\n           delete-merged: true",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "移除: name: nightly-a2",
+        "新增: name: weekly-a2"
+      ]
+    },
+    "language": "yaml",
+    "_status": "extracted"
+  }
+}

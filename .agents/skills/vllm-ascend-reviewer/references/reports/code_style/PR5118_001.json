@@ -1,0 +1,60 @@
+{
+  "report_id": "PR5118_001",
+  "pr_number": 5118,
+  "pr_title": "[Feat] Support to use fullgraph with eagle",
+  "pr_status": "merged",
+  "merged_at": "2025-12-29T01:54:51Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/spec_decode/eagle_proposer.py:258",
+    "vllm_ascend/compilation/acl_graph.py:199"
+  ],
+  "landing_sha": "0203dc5",
+  "source_quote": "Why is it different from `propose` that seperates `i=0` and `i>0`?",
+  "correspondence": [
+    {
+      "review_quote": "yiz-liu 指出 eagle_proposer.py 中的逻辑与 propose 方法不一致，且 graph capturing 条件判断有误（参考 #5072），同时建议参考 model runner 中的 full_graph_pa 实现。作者通过 commit `0203dc5` 重命名参数并修正逻辑，3/3 建议全部落地。",
+      "patch_snippet": "commit `0203dc5`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "0203dc5",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 speculative decoding 中，graph capturing 的条件判断应与已有实现（如 propose 方法）保持一致，参考 PR #5072 中的正确做法。",
+    "context": "",
+    "checkpoints": [
+      "新增的 graph 相关逻辑是否与 propose 方法中的逻辑一致",
+      "条件判断是否使用了正确的标志（参考 #5072）",
+      "是否参考了 model runner 中已有的 full_graph_pa 实现"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/spec_decode/eagle_proposer.py",
+      "line": 0,
+      "code": "    def propose(self, ...):\n        for i in range(num_speculative_tokens):\n            if not in_graph_capturing:\n                update_attn_params(\n                    self.update_stream,\n                    forward_context,\n                    num_tokens,\n                )",
+      "context": "Why is it different from `propose` that seperates `i=0` and `i>0`?"
+    },
+    "pattern": {
+      "file": "vllm_ascend/spec_decode/eagle_proposer.py",
+      "line": 0,
+      "code": "    def propose(self, ...):\n        for i in range(num_speculative_tokens):\n            if forward_context.cudagraph_runtime_mode == CUDAGraphMode.FULL:\n                update_attn_params(\n                    self.update_stream,\n                    forward_context,\n                    num_tokens,\n                    self.vllm_config,\n                )",
+      "context": "Why is it different from `propose` that seperates `i=0` and `i>0`?"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/spec_decode/eagle_proposer.py\n+++ b/vllm_ascend/spec_decode/eagle_proposer.py\n@@ -1,8 +1,9 @@\n     def propose(self, ...):\n         for i in range(num_speculative_tokens):\n-            if not in_graph_capturing:\n+            if forward_context.cudagraph_runtime_mode == CUDAGraphMode.FULL:\n                 update_attn_params(\n                     self.update_stream,\n                     forward_context,\n                     num_tokens,\n+                    self.vllm_config,\n                 )",
+      "stats": "1 file changed, +2 lines, -1 lines",
+      "key_changes": [
+        "修改了第 3-3 行的代码",
+        "在第 8-8 行新增了代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

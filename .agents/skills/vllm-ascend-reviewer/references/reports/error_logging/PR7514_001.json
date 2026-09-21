@@ -1,0 +1,65 @@
+{
+  "report_id": "PR7514_001",
+  "pr_number": 7514,
+  "pr_title": "[P/D] [Bugfix] fix mooncake layerconnector dead when update_decoder_info fail",
+  "pr_status": "merged",
+  "merged_at": "2026-03-23T09:03:48Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_layerwise_connector.py:1631"
+  ],
+  "landing_sha": "2c26639",
+  "source_quote": "如果错误被忽略（不抛出异常），则不应使用 `error` 级别日志。\ndo not use `error` level if the error is ignored.\n在代码中添加注释，说明为什么这个错误不需要抛出异常。\nPls add an annoation afterwards on why this error needn't to throw an exception.",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan: vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_layerwise_connector.py:1631",
+      "patch_snippet": "评后sha 2c26639 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "zzzzwwjj: vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_layerwise_connector.py:1631",
+      "patch_snippet": "评后sha 2c26639 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "2c26639",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当异常被捕获且不抛出时，不应使用 `error` 级别日志。应根据实际处理行为选择合适的日志级别（如 `warning` 或 `info`），并添加注释说明为何不抛出异常。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_layerwise_connector.py",
+      "line": 1620,
+      "code": "    def save_kv_layer(self, **kwargs) -> None:\n        \"\"\"Save KV layer for transfer to decoder side.\"\"\"\n        kv_caches = kwargs.get(\"kv_caches\", None)\n        layer_name = kwargs.get(\"layer_name\", None)\n\n        # Update decoder info for the current layer\n        try:\n            self.update_decoder_info(\n                layer_name=layer_name,\n                kv_caches=kv_caches,\n            )\n        except Exception as e:\n            logger.error(f\"update_decoder_info failed: {e}\")\n            # Error is silently ignored, continue processing\n\n        # Proceed with KV cache transfer\n        self._send_kv_cache(layer_name, kv_caches)",
+      "context": "如果错误被忽略（不抛出异常），则不应使用 `error` 级别日志。\ndo not use `error` level if the error is ignored.\n在代码中添加注释，说明为什么这个错误不需要抛出异常。\nPls add an annoation afterwards on why this error needn't to throw an exception."
+    },
+    "pattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_layerwise_connector.py",
+      "line": 1620,
+      "code": "    def save_kv_layer(self, **kwargs) -> None:\n        \"\"\"Save KV layer for transfer to decoder side.\"\"\"\n        kv_caches = kwargs.get(\"kv_caches\", None)\n        layer_name = kwargs.get(\"layer_name\", None)\n\n        # Update decoder info for the current layer\n        try:\n            self.update_decoder_info(\n                layer_name=layer_name,\n                kv_caches=kv_caches,\n            )\n        except Exception as e:\n            logger.warning(f\"update_decoder_info failed: {e}\")\n            # This error is intentionally ignored because\n            # update_decoder_info failure does not affect the current\n            # layer's KV cache transfer. The next request will retry\n            # the update.\n\n        # Proceed with KV cache transfer\n        self._send_kv_cache(layer_name, kv_caches)",
+      "context": "如果错误被忽略（不抛出异常），则不应使用 `error` 级别日志。\ndo not use `error` level if the error is ignored.\n在代码中添加注释，说明为什么这个错误不需要抛出异常。\nPls add an annoation afterwards on why this error needn't to throw an exception."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_layerwise_connector.py\n+++ b/vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_layerwise_connector.py\n@@ -10,8 +10,11 @@\n                 kv_caches=kv_caches,\n             )\n         except Exception as e:\n-            logger.error(f\"update_decoder_info failed: {e}\")\n-            # Error is silently ignored, continue processing\n+            logger.warning(f\"update_decoder_info failed: {e}\")\n+            # This error is intentionally ignored because\n+            # update_decoder_info failure does not affect the current\n+            # layer's KV cache transfer. The next request will retry\n+            # the update.\n \n         # Proceed with KV cache transfer\n         self._send_kv_cache(layer_name, kv_caches)\n",
+      "stats": "1 file changed, +5 lines, -2 lines",
+      "key_changes": [
+        "-            logger.error(f\"update_decoder_info failed: {e}\")",
+        "-            # Error is silently ignored, continue processing",
+        "+            logger.warning(f\"update_decoder_info failed: {e}\")",
+        "+            # This error is intentionally ignored because",
+        "+            # update_decoder_info failure does not affect the current",
+        "+            # layer's KV cache transfer. The next request will retry",
+        "+            # the update."
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

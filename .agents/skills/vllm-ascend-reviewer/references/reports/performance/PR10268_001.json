@@ -1,0 +1,67 @@
+{
+  "report_id": "PR10268_001",
+  "pr_number": 10268,
+  "pr_title": "[Performance]earse the synconize when enable sampling params",
+  "pr_status": "merged",
+  "merged_at": "2026-06-23T03:13:20Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/sample/rejection_sampler.py:105",
+    "vllm_ascend/sample/rejection_sampler.py:124"
+  ],
+  "landing_sha": "771e68c",
+  "source_quote": "remove commented code.",
+  "correspondence": [
+    {
+      "review_quote": "momo609 指出 `rejection_sampler.py:105` 处有注释代码需要清理。weijinqian0 指出 `rejection_sampler.py:124` 处的代码应迁移到 vllm 上游。作者通过 commit `771e68c`（\"remove redundant code\"）移除了注释代码，2/2 建议全部落地。",
+      "patch_snippet": "commit `771e68c`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "771e68c",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "PR 中不应保留被注释掉的旧代码，应在提交前清理。对于需要迁移到上游的代码，应添加 TODO 标注迁移计划。",
+    "context": "",
+    "checkpoints": [
+      "检查是否存在被注释掉的旧代码块",
+      "检查需要迁移到上游的代码是否有 TODO 标注"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/sample/rejection_sampler.py",
+      "line": 105,
+      "code": "import torch\nfrom typing import Optional\n\n# ... 其他代码 ...\n\nclass AscendRejectionSampler:\n    # ... 其他方法 ...\n\n    def apply_logits_processors(\n        self,\n        logits: torch.Tensor,\n        sampling_metadata: \"SamplingMetadata\",\n        metadata: \"SpecDecodeMetadata\",\n        output_token_ids: list[list[int]],\n    ) -> torch.Tensor:\n        has_penalties = self._has_penalties(sampling_metadata)\n\n        # lines 105-111: 被注释掉的旧代码\n        # if sampling_metadata.allowed_token_ids_mask is not None:\n        #     # old logic with CPU-based repeat_interleave\n        #     repeat_interleave logic here\n        #     ...\n\n        # lines 124-129: output_token_ids 直接传入 apply_penalties\n        # 未 repeat 到 token 级别维度，导致 shape mismatch\n        if sampling_metadata.allowed_token_ids_mask is not None or has_penalties:\n            logits = self.apply_penalties(logits, sampling_metadata, metadata,\n                                          output_token_ids)\n\n        return logits\n\n    # ... 其他方法 ...",
+      "context": "remove commented code."
+    },
+    "pattern": {
+      "file": "vllm_ascend/sample/rejection_sampler.py",
+      "line": 105,
+      "code": "import torch\nfrom typing import Optional\n\n# ... 其他代码 ...\n\nclass AscendRejectionSampler:\n    # ... 其他方法 ...\n\n    def apply_logits_processors(\n        self,\n        logits: torch.Tensor,\n        sampling_metadata: \"SamplingMetadata\",\n        metadata: \"SpecDecodeMetadata\",\n        output_token_ids: list[list[int]],\n    ) -> torch.Tensor:\n        has_penalties = self._has_penalties(sampling_metadata)\n\n        # 移除了注释掉的旧代码，保持代码整洁\n\n        # TODO: Move this to vllm (weijinqian0 建议将相关逻辑迁移到 vllm 上游)\n        # 修复 shape mismatch：使用 expand_batch_to_tokens repeat output_token_ids\n        if sampling_metadata.allowed_token_ids_mask is not None or has_penalties:\n            num_requests = len(metadata.num_draft_tokens)\n            original_indices = torch.arange(\n                num_requests, device=logits.device, dtype=torch.long)\n            repeat_indices = expand_batch_to_tokens(\n                original_indices,\n                metadata.cu_num_draft_tokens,\n                logits.shape[0],\n            )\n            repeated_output_token_ids = []\n            for i, num_tokens in enumerate(metadata.num_draft_tokens):\n                repeated_output_token_ids.extend(\n                    [output_token_ids[i]] * num_tokens)\n            logits = self.apply_penalties(\n                logits, sampling_metadata, metadata,\n                repeat_indices, repeated_output_token_ids)\n\n        return logits\n\n    # ... 其他方法 ...",
+      "context": "remove commented code."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/sample/rejection_sampler.py\n+++ b/vllm_ascend/sample/rejection_sampler.py\n@@ -15,17 +15,26 @@\n     ) -> torch.Tensor:\n         has_penalties = self._has_penalties(sampling_metadata)\n \n-        # lines 105-111: 被注释掉的旧代码\n-        # if sampling_metadata.allowed_token_ids_mask is not None:\n-        #     # old logic with CPU-based repeat_interleave\n-        #     repeat_interleave logic here\n-        #     ...\n+        # 移除了注释掉的旧代码，保持代码整洁\n \n-        # lines 124-129: output_token_ids 直接传入 apply_penalties\n-        # 未 repeat 到 token 级别维度，导致 shape mismatch\n+        # TODO: Move this to vllm (weijinqian0 建议将相关逻辑迁移到 vllm 上游)\n+        # 修复 shape mismatch：使用 expand_batch_to_tokens repeat output_token_ids\n         if sampling_metadata.allowed_token_ids_mask is not None or has_penalties:\n-            logits = self.apply_penalties(logits, sampling_metadata, metadata,\n-                                          output_token_ids)\n+            num_requests = len(metadata.num_draft_tokens)\n+            original_indices = torch.arange(\n+                num_requests, device=logits.device, dtype=torch.long)\n+            repeat_indices = expand_batch_to_tokens(\n+                original_indices,\n+                metadata.cu_num_draft_tokens,\n+                logits.shape[0],\n+            )\n+            repeated_output_token_ids = []\n+            for i, num_tokens in enumerate(metadata.num_draft_tokens):\n+                repeated_output_token_ids.extend(\n+                    [output_token_ids[i]] * num_tokens)\n+            logits = self.apply_penalties(\n+                logits, sampling_metadata, metadata,\n+                repeat_indices, repeated_output_token_ids)\n \n         return logits\n ",
+      "stats": "1 file changed, +18 lines, -9 lines",
+      "key_changes": [
+        "移除: # lines 105-111: 被注释掉的旧代码",
+        "移除: # if sampling_metadata.allowed_token_ids_mask is not None:",
+        "移除: #     # old logic with CPU-based repeat_interleave",
+        "移除: #     repeat_interleave logic here",
+        "移除: #     ...",
+        "新增: # 移除了注释掉的旧代码，保持代码整洁",
+        "移除: # lines 124-129: output_token_ids 直接传入 apply_penalties",
+        "移除: # 未 repeat 到 token 级别维度，导致 shape mismatch",
+        "新增: # TODO: Move this to vllm (weijinqian0 建议将相关逻辑迁移到 vllm 上游)",
+        "新增: # 修复 shape mismatch：使用 expand_batch_to_tokens repeat output_token_ids"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

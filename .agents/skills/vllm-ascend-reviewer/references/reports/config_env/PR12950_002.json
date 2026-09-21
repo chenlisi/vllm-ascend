@@ -1,0 +1,57 @@
+{
+  "report_id": "PR12950_002",
+  "pr_number": 12950,
+  "pr_title": "[Feature][v0.26.0rc] Support Kimi K3 on Ascend",
+  "pr_status": "merged",
+  "dimension": [
+    "design"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/patch/platform/patch_speculative_config.py:7"
+  ],
+  "landing_sha": "23cfbd5",
+  "source_quote": "What is _LEGACY_QWEN3_DSPARK_BLOCK_SIZE?\nWhy use this name?",
+  "correspondence": [
+    {
+      "review_quote": "drslark: vllm_ascend/patch/platform/patch_speculative_config.py:7",
+      "patch_snippet": "评后sha 23cfbd5 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "23cfbd5",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "共享代码路径中不应硬编码特定模型的常量（如 block_size），应从模型配置中动态读取，使不同模型可以保留各自的训练参数。",
+    "context": "",
+    "checkpoints": [
+      "检查共享路径中是否有以模型名命名的硬编码常量（如 `_LEGACY_*_BLOCK_SIZE`）",
+      "确认常量是否可以从配置对象动态获取",
+      "验证移除硬编码后不同模型仍能正确工作"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/patch/platform/patch_speculative_config.py",
+      "line": 1,
+      "code": "\"\"\"Platform-specific speculative config patching for Ascend.\"\"\"\n\n# 硬编码常量，Kimi 特定假设\n_LEGACY_QWEN3_DSPARK_BLOCK_SIZE = 128\n\n\ndef _patch_dspark_config(self, model_type, draft_hf_config):\n    \"\"\"Patch speculative config for Qwen3/GQA DSpark.\"\"\"\n    if model_type in (\"qwen3\", \"gqa_dspark\"):\n        # 使用硬编码常量\n        block_size = _LEGACY_QWEN3_DSPARK_BLOCK_SIZE\n        if self.num_speculative_tokens != block_size:\n            raise ValueError(\n                f\"num_speculative_tokens ({self.num_speculative_tokens}) \"\n                f\"must match DSpark block size ({block_size})\"\n            )\n    elif model_type == \"kimi_k3\":\n        # Kimi K3 也走同一硬编码路径\n        block_size = _LEGACY_QWEN3_DSPARK_BLOCK_SIZE\n        if self.num_speculative_tokens != block_size:\n            raise ValueError(\n                f\"num_speculative_tokens ({self.num_speculative_tokens}) \"\n                f\"must match DSpark block size ({block_size})\"\n            )",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/patch/platform/patch_speculative_config.py",
+      "line": 1,
+      "code": "\"\"\"Platform-specific speculative config patching for Ascend.\"\"\"\n\n# 移除 _LEGACY_QWEN3_DSPARK_BLOCK_SIZE 硬编码常量\n\n\ndef _patch_dspark_config(self, model_type, draft_hf_config):\n    \"\"\"Patch speculative config for Qwen3/GQA DSpark.\"\"\"\n    if model_type in (\"qwen3\", \"gqa_dspark\", \"kimi_k3\"):\n        # 从 draft config 动态获取 block_size，不再硬编码\n        block_size = getattr(draft_hf_config, \"block_size\", None)\n        if (not isinstance(block_size, int)\n                or isinstance(block_size, bool)\n                or block_size <= 0):\n            raise ValueError(\n                \"Qwen3/GQA DSpark requires a positive integer block_size \"\n                \"in the draft config.\"\n            )\n        if self.num_speculative_tokens != block_size:\n            raise ValueError(\n                f\"num_speculative_tokens ({self.num_speculative_tokens}) \"\n                f\"must match draft block_size ({block_size})\"\n            )\n        # Kimi K3 通过 checkpoint metadata 保持 K=7，\n        # 其他 Qwen3 DSpark checkpoint 保留各自训练的 block_size",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/patch/platform/patch_speculative_config.py\n+++ b/vllm_ascend/patch/platform/patch_speculative_config.py\n@@ -1,24 +1,24 @@\n \"\"\"Platform-specific speculative config patching for Ascend.\"\"\"\n \n-# 硬编码常量，Kimi 特定假设\n-_LEGACY_QWEN3_DSPARK_BLOCK_SIZE = 128\n+# 移除 _LEGACY_QWEN3_DSPARK_BLOCK_SIZE 硬编码常量\n \n \n def _patch_dspark_config(self, model_type, draft_hf_config):\n     \"\"\"Patch speculative config for Qwen3/GQA DSpark.\"\"\"\n-    if model_type in (\"qwen3\", \"gqa_dspark\"):\n-        # 使用硬编码常量\n-        block_size = _LEGACY_QWEN3_DSPARK_BLOCK_SIZE\n+    if model_type in (\"qwen3\", \"gqa_dspark\", \"kimi_k3\"):\n+        # 从 draft config 动态获取 block_size，不再硬编码\n+        block_size = getattr(draft_hf_config, \"block_size\", None)\n+        if (not isinstance(block_size, int)\n+                or isinstance(block_size, bool)\n+                or block_size <= 0):\n+            raise ValueError(\n+                \"Qwen3/GQA DSpark requires a positive integer block_size \"\n+                \"in the draft config.\"\n+            )\n         if self.num_speculative_tokens != block_size:\n             raise ValueError(\n                 f\"num_speculative_tokens ({self.num_speculative_tokens}) \"\n-                f\"must match DSpark block size ({block_size})\"\n+                f\"must match draft block_size ({block_size})\"\n             )\n-    elif model_type == \"kimi_k3\":\n-        # Kimi K3 也走同一硬编码路径\n-        block_size = _LEGACY_QWEN3_DSPARK_BLOCK_SIZE\n-        if self.num_speculative_tokens != block_size:\n-            raise ValueError(\n-                f\"num_speculative_tokens ({self.num_speculative_tokens}) \"\n-                f\"must match DSpark block size ({block_size})\"\n-            )\n+        # Kimi K3 通过 checkpoint metadata 保持 K=7，\n+        # 其他 Qwen3 DSpark checkpoint 保留各自训练的 block_size",
+      "stats": "1 file changed, +14 lines, -14 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

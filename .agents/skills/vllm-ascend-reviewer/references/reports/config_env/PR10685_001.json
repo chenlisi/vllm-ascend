@@ -1,0 +1,67 @@
+{
+  "report_id": "PR10685_001",
+  "pr_number": 10685,
+  "pr_title": "[CI] Add E2E weekly multi-node config for MiniMax-PD-in32k-bs4-1",
+  "pr_status": "merged",
+  "merged_at": "2026-06-24T02:06:29Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/e2e/weekly/multi_node/internal_dp/config/MiniMax-PD-in32k-bs4-1.yaml:95",
+    ".github/workflows/schedule_nightly_test_a3.yaml:161",
+    "tests/e2e/weekly/multi_node/external_dp/config/MiniMax-PD-in32k-bs4-1.yaml:1",
+    "tests/e2e/weekly/single_node/configs/Qwen3.5-27B-w8a8-A3.yaml:13"
+  ],
+  "landing_sha": "7a67841",
+  "source_quote": "No need for the use_ascend_direct and engine_id parameters",
+  "correspondence": [
+    {
+      "review_quote": "liziyu179 指出配置中不需要 use_ascend_direct 和 engine_id 参数。zhangxinyuehfad 质疑为何添加新的 nightly test，指出 yaml 文件分类错误（应为 external_dp），并要求新模型需加入 model_dataset_list.json。作者通过 commit `7a67841` 删除了不必要参数、修正了文件分类和测试用例名称，4/4 建议全部落地。",
+      "patch_snippet": "commit `7a67841`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "7a67841",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "测试配置文件中不应包含不必要的参数；配置文件应放在正确的分类目录下；新增模型需更新 model_dataset_list.json；新增测试需说明理由。",
+    "context": "",
+    "checkpoints": [
+      "配置文件中是否包含不必要的参数（如 use_ascend_direct, engine_id）",
+      "yaml 文件是否放在正确的目录分类下（internal_dp vs external_dp）",
+      "新增模型是否已添加到 model_dataset_list.json",
+      "新增 nightly/weekly 测试是否有明确理由"
+    ],
+    "antipattern": {
+      "file": "tests/e2e/weekly/multi_node/internal_dp/config/MiniMax-PD-in32k-bs4-1.yaml",
+      "line": 85,
+      "code": "# MiniMax-PD-in32k-bs4-1 internal_dp 配置文件\n# 用于多节点 PD 分离测试\n\n# ... 前面的配置省略 ...\n\n    \"kv_transfer_config\": {\n        \"kv_connector\": \"MooncakeConnector\",\n        \"kv_role\": \"prefill\",\n        \"kv_port\": \"30000\",\n        \"use_ascend_direct\": true,\n        \"engine_id\": \"xxx\",\n        \"mooncake_config\": {\n            \"metadata_server\": \"192.168.1.100:2379\",\n            \"protocol\": \"tcp\"\n        }\n    },\n\n# ... 后续节点配置类似 ...",
+      "context": "No need for the use_ascend_direct and engine_id parameters"
+    },
+    "pattern": {
+      "file": "tests/e2e/weekly/multi_node/internal_dp/config/MiniMax-PD-in32k-bs4-1.yaml",
+      "line": 85,
+      "code": "# MiniMax-PD-in32k-bs4-1 internal_dp 配置文件\n# 用于多节点 PD 分离测试\n\n# ... 前面的配置省略 ...\n\n    \"kv_transfer_config\": {\n        \"kv_connector\": \"MooncakeConnector\",\n        \"kv_role\": \"prefill\",\n        \"kv_port\": 30000,\n        \"mooncake_config\": {\n            \"metadata_server\": \"192.168.1.100:2379\",\n            \"protocol\": \"tcp\"\n        }\n    },\n\n# ... 后续节点配置类似 ...\n# 注: use_ascend_direct 和 engine_id 已删除\n#     kv_port 从字符串改为整数",
+      "context": "No need for the use_ascend_direct and engine_id parameters"
+    },
+    "diff": {
+      "unified": "--- a/tests/e2e/weekly/multi_node/internal_dp/config/MiniMax-PD-in32k-bs4-1.yaml\n+++ b/tests/e2e/weekly/multi_node/internal_dp/config/MiniMax-PD-in32k-bs4-1.yaml\n@@ -6,9 +6,7 @@\n     \"kv_transfer_config\": {\n         \"kv_connector\": \"MooncakeConnector\",\n         \"kv_role\": \"prefill\",\n-        \"kv_port\": \"30000\",\n-        \"use_ascend_direct\": true,\n-        \"engine_id\": \"xxx\",\n+        \"kv_port\": 30000,\n         \"mooncake_config\": {\n             \"metadata_server\": \"192.168.1.100:2379\",\n             \"protocol\": \"tcp\"\n@@ -16,3 +14,5 @@\n     },\n \n # ... 后续节点配置类似 ...\n+# 注: use_ascend_direct 和 engine_id 已删除\n+#     kv_port 从字符串改为整数",
+      "stats": "1 file changed, +3 lines, -3 lines",
+      "key_changes": [
+        "移除: \"kv_port\": \"30000\",",
+        "移除: \"use_ascend_direct\": true,",
+        "移除: \"engine_id\": \"xxx\",",
+        "新增: \"kv_port\": 30000,",
+        "新增: # 注: use_ascend_direct 和 engine_id 已删除",
+        "新增: #     kv_port 从字符串改为整数"
+      ]
+    },
+    "language": "yaml",
+    "_status": "extracted"
+  }
+}

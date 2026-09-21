@@ -1,0 +1,58 @@
+{
+  "report_id": "PR6878_001",
+  "pr_number": 6878,
+  "pr_title": "[Feat][310p] 310P support w8a8s quantization and saving w8a8sc state",
+  "pr_status": "merged",
+  "merged_at": "2026-03-02T10:13:40Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "examples/save_sharded_state_310.py:1"
+  ],
+  "landing_sha": "f6c5eef",
+  "source_quote": "rename to `save_sharded_state_310.py`",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan 指出文件名应重命名为 `save_sharded_state_310.py` 以明确标识该脚本为 310P 设备专用。作者接受建议并完成重命名，同时说明该脚本专为 Atlas 300I 设计，1/1 建议全部落地。",
+      "patch_snippet": "",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f6c5eef",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当脚本或工具仅适用于特定硬件设备（如 310P、Atlas 300I）时，文件名应包含设备标识，以避免用户在不兼容的设备上误用。",
+    "context": "",
+    "checkpoints": [
+      "设备特定的脚本文件名应包含设备型号标识（如 `_310`、`_atlas300i`）",
+      "通用脚本不应包含设备特定标识",
+      "文件头部注释应说明适用设备范围"
+    ],
+    "antipattern": {
+      "file": "examples/save_sharded_state.py",
+      "line": 1,
+      "code": "\"\"\"Save sharded model state with quantization compression.\nThis script saves model weights in sharded format with optional\nquantization compression for efficient deployment.\"\"\"\n\nimport os\nimport json\nimport shutil\nimport argparse\nfrom pathlib import Path\n\ndef weight_compress_worker(...):\n    \"\"\"Worker function for weight compression.\"\"\"\n    pass\n\ndef update_quant_description(json_file):\n    \"\"\"Update quantization description file.\"\"\"\n    pass\n\ndef main():\n    parser = argparse.ArgumentParser()",
+      "context": "rename to `save_sharded_state_310.py`"
+    },
+    "pattern": {
+      "file": "examples/save_sharded_state_310.py（重命名）",
+      "line": 1,
+      "code": "\"\"\"Save sharded model state with quantization compression.\nThis script is designed for Atlas 300I (310P) devices.\nIt saves model weights in sharded format with optional\nquantization compression for efficient deployment.\"\"\"\n\nimport os\nimport json\nimport shutil\nimport argparse\nfrom pathlib import Path\n\ndef weight_compress_worker(...):\n    \"\"\"Worker function for weight compression.\"\"\"\n    pass\n\ndef update_quant_description(json_file):\n    \"\"\"Update quantization description file.\"\"\"\n    pass\n\ndef main():\n    parser = argparse.ArgumentParser()",
+      "context": "rename to `save_sharded_state_310.py`"
+    },
+    "diff": {
+      "unified": "--- a/examples/save_sharded_state.py\n+++ b/examples/save_sharded_state_310.py（重命名）\n@@ -1,20 +1,21 @@\n \"\"\"Save sharded model state with quantization compression.\n-This script saves model weights in sharded format with optional\n+This script is designed for Atlas 300I (310P) devices.\n+It saves model weights in sharded format with optional\n quantization compression for efficient deployment.\"\"\"\n \n import os",
+      "stats": "1 file changed, +2 lines, -1 lines",
+      "key_changes": [
+        "修改了第 2-2 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

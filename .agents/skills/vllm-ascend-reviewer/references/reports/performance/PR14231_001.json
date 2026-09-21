@@ -1,0 +1,62 @@
+{
+  "report_id": "PR14231_001",
+  "pr_number": 14231,
+  "pr_title": "[BugFix][Model] Enable Kimi K3 projector rotation",
+  "pr_status": "merged",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/models/kimi_k3.py:613"
+  ],
+  "landing_sha": "83c0df2",
+  "source_quote": "![high]\nCalling `self.named_parameters()` on the top-level `AscendKimiK3ForConditionalGeneration` model recursively traverses all parameters of the entire language model and vision tower. For large models, this is extremely inefficient and introduces a significant performance bottleneck during model loading. Since we only need to check if the projector's rotation weights are loaded, we can query `self.mm_projector.rot_proj.named_parameters()` directly if it is not `None`, which is extremely fast and avoids full-model parameter traversal.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/models/kimi_k3.py:613",
+      "patch_snippet": "评后sha 83c0df2 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "83c0df2",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 `load_weights` 或其他加载期逻辑中，若只需检查某个子模块（如 `mm_projector.rot_proj`）的参数是否被加载，禁止用 `self.named_parameters()`（顶层模型）递归遍历整个模型（LM + vision tower 等所有参数），对大模型会引入显著加载性能瓶颈。必须直接调用目标子模块的 `named_parameters(prefix=...)`，只遍历该子模块的参数。用 `prefix` 参数保证参数名与 `loaded_weights` 的全限定名命名空间一致，便于集合比对。",
+    "context": "",
+    "checkpoints": [
+      "识别 `load_weights` 或加载期逻辑中调用 `self.named_parameters()` / `model.named_parameters()` 的代码",
+      "确认遍历目的是否只关心某个子模块的参数——若是，改为 `submodule.named_parameters(prefix=\"full.qualified.path\")`",
+      "用 `prefix` 参数限定命名空间，保证返回的参数名与 `loaded_weights` / checkpoint 的全限定名一致",
+      "用集合操作（`isdisjoint` / `intersection`）比对参数名，避免 O(n*m) 嵌套遍历",
+      "配套单测覆盖\"权重存在 → 保留子模块\"和\"权重不存在 → 删除子模块\"两种情况"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/models/kimi_k3.py",
+      "line": 613,
+      "code": "# vllm_ascend/models/kimi_k3.py\n# AscendKimiK3ForConditionalGeneration.load_weights 方法，约第 600-620 行\nclass AscendKimiK3ForConditionalGeneration:\n    # ...\n\n    def load_weights(self, weights: Iterable[tuple[str, torch.Tensor]]) -> set[str]:\n        # ❌ 用 self.named_parameters() 遍历整个模型（LM + vision tower）\n        # ❌ 只为检查 projector rotation 权重是否被加载，对大模型极低效\n        skip_prefixes = [] if self.mm_projector.rot_proj is not None else [\"mm_projector.rot_proj.\"]\n        loader = AutoWeightsLoader(self, skip_prefixes=skip_prefixes)\n        loaded_weights = loader.load_weights(weights, mapper=self.hf_to_vllm_mapper)\n\n        # ❌ 全模型遍历：O(n) 其中 n 是 LM + vision tower 全部参数量\n        all_param_names = {name for name, _ in self.named_parameters()}\n        rot_proj_loaded = any(\n            name.startswith(\"mm_projector.rot_proj\") for name in all_param_names\n        )\n        # ❌ 大模型下遍历数亿参数，加载期显著性能瓶颈\n\n        return loaded_weights",
+      "context": "vllm_ascend/models/kimi_k3.py AscendKimiK3ForConditionalGeneration.load_weights 方法，约第 600-620 行 ❌ 用 self.named_parameters() 遍历整个模型（LM + vision tower）"
+    },
+    "pattern": {
+      "file": "vllm_ascend/models/kimi_k3.py",
+      "line": 613,
+      "code": "# vllm_ascend/models/kimi_k3.py\nclass AscendKimiK3ForConditionalGeneration:\n    # ...\n\n    def load_weights(self, weights: Iterable[tuple[str, torch.Tensor]]) -> set[str]:\n        # ModelSlim checkpoints may include an explicit projector rotation.\n        # Build the optional layer before loading so streaming checkpoint\n        # iterators can populate it, then release it when the weight is absent.\n        rot_proj = getattr(self.mm_projector, \"rot_proj\", None)\n        skip_prefixes = [] if rot_proj is not None else [\"mm_projector.rot_proj.\"]\n        loader = AutoWeightsLoader(self, skip_prefixes=skip_prefixes)\n        # ✅ 只查询 rot_proj 子模块的参数，用 prefix 限定命名空间\n        # ✅ O(k) 其中 k 是 rot_proj 参数数（通常 < 10），极快\n        rot_proj_weight_names = (\n            {name for name, _ in rot_proj.named_parameters(prefix=\"mm_projector.rot_proj\")}\n            if rot_proj is not None\n            else set()\n        )\n        loaded_weights = loader.load_weights(weights, mapper=self.hf_to_vllm_mapper)\n        # ✅ 检查 rot_proj 权重是否被加载，未加载则删除该层\n        if rot_proj is not None and rot_proj_weight_names.isdisjoint(loaded_weights):\n            del self.mm_projector.rot_proj\n        return loaded_weights",
+      "context": "vllm_ascend/models/kimi_k3.py ModelSlim checkpoints may include an explicit projector rotation. Build the optional layer before loading so streaming checkpoint"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/models/kimi_k3.py\n+++ b/vllm_ascend/models/kimi_k3.py\n@@ -1,20 +1,23 @@\n # vllm_ascend/models/kimi_k3.py\n-# AscendKimiK3ForConditionalGeneration.load_weights 方法，约第 600-620 行\n class AscendKimiK3ForConditionalGeneration:\n     # ...\n \n     def load_weights(self, weights: Iterable[tuple[str, torch.Tensor]]) -> set[str]:\n-        # ❌ 用 self.named_parameters() 遍历整个模型（LM + vision tower）\n-        # ❌ 只为检查 projector rotation 权重是否被加载，对大模型极低效\n-        skip_prefixes = [] if self.mm_projector.rot_proj is not None else [\"mm_projector.rot_proj.\"]\n+        # ModelSlim checkpoints may include an explicit projector rotation.\n+        # Build the optional layer before loading so streaming checkpoint\n+        # iterators can populate it, then release it when the weight is absent.\n+        rot_proj = getattr(self.mm_projector, \"rot_proj\", None)\n+        skip_prefixes = [] if rot_proj is not None else [\"mm_projector.rot_proj.\"]\n         loader = AutoWeightsLoader(self, skip_prefixes=skip_prefixes)\n+        # ✅ 只查询 rot_proj 子模块的参数，用 prefix 限定命名空间\n+        # ✅ O(k) 其中 k 是 rot_proj 参数数（通常 < 10），极快\n+        rot_proj_weight_names = (\n+            {name for name, _ in rot_proj.named_parameters(prefix=\"mm_projector.rot_proj\")}\n+            if rot_proj is not None\n+            else set()\n+        )\n         loaded_weights = loader.load_weights(weights, mapper=self.hf_to_vllm_mapper)\n-\n-        # ❌ 全模型遍历：O(n) 其中 n 是 LM + vision tower 全部参数量\n-        all_param_names = {name for name, _ in self.named_parameters()}\n-        rot_proj_loaded = any(\n-            name.startswith(\"mm_projector.rot_proj\") for name in all_param_names\n-        )\n-        # ❌ 大模型下遍历数亿参数，加载期显著性能瓶颈\n-\n+        # ✅ 检查 rot_proj 权重是否被加载，未加载则删除该层\n+        if rot_proj is not None and rot_proj_weight_names.isdisjoint(loaded_weights):\n+            del self.mm_projector.rot_proj\n         return loaded_weights\n",
+      "stats": "1 file changed, +15 lines, -12 lines",
+      "key_changes": [
+        "移除: skip_prefixes = [] if self.mm_projector.rot_proj is not None else [\"mm_projector",
+        "新增: skip_prefixes = [] if rot_proj is not None else [\"mm_projector.rot_proj.\"]",
+        "新增: if rot_proj is not None",
+        "新增: else set()"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

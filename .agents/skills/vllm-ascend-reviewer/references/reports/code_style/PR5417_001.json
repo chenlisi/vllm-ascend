@@ -1,0 +1,59 @@
+{
+  "report_id": "PR5417_001",
+  "pr_number": 5417,
+  "pr_title": "[Bugfix] fix greedy temperature detection",
+  "pr_status": "merged",
+  "merged_at": "",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/sample/rejection_sampler.py:12"
+  ],
+  "landing_sha": "6ac40c6",
+  "source_quote": "import from vLLM directly?",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan 建议直接从 vLLM 导入 `GREEDY_TEMPERATURE` 而非本地定义，并指出其他全局变量也应从 vLLM 导入。作者通过 commit `6ac40c6` 修改为从 vLLM 导入。MengqingCao 表示其他全局变量的导入将在后续 PR 中处理。2/2 建议落地（其余留待后续 PR）。",
+      "patch_snippet": "commit `6ac40c6`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "6ac40c6",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当 vLLM 上游已定义了常量（如 `GREEDY_TEMPERATURE`）时，应直接从上游导入使用，而非在 vllm-ascend 中本地定义，以避免值不一致导致的 bug。",
+    "context": "",
+    "checkpoints": [
+      "常量是否已从 vLLM 上游导入",
+      "是否存在本地重复定义的常量",
+      "其他全局变量是否也应从上游导入"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/sample/rejection_sampler.py",
+      "line": 1,
+      "code": "import torch\n\nGREEDY_TEMPERATURE = -1\n\nSOME_OTHER_CONSTANT = ...\n\ndef rejection_sample(\n    q: torch.Tensor,\n    num_samples: int,\n    seq_ids: torch.Tensor,\n    temperature: torch.Tensor,\n    generators: dict[str, torch.Generator],\n) -> torch.Tensor:\n    \"\"\"Rejection sampling implementation.\"\"\"\n    if temperature == GREEDY_TEMPERATURE:\n        temperature = torch.ones_like(temperature)",
+      "context": "import from vLLM directly?"
+    },
+    "pattern": {
+      "file": "vllm_ascend/sample/rejection_sampler.py",
+      "line": 1,
+      "code": "import torch\nfrom vllm.sampling_params import GREEDY_TEMPERATURE\n\n\ndef rejection_sample(\n    q: torch.Tensor,\n    num_samples: int,\n    seq_ids: torch.Tensor,\n    temperature: torch.Tensor,\n    generators: dict[str, torch.Generator],\n) -> torch.Tensor:\n    \"\"\"Rejection sampling implementation.\"\"\"\n    if temperature == GREEDY_TEMPERATURE:\n        temperature = torch.ones_like(temperature)",
+      "context": "import from vLLM directly?"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/sample/rejection_sampler.py\n+++ b/vllm_ascend/sample/rejection_sampler.py\n@@ -1,16 +1,14 @@\n import torch\n+from vllm.sampling_params import GREEDY_TEMPERATURE\n \n-GREEDY_TEMPERATURE = -1\n-\n-SOME_OTHER_CONSTANT = ...\n \n def rejection_sample(\n     q: torch.Tensor,",
+      "stats": "1 file changed, +1 lines, -3 lines",
+      "key_changes": [
+        "在第 2-2 行新增了代码",
+        "删除了第 3-5 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

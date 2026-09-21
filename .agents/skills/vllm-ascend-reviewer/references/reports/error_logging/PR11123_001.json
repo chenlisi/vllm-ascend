@@ -1,0 +1,72 @@
+{
+  "report_id": "PR11123_001",
+  "pr_number": 11123,
+  "pr_title": "[Misc] Add debug logging probes for speculative decoding diagnostics",
+  "pr_status": "merged",
+  "merged_at": "2026-07-16T11:38:18Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/sample/rejection_sampler.py:185",
+    "vllm_ascend/sample/rejection_sampler.py:466",
+    "vllm_ascend/sample/rejection_sampler.py:566",
+    "vllm_ascend/sample/rejection_sampler.py:453",
+    "vllm_ascend/sample/rejection_sampler.py:178",
+    "vllm_ascend/sample/rejection_sampler.py:192",
+    "vllm_ascend/sample/rejection_sampler.py:268"
+  ],
+  "landing_sha": "d84ad93",
+  "source_quote": "",
+  "correspondence": [
+    {
+      "review_quote": "zzzzwwjj 指出 assert 应移入 if 块并使用 raise error，同时质疑打印 error log 但不抛异常的一致性问题。drslark 建议添加 assert message、质疑不必要的 if 判断、以及建议将日志逻辑与主逻辑分离。作者回应：对于 `draft_probs is None` 的合法路径（ngram spec-decode），将 `logger.error` 降级为 `logger.warning`；其他 assert 改为 raise error。通过 3 个 commit 完成了修改。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "d84ad93",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在生产代码的调试诊断中，条件检查应使用 `if not condition: raise RuntimeError(...)` 而非裸 `assert`，确保在 release 模式下也能捕获错误。",
+    "context": "",
+    "checkpoints": [
+      "是否使用了裸 `assert` 进行关键条件检查",
+      "assert 是否包含有意义的错误消息"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/sample/rejection_sampler.py",
+      "line": 185,
+      "code": "import logging\nimport torch\nfrom typing import Optional\n\nlogger = logging.getLogger(__name__)\n\nclass AscendRejectionSampler:\n    \"\"\"Rejection sampler for speculative decoding on Ascend.\"\"\"\n\n    def _verify_accepted_tokens(\n        self,\n        draft_token_ids: torch.Tensor,\n        bonus_token_ids: torch.Tensor,\n        draft_probs: Optional[torch.Tensor],\n    ) -> torch.Tensor:\n        \"\"\"Verify and select accepted tokens.\"\"\"\n        batch_size = draft_token_ids.shape[0]\n\n        # 使用裸 assert，缺少错误消息\n        assert draft_probs is not None\n\n        # 主逻辑中混合日志\n        if draft_probs.shape[0] != batch_size:\n            logger.error(\"draft_probs batch mismatch\")\n            # 仅打印错误但不抛出异常\n\n        accepted = self._compare_tokens(draft_token_ids, bonus_token_ids)\n        return accepted",
+      "context": "move `assert` into if, and use raise error."
+    },
+    "pattern": {
+      "file": "vllm_ascend/sample/rejection_sampler.py",
+      "line": 185,
+      "code": "import logging\nimport torch\nfrom typing import Optional\n\nlogger = logging.getLogger(__name__)\n\nclass AscendRejectionSampler:\n    \"\"\"Rejection sampler for speculative decoding on Ascend.\"\"\"\n\n    def _verify_accepted_tokens(\n        self,\n        draft_token_ids: torch.Tensor,\n        bonus_token_ids: torch.Tensor,\n        draft_probs: Optional[torch.Tensor],\n    ) -> torch.Tensor:\n        \"\"\"Verify and select accepted tokens.\"\"\"\n        batch_size = draft_token_ids.shape[0]\n\n        # assert 移入 if 块，使用 raise error 并添加消息\n        if draft_probs is None:\n            raise RuntimeError(\n                \"draft_probs must not be None for non-ngram spec-decode\"\n            )\n\n        # 日志逻辑与主逻辑分离\n        if draft_probs.shape[0] != batch_size:\n            raise RuntimeError(\n                f\"draft_probs batch mismatch: expected {batch_size}, \"\n                f\"got {draft_probs.shape[0]}\"\n            )\n\n        accepted = self._compare_tokens(draft_token_ids, bonus_token_ids)\n        return accepted",
+      "context": "move `assert` into if, and use raise error."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/sample/rejection_sampler.py\n+++ b/vllm_ascend/sample/rejection_sampler.py\n@@ -16,13 +16,18 @@\n         \"\"\"Verify and select accepted tokens.\"\"\"\n         batch_size = draft_token_ids.shape[0]\n \n-        # 使用裸 assert，缺少错误消息\n-        assert draft_probs is not None\n+        # assert 移入 if 块，使用 raise error 并添加消息\n+        if draft_probs is None:\n+            raise RuntimeError(\n+                \"draft_probs must not be None for non-ngram spec-decode\"\n+            )\n \n-        # 主逻辑中混合日志\n+        # 日志逻辑与主逻辑分离\n         if draft_probs.shape[0] != batch_size:\n-            logger.error(\"draft_probs batch mismatch\")\n-            # 仅打印错误但不抛出异常\n+            raise RuntimeError(\n+                f\"draft_probs batch mismatch: expected {batch_size}, \"\n+                f\"got {draft_probs.shape[0]}\"\n+            )\n \n         accepted = self._compare_tokens(draft_token_ids, bonus_token_ids)\n         return accepted",
+      "stats": "1 file changed, +10 lines, -5 lines",
+      "key_changes": [
+        "移除: # 使用裸 assert，缺少错误消息",
+        "移除: assert draft_probs is not None",
+        "新增: # assert 移入 if 块，使用 raise error 并添加消息",
+        "新增: if draft_probs is None:",
+        "新增: raise RuntimeError(",
+        "新增: \"draft_probs must not be None for non-ngram spec-decode\"",
+        "新增: )",
+        "移除: # 主逻辑中混合日志",
+        "新增: # 日志逻辑与主逻辑分离",
+        "移除: logger.error(\"draft_probs batch mismatch\")"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

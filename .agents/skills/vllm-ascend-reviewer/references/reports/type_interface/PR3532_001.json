@@ -1,0 +1,70 @@
+{
+  "report_id": "PR3532_001",
+  "pr_number": 3532,
+  "pr_title": "add `dispatch_gmm_combine` kernel",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/fused_moe/token_dispatcher.py:507",
+    "vllm_ascend/quantization/w8a8_dynamic.py:254",
+    "vllm_ascend/worker/model_runner_v1.py:2239"
+  ],
+  "landing_sha": "dcc5f9e",
+  "source_quote": "Can these variables be reused with other categories?\nuse get_forward_context moe_comm_type\nNot using FUSED_MC2?",
+  "correspondence": [
+    {
+      "review_quote": "weijinqian0: vllm_ascend/ops/fused_moe/token_dispatcher.py:507(2025-11-29 03:45:30)",
+      "patch_snippet": "评后sha dcc5f9e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "weijinqian0: vllm_ascend/quantization/w8a8_dynamic.py:254(2025-11-29 03:47:07)",
+      "patch_snippet": "评后sha dcc5f9e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Angazenn: vllm_ascend/worker/model_runner_v1.py:2239(2025-12-02 15:01:43)",
+      "patch_snippet": "评后sha dcc5f9e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "dcc5f9e",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "MoE 通信类型不应硬编码，应通过 `get_forward_context().moe_comm_type` 统一获取，以支持不同通信策略的灵活切换。",
+    "context": "",
+    "checkpoints": [
+      "MoE 通信类型是否通过 forward_context 获取而非硬编码",
+      "变量命名是否具有通用性，可被其他场景复用",
+      "新算子是否考虑了与现有通信策略（如 FUSED_MC2）的关系"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/quantization/w8a8_dynamic.py",
+      "line": 507,
+      "code": "# vllm_ascend/quantization/w8a8_dynamic.py:244-264\ndef fused_experts_w8a8(\n    hidden_states: torch.Tensor,\n    w1: torch.Tensor,\n    w2: torch.Tensor,\n    topk_weights: torch.Tensor,\n    topk_ids: torch.Tensor,\n    ...\n) -> torch.Tensor:\n    \"\"\"W8A8 fused experts implementation for Ascend NPU.\n\n    This function performs the fused experts computation using\n    W8A8 quantization with dynamic scaling.\n    \"\"\"\n    # 硬编码 MoE 通信类型\n    moe_comm_type = MoECommType.DISPATCH_GMM_COMBINE\n\n    # 根据通信类型选择不同的执行路径\n    if moe_comm_type == MoECommType.DISPATCH_GMM_COMBINE:\n        # 使用 dispatch_gmm_combine 算子\n        output = dispatch_gmm_combine_fn(\n            hidden_states, w1, w2,\n            topk_ids, topk_weights, ...\n        )\n    else:\n        # 使用默认路径\n        output = default_fused_experts_fn(\n            hidden_states, w1, w2,\n            topk_ids, topk_weights, ...\n        )\n    return output",
+      "context": "vllm_ascend/quantization/w8a8_dynamic.py:244-264 硬编码 MoE 通信类型 根据通信类型选择不同的执行路径"
+    },
+    "pattern": {
+      "file": "vllm_ascend/quantization/w8a8_dynamic.py",
+      "line": 507,
+      "code": "# vllm_ascend/quantization/w8a8_dynamic.py:244-264\ndef fused_experts_w8a8(\n    hidden_states: torch.Tensor,\n    w1: torch.Tensor,\n    w2: torch.Tensor,\n    topk_weights: torch.Tensor,\n    topk_ids: torch.Tensor,\n    ...\n) -> torch.Tensor:\n    \"\"\"W8A8 fused experts implementation for Ascend NPU.\n\n    This function performs the fused experts computation using\n    W8A8 quantization with dynamic scaling.\n    \"\"\"\n    # 通过 forward_context 统一获取 MoE 通信类型\n    moe_comm_type = get_forward_context().moe_comm_type\n\n    # 根据通信类型选择不同的执行路径\n    if moe_comm_type == MoECommType.DISPATCH_GMM_COMBINE:\n        # 使用 dispatch_gmm_combine 算子\n        output = dispatch_gmm_combine_fn(\n            hidden_states, w1, w2,\n            topk_ids, topk_weights, ...\n        )\n    else:\n        # 使用默认路径\n        output = default_fused_experts_fn(\n            hidden_states, w1, w2,\n            topk_ids, topk_weights, ...\n        )\n    return output",
+      "context": "vllm_ascend/quantization/w8a8_dynamic.py:244-264 通过 forward_context 统一获取 MoE 通信类型 根据通信类型选择不同的执行路径"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/quantization/w8a8_dynamic.py\n+++ b/vllm_ascend/quantization/w8a8_dynamic.py\n@@ -12,8 +12,8 @@\n     This function performs the fused experts computation using\n     W8A8 quantization with dynamic scaling.\n     \"\"\"\n-    # 硬编码 MoE 通信类型\n-    moe_comm_type = MoECommType.DISPATCH_GMM_COMBINE\n+    # 通过 forward_context 统一获取 MoE 通信类型\n+    moe_comm_type = get_forward_context().moe_comm_type\n \n     # 根据通信类型选择不同的执行路径\n     if moe_comm_type == MoECommType.DISPATCH_GMM_COMBINE:\n",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "移除: moe_comm_type = MoECommType.DISPATCH_GMM_COMBINE",
+        "新增: moe_comm_type = get_forward_context().moe_comm_type"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

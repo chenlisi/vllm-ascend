@@ -1,0 +1,62 @@
+{
+  "report_id": "PR14254_001",
+  "pr_number": 14254,
+  "pr_title": "[BugFix][KV Offload] Normalize aligned Mamba state block transfer",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py:842"
+  ],
+  "landing_sha": "89e39b1",
+  "source_quote": "![critical]\nIn aligned Mamba mode, the producer normalizes the remote block IDs to exactly one block containing the final prompt state. On the receiver side, the receiver blindly writes the received state into `local_group_block_ids[0]` instead of `local_group_block_ids[-1]`...\n> Additionally, if `mamba_cache_mode` is `\"none\"` (non-aligned), `len(remote_group_block_ids)` can be greater than 1, which will trigger the `RuntimeError` on line 834 and crash the receiver, violating the PR's goal of keeping non-aligned state groups unchanged. Checking `mamba_cache_mode` and writing to `local_group_block_ids[-1]` for aligned mode fixes both issues.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py:842",
+      "patch_snippet": "评后sha 89e39b1 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "89e39b1",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当同一函数需要支持多种模式（如 `mamba_cache_mode` 的 `align`/`none`），且不同模式下数据形状/长度语义不同（如对齐模式 `remote_group_block_ids` 长度必为 1，非对齐模式可能 >1），不能写无条件的 `if len != 1: raise`，必须按模式分支处理。强约束（如单块契约）只能施加给真正满足该约束的模式，不能波及不满足该约束但语义合法的模式。",
+    "context": "",
+    "checkpoints": [
+      "识别代码中是否存在 `if <形状/长度约束>: raise` 的无条件断言",
+      "确认该约束是否对所有支持的模式都成立——若某些模式下该形状/长度是合法的（如非对齐模式 `len>1`），则不能无条件崩溃",
+      "按 `config.mode` 或类似开关显式分支：仅在强约束模式下加 `raise`，其他模式按其语义处理",
+      "为新模式路径加配套单测（如非对齐模式\"1 running + N speculative 块\"用例）",
+      "模式相关成员（`mamba_cache_mode`、`num_speculative_tokens`）必须在 `__init__` 中初始化，不能在分支里临时 `getattr`"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py",
+      "line": 842,
+      "code": "# vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py\n# (else 分支：非 MLA、非普通层的 Mamba 组)\nelse:\n    if len(remote_group_block_ids) != 1:\n        raise RuntimeError(  # ❌ 无条件崩溃，非对齐模式(len>1)会被误杀\n            \"Mooncake Mamba transfer requires exactly one normalized remote state block; \"\n            f\"request_id={remote_request_id}, group_idx={group_idx}, \"\n            f\"remote_block_count={len(remote_group_block_ids)}, \"\n            f\"local_block_count={len(local_group_block_ids)}.\"\n        )\n    grouped_remote_block_ids = [[remote_group_block_ids[0]]]\n    grouped_local_block_ids = [[local_group_block_ids[0]]]",
+      "context": "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py (else 分支：非 MLA、非普通层的 Mamba 组)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py",
+      "line": 842,
+      "code": "# vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py\n# __init__ 新增成员初始化\nself.mamba_cache_mode = getattr(self.vllm_config.cache_config, \"mamba_cache_mode\", None)\nself.num_speculative_tokens = (\n    self.vllm_config.speculative_config.num_speculative_tokens\n    if self.vllm_config.speculative_config is not None\n    else 0\n)\n\n# else 分支：按 mamba_cache_mode 分支处理\nelse:\n    # Ascend Hybrid Mamba supports \"align\" (prefix caching) and\n    # \"none\" (no prefix caching), but not \"all\".\n    if self.mamba_cache_mode == \"align\":\n        if len(remote_group_block_ids) != 1:  # ✅ 仅对齐模式强制单块\n            raise RuntimeError(\n                \"Mooncake Mamba transfer requires exactly one normalized remote state block; \"\n                f\"request_id={remote_request_id}, group_idx={group_idx}, \"\n                f\"remote_block_count={len(remote_group_block_ids)}, \"\n                f\"local_block_count={len(local_group_block_ids)}.\"\n            )\n        remote_state_block_id = remote_group_block_ids[0]\n    else:\n        # ✅ 非对齐模式：用块数减去 speculative tokens 定位 running-state block\n        transfer_block_idx = len(remote_group_block_ids) - self.num_speculative_tokens - 1\n        if transfer_block_idx < 0:\n            raise RuntimeError(\n                \"Invalid non-aligned Mamba state block metadata: \"\n                f\"request_id={remote_request_id}, group_idx={group_idx}, \"\n                f\"remote_block_count={len(remote_group_block_ids)}, \"\n                f\"num_speculative_tokens={self.num_speculative_tokens}.\"\n            )\n        remote_state_block_id = remote_group_block_ids[transfer_block_idx]\n    grouped_remote_block_ids = [[remote_state_block_id]]\n    grouped_local_block_ids = [[local_group_block_ids[0]]]",
+      "context": "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py __init__ 新增成员初始化 else 分支：按 mamba_cache_mode 分支处理"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py\n+++ b/vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py\n@@ -1,12 +1,35 @@\n # vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py\n-# (else 分支：非 MLA、非普通层的 Mamba 组)\n+# __init__ 新增成员初始化\n+self.mamba_cache_mode = getattr(self.vllm_config.cache_config, \"mamba_cache_mode\", None)\n+self.num_speculative_tokens = (\n+    self.vllm_config.speculative_config.num_speculative_tokens\n+    if self.vllm_config.speculative_config is not None\n+    else 0\n+)\n+\n+# else 分支：按 mamba_cache_mode 分支处理\n else:\n-    if len(remote_group_block_ids) != 1:\n-        raise RuntimeError(  # ❌ 无条件崩溃，非对齐模式(len>1)会被误杀\n-            \"Mooncake Mamba transfer requires exactly one normalized remote state block; \"\n-            f\"request_id={remote_request_id}, group_idx={group_idx}, \"\n-            f\"remote_block_count={len(remote_group_block_ids)}, \"\n-            f\"local_block_count={len(local_group_block_ids)}.\"\n-        )\n-    grouped_remote_block_ids = [[remote_group_block_ids[0]]]\n+    # Ascend Hybrid Mamba supports \"align\" (prefix caching) and\n+    # \"none\" (no prefix caching), but not \"all\".\n+    if self.mamba_cache_mode == \"align\":\n+        if len(remote_group_block_ids) != 1:  # ✅ 仅对齐模式强制单块\n+            raise RuntimeError(\n+                \"Mooncake Mamba transfer requires exactly one normalized remote state block; \"\n+                f\"request_id={remote_request_id}, group_idx={group_idx}, \"\n+                f\"remote_block_count={len(remote_group_block_ids)}, \"\n+                f\"local_block_count={len(local_group_block_ids)}.\"\n+            )\n+        remote_state_block_id = remote_group_block_ids[0]\n+    else:\n+        # ✅ 非对齐模式：用块数减去 speculative tokens 定位 running-state block\n+        transfer_block_idx = len(remote_group_block_ids) - self.num_speculative_tokens - 1\n+        if transfer_block_idx < 0:\n+            raise RuntimeError(\n+                \"Invalid non-aligned Mamba state block metadata: \"\n+                f\"request_id={remote_request_id}, group_idx={group_idx}, \"\n+                f\"remote_block_count={len(remote_group_block_ids)}, \"\n+                f\"num_speculative_tokens={self.num_speculative_tokens}.\"\n+            )\n+        remote_state_block_id = remote_group_block_ids[transfer_block_idx]\n+    grouped_remote_block_ids = [[remote_state_block_id]]\n     grouped_local_block_ids = [[local_group_block_ids[0]]]\n",
+      "stats": "1 file changed, +32 lines, -9 lines",
+      "key_changes": [
+        "移除: f\"remote_block_count={len(remote_group_block_ids)}, \"",
+        "移除: f\"local_block_count={len(local_group_block_ids)}.\"",
+        "新增: if transfer_block_idx < 0:",
+        "新增: raise RuntimeError("
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

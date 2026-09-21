@@ -1,0 +1,61 @@
+{
+  "report_id": "PR13327_001",
+  "pr_number": 13327,
+  "pr_title": "[Ops][Feature] Add Triton kernel warmup for Ascend NPU",
+  "pr_status": "merged",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/triton/penalty.py:33"
+  ],
+  "landing_sha": "56b654e",
+  "source_quote": "I think stride will not change during the whole serving process, please check.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/ops/triton/penalty.py:33",
+      "patch_snippet": "评后sha 56b654e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "56b654e",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "Triton 的 `@triton.jit(do_not_specialize=[...])` 装饰器用于标记\"每次调用可能变化、不应触发重新编译\"的参数。对于在推理服务全程保持不变的参数（如张量的 stride、固定 rank 等），放入 `do_not_specialize` 会阻止 Triton 对其进行 specialize 优化（如常量折叠、循环展开），导致生成的 kernel 次优。不变的参数应从 `do_not_specialize` 中移除，让 Triton 将其作为编译期常量处理。",
+    "context": "",
+    "checkpoints": [
+      "检查每个 `@triton.jit(do_not_specialize=[...])` 列表中的每个参数，判断其在运行时是否真的会变化",
+      "重点检查 `stride_*` 参数：对于 layout 固定的张量（如 KV cache、logits），其 stride 在服务全程不变，不应放入 `do_not_specialize`",
+      "检查 `tp_rank`、`pp_rank` 等进程级常量：这些在进程生命周期内不变，不应放入 `do_not_specialize`",
+      "真正会变化的是 `num_seqs`、`batch_size`、`seq_len`、`total_blocks`、`total_batch` 等动态 shape 参数",
+      "修改后验证 kernel 功能正确性（stride 作为常量后 Triton 会内联，行为等价）"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/triton/penalty.py",
+      "line": 25,
+      "code": "import triton\nimport triton.language as tl\n\n\n@triton.jit(\n    do_not_specialize=[\n        \"num_seqs\",\n        \"stride_logits_seq\",\n        \"stride_prompt_mask_seq\",\n        \"stride_output_mask_seq\",\n        \"stride_bin_counts_seq\",\n    ]\n)\ndef apply_all_penalties_kernel(\n    num_seqs,\n    logits_ptr,\n    stride_logits_seq,\n    prompt_mask_ptr,\n    stride_prompt_mask_seq,\n    output_mask_ptr,\n    stride_output_mask_seq,\n    bin_counts_ptr,\n    stride_bin_counts_seq,\n    vocab_size,\n):\n    seq_id = tl.program_id(0)\n    if seq_id >= num_seqs:\n        return\n    # ... kernel body ...",
+      "context": "... kernel body ..."
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/triton/penalty.py",
+      "line": 25,
+      "code": "import triton\nimport triton.language as tl\n\n\n@triton.jit(\n    do_not_specialize=[\n        \"num_seqs\",\n        # stride 参数已移除：它们在服务全程不变，\n        # 让 Triton 对其 specialize 以启用常量折叠优化\n    ]\n)\ndef apply_all_penalties_kernel(\n    num_seqs,\n    logits_ptr,\n    stride_logits_seq,\n    prompt_mask_ptr,\n    stride_prompt_mask_seq,\n    output_mask_ptr,\n    stride_output_mask_seq,\n    bin_counts_ptr,\n    stride_bin_counts_seq,\n    vocab_size,\n):\n    seq_id = tl.program_id(0)\n    if seq_id >= num_seqs:\n        return\n    # ... kernel body ...",
+      "context": "stride 参数已移除：它们在服务全程不变， 让 Triton 对其 specialize 以启用常量折叠优化 ... kernel body ..."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/triton/penalty.py\n+++ b/vllm_ascend/ops/triton/penalty.py\n@@ -5,10 +5,8 @@\n @triton.jit(\n     do_not_specialize=[\n         \"num_seqs\",\n-        \"stride_logits_seq\",\n-        \"stride_prompt_mask_seq\",\n-        \"stride_output_mask_seq\",\n-        \"stride_bin_counts_seq\",\n+        # stride 参数已移除：它们在服务全程不变，\n+        # 让 Triton 对其 specialize 以启用常量折叠优化\n     ]\n )\n def apply_all_penalties_kernel(\n",
+      "stats": "1 file changed, +2 lines, -4 lines",
+      "key_changes": [
+        "移除: \"stride_bin_counts_seq\",",
+        "移除: \"stride_prompt_mask_seq\",",
+        "移除: \"stride_logits_seq\","
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

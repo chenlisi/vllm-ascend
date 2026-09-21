@@ -1,0 +1,60 @@
+{
+  "report_id": "PR10974_001",
+  "pr_number": 10974,
+  "pr_title": "[CI] Move accuracy-group-2 to weekly single node configs",
+  "pr_status": "merged",
+  "merged_at": "2026-06-26T09:35:51Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    ".github/workflows/schedule_weekly_test_a2.yaml:28",
+    ".github/workflows/schedule_weekly_test_a2.yaml:254"
+  ],
+  "landing_sha": "f588285",
+  "source_quote": "should be main",
+  "correspondence": [
+    {
+      "review_quote": "zhangxinyuehfad 指出两处问题：(1) 分支引用应为 `main`；(2) 配置格式应跟随 `weekly-a3` 的格式。作者通过 commit `f588285` 修改了分支引用和配置格式。",
+      "patch_snippet": "commit `f588285`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f588285",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "CI 工作流 YAML 文件中的分支引用应统一为 `main`，且同类配置（如 weekly-a2 和 weekly-a3）应保持格式一致，避免配置漂移。",
+    "context": "",
+    "checkpoints": [
+      "检查分支引用是否为 `main`",
+      "确认同类配置格式是否一致",
+      "验证配置是否跟随已有的模板格式"
+    ],
+    "antipattern": {
+      "file": ".github/workflows/schedule_weekly_test_a2.yaml",
+      "line": 20,
+      "code": "name: Weekly-A2 Single Node Test\n\non:\n  schedule:\n    - cron: '0 0 * * 0'\n  workflow_dispatch:\n    inputs:\n      vllm_ascend_branch:\n        description: 'Branch to test'\n        required: true\n        default: 'releases/v0.22.1rc'\n        type: string\n      test_group:\n        description: 'Test group to run'\n        required: false\n        default: 'all'\n        type: string\n\njobs:",
+      "context": "should be main"
+    },
+    "pattern": {
+      "file": ".github/workflows/schedule_weekly_test_a2.yaml",
+      "line": 20,
+      "code": "name: Weekly-A2 Single Node Test\n\non:\n  schedule:\n    - cron: '0 0 * * 0'\n  workflow_dispatch:\n    inputs:\n      vllm_ascend_branch:\n        description: 'Branch to test'\n        required: true\n        default: 'main'\n        type: string\n      test_group:\n        description: 'Test group to run'\n        required: false\n        default: 'all'\n        type: string\n\njobs:",
+      "context": "should be main"
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/schedule_weekly_test_a2.yaml\n+++ b/.github/workflows/schedule_weekly_test_a2.yaml\n@@ -8,7 +8,7 @@\n       vllm_ascend_branch:\n         description: 'Branch to test'\n         required: true\n-        default: 'releases/v0.22.1rc'\n+        default: 'main'\n         type: string\n       test_group:\n         description: 'Test group to run'",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "移除: default: 'releases/v0.22.1rc'",
+        "新增: default: 'main'"
+      ]
+    },
+    "language": "yaml",
+    "_status": "extracted"
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "report_id": "PR10487_001",
+  "pr_number": 10487,
+  "pr_title": "[Feature] qwen3.5 support pcp+mtp",
+  "pr_status": "merged",
+  "merged_at": "2026-06-23T15:38:16Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/spec_decode/llm_base_proposer.py:1358",
+    "vllm_ascend/worker/model_runner_v1.py:1577",
+    "vllm_ascend/worker/model_runner_v1.py:1587",
+    "vllm_ascend/spec_decode/llm_base_proposer.py:2004",
+    "vllm_ascend/spec_decode/llm_base_proposer.py:2020",
+    "vllm_ascend/ops/triton/fla/chunk.py:156"
+  ],
+  "landing_sha": "4a7b6a2",
+  "source_quote": "It is no need to change here",
+  "correspondence": [
+    {
+      "review_quote": "本次评审涉及 3 位人工评审人共 7 条意见：\n- **lilinsiman** 指出 llm_base_proposer.py:1358 处无需修改，作者撤回该变更\n- **Tflowers-0129** 关注 model_runner_v1.py 中的越界风险，要求增加 UT；指出 llm_base_proposer.py 中空列表会报错的问题\n- **weiguihua2** 指出 chunk.py 中 `.item()` 会触发同步操作影响性能；建议将代码迁移到 pcp_utils\n\n作者通过多个 commit 逐步修复了上述问题，包括修复 spec mask 错误、null bloc",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "4a7b6a2",
+    "approvals": 4
+  },
+  "rule": {
+    "description": "`.item()` 会触发 device-to-host 同步操作，在模型前向传播的热路径中会严重阻塞 CPU，降低性能。应使用等价的整数变量替代。",
+    "context": "",
+    "checkpoints": [
+      "检查模型前向传播路径中是否存在 `.item()` 调用",
+      "确认是否可以从 `attn_metadata` 直接获取等价的整数值",
+      "避免在 `cu_seqlens` 等 NPU tensor 上调用 `.item()`"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/triton/fla/chunk.py",
+      "line": 145,
+      "code": "# gemini-code-assist[bot] 指出: 在 NPU tensor 上调用 .item() 会触发 device-to-host 同步\n# weiguihua2 补充: \"item will be synchronous operations.\"\n\ndef chunk_fwd(\n    q: torch.Tensor,\n    k: torch.Tensor,\n    v: torch.Tensor,\n    cu_seqlens: torch.Tensor,\n    attn_metadata,\n    final_state: torch.Tensor,\n) -> torch.Tensor:\n    \"\"\"Forward pass for chunked attention computation.\"\"\"\n    num_decodes = attn_metadata.num_decodes\n    num_prefills = attn_metadata.num_prefills\n    seqlens = attn_metadata.seq_lens\n\n    # BUG: cu_seqlens 是 NPU tensor，.item() 触发 device-to-host 同步\n    prefill_seq_offset = cu_seqlens[num_decodes].item()\n    prefill_slice = slice(prefill_seq_offset, final_state.shape[0])\n\n    # 后续使用 prefill_slice 进行 chunk 计算\n    q_chunk = q[prefill_slice]\n    k_chunk = k[prefill_slice]\n    v_chunk = v[prefill_slice]\n    output = chunk_attention(q_chunk, k_chunk, v_chunk)\n    return output",
+      "context": "It is no need to change here"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/triton/fla/chunk.py",
+      "line": 145,
+      "code": "# 直接使用 num_decodes（已从 attn_metadata 获取的整数），避免 .item() 同步\n\ndef chunk_fwd(\n    q: torch.Tensor,\n    k: torch.Tensor,\n    v: torch.Tensor,\n    cu_seqlens: torch.Tensor,\n    attn_metadata,\n    final_state: torch.Tensor,\n) -> torch.Tensor:\n    \"\"\"Forward pass for chunked attention computation.\"\"\"\n    num_decodes = attn_metadata.num_decodes\n    num_prefills = attn_metadata.num_prefills\n    seqlens = attn_metadata.seq_lens\n\n    # FIX: 直接使用 num_decodes 整数，避免 NPU tensor .item() 同步开销\n    prefill_seq_offset = num_decodes\n    prefill_slice = slice(prefill_seq_offset, final_state.shape[0])\n\n    # 后续使用 prefill_slice 进行 chunk 计算\n    q_chunk = q[prefill_slice]\n    k_chunk = k[prefill_slice]\n    v_chunk = v[prefill_slice]\n    output = chunk_attention(q_chunk, k_chunk, v_chunk)\n    return output",
+      "context": "It is no need to change here"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/triton/fla/chunk.py\n+++ b/vllm_ascend/ops/triton/fla/chunk.py\n@@ -1,5 +1,4 @@\n-# gemini-code-assist[bot] 指出: 在 NPU tensor 上调用 .item() 会触发 device-to-host 同步\n-# weiguihua2 补充: \"item will be synchronous operations.\"\n+# 直接使用 num_decodes（已从 attn_metadata 获取的整数），避免 .item() 同步\n \n def chunk_fwd(\n     q: torch.Tensor,\n@@ -14,8 +13,8 @@\n     num_prefills = attn_metadata.num_prefills\n     seqlens = attn_metadata.seq_lens\n \n-    # BUG: cu_seqlens 是 NPU tensor，.item() 触发 device-to-host 同步\n-    prefill_seq_offset = cu_seqlens[num_decodes].item()\n+    # FIX: 直接使用 num_decodes 整数，避免 NPU tensor .item() 同步开销\n+    prefill_seq_offset = num_decodes\n     prefill_slice = slice(prefill_seq_offset, final_state.shape[0])\n \n     # 后续使用 prefill_slice 进行 chunk 计算",
+      "stats": "1 file changed, +3 lines, -4 lines",
+      "key_changes": [
+        "移除: # gemini-code-assist[bot] 指出: 在 NPU tensor 上调用 .item() 会触发 device-to-host 同步",
+        "移除: # weiguihua2 补充: \"item will be synchronous operations.\"",
+        "新增: # 直接使用 num_decodes（已从 attn_metadata 获取的整数），避免 .item() 同步",
+        "移除: # BUG: cu_seqlens 是 NPU tensor，.item() 触发 device-to-host 同步",
+        "移除: prefill_seq_offset = cu_seqlens[num_decodes].item()",
+        "新增: # FIX: 直接使用 num_decodes 整数，避免 NPU tensor .item() 同步开销",
+        "新增: prefill_seq_offset = num_decodes"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

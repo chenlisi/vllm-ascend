@@ -1,0 +1,60 @@
+{
+  "report_id": "PR4216_001",
+  "pr_number": 4216,
+  "pr_title": "[EPLB][Ops] Integerate grouped_matmul_swiglu_quant_weight_nz_tensor_list operator into dynamic EPLB",
+  "pr_status": "merged",
+  "merged_at": "2025-11-30T14:52:06Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/fused_moe/moe_comm_method.py:87",
+    "vllm_ascend/quantization/w8a8_dynamic.py:260",
+    "vllm_ascend/quantization/w8a8_dynamic.py:237"
+  ],
+  "landing_sha": "6d94c2e",
+  "source_quote": "list[torch.Tensor]",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan 提出三条意见：(1) `moe_comm_method.py` 中 w1 参数类型应为 `list[torch.Tensor]`；(2) `w8a8_dynamic.py:260` 处应传递权重列表 `[layer.w13_weight]`；(3) `w8a8_dynamic.py:237` 处需根据 `dynamic_eplb` 条件分支选择不同权重。作者通过 commit `6d94c2e` 统一了数据类型，通过 commit `aaa0bd9` 标准化了自定义算子的使用方式。",
+      "patch_snippet": "commit `6d94c2e`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "6d94c2e",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "函数参数的类型注解必须准确反映实际传入的数据结构，如 `list[torch.Tensor]` 不应标注为 `torch.Tensor`。",
+    "context": "",
+    "checkpoints": [
+      "检查参数类型注解是否与实际传入类型一致",
+      "确认列表类型参数是否使用了正确的泛型标注",
+      "验证类型注解是否通过了静态检查"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/fused_moe/moe_comm_method.py",
+      "line": 75,
+      "code": "import torch\nfrom typing import Optional\n\nclass AscendMoEMethod:\n    \"\"\"Ascend MoE 通信方法\"\"\"\n\n    def fused_moe_forward(\n        self,\n        hidden_states: torch.Tensor,\n        w1: torch.Tensor,  # 类型不正确：实际传入的是列表\n        w2: torch.Tensor,\n        topk_weights: torch.Tensor,\n        topk_ids: torch.Tensor,\n    ) -> torch.Tensor:\n        \"\"\"执行 fused MoE 前向计算\"\"\"\n        return output",
+      "context": "w1: list[torch.Tensor]"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/fused_moe/moe_comm_method.py",
+      "line": 75,
+      "code": "import torch\nfrom typing import Optional\n\nclass AscendMoEMethod:\n    \"\"\"Ascend MoE 通信方法\"\"\"\n\n    def fused_moe_forward(\n        self,\n        hidden_states: torch.Tensor,\n        w1: list[torch.Tensor],  # 修正为 list[torch.Tensor]\n        w2: torch.Tensor,\n        topk_weights: torch.Tensor,\n        topk_ids: torch.Tensor,\n    ) -> torch.Tensor:\n        \"\"\"执行 fused MoE 前向计算\"\"\"\n        return output",
+      "context": "w1: list[torch.Tensor]"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/fused_moe/moe_comm_method.py\n+++ b/vllm_ascend/ops/fused_moe/moe_comm_method.py\n@@ -75,16 +75,16 @@\n     def fused_moe_forward(\n         self,\n         hidden_states: torch.Tensor,\n-        w1: torch.Tensor,  # 类型不正确：实际传入的是列表\n+        w1: list[torch.Tensor],  # 修正为 list[torch.Tensor]\n         w2: torch.Tensor,\n         topk_weights: torch.Tensor,\n         topk_ids: torch.Tensor,",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "修改了第 10-10 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

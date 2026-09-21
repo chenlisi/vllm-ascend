@@ -1,0 +1,60 @@
+{
+  "report_id": "PR13509_001",
+  "pr_number": 13509,
+  "pr_title": "[Performance][Ops] Integrate Kimi K3 fused norm gate and attention residual",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/kimi_kda.py:50"
+  ],
+  "landing_sha": "f1acbea",
+  "source_quote": "Unconditionally importing `apply_kda_rms_norm_sigmoid_gate` will cause an `ImportError` when Triton is not available, breaking the CPU/CANN fallback path. Import it conditionally using `HAS_TRITON`.\n> ```suggestion\nfrom vllm.triton_utils import HAS_TRITON\n> if HAS_TRITON:\nfrom vllm_ascend.ops.triton.kda.fused_norm_gate import apply_kda_rms_norm_sigmoid_gate\nelse:\napply_kda_rms_norm_sigmoid_gate = None",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/ops/kimi_kda.py:50",
+      "patch_snippet": "评后sha f1acbea 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f1acbea",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "从 Triton kernel 模块导入函数时，必须使用 `HAS_TRITON` 进行条件导入，否则在 Triton 不可用的环境（如 CPU/CANN fallback）下会触发 `ImportError`。",
+    "context": "",
+    "checkpoints": [
+      "检查是否存在从 `vllm_ascend.ops.triton.*` 模块的直接（非条件）导入",
+      "确认 Triton kernel 函数导入是否用 `HAS_TRITON` 包裹",
+      "确认非 Triton 环境下导入的函数是否有默认值（如 `None`）"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/kimi_kda.py",
+      "line": 1,
+      "code": "from typing import Callable, Optional\n\nimport torch\nimport torch.nn as nn\n\nfrom vllm.attention.backends.abstract import AttentionBackend\nfrom vllm.config import VllmConfig\n\n# 无条件导入 — Triton 不可用时触发 ImportError，破坏 CPU/CANN fallback 路径\nfrom vllm_ascend.ops.triton.kda.fused_norm_gate import apply_kda_rms_norm_sigmoid_gate\nfrom vllm_ascend.ops.triton.kda.kda import fused_kda_gate\n\n\nclass KimiKDAModel(nn.Module):\n    \"\"\"Kimi KDA model with fused Triton kernels.\"\"\"\n\n    def __init__(self, config, ...):\n        super().__init__()\n        self.o_norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)\n        # ...\n\n    def forward(self, ...):\n        # ...",
+      "context": "无条件导入 — Triton 不可用时触发 ImportError，破坏 CPU/CANN fallback 路径"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/kimi_kda.py",
+      "line": 1,
+      "code": "from typing import Callable, Optional\n\nimport torch\nimport torch.nn as nn\n\nfrom vllm.attention.backends.abstract import AttentionBackend\nfrom vllm.config import VllmConfig\nfrom vllm.triton_utils import HAS_TRITON\n\n# Triton 导入改为条件导入，非 Triton 环境下默认为 None\nfrom vllm_ascend.ops.triton.kda.kda import fused_kda_gate\n\napply_kda_rms_norm_sigmoid_gate: (\n    Callable[\n        [torch.Tensor, torch.Tensor, torch.Tensor, float],\n        torch.Tensor,\n    ]\n    | None\n) = None\nif HAS_TRITON:\n    from vllm_ascend.ops.triton.kda.fused_norm_gate import (\n        apply_kda_rms_norm_sigmoid_gate as triton_apply_kda_rms_norm_sigmoid_gate,\n    )\n\n    apply_kda_rms_norm_sigmoid_gate = triton_apply_kda_rms_norm_sigmoid_gate\n\n\nclass KimiKDAModel(nn.Module):\n    \"\"\"Kimi KDA model with fused Triton kernels.\"\"\"\n\n    def __init__(self, config, ...):\n        super().__init__()\n        self.o_norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)\n        # ...\n\n    def forward(self, ...):\n        # ...",
+      "context": "Triton 导入改为条件导入，非 Triton 环境下默认为 None"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/kimi_kda.py\n+++ b/vllm_ascend/ops/kimi_kda.py\n@@ -5,10 +5,24 @@\n \n from vllm.attention.backends.abstract import AttentionBackend\n from vllm.config import VllmConfig\n+from vllm.triton_utils import HAS_TRITON\n \n-# 无条件导入 — Triton 不可用时触发 ImportError，破坏 CPU/CANN fallback 路径\n-from vllm_ascend.ops.triton.kda.fused_norm_gate import apply_kda_rms_norm_sigmoid_gate\n+# Triton 导入改为条件导入，非 Triton 环境下默认为 None\n from vllm_ascend.ops.triton.kda.kda import fused_kda_gate\n+\n+apply_kda_rms_norm_sigmoid_gate: (\n+    Callable[\n+        [torch.Tensor, torch.Tensor, torch.Tensor, float],\n+        torch.Tensor,\n+    ]\n+    | None\n+) = None\n+if HAS_TRITON:\n+    from vllm_ascend.ops.triton.kda.fused_norm_gate import (\n+        apply_kda_rms_norm_sigmoid_gate as triton_apply_kda_rms_norm_sigmoid_gate,\n+    )\n+\n+    apply_kda_rms_norm_sigmoid_gate = triton_apply_kda_rms_norm_sigmoid_gate\n \n \n class KimiKDAModel(nn.Module):\n",
+      "stats": "1 file changed, +16 lines, -2 lines",
+      "key_changes": [
+        "移除: from vllm_ascend.ops.triton.kda.fused_norm_gate import apply_kda_rms_norm_sigmoi",
+        "新增: torch.Tensor,",
+        "新增: apply_kda_rms_norm_sigmoid_gate: (",
+        "新增: ]"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

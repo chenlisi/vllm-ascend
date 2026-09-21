@@ -1,0 +1,54 @@
+{
+  "report_id": "PR4062_001",
+  "pr_number": 4062,
+  "pr_title": "[CI] Integrate mooncake to vllm-ascend base image",
+  "pr_status": "merged",
+  "merged_at": "2025-11-11T07:51:16Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "Dockerfile:38"
+  ],
+  "landing_sha": "fac99b1",
+  "source_quote": "Why use `make -j2` instead of `make -j$(nproc)`?",
+  "correspondence": [
+    {
+      "review_quote": "LCAIZJ: Dockerfile:38(2025-11-10 03:22:09)",
+      "patch_snippet": "评后sha `fac99b1` make -j$(nproc) 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "fac99b1",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "Dockerfile",
+      "line": 30,
+      "code": "FROM quay.io/ascend/cann:8.3.rc1-ubuntu22.04-py3.11\n\nARG MOONCAKE_TAG=\"v0.5.0\"\nENV VLLM_WORKSPACE=/workspace\n\nWORKDIR $VLLM_WORKSPACE\n\n\nRUN mkdir -p build && cd build && \\\n    cmake .. -DUSE_ASCEND_DIRECT=ON && \\\n    make -j2 && make install",
+      "context": "Why use `make -j2` instead of `make -j$(nproc)`?"
+    },
+    "pattern": {
+      "file": "Dockerfile",
+      "line": 30,
+      "code": "FROM quay.io/ascend/cann:8.3.rc1-ubuntu22.04-py3.11\n\nARG MOONCAKE_TAG=\"v0.5.0\"\nENV VLLM_WORKSPACE=/workspace\n\nWORKDIR $VLLM_WORKSPACE\n\n\nRUN mkdir -p build && cd build && \\\n    cmake .. -DUSE_ASCEND_DIRECT=ON && \\\n    make -j$(nproc) && make install",
+      "context": "Why use `make -j2` instead of `make -j$(nproc)`?"
+    },
+    "diff": {
+      "unified": "--- a/Dockerfile\n+++ b/Dockerfile\n@@ -30,11 +30,11 @@\n \n RUN mkdir -p build && cd build && \\\n     cmake .. -DUSE_ASCEND_DIRECT=ON && \\\n-    make -j2 && make install\n+    make -j$(nproc) && make install",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "修改了第 11-11 行的代码"
+      ]
+    },
+    "language": "sh",
+    "_status": "extracted"
+  }
+}

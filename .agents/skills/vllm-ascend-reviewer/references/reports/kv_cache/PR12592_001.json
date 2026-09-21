@@ -1,0 +1,58 @@
+{
+  "report_id": "PR12592_001",
+  "pr_number": 12592,
+  "pr_title": "[Refactor][PCP][1/N] remove PCP from MRV1.",
+  "pr_status": "merged",
+  "dimension": [
+    "design"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/device/device_op.py:39"
+  ],
+  "landing_sha": "b4e1a76",
+  "source_quote": "**P1 Avoid caching capability in mutable module globals**\n> Keep the custom-op capability state out of process-wide mutable globals. After one missing-symbol failure, `_moe_init_routing_custom_available` permanently changes behavior for every later adaptor invocation based on call order; the same pattern is introduced by `_add_rms_norm_bias_available` in `ops/layernorm.py`. This is particularly problematic for tests or embedded processes that initialize or replace extension state after the first call, since fused execution cannot recover without restarting. Pass the capability through the owning component or use an explicitly managed immutable configuration instead.",
+  "correspondence": [
+    {
+      "review_quote": "chatgpt-codex-connector[bot]: vllm_ascend/device/device_op.py:39",
+      "patch_snippet": "评后sha b4e1a76 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "b4e1a76",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "不要用模块级可变全局变量（如 `_xxx_available = True`）缓存 custom operator 的能力探测结果。一旦探测失败将全局永久置为 `False`，后续调用无法恢复，导致测试或嵌入式进程中 fused 路径永久降级。应改为每次调用基于配置（如 `enable_custom_op()`）重新评估，或将能力状态通过显式的不可变配置传递。",
+    "context": "",
+    "checkpoints": [
+      "检查 `ops/` 目录下是否存在 `_xxx_available` 形式的模块级可变全局",
+      "检查 `try/except RuntimeError` 中是否有 `global _xxx; _xxx = False` 的永久降级逻辑",
+      "能力判断应基于每次调用的配置（`enable_custom_op()`），而非缓存的历史探测结果",
+      "避免在 `except` 中改变全局状态影响后续调用"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/layernorm.py",
+      "line": 30,
+      "code": "import logging\nlogger = logging.getLogger(__name__)\n_add_rms_norm_bias_available = True  # ❌ 进程级可变全局，一次失败后永久置 False\n\n\ndef _npu_add_rms_norm(x, residual, weight, bias, eps):\n    \"\"\"Use the fused extension when the installed CANN runtime supports it.\"\"\"\n    import torch_npu\n\n    global _add_rms_norm_bias_available\n    if enable_custom_op() and _add_rms_norm_bias_available:\n        try:\n            x, _, residual = torch.ops._C_ascend.npu_add_rms_norm_bias(\n                x, residual, weight, bias, eps)\n            return x, residual\n        except RuntimeError as exc:\n            message = str(exc)\n            if \"aclnnAddRmsNormBias\" not in message or \"libopapi.so\" not in message:\n                raise\n            _add_rms_norm_bias_available = False  # ❌ 永久降级，无法恢复\n            logger.warning(\n                \"aclnnAddRmsNormBias is unavailable in the installed CANN runtime; \"\n                \"falling back to torch_npu.npu_add_rms_norm.\"\n            )\n\n    x, _, residual = torch_npu.npu_add_rms_norm(x, residual, weight, eps)\n    if bias is not None:\n        x.add_(bias)\n    return x, residual",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/layernorm.py",
+      "line": 30,
+      "code": "# ✅ 移除了 logging 导入和 _add_rms_norm_bias_available 全局\n# ✅ 移除了整个 _npu_add_rms_norm 包装函数\n# 改为在调用处直接用 enable_custom_op() 判断（每次调用重新评估，无永久状态）\n\nclass AscendRMSNorm(RMSNorm):\n    def forward_oot(self, x, residual=None):\n        import torch_npu\n\n        if residual is not None:\n            residual = torch.ops.vllm.maybe_chunk_residual(x, residual)\n            if enable_custom_op():\n                x, _, residual = torch.ops._C_ascend.npu_add_rms_norm_bias(\n                    x, residual, self.weight, self.bias, self.variance_epsilon\n                )\n            else:\n                x, _, residual = torch_npu.npu_add_rms_norm(\n                    x, residual, self.weight, self.variance_epsilon)\n                if self.bias is not None:\n                    x.add_(self.bias)\n            return x, residual\n        ...",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/layernorm.py\n+++ b/vllm_ascend/ops/layernorm.py\n@@ -1,29 +1,21 @@\n-import logging\n-logger = logging.getLogger(__name__)\n-_add_rms_norm_bias_available = True  # ❌ 进程级可变全局，一次失败后永久置 False\n+# ✅ 移除了 logging 导入和 _add_rms_norm_bias_available 全局\n+# ✅ 移除了整个 _npu_add_rms_norm 包装函数\n+# 改为在调用处直接用 enable_custom_op() 判断（每次调用重新评估，无永久状态）\n \n+class AscendRMSNorm(RMSNorm):\n+    def forward_oot(self, x, residual=None):\n+        import torch_npu\n \n-def _npu_add_rms_norm(x, residual, weight, bias, eps):\n-    \"\"\"Use the fused extension when the installed CANN runtime supports it.\"\"\"\n-    import torch_npu\n-\n-    global _add_rms_norm_bias_available\n-    if enable_custom_op() and _add_rms_norm_bias_available:\n-        try:\n-            x, _, residual = torch.ops._C_ascend.npu_add_rms_norm_bias(\n-                x, residual, weight, bias, eps)\n+        if residual is not None:\n+            residual = torch.ops.vllm.maybe_chunk_residual(x, residual)\n+            if enable_custom_op():\n+                x, _, residual = torch.ops._C_ascend.npu_add_rms_norm_bias(\n+                    x, residual, self.weight, self.bias, self.variance_epsilon\n+                )\n+            else:\n+                x, _, residual = torch_npu.npu_add_rms_norm(\n+                    x, residual, self.weight, self.variance_epsilon)\n+                if self.bias is not None:\n+                    x.add_(self.bias)\n             return x, residual\n-        except RuntimeError as exc:\n-            message = str(exc)\n-            if \"aclnnAddRmsNormBias\" not in message or \"libopapi.so\" not in message:\n-                raise\n-            _add_rms_norm_bias_available = False  # ❌ 永久降级，无法恢复\n-            logger.warning(\n-                \"aclnnAddRmsNormBias is unavailable in the installed CANN runtime; \"\n-                \"falling back to torch_npu.npu_add_rms_norm.\"\n-            )\n-\n-    x, _, residual = torch_npu.npu_add_rms_norm(x, residual, weight, eps)\n-    if bias is not None:\n-        x.add_(bias)\n-    return x, residual\n+        ...",
+      "stats": "1 file changed, +18 lines, -26 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "report_id": "PR12536_001",
+  "pr_number": 12536,
+  "pr_title": "[Performance] remove D2H sync in QLIMetadata builder for DSA_CP",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/attention/context_parallel/dsa_cp.py:662"
+  ],
+  "landing_sha": "d74d726",
+  "source_quote": "gemini (662): Update the argument name to `max_seqlen_k` to match the updated parameter name in `_build_qli_metadata` to avoid a `NameError` at runtime.\n> gemini (871): In `_build_qli_metadata`, the variable `max_seqlen_k` is used inside the method (at line 892) but it is not defined because the local definition was removed and the parameter was named `max_seqlen` instead. This will cause a `NameError` at runtime. Please rename the parameter `max_seqlen` to `max_seqlen_k` to match its usage inside the method.\n> codex (871): When DSA context parallelism uses `compressor_ratio == 4`... this method now receives the key length as `max_seqlen`, but the operator call still references `max_seqlen_k`; the prior local definition of that name was deleted. Metadata construction therefore raises `NameError` before the QLI operator can run. Use the new `max_seqlen` parameter for `max_seqlen_k`.",
+  "correspondence": [
+    {
+      "review_quote": "gemini-code-assist[bot]: vllm_ascend/attention/context_parallel/dsa_cp.py:662",
+      "patch_snippet": "评后sha d74d726 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "d74d726",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当重命名函数参数或变量时，必须同步更新函数体内所有引用该名称的位置，否则会导致 `NameError` 等运行时错误。特别是当移除局部变量定义、改为参数传入时，需检查 operator 调用中的 kwarg 是否仍引用旧变量名。",
+    "context": "",
+    "checkpoints": [
+      "重命名参数后，检查函数体内是否还有旧变量名的引用（尤其 kwarg 传值 `old_name=old_name`）",
+      "移除局部变量定义改为参数传入时，确认参数名与函数体内使用的变量名一致",
+      "注意 kwarg 形式 `param=value` 中 `value` 部分是否引用了不存在的变量",
+      "检查所有调用点是否同步更新了参数名"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/context_parallel/dsa_cp.py",
+      "line": 655,
+      "code": "    def _build_qli_metadata(self, query_start_loc, seq_lens, seq_lens_q, num_reqs):\n        \"\"\"Build QLI metadata for quantized lightning indexer.\"\"\"\n        if self.compressor_ratio != 4:\n            return None\n        # 重构移除了内部的 D2H 同步:\n        # max_seqlen_k = max(1, int(seq_lens.max().item()))  ← 已删除\n        # 但未将 max_seqlen_k 作为参数传入\n        ...\n        metadata = torch.ops._C_ascend.npu_vllm_quant_lightning_indexer_metadata(\n            query_start_loc=query_start_loc,\n            seq_lens=seq_lens,\n            num_reqs=num_reqs,\n            max_seqlen_q=max_seqlen_q,\n            max_seqlen_k=max_seqlen_k,  # ❌ NameError: max_seqlen_k 未定义\n            compressor_ratio=self.compressor_ratio,\n        )\n        return metadata",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/context_parallel/dsa_cp.py",
+      "line": 655,
+      "code": "    def _build_qli_metadata(self, query_start_loc, seq_lens, seq_lens_q,\n                            max_seqlen, max_seqlen_q, num_reqs):\n        \"\"\"Build QLI metadata for quantized lightning indexer.\"\"\"\n        if self.compressor_ratio != 4:\n            return None\n        # ✅ 参数显式传入 max_seqlen 和 max_seqlen_q\n        ...\n        metadata = torch.ops._C_ascend.npu_vllm_quant_lightning_indexer_metadata(\n            query_start_loc=query_start_loc,\n            seq_lens=seq_lens,\n            num_reqs=num_reqs,\n            max_seqlen_q=max_seqlen_q,\n            max_seqlen_k=max_seqlen,  # ✅ 使用传入的 max_seqlen 参数\n            compressor_ratio=self.compressor_ratio,\n        )\n        return metadata",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/context_parallel/dsa_cp.py\n+++ b/vllm_ascend/attention/context_parallel/dsa_cp.py\n@@ -1,17 +1,16 @@\n-    def _build_qli_metadata(self, query_start_loc, seq_lens, seq_lens_q, num_reqs):\n+    def _build_qli_metadata(self, query_start_loc, seq_lens, seq_lens_q,\n+                            max_seqlen, max_seqlen_q, num_reqs):\n         \"\"\"Build QLI metadata for quantized lightning indexer.\"\"\"\n         if self.compressor_ratio != 4:\n             return None\n-        # 重构移除了内部的 D2H 同步:\n-        # max_seqlen_k = max(1, int(seq_lens.max().item()))  ← 已删除\n-        # 但未将 max_seqlen_k 作为参数传入\n+        # ✅ 参数显式传入 max_seqlen 和 max_seqlen_q\n         ...\n         metadata = torch.ops._C_ascend.npu_vllm_quant_lightning_indexer_metadata(\n             query_start_loc=query_start_loc,\n             seq_lens=seq_lens,\n             num_reqs=num_reqs,\n             max_seqlen_q=max_seqlen_q,\n-            max_seqlen_k=max_seqlen_k,  # ❌ NameError: max_seqlen_k 未定义\n+            max_seqlen_k=max_seqlen,  # ✅ 使用传入的 max_seqlen 参数\n             compressor_ratio=self.compressor_ratio,\n         )\n         return metadata",
+      "stats": "1 file changed, +4 lines, -5 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

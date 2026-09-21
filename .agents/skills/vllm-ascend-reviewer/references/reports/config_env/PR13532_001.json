@@ -1,0 +1,62 @@
+{
+  "report_id": "PR13532_001",
+  "pr_number": 13532,
+  "pr_title": "[Refactor] Clean some useless code and change some parameter type to avoid re-comppilation inside minimax m3 triton",
+  "pr_status": "merged",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/models/minimax_m3/ops/msa_m3_triton.py:164"
+  ],
+  "landing_sha": "be75de4",
+  "source_quote": "### Performance Regression: Dynamic Integer Division and Modulo\n> Changing `index_head_count` from `tl.constexpr` to a normal argument introduces a significant performance regression.\n> In Triton, when a variable is not a `tl.constexpr`, operations like integer division (`//`) and modulo (`%`) are compiled as dynamic GPU instructions. Since GPUs do not have native integer division hardware, these operations are extremely slow and compiled into long emulation sequences.\n> In `_prefill_index_score_kernel`, `index_head_count` is used for:\nbatch_id = batch_head_id // index_head_count\nhead_id = batch_head_id % index_head_count\nSince `index_head_count` is a model architecture constant (determined by the number of key-value heads), it is fixed for the lifetime of the model and does not vary at runtime. Therefore, keeping it as `tl.constexpr` allows the compiler to optimize these division and modulo operations into cheap multiplications and shifts, or constant-fold them entirely.\n> Please revert this parameter to `tl.constexpr`.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/models/minimax_m3/ops/msa_m3_triton.py:164",
+      "patch_snippet": "评后sha be75de4 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "be75de4",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 Triton kernel 中，由模型架构决定且运行期间不变的参数（如 `index_head_count`、`top_k`、`head_dim`）应声明为 `tl.constexpr`，避免动态整数除法/取模导致的性能回归。",
+    "context": "",
+    "checkpoints": [
+      "识别 kernel 参数中哪些是模型架构常量（不随 batch/seq_len 变化）",
+      "检查这些常量是否被错误地从 `tl.constexpr` 改为普通参数",
+      "确认涉及整数除法 `//` 或取模 `%` 的参数是否为 `tl.constexpr`（GPU 无原生整数除法硬件）",
+      "不要为了减少重编译而将架构常量移出 `tl.constexpr`"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/models/minimax_m3/ops/msa_m3_triton.py",
+      "line": 155,
+      "code": "@triton.jit(do_not_specialize=[\n    \"batch_head_id\",\n    \"index_head_count\",\n    \"head_dim\",\n])\ndef _prefill_index_score_kernel(\n    batch_head_id,\n    index_head_count,          # 普通参数，导致动态除法/取模\n    head_dim: tl.constexpr,\n    # ... other params ...\n):\n    \"\"\"Score kernel for block-sparse GQA prefill attention.\"\"\"\n    pid = tl.program_id(0)\n    batch_head_id = tl.load(batch_head_id_ptr + pid)\n\n    # GPU 无原生整数除法硬件，动态 // 和 % 编译为冗长模拟序列\n    batch_id = batch_head_id // index_head_count   # 动态 GPU 指令\n    head_id = batch_head_id % index_head_count     # 动态 GPU 指令\n\n    # ... rest of kernel body ...",
+      "context": "... other params ... GPU 无原生整数除法硬件，动态 // 和 % 编译为冗长模拟序列 ... rest of kernel body ..."
+    },
+    "pattern": {
+      "file": "vllm_ascend/models/minimax_m3/ops/msa_m3_triton.py",
+      "line": 155,
+      "code": "@triton.jit(do_not_specialize=[\n    \"batch_head_id\",\n    # index_head_count 已移出 do_not_specialize\n    \"head_dim\",\n])\ndef _prefill_index_score_kernel(\n    batch_head_id,\n    index_head_count: tl.constexpr,   # 改回 constexpr，编译期常量\n    head_dim: tl.constexpr,\n    # ... other params ...\n):\n    \"\"\"Score kernel for block-sparse GQA prefill attention.\"\"\"\n    pid = tl.program_id(0)\n    batch_head_id = tl.load(batch_head_id_ptr + pid)\n\n    # index_head_count 为 constexpr，编译器可优化为乘法/移位或常量折叠\n    batch_id = batch_head_id // index_head_count   # 编译期优化为乘法/移位\n    head_id = batch_head_id % index_head_count     # 编译期常量折叠\n\n    # ... rest of kernel body ...",
+      "context": "index_head_count 已移出 do_not_specialize ... other params ... index_head_count 为 constexpr，编译器可优化为乘法/移位或常量折叠"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/models/minimax_m3/ops/msa_m3_triton.py\n+++ b/vllm_ascend/models/minimax_m3/ops/msa_m3_triton.py\n@@ -1,11 +1,11 @@\n @triton.jit(do_not_specialize=[\n     \"batch_head_id\",\n-    \"index_head_count\",\n+    # index_head_count 已移出 do_not_specialize\n     \"head_dim\",\n ])\n def _prefill_index_score_kernel(\n     batch_head_id,\n-    index_head_count,          # 普通参数，导致动态除法/取模\n+    index_head_count: tl.constexpr,   # 改回 constexpr，编译期常量\n     head_dim: tl.constexpr,\n     # ... other params ...\n ):\n@@ -13,8 +13,8 @@\n     pid = tl.program_id(0)\n     batch_head_id = tl.load(batch_head_id_ptr + pid)\n \n-    # GPU 无原生整数除法硬件，动态 // 和 % 编译为冗长模拟序列\n-    batch_id = batch_head_id // index_head_count   # 动态 GPU 指令\n-    head_id = batch_head_id % index_head_count     # 动态 GPU 指令\n+    # index_head_count 为 constexpr，编译器可优化为乘法/移位或常量折叠\n+    batch_id = batch_head_id // index_head_count   # 编译期优化为乘法/移位\n+    head_id = batch_head_id % index_head_count     # 编译期常量折叠\n \n     # ... rest of kernel body ...\n",
+      "stats": "1 file changed, +5 lines, -5 lines",
+      "key_changes": [
+        "移除: index_head_count,          # 普通参数，导致动态除法/取模",
+        "移除: batch_id = batch_head_id // index_head_count   # 动态 GPU 指令",
+        "移除: \"index_head_count\",",
+        "新增: index_head_count: tl.constexpr,   # 改回 constexpr，编译期常量",
+        "新增: batch_id = batch_head_id // index_head_count   # 编译期优化为乘法/移位"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

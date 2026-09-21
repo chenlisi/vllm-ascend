@@ -1,0 +1,60 @@
+{
+  "report_id": "PR13477_003",
+  "pr_number": 13477,
+  "pr_title": "[CI]Main2Main 0807",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/ops/triton/mamba/postprocess.py:69"
+  ],
+  "landing_sha": "78a10d9",
+  "source_quote": "**[P1] Validate the batch index, not the mapped request slot, against `num_reqs`.**\n> `num_reqs` is the number of active batch rows, whereas `req_idx` is a request-state slot and may be sparse/non-contiguous. For example, `num_reqs=2` with `idx_mapping=[5, 1]` is valid, but the current `req_idx >= num_reqs` check drops slot 5 entirely. It also fails to reject the `-1` skip sentinel and can read decision buffers at a negative offset.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/ops/triton/mamba/postprocess.py:69",
+      "patch_snippet": "评后sha 78a10d9 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "78a10d9",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "当存在 `idx_mapping` 将连续 `batch_idx` 映射到稀疏 `req_idx`（请求状态槽位）时，针对 `num_reqs`（活跃 batch 行数）的边界检查必须作用于 `batch_idx`，而非映射后的 `req_idx`；同时必须显式拒绝 `-1` 等跳过哨兵，避免对决策缓冲区的负偏移读取。",
+    "context": "",
+    "checkpoints": [
+      "检查 `if req_idx >= num_reqs` 这类边界检查是否放在了 `idx_mapping` 加载之后（错误位置）",
+      "检查 `req_idx` 是否可能稀疏/非连续（如 `idx_mapping=[5, 1]` 这种合法但稀疏的映射）",
+      "检查是否处理了 `-1` 跳过哨兵（未激活 batch 行）",
+      "边界检查应使用连续的 `batch_idx = tl.program_id(0)` 对照 `num_reqs`"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/triton/mamba/postprocess.py",
+      "line": 60,
+      "code": "@triton.jit\ndef postprocess_mamba_fused_kernel(\n    # ... pointer params ...\n    num_reqs,\n    idx_mapping_ptr,\n    num_accepted_tokens_ptr,\n    mamba_state_idx_ptr,\n    # ... other params ...\n    HAS_IDX_MAPPING: tl.constexpr,\n):\n    batch_idx = tl.program_id(0)\n    state_idx = tl.program_id(1)\n\n    if HAS_IDX_MAPPING:\n        req_idx = tl.load(idx_mapping_ptr + batch_idx).to(tl.int32)\n    else:\n        req_idx = batch_idx\n\n    # Bounds check — 错误：对稀疏 req_idx 检查 num_reqs\n    if req_idx >= num_reqs:\n        return\n\n    num_accepted = tl.load(num_accepted_tokens_ptr + req_idx)\n    src_block_idx = tl.load(mamba_state_idx_ptr + req_idx)",
+      "context": "... pointer params ... ... other params ... Bounds check — 错误：对稀疏 req_idx 检查 num_reqs"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/triton/mamba/postprocess.py",
+      "line": 60,
+      "code": "@triton.jit\ndef postprocess_mamba_fused_kernel(\n    # ... pointer params ...\n    num_reqs,\n    idx_mapping_ptr,\n    num_accepted_tokens_ptr,\n    mamba_state_idx_ptr,\n    # ... other params ...\n    HAS_IDX_MAPPING: tl.constexpr,\n):\n    batch_idx = tl.program_id(0)\n    state_idx = tl.program_id(1)\n\n    # Bounds check: num_reqs is the number of active batch rows. With\n    # HAS_IDX_MAPPING, req_idx is a (possibly sparse) request-state slot, so it\n    # must NOT be checked against num_reqs.\n    if batch_idx >= num_reqs:\n        return\n\n    if HAS_IDX_MAPPING:\n        req_idx = tl.load(idx_mapping_ptr + batch_idx)\n        # -1 is the skip sentinel for inactive batch rows.\n        if req_idx < 0:\n            return\n    else:\n        req_idx = batch_idx\n\n    num_accepted = tl.load(num_accepted_tokens_ptr + req_idx)\n    src_block_idx = tl.load(mamba_state_idx_ptr + req_idx)",
+      "context": "... pointer params ... ... other params ... Bounds check: num_reqs is the number of active batch rows. With"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/triton/mamba/postprocess.py\n+++ b/vllm_ascend/ops/triton/mamba/postprocess.py\n@@ -11,14 +11,19 @@\n     batch_idx = tl.program_id(0)\n     state_idx = tl.program_id(1)\n \n+    # Bounds check: num_reqs is the number of active batch rows. With\n+    # HAS_IDX_MAPPING, req_idx is a (possibly sparse) request-state slot, so it\n+    # must NOT be checked against num_reqs.\n+    if batch_idx >= num_reqs:\n+        return\n+\n     if HAS_IDX_MAPPING:\n-        req_idx = tl.load(idx_mapping_ptr + batch_idx).to(tl.int32)\n+        req_idx = tl.load(idx_mapping_ptr + batch_idx)\n+        # -1 is the skip sentinel for inactive batch rows.\n+        if req_idx < 0:\n+            return\n     else:\n         req_idx = batch_idx\n \n-    # Bounds check — 错误：对稀疏 req_idx 检查 num_reqs\n-    if req_idx >= num_reqs:\n-        return\n-\n     num_accepted = tl.load(num_accepted_tokens_ptr + req_idx)\n     src_block_idx = tl.load(mamba_state_idx_ptr + req_idx)\n",
+      "stats": "1 file changed, +10 lines, -5 lines",
+      "key_changes": [
+        "移除: if req_idx >= num_reqs:",
+        "移除: req_idx = tl.load(idx_mapping_ptr + batch_idx).to(tl.int32)",
+        "新增: if req_idx < 0:"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

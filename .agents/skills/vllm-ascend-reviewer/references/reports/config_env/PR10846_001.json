@@ -1,0 +1,62 @@
+{
+  "report_id": "PR10846_001",
+  "pr_number": 10846,
+  "pr_title": "[BugFix]mega moe w4a8 assert bias fix",
+  "pr_status": "merged",
+  "merged_at": "2026-06-25T09:57:37Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/fused_moe/moe_comm_method.py:304"
+  ],
+  "landing_sha": "e1c0da6",
+  "source_quote": "🟡 建议补充 assert 消息说明\n\n将 assert 移到 `enable_fused_mc2 == 1` 条件内部是正确的修复方向，确保只在 MC=2 模式下才要求 `w1_scale_bias` 和 `w2_scale_bias` 非空。\n\n但当前 assert 消息 `\"w1_scale_bias and w2_scale_bias cannot be None for FusedMC2CommImpl.\"` 没有说明是在哪个条件下触发。建议修改为更清晰的消息，例如：\n\n```python\nassert not (\nfused_experts_input.weights.w1_scale_bias is None or fused_experts_input.weights.w2_scale_bias is None\n), \"w1_scale_bias and w2_scale_bias cannot be None when enable_fused_mc2=1 (MC=2 mode).\"\n```\n\n这样当触发时用户能更清楚是 MC=2 模式下的要求。",
+  "correspondence": [
+    {
+      "review_quote": "winson-00178005 确认将 assert 移到 `enable_fused_mc2 == 1` 条件内部是正确方向，但建议 assert 消息应包含触发条件说明（MC=2 mode），以便用户触发时能快速定位问题。作者通过 commit `e1c0da6`（\"assert comment fix\"）更新了 assert 消息，添加了 `when enable_fused_mc2=1 (MC=2 mode)` 条件说明。",
+      "patch_snippet": "commit `e1c0da6`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "e1c0da6",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "assert 语句的错误消息应明确说明触发的条件上下文（如特定的配置模式、参数组合），而不仅仅是描述\"什么不能为空\"，以便用户在遇到断言失败时能快速定位问题根因。",
+    "context": "",
+    "checkpoints": [
+      "检查 assert 消息是否包含触发条件（如 `enable_fused_mc2=1`）",
+      "确认消息是否能帮助用户理解在什么配置下触发了该断言",
+      "避免仅描述\"不能为 None\"而不说明条件"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/fused_moe/moe_comm_method.py",
+      "line": 304,
+      "code": "# vllm_ascend/ops/fused_moe/moe_comm_method.py - FusedMC2CommImpl 类中\n# （根据评审意见推断，以下为完整函数上下文）\n\nclass FusedMC2CommImpl(FusedExpertsCommImplBase):\n    \"\"\"MC=2 mode fused MoE communication implementation.\"\"\"\n\n    def communicate(\n        self,\n        fused_experts_input: FusedExpertsInput,\n    ) -> FusedExpertsOutput:\n        # ...\n        # 检查 scale bias 是否已正确设置\n        # 注意：此 assert 原先位于更外层的作用域，\n        # PR 将其移入 enable_fused_mc2 == 1 条件内部\n        if get_ascend_config().enable_fused_mc2 == 1:\n            assert not (\n                fused_experts_input.weights.w1_scale_bias is None\n                or fused_experts_input.weights.w2_scale_bias is None\n            ), \"w1_scale_bias and w2_scale_bias cannot be None for FusedMC2CommImpl.\"\n            # ... MC=2 模式的通信逻辑 ...",
+      "context": "🟡 建议补充 assert 消息说明"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/fused_moe/moe_comm_method.py",
+      "line": 304,
+      "code": "# vllm_ascend/ops/fused_moe/moe_comm_method.py - FusedMC2CommImpl 类中\n\nclass FusedMC2CommImpl(FusedExpertsCommImplBase):\n    \"\"\"MC=2 mode fused MoE communication implementation.\"\"\"\n\n    def communicate(\n        self,\n        fused_experts_input: FusedExpertsInput,\n    ) -> FusedExpertsOutput:\n        # ...\n        # 检查 scale bias 是否已正确设置\n        if get_ascend_config().enable_fused_mc2 == 1:\n            assert not (\n                fused_experts_input.weights.w1_scale_bias is None\n                or fused_experts_input.weights.w2_scale_bias is None\n            ), \"w1_scale_bias and w2_scale_bias cannot be None when enable_fused_mc2=1 (MC=2 mode).\"\n            # ... MC=2 模式的通信逻辑 ...",
+      "context": "🟡 建议补充 assert 消息说明"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/fused_moe/moe_comm_method.py\n+++ b/vllm_ascend/ops/fused_moe/moe_comm_method.py\n@@ -1,5 +1,4 @@\n # vllm_ascend/ops/fused_moe/moe_comm_method.py - FusedMC2CommImpl 类中\n-# （根据评审意见推断，以下为完整函数上下文）\n \n class FusedMC2CommImpl(FusedExpertsCommImplBase):\n     \"\"\"MC=2 mode fused MoE communication implementation.\"\"\"\n@@ -10,11 +9,9 @@\n     ) -> FusedExpertsOutput:\n         # ...\n         # 检查 scale bias 是否已正确设置\n-        # 注意：此 assert 原先位于更外层的作用域，\n-        # PR 将其移入 enable_fused_mc2 == 1 条件内部\n         if get_ascend_config().enable_fused_mc2 == 1:\n             assert not (\n                 fused_experts_input.weights.w1_scale_bias is None\n                 or fused_experts_input.weights.w2_scale_bias is None\n-            ), \"w1_scale_bias and w2_scale_bias cannot be None for FusedMC2CommImpl.\"\n+            ), \"w1_scale_bias and w2_scale_bias cannot be None when enable_fused_mc2=1 (MC=2 mode).\"\n             # ... MC=2 模式的通信逻辑 ...",
+      "stats": "1 file changed, +1 lines, -4 lines",
+      "key_changes": [
+        "移除: # （根据评审意见推断，以下为完整函数上下文）",
+        "移除: # 注意：此 assert 原先位于更外层的作用域，",
+        "移除: # PR 将其移入 enable_fused_mc2 == 1 条件内部",
+        "移除: ), \"w1_scale_bias and w2_scale_bias cannot be None for FusedMC2CommImpl.\"",
+        "新增: ), \"w1_scale_bias and w2_scale_bias cannot be None when enable_fused_mc2=1 (MC=2"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

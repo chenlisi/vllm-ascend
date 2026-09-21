@@ -1,0 +1,67 @@
+{
+  "report_id": "PR10566_001",
+  "pr_number": 10566,
+  "pr_title": "[SpecDecode][BugFix] Support Eagle3 with Chunked Pipeline Parallelism",
+  "pr_status": "merged",
+  "merged_at": "2026-06-22T14:38:16Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/spec_decode/llm_base_proposer.py:592"
+  ],
+  "landing_sha": "68e580f",
+  "source_quote": "（评审人指出该位置的代码需要修改，涉及 Eagle3 speculative decoding 在 chunked pipeline parallelism 下的 drafter dummy_run 行为）",
+  "correspondence": [
+    {
+      "review_quote": "lilinsiman 指出 `llm_base_proposer.py:592` 处的代码在 Eagle3 与 Chunked Pipeline Parallelism 配合使用时存在问题。作者在 commit `68e580f`（\"skip drafter.dummy_run while profile_cpp == true\"）中修复了该问题，在 profile_cpp 为 True 时跳过 drafter 的 dummy_run。",
+      "patch_snippet": "commit `68e580f`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "68e580f",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当使用 Eagle3 speculative decoding 配合 Chunked Pipeline Parallelism 时，如果 `profile_cpp == True`（C++ profiling 模式），应跳过 drafter 的 `dummy_run`，以避免在 profiling 阶段产生不必要的开销或冲突。",
+    "context": "",
+    "checkpoints": [
+      "检查 `llm_base_proposer.py` 中 drafter 的 `dummy_run` 调用是否有 `profile_cpp` 条件判断",
+      "确认 speculative decoding 相关代码在 profiling 模式下的行为正确",
+      "验证 Eagle3 与 PP 配合时 drafter 初始化流程的正确性"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/spec_decode/llm_base_proposer.py",
+      "line": 592,
+      "code": "# （根据评审意见推断）\n# Eagle3 drafter 在 profile_cpp == True 时仍然执行 dummy_run\n# 在 profile_cpp 模式下，num_tokens 表示一个长 prefill chunk\n# drafter 会将其误解为多个请求，分配巨大的 draft-side buffer，导致 OOM\n    def _init_drafter(self, drafter, input_batch, profile_cpp: bool = False):\n        \"\"\"Initialize the Eagle3 drafter model for speculative decoding.\"\"\"\n        ...\n        # 无论是否 profiling 模式都执行 dummy_run\n        # 在 profile_cpp 模式下：\n        #   num_tokens ≈ batch_size * (1 + num_speculative_tokens)\n        #   但实际是一个长 prefill chunk，drafter 误算 batch_size 导致 OOM\n        drafter.dummy_run(\n            input_batch=input_batch,\n            num_tokens=num_tokens,\n        )\n        ...",
+      "context": "（评审人指出该位置的代码需要修改，涉及 Eagle3 speculative decoding 在 chunked pipeline parallelism 下的 drafter dummy_run 行为）"
+    },
+    "pattern": {
+      "file": "vllm_ascend/spec_decode/llm_base_proposer.py",
+      "line": 592,
+      "code": "# （根据评审意见推断）\n# 当 profile_cpp == True 时跳过 drafter.dummy_run\n# 原因：profile_cpp 模式下 num_tokens 代表一个长 prefill chunk\n# drafter 按正常公式推算 batch_size 会分配巨大 buffer 导致 OOM\n# 解决方案：profile_cpp 模式下直接跳过 drafter 的 dummy_run\n    def _init_drafter(self, drafter, input_batch, profile_cpp: bool = False):\n        \"\"\"Initialize the Eagle3 drafter model for speculative decoding.\"\"\"\n        ...\n        # profile_cpp 模式下跳过 drafter dummy_run 以避免 OOM\n        if not profile_cpp:\n            drafter.dummy_run(\n                input_batch=input_batch,\n                num_tokens=num_tokens,\n            )\n        ...",
+      "context": "（评审人指出该位置的代码需要修改，涉及 Eagle3 speculative decoding 在 chunked pipeline parallelism 下的 drafter dummy_run 行为）"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/spec_decode/llm_base_proposer.py\n+++ b/vllm_ascend/spec_decode/llm_base_proposer.py\n@@ -1,16 +1,15 @@\n # （根据评审意见推断）\n-# Eagle3 drafter 在 profile_cpp == True 时仍然执行 dummy_run\n-# 在 profile_cpp 模式下，num_tokens 表示一个长 prefill chunk\n-# drafter 会将其误解为多个请求，分配巨大的 draft-side buffer，导致 OOM\n+# 当 profile_cpp == True 时跳过 drafter.dummy_run\n+# 原因：profile_cpp 模式下 num_tokens 代表一个长 prefill chunk\n+# drafter 按正常公式推算 batch_size 会分配巨大 buffer 导致 OOM\n+# 解决方案：profile_cpp 模式下直接跳过 drafter 的 dummy_run\n     def _init_drafter(self, drafter, input_batch, profile_cpp: bool = False):\n         \"\"\"Initialize the Eagle3 drafter model for speculative decoding.\"\"\"\n         ...\n-        # 无论是否 profiling 模式都执行 dummy_run\n-        # 在 profile_cpp 模式下：\n-        #   num_tokens ≈ batch_size * (1 + num_speculative_tokens)\n-        #   但实际是一个长 prefill chunk，drafter 误算 batch_size 导致 OOM\n-        drafter.dummy_run(\n-            input_batch=input_batch,\n-            num_tokens=num_tokens,\n-        )\n+        # profile_cpp 模式下跳过 drafter dummy_run 以避免 OOM\n+        if not profile_cpp:\n+            drafter.dummy_run(\n+                input_batch=input_batch,\n+                num_tokens=num_tokens,\n+            )\n         ...",
+      "stats": "1 file changed, +10 lines, -11 lines",
+      "key_changes": [
+        "移除: # Eagle3 drafter 在 profile_cpp == True 时仍然执行 dummy_run",
+        "移除: # 在 profile_cpp 模式下，num_tokens 表示一个长 prefill chunk",
+        "移除: # drafter 会将其误解为多个请求，分配巨大的 draft-side buffer，导致 OOM",
+        "新增: # 当 profile_cpp == True 时跳过 drafter.dummy_run",
+        "新增: # 原因：profile_cpp 模式下 num_tokens 代表一个长 prefill chunk",
+        "新增: # drafter 按正常公式推算 batch_size 会分配巨大 buffer 导致 OOM",
+        "新增: # 解决方案：profile_cpp 模式下直接跳过 drafter 的 dummy_run",
+        "移除: # 无论是否 profiling 模式都执行 dummy_run",
+        "移除: # 在 profile_cpp 模式下：",
+        "移除: #   num_tokens ≈ batch_size * (1 + num_speculative_tokens)"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

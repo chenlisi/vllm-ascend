@@ -1,0 +1,66 @@
+{
+  "report_id": "PR8030_001",
+  "pr_number": 8030,
+  "pr_title": "[Performance][model_runner_v2]Add bad-words-kernel triton kernel and optimize performance",
+  "pr_status": "merged",
+  "merged_at": "2026-04-11T08:31:53Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/v2/sample/bad_words.py:31",
+    "vllm_ascend/worker/v2/sample/bad_words.py:29"
+  ],
+  "landing_sha": "6b1758a",
+  "source_quote": "Plz add do_not_specialize for variable like num_tokens, max_num_bad_words.\nthere is `get_vectorcore_num` in vllm_ascend.ops.triton.triton_utils.py alreay.",
+  "correspondence": [
+    {
+      "review_quote": "weijinqian0: vllm_ascend/worker/v2/sample/bad_words.py:31",
+      "patch_snippet": "评后sha 6b1758a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Ronald1995: vllm_ascend/worker/v2/sample/bad_words.py:29",
+      "patch_snippet": "评后sha 6b1758a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "6b1758a",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在 Triton 内核中，对于在运行时才会确定值的变量（如 `num_tokens`、`max_num_bad_words`），必须使用 `do_not_specialize` 注解，防止编译器对这些变量进行特化优化，避免生成过多内核变体导致编译时间增加和缓存命中率降低。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/worker/v2/sample/bad_words.py",
+      "line": 20,
+      "code": "# num_tokens, max_num_bad_words.\"\n\nimport triton\nimport triton.language as tl\n\n\n@triton.jit\ndef _bad_words_kernel(\n    input_ids_ptr,\n    idx_mapping_ptr,\n    bad_words_ids_ptr,\n    bad_words_offsets_ptr,\n    output_ptr,\n    num_tokens,\n    max_num_bad_words,\n    BLOCK_SIZE: tl.constexpr,\n):\n    \"\"\"Kernel to filter bad words from input_ids.\"\"\"\n    token_idx = tl.program_id(0) * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)\n    mask = token_idx < num_tokens\n\n    # Load input ids and check against bad words\n    input_id = tl.load(input_ids_ptr + token_idx, mask=mask)\n    # ... bad words filtering logic ...\n    tl.store(output_ptr + token_idx, input_id, mask=mask)",
+      "context": "Plz add do_not_specialize for variable like num_tokens, max_num_bad_words.\nthere is `get_vectorcore_num` in vllm_ascend.ops.triton.triton_utils.py alreay."
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/v2/sample/bad_words.py",
+      "line": 20,
+      "code": "# commit 6b1758a \"add do_not_specialize as reviewd\"\n\nimport triton\nimport triton.language as tl\nfrom triton import do_not_specialize\n\n\n@triton.jit\ndef _bad_words_kernel(\n    input_ids_ptr,\n    idx_mapping_ptr,\n    bad_words_ids_ptr,\n    bad_words_offsets_ptr,\n    output_ptr,\n    do_not_specialize(num_tokens),\n    do_not_specialize(max_num_bad_words),\n    BLOCK_SIZE: tl.constexpr,\n):\n    \"\"\"Kernel to filter bad words from input_ids.\"\"\"\n    token_idx = tl.program_id(0) * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)\n    mask = token_idx < num_tokens\n\n    # Load input ids and check against bad words\n    input_id = tl.load(input_ids_ptr + token_idx, mask=mask)\n    # ... bad words filtering logic ...\n    tl.store(output_ptr + token_idx, input_id, mask=mask)",
+      "context": "Plz add do_not_specialize for variable like num_tokens, max_num_bad_words.\nthere is `get_vectorcore_num` in vllm_ascend.ops.triton.triton_utils.py alreay."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/v2/sample/bad_words.py\n+++ b/vllm_ascend/worker/v2/sample/bad_words.py\n@@ -1,7 +1,8 @@\n-# num_tokens, max_num_bad_words.\"\n+# commit 6b1758a \"add do_not_specialize as reviewd\"\n \n import triton\n import triton.language as tl\n+from triton import do_not_specialize\n \n \n @triton.jit\n@@ -11,8 +12,8 @@\n     bad_words_ids_ptr,\n     bad_words_offsets_ptr,\n     output_ptr,\n-    num_tokens,\n-    max_num_bad_words,\n+    do_not_specialize(num_tokens),\n+    do_not_specialize(max_num_bad_words),\n     BLOCK_SIZE: tl.constexpr,\n ):\n     \"\"\"Kernel to filter bad words from input_ids.\"\"\"\n",
+      "stats": "1 file changed, +4 lines, -3 lines",
+      "key_changes": [
+        "-# num_tokens, max_num_bad_words.\"",
+        "+# commit 6b1758a \"add do_not_specialize as reviewd\"",
+        "+from triton import do_not_specialize",
+        "-    num_tokens,",
+        "-    max_num_bad_words,",
+        "+    do_not_specialize(num_tokens),",
+        "+    do_not_specialize(max_num_bad_words),"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

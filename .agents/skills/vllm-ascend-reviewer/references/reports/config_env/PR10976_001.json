@@ -1,0 +1,63 @@
+{
+  "report_id": "PR10976_001",
+  "pr_number": 10976,
+  "pr_title": "[feature] ai接入冒烟问题定位",
+  "pr_status": "merged",
+  "merged_at": "2026-07-01T10:57:38Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/envs.py:113",
+    ".agents/skills/ci-ai-diagnosis-agent/scripts/ci_diagnosis_agent.py:41",
+    ".agents/skills/ci-ai-diagnosis-agent/references/output-format.md:38",
+    ".agents/skills/ci-ai-diagnosis-agent/SKILL.md:120",
+    ".github/workflows/_e2e_nightly_single_node.yaml:346"
+  ],
+  "landing_sha": "4e5111a",
+  "source_quote": "these envs are totally useless for vllm-ascend. If you want to use/set these env. Just use `os.env` in your script. No need to add them here.",
+  "correspondence": [
+    {
+      "review_quote": "zzzzwwjj 指出 output-format.md 中有中文需改为英文，ci_diagnosis_agent.py 的工具放置位置需确认，envs.py 新增环境变量需检查。wangxiyuan 确认这些环境变量对 vllm-ascend 无用，应直接在脚本中使用 `os.environ`。maoxx241 指出 SKILL.md 中描述的工具与实际暴露的工具不匹配、renderer 输出与文档定义的 11-section 报告契约不一致、脚本依赖第三方 `regex` 包但未显式安装、以及 single-node workflow 写诊断 JSON 但未上传 artifact 与 multi-node 不一致。",
+      "patch_snippet": "commit `d3bfc44` + commit `4e5111a`",
+      "adoption_judgment": "全部采纳"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "4e5111a",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "CI 辅助工具的环境变量应直接在工具脚本中使用 `os.environ` 获取，不应添加到 vllm-ascend 核心 `envs.py` 中，避免污染核心模块的命名空间。",
+    "context": "wangxiyuan 指出这些环境变量对 vllm-ascend 核心无用，应直接在 CI 诊断脚本中获取。",
+    "checkpoints": [
+      "新增环境变量是否仅用于 CI 辅助工具",
+      "是否可以直接在脚本中使用 `os.environ` 替代",
+      "核心 envs.py 中是否混入了工具专用的环境变量"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/envs.py",
+      "line": 113,
+      "code": "# ❌ 在核心 envs.py 中添加 CI 工具专用环境变量\n\"VLLM_ASCEND_CI_AI_DIAGNOSIS_ENABLED\":\n    lambda: bool(int(os.getenv(\"VLLM_ASCEND_CI_AI_DIAGNOSIS_ENABLED\", \"0\"))),\n\"VLLM_ASCEND_CI_AI_DIAGNOSIS_API_KEY\":\n    lambda: os.getenv(\"VLLM_ASCEND_CI_AI_DIAGNOSIS_API_KEY\", \"\"),\n\"VLLM_ASCEND_CI_AI_DIAGNOSIS_BASE_URL\":\n    lambda: os.getenv(\"VLLM_ASCEND_CI_AI_DIAGNOSIS_BASE_URL\", \"\"),",
+      "context": "wangxiyuan: these envs are totally useless for vllm-ascend"
+    },
+    "pattern": {
+      "file": ".agents/skills/ci-ai-diagnosis-agent/scripts/ci_diagnosis_agent.py",
+      "line": 41,
+      "code": "# ✅ 在 CI 工具脚本中直接获取环境变量\nimport os\napi_key = os.environ.get(\"VLLM_ASCEND_CI_AI_DIAGNOSIS_API_KEY\", \"\")\nbase_url = os.environ.get(\"VLLM_ASCEND_CI_AI_DIAGNOSIS_BASE_URL\", \"\")",
+      "context": "CI 工具脚本中直接使用 os.environ"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/envs.py\n+++ b/vllm_ascend/envs.py\n@@ -105,15 +105,6 @@\n-# CI AI Diagnosis Agent environment variables\n-\"VLLM_ASCEND_CI_AI_DIAGNOSIS_ENABLED\":\n-    lambda: bool(int(os.getenv(\"VLLM_ASCEND_CI_AI_DIAGNOSIS_ENABLED\", \"0\"))),\n-\"VLLM_ASCEND_CI_AI_DIAGNOSIS_API_KEY\":\n-    lambda: os.getenv(\"VLLM_ASCEND_CI_AI_DIAGNOSIS_API_KEY\", \"\"),\n-\"VLLM_ASCEND_CI_AI_DIAGNOSIS_BASE_URL\":\n-    lambda: os.getenv(\"VLLM_ASCEND_CI_AI_DIAGNOSIS_BASE_URL\", \"\"),",
+      "stats": "1 file changed, removed CI diagnosis envs from core envs.py",
+      "key_changes": [
+        "移除: vllm_ascend/envs.py 中的 CI AI Diagnosis 环境变量定义",
+        "修改: CI 诊断脚本改用内置 re 模块替代第三方 regex"
+      ]
+    },
+    "language": "python",
+    "_status": "complete"
+  }
+}

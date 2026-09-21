@@ -1,0 +1,57 @@
+{
+  "report_id": "PR4973_001",
+  "pr_number": 4973,
+  "pr_title": "[Bugfix] fix pipeline parallelism bug introduced by async-scheduling refactor work",
+  "pr_status": "merged",
+  "merged_at": "2025-12-18T07:27:55Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/model_runner_v1.py:405"
+  ],
+  "landing_sha": "3244b2f",
+  "source_quote": "gpu model runner has initial this property",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan 指出 gpu model runner 已经初始化了该 property，存在冗余定义。作者通过 commit `3244b2f` 移除冗余定义，1/1 建议全部落地。",
+      "patch_snippet": "commit `3244b2f`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "3244b2f",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在子类或模块中定义属性前，应检查父类（如 gpu model runner）是否已经初始化了该属性，避免冗余定义导致维护混乱。",
+    "context": "",
+    "checkpoints": [
+      "新增属性定义前检查父类是否已有相同属性",
+      "移除与父类重复的属性定义"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 0,
+      "code": "class NPUModelRunner(GPUModelRunner):\n    \"\"\"Ascend NPU model runner.\"\"\"\n\n    def __init__(\n        self,\n        vllm_config: VllmConfig,\n        kv_cache_dtype: Optional[str] = None,\n        is_driver_worker: bool = False,\n    ):\n        super().__init__(vllm_config, kv_cache_dtype, is_driver_worker)\n        self.some_property = SomeClass()  # 冗余定义\n\n    def execute_model(self, ...):\n        ...",
+      "context": "gpu model runner has initial this property"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 0,
+      "code": "class NPUModelRunner(GPUModelRunner):\n    \"\"\"Ascend NPU model runner.\"\"\"\n\n    def __init__(\n        self,\n        vllm_config: VllmConfig,\n        kv_cache_dtype: Optional[str] = None,\n        is_driver_worker: bool = False,\n    ):\n        super().__init__(vllm_config, kv_cache_dtype, is_driver_worker)\n\n    def execute_model(self, ...):\n        ...",
+      "context": "gpu model runner has initial this property"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/model_runner_v1.py\n+++ b/vllm_ascend/worker/model_runner_v1.py\n@@ -1,14 +1,13 @@\n         is_driver_worker: bool = False,\n     ):\n         super().__init__(vllm_config, kv_cache_dtype, is_driver_worker)\n-        self.some_property = SomeClass()  # 冗余定义\n \n     def execute_model(self, ...):\n         ...",
+      "stats": "1 file changed, +0 lines, -1 lines",
+      "key_changes": [
+        "删除了第 11-11 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

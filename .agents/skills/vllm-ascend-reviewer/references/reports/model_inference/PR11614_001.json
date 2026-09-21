@@ -1,0 +1,57 @@
+{
+  "report_id": "PR11614_001",
+  "pr_number": 11614,
+  "pr_title": "[Feature] Add mxfp quant for token dispatch to fit low acc communication with MXFP4 fixed",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/device/device_op.py:1196"
+  ],
+  "landing_sha": "8cb26c2",
+  "source_quote": "Plz recover this.",
+  "correspondence": [
+    {
+      "review_quote": "weijinqian0: vllm_ascend/device/device_op.py:1196",
+      "patch_snippet": "评后sha 8cb26c2 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "8cb26c2",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在开发新功能（如 MXFP 量化 token dispatch）时，不应修改与功能无关的代码（如 `device_op.py` 中的其他逻辑）。如果其他人已经修复了某处代码，不应在 PR 中包含重复的修改。",
+    "context": "",
+    "checkpoints": [
+      "检查 PR 的 diff 是否包含与主要功能无关的代码修改",
+      "确认修改的代码是否已被其他人通过其他 PR 修复",
+      "在提交前对比 main 分支，确保不包含冗余变更"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/device/device_op.py",
+      "line": 1185,
+      "code": "    def _compute_mxfp_token_dispatch(\n        self,\n        hidden_states: torch.Tensor,\n        router_logits: torch.Tensor,\n        ...\n    ) -> tuple[torch.Tensor, torch.Tensor]:\n        \"\"\"Compute MXFP quantized token dispatch for MoE.\"\"\"\n        # Quantize hidden states to MXFP4 format\n        quantized = self._mxfp_quantize(hidden_states)\n\n        # Modified during MXFP feature development — this change\n        # was not needed as someone else already fixed it elsewhere\n        topk_weights, topk_ids = self._routing_compute(\n            router_logits,\n            quantized_scales=self._scale_cache,  #误改: 引入了不必要的 scale 缓存参数\n        )\n\n        return quantized, topk_weights, topk_ids",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/device/device_op.py",
+      "line": 1196,
+      "code": "    def _compute_mxfp_token_dispatch(\n        self,\n        hidden_states: torch.Tensor,\n        router_logits: torch.Tensor,\n        ...\n    ) -> tuple[torch.Tensor, torch.Tensor]:\n        \"\"\"Compute MXFP quantized token dispatch for MoE.\"\"\"\n        # Quantize hidden states to MXFP4 format\n        quantized = self._mxfp_quantize(hidden_states)\n\n        # Reverted — someone else already fixed this elsewhere\n        topk_weights, topk_ids = self._routing_compute(\n            router_logits,\n        )\n\n        return quantized, topk_weights, topk_ids",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/device/device_op.py\n+++ b/vllm_ascend/device/device_op.py\n@@ -8,11 +8,9 @@\n         # Quantize hidden states to MXFP4 format\n         quantized = self._mxfp_quantize(hidden_states)\n \n-        # Modified during MXFP feature development — this change\n-        # was not needed as someone else already fixed it elsewhere\n+        # Reverted — someone else already fixed this elsewhere\n         topk_weights, topk_ids = self._routing_compute(\n             router_logits,\n-            quantized_scales=self._scale_cache,  #误改: 引入了不必要的 scale 缓存参数\n         )\n \n         return quantized, topk_weights, topk_ids",
+      "stats": "1 file changed, +1 lines, -3 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "report_id": "PR3756_001",
+  "pr_number": 3756,
+  "pr_title": "[Misc][Doc] Add service profiling feature with user guide",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "requirements.txt:5",
+    "docs/source/developer_guide/performance/service_profiling_guide.md:48",
+    "docs/source/developer_guide/performance/service_profiling_guide.md:27",
+    "docs/source/developer_guide/performance/service_profiling_guide.md:121"
+  ],
+  "landing_sha": "544948c",
+  "source_quote": "Let's move this to `requirements-dev.txt`\nAll examples in the community with qwen-2.5-0.5b have been upgraded to qwen3-0.6B. Upgrading is recommended.\nAll examples in the community with qwen-2.5-0.5b have been upgraded to qwen3-0.6B. Upgrading is recommended.\nThere is a misunderstanding that currently only version 0.9.1 is supported. It is recommended to split this into two lines.",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao: requirements.txt:5(2025-11-03 08:56:11)",
+      "patch_snippet": "评后sha 544948c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "leo-pony: docs/source/developer_guide/performance/service_profiling_guide.md:48(2025-11-03 09:03:51)",
+      "patch_snippet": "评后sha 544948c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "leo-pony: docs/source/developer_guide/performance/service_profiling_guide.md:27(2025-11-03 09:03:58)",
+      "patch_snippet": "评后sha 544948c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "leo-pony: docs/source/developer_guide/performance/service_profiling_guide.md:121(2025-11-03 09:05:55)",
+      "patch_snippet": "评后sha 544948c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "544948c",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "调试和分析工具类依赖应放在 `requirements-dev.txt` 中，不应加入生产环境的 `requirements.txt`。文档示例应使用最新的模型版本。",
+    "context": "",
+    "checkpoints": [
+      "调试/分析工具依赖是否放在了 `requirements-dev.txt` 中",
+      "文档示例是否使用了最新的模型版本（如 qwen3-0.6B 替代 qwen-2.5-0.5b）",
+      "版本说明是否清晰，不会产生歧义"
+    ],
+    "antipattern": {
+      "file": "requirements.txt",
+      "line": 5,
+      "code": "# requirements.txt:1-10\n# Production dependencies for vllm-ascend\n-r requirements-dev.txt\ntorch_npu==2.5.0\ntriton>=2.2.0\nmsserviceprofiler==1.1.4b1    # ← 开发调试工具不应放在生产依赖中\nvllm>=0.7.0\nnumpy>=1.24.0\npyyaml>=6.0",
+      "context": "requirements.txt:1-10 Production dependencies for vllm-ascend"
+    },
+    "pattern": {
+      "file": "requirements.txt",
+      "line": 5,
+      "code": "# requirements.txt:1-10\n# Production dependencies for vllm-ascend\n-r requirements-dev.txt\ntorch_npu==2.5.0\ntriton>=2.2.0\n# msserviceprofiler 已移至 requirements-dev.txt\nvllm>=0.7.0\nnumpy>=1.24.0\npyyaml>=6.0",
+      "context": "requirements.txt:1-10 Production dependencies for vllm-ascend msserviceprofiler 已移至 requirements-dev.txt"
+    },
+    "diff": {
+      "unified": "--- a/requirements.txt\n+++ b/requirements.txt\n@@ -3,7 +3,7 @@\n -r requirements-dev.txt\n torch_npu==2.5.0\n triton>=2.2.0\n-msserviceprofiler==1.1.4b1    # ← 开发调试工具不应放在生产依赖中\n+# msserviceprofiler 已移至 requirements-dev.txt\n vllm>=0.7.0\n numpy>=1.24.0\n pyyaml>=6.0\n",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "移除: msserviceprofiler==1.1.4b1    # ← 开发调试工具不应放在生产依赖中"
+      ]
+    },
+    "language": "text",
+    "_status": "processed"
+  }
+}

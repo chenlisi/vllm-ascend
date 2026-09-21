@@ -1,0 +1,66 @@
+{
+  "report_id": "PR10342_001",
+  "pr_number": 10342,
+  "pr_title": "[Feature] Mooncake connectot support dsv4",
+  "pr_status": "merged",
+  "merged_at": "2026-06-17T02:37:09Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py:788"
+  ],
+  "landing_sha": "01b79e1",
+  "source_quote": "Using `block_stride` to send the blocks can simplify the transfer and make it easier to merge transfer tasks and get full use of bandwidth.",
+  "correspondence": [
+    {
+      "review_quote": "nwpu-zxr 指出 `mooncake_connector.py:788` 处使用 `block_stride` 发送块可以简化传输，更容易合并传输任务并充分利用带宽。作者通过 commit `01b79e1`（\"todo dsv4 aggregating layer views\"）实现了基于 block_stride 的传输优化，1/1 建议全部落地。",
+      "patch_snippet": "commit `01b79e1`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "01b79e1",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "在 KV cache 传输中，当存在 block_stride 时，应使用 stride 方式发送块，而非逐块发送。这样可以合并传输任务，充分利用带宽，提升传输效率。",
+    "context": "",
+    "checkpoints": [
+      "检查 KV 传输代码是否支持 block_stride",
+      "检查是否可以合并传输任务以提升带宽利用率"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py",
+      "line": 788,
+      "code": "import math\nimport torch\nfrom typing import Optional\n\n# ... 其他代码 ...\n\nclass MooncakeConnector:\n    # ... 其他方法 ...\n\n    def _send_kv_blocks(\n        self,\n        local_block_ids: list[int],\n        remote_block_ids: list[int],\n        block_len: int,\n        block_stride: int,\n    ) -> None:\n        \"\"\"发送 KV 块到远端\"\"\"\n        # 逐块发送，未利用 block_stride 合并传输任务\n        # 当 block_stride != block_len 时（如 dsv4 布局），\n        # 连续块在物理内存中不连续\n        # 使用 group_concurrent_contiguous 会将后续块数据\n        # 写入 stride 间隙，导致内存损坏\n        for block_id in local_block_ids:\n            self._send_single_block(block_id)  # 每次发送一个块，带宽利用率低\n\n    # ... 其他方法 ...",
+      "context": "Using `block_stride` to send the blocks can simplify the transfer and make it easier to merge transfer tasks and get full use of bandwidth."
+    },
+    "pattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py",
+      "line": 788,
+      "code": "import math\nimport torch\nfrom typing import Optional\n\n# ... 其他代码 ...\n\nclass MooncakeConnector:\n    # ... 其他方法 ...\n\n    def _send_kv_blocks(\n        self,\n        local_block_ids: list[int],\n        remote_block_ids: list[int],\n        block_len: int,\n        block_stride: int,\n    ) -> None:\n        \"\"\"发送 KV 块到远端\"\"\"\n        # nwpu-zxr: \"Using block_stride to send the blocks can simplify\n        # the transfer and make it easier to merge transfer tasks and\n        # get full use of bandwidth.\"\n        # commit 01b79e1: \"todo dsv4 aggregating layer views\"\n        # 使用 block_stride 发送块，简化传输并合并传输任务\n        # 当 block_stride != block_len 时禁用 grouping 防止内存损坏\n        if block_stride == block_len:\n            # 连续布局，可以合并传输\n            self._send_blocks_contiguous(local_block_ids, remote_block_ids)\n        else:\n            # dsv4 布局，stride 发送防止内存损坏\n            self._send_blocks_with_stride(\n                local_block_ids, remote_block_ids, block_stride)\n\n    # ... 其他方法 ...",
+      "context": "Using `block_stride` to send the blocks can simplify the transfer and make it easier to merge transfer tasks and get full use of bandwidth."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py\n+++ b/vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py\n@@ -15,12 +15,18 @@\n         block_stride: int,\n     ) -> None:\n         \"\"\"发送 KV 块到远端\"\"\"\n-        # 逐块发送，未利用 block_stride 合并传输任务\n-        # 当 block_stride != block_len 时（如 dsv4 布局），\n-        # 连续块在物理内存中不连续\n-        # 使用 group_concurrent_contiguous 会将后续块数据\n-        # 写入 stride 间隙，导致内存损坏\n-        for block_id in local_block_ids:\n-            self._send_single_block(block_id)  # 每次发送一个块，带宽利用率低\n+        # nwpu-zxr: \"Using block_stride to send the blocks can simplify\n+        # the transfer and make it easier to merge transfer tasks and\n+        # get full use of bandwidth.\"\n+        # commit 01b79e1: \"todo dsv4 aggregating layer views\"\n+        # 使用 block_stride 发送块，简化传输并合并传输任务\n+        # 当 block_stride != block_len 时禁用 grouping 防止内存损坏\n+        if block_stride == block_len:\n+            # 连续布局，可以合并传输\n+            self._send_blocks_contiguous(local_block_ids, remote_block_ids)\n+        else:\n+            # dsv4 布局，stride 发送防止内存损坏\n+            self._send_blocks_with_stride(\n+                local_block_ids, remote_block_ids, block_stride)\n \n     # ... 其他方法 ...",
+      "stats": "1 file changed, +13 lines, -7 lines",
+      "key_changes": [
+        "移除: # 逐块发送，未利用 block_stride 合并传输任务",
+        "移除: # 当 block_stride != block_len 时（如 dsv4 布局），",
+        "移除: # 连续块在物理内存中不连续",
+        "移除: # 使用 group_concurrent_contiguous 会将后续块数据",
+        "移除: # 写入 stride 间隙，导致内存损坏",
+        "移除: for block_id in local_block_ids:",
+        "移除: self._send_single_block(block_id)  # 每次发送一个块，带宽利用率低",
+        "新增: # nwpu-zxr: \"Using block_stride to send the blocks can simplify",
+        "新增: # the transfer and make it easier to merge transfer tasks and",
+        "新增: # get full use of bandwidth.\""
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

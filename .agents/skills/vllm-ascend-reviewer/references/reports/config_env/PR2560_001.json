@@ -1,0 +1,62 @@
+{
+  "report_id": "PR2560_001",
+  "pr_number": 2560,
+  "pr_title": "[Bugfix][LoRA][Patch] Fix the LoRA inference bug after upstream vLLM codebase changed",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    ".github/workflows/vllm_ascend_test.yaml:287"
+  ],
+  "landing_sha": "56f63ce",
+  "source_quote": "this should be kept\nLGTM if the above comment is addressed",
+  "correspondence": [
+    {
+      "review_quote": ".github/workflows/vllm_ascend_test.yaml:287",
+      "patch_snippet": "评后sha 56f63ce 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": ".github/workflows/vllm_ascend_test.yaml:287",
+      "patch_snippet": "评后sha 56f63ce 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "56f63ce",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在修复 bug 或重构时，不应随意删除 CI 配置中的测试条目。即使某些测试暂时失败，也应保留配置并通过注释或 skip 标记处理，确保测试覆盖不丢失。",
+    "context": "",
+    "checkpoints": [
+      "CI 配置文件中的测试条目是否被删除",
+      "删除测试是否有合理理由",
+      "是否有替代方案（如 skip、xfail）"
+    ],
+    "antipattern": {
+      "file": ".github/workflows/vllm_ascend_test.yaml",
+      "line": 275,
+      "code": "# 评审人 wangxiyuan: \"this should be kept\"\n# 评审人 MengqingCao: \"LGTM if the above comment is addressed\"\n\nname: vllm_ascend_test\n\non:\n  pull_request:\n    branches: [main]\n\njobs:\n  e2e-tests:\n    runs-on: [self-hosted, ascend]\n    steps:\n      - uses: actions/checkout@v4\n      - name: Setup environment\n        run: pip install -e .\n\n      # LoRA e2e 测试条目被删除了\n      # 导致 LoRA 相关测试覆盖缺失\n      - name: Run model e2e tests\n        run: pytest tests/e2e/models/\n\n      - name: Run ops e2e tests\n        run: pytest tests/e2e/ops/",
+      "context": "评审人 wangxiyuan: \"this should be kept\" 评审人 MengqingCao: \"LGTM if the above comment is addressed\" LoRA e2e 测试条目被删除了"
+    },
+    "pattern": {
+      "file": ".github/workflows/vllm_ascend_test.yaml",
+      "line": 275,
+      "code": "# 作者 paulyu12 回复: \"Done. For a quick fix, I have commented both of the e2e\n#   tests about LoRA. We can merge it first. LoRA offline inference test still\n#   has an accuracy issue, and I'm working on it.\"\n\nname: vllm_ascend_test\n\non:\n  pull_request:\n    branches: [main]\n\njobs:\n  e2e-tests:\n    runs-on: [self-hosted, ascend]\n    steps:\n      - uses: actions/checkout@v4\n      - name: Setup environment\n        run: pip install -e .\n\n      # 保留 LoRA e2e 测试条目，注释掉作为快速修复\n      # - name: Run LoRA e2e tests  # temporarily disabled, accuracy issue being fixed\n      #   run: pytest tests/e2e/lora/\n\n      - name: Run model e2e tests\n        run: pytest tests/e2e/models/\n\n      - name: Run ops e2e tests\n        run: pytest tests/e2e/ops/",
+      "context": "作者 paulyu12 回复: \"Done. For a quick fix, I have commented both of the e2e tests about LoRA. We can merge it first. LoRA offline inference test still has an accuracy issue, and I'm working on it.\""
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/vllm_ascend_test.yaml\n+++ b/.github/workflows/vllm_ascend_test.yaml\n@@ -1,5 +1,6 @@\n-# 评审人 wangxiyuan: \"this should be kept\"\n-# 评审人 MengqingCao: \"LGTM if the above comment is addressed\"\n+# 作者 paulyu12 回复: \"Done. For a quick fix, I have commented both of the e2e\n+#   tests about LoRA. We can merge it first. LoRA offline inference test still\n+#   has an accuracy issue, and I'm working on it.\"\n \n name: vllm_ascend_test\n \n@@ -15,8 +16,10 @@\n       - name: Setup environment\n         run: pip install -e .\n \n-      # LoRA e2e 测试条目被删除了\n-      # 导致 LoRA 相关测试覆盖缺失\n+      # 保留 LoRA e2e 测试条目，注释掉作为快速修复\n+      # - name: Run LoRA e2e tests  # temporarily disabled, accuracy issue being fixed\n+      #   run: pytest tests/e2e/lora/\n+\n       - name: Run model e2e tests\n         run: pytest tests/e2e/models/\n \n",
+      "stats": "1 file changed, +7 lines, -4 lines",
+      "key_changes": [
+        "代码结构或逻辑调整"
+      ]
+    },
+    "language": "yaml",
+    "_status": "processed"
+  }
+}

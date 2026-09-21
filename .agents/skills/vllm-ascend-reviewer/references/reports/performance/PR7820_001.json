@@ -1,0 +1,73 @@
+{
+  "report_id": "PR7820_001",
+  "pr_number": 7820,
+  "pr_title": "[Feature] Mooncake kvpool usage optimization",
+  "pr_status": "merged",
+  "merged_at": "2026-06-01T12:06:20Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/mooncake_backend.py:134",
+    "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/mooncake_backend.py:197",
+    "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/mooncake_backend.py:181",
+    "docs/source/user_guide/feature_guide/kv_pool.md:113"
+  ],
+  "landing_sha": "d7074eb",
+  "source_quote": "LGTM, should we consider also add `replica_num` here for future's sake?\nmaybe we should update the mooncake.json example in kv_pool doc as well for `preferred_segment ` and `prefer_alloc_in_same_node`?\nsame here, for new env variable introduced, i think we should update our doc accordingly\nLGTM",
+  "correspondence": [
+    {
+      "review_quote": "Pz1116: vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/mooncake_backend.py:134",
+      "patch_snippet": "评后sha d7074eb 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Pz1116: vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/mooncake_backend.py:197",
+      "patch_snippet": "评后sha d7074eb 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Pz1116: vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/mooncake_backend.py:181",
+      "patch_snippet": "评后sha d7074eb 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Pz1116: docs/source/user_guide/feature_guide/kv_pool.md:113",
+      "patch_snippet": "评后sha d7074eb 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "d7074eb",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "LGTM, should we consider also add `replica_num` here for future's sake?",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/mooncake_backend.py",
+      "line": 134,
+      "code": "# vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/mooncake_backend.py:134",
+      "context": "LGTM, should we consider also add `replica_num` here for future's sake?\nmaybe we should update the mooncake.json example in kv_pool doc as well for `preferred_segment ` and `prefer_alloc_in_same_node`"
+    },
+    "pattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/mooncake_backend.py",
+      "line": 134,
+      "code": "# 根据评审意见修改后的代码",
+      "context": "LGTM, should we consider also add `replica_num` here for future's sake?\nmaybe we should update the mooncake.json example in kv_pool doc as well for `preferred_segment ` and `prefer_alloc_in_same_node`"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/mooncake_backend.py\n+++ b/vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/mooncake_backend.py\n@@ -1 +1 @@\n-# vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/mooncake_backend.py:134\n+# 根据评审意见修改后的代码\n",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "-# vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/mooncake_backend.py:134",
+        "+# 根据评审意见修改后的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "report_id": "PR9689_001",
+  "pr_number": 9689,
+  "pr_title": "[BugFix]Fix multi-DP deadlock for extract_hidden_states proposer on MoE targets",
+  "pr_status": "merged",
+  "merged_at": "2026-06-18T08:07:34Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/spec_decode/extract_hidden_states_proposer.py:96"
+  ],
+  "landing_sha": "9be6e7f",
+  "source_quote": "Check whether the synchronization operation here affects the graph mode.",
+  "correspondence": [
+    {
+      "review_quote": "lilinsiman: vllm_ascend/spec_decode/extract_hidden_states_proposer.py:96",
+      "patch_snippet": "评后sha 9be6e7f 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "9be6e7f",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在数据并行（DP）环境中，speculative decoding 的 proposer 必须通过 `_sync_metadata_across_dp` 同步所有 DP rank 的 cudagraph_mode，避免因 graph mode 不一致导致设备端集合通信失步和死锁。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/spec_decode/extract_hidden_states_proposer.py",
+      "line": 80,
+      "code": "# （根据评审意见推断）多 DP 场景下缺少 _sync_metadata_across_dp 调用\n# lilinsiman 评论: \"Check whether the synchronization operation here\n#                   affects the graph mode.\"\n# 不同 DP rank 的 num_tokens 不一致，cudagraph_mode 不同步，引发死锁\n\nclass AscendExtractHiddenStatesProposer:\n    def _determine_batch_execution_and_padding(\n        self,\n        num_tokens: int,\n        batch_desc: Any,\n        cudagraph_mode: Any,\n        use_cudagraphs: bool,\n    ) -> Tuple[Any, Any]:\n        # SP padding must happen BEFORE DP sync (matches the main runner)\n        num_tokens = self.runner._pad_for_sequence_parallelism(num_tokens)\n\n        # 直接读取本地 DP rank 的 num_tokens，未进行 DP 间同步\n        num_tokens_across_dp = self.runner.get_num_tokens_across_dp()\n        if num_tokens_across_dp is not None:\n            num_tokens_padded = int(num_tokens_across_dp[self.dp_rank].item())\n            num_tokens_across_dp[self.dp_rank] = num_tokens_padded\n            cudagraph_mode, batch_desc = self.cudagraph_dispatcher.dispatch(\n                num_tokens_padded,\n                valid_modes={cudagraph_mode},\n            )\n            assert batch_desc.num_tokens == num_tokens_padded\n        # 直接使用本地 cudagraph_mode，未与其他 DP rank 对齐\n        # 导致不同 DP rank 的 graph mode 不一致 → 设备端集合通信失步 → 死锁\n        return cudagraph_mode, batch_desc",
+      "context": "Check whether the synchronization operation here affects the graph mode."
+    },
+    "pattern": {
+      "file": "vllm_ascend/spec_decode/extract_hidden_states_proposer.py",
+      "line": 80,
+      "code": "# 使用 runner._sync_metadata_across_dp 同步 DP rank 间的元数据\n# 确保所有 DP rank 使用一致的 cudagraph_mode，避免死锁\n# 同步操作以安全方式降级 graph mode（取 DP 间最小值），不破坏 graph capture\n\nclass AscendExtractHiddenStatesProposer:\n    def _determine_batch_execution_and_padding(\n        self,\n        num_tokens: int,\n        batch_desc: Any,\n        cudagraph_mode: Any,\n        use_cudagraphs: bool,\n    ) -> Tuple[Any, Any]:\n        # SP padding must happen BEFORE DP sync (matches the main runner)\n        num_tokens = self.runner._pad_for_sequence_parallelism(num_tokens)\n\n        num_tokens_across_dp = self.runner.get_num_tokens_across_dp()\n        if num_tokens_across_dp is not None:\n            num_tokens_padded = int(num_tokens_across_dp[self.dp_rank].item())\n            # 修复: 使用 runner._sync_metadata_across_dp 同步 DP rank 间的元数据\n            # is_draft_model=True 跳过不必要的 all_reduce\n            # synced_cudagraph_mode 取 DP 间最小值, 安全降级 graph mode\n            (\n                _max_tokens_across_dp,\n                num_tokens_across_dp,\n                synced_cudagraph_mode,\n            ) = self.runner._sync_metadata_across_dp(\n                num_tokens=num_tokens_padded,\n                is_draft_model=True,\n                cudagraph_mode=cudagraph_mode,\n                allow_dp_padding=use_cudagraphs,\n            )\n            # Re-dispatch with DP-synced padding\n            cudagraph_mode, batch_desc = self.cudagraph_dispatcher.dispatch(\n                num_tokens_padded,\n                valid_modes={synced_cudagraph_mode},\n            )\n            assert batch_desc.num_tokens == num_tokens_padded\n        return cudagraph_mode, batch_desc",
+      "context": "Check whether the synchronization operation here affects the graph mode."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/spec_decode/extract_hidden_states_proposer.py\n+++ b/vllm_ascend/spec_decode/extract_hidden_states_proposer.py\n@@ -1,7 +1,6 @@\n-# （根据评审意见推断）多 DP 场景下缺少 _sync_metadata_across_dp 调用\n-# lilinsiman 评论: \"Check whether the synchronization operation here\n-#                   affects the graph mode.\"\n-# 不同 DP rank 的 num_tokens 不一致，cudagraph_mode 不同步，引发死锁\n+# 使用 runner._sync_metadata_across_dp 同步 DP rank 间的元数据\n+# 确保所有 DP rank 使用一致的 cudagraph_mode，避免死锁\n+# 同步操作以安全方式降级 graph mode（取 DP 间最小值），不破坏 graph capture\n \n class AscendExtractHiddenStatesProposer:\n     def _determine_batch_execution_and_padding(\n@@ -14,16 +13,26 @@\n         # SP padding must happen BEFORE DP sync (matches the main runner)\n         num_tokens = self.runner._pad_for_sequence_parallelism(num_tokens)\n \n-        # 直接读取本地 DP rank 的 num_tokens，未进行 DP 间同步\n         num_tokens_across_dp = self.runner.get_num_tokens_across_dp()\n         if num_tokens_across_dp is not None:\n             num_tokens_padded = int(num_tokens_across_dp[self.dp_rank].item())\n-            num_tokens_across_dp[self.dp_rank] = num_tokens_padded\n+            # 修复: 使用 runner._sync_metadata_across_dp 同步 DP rank 间的元数据\n+            # is_draft_model=True 跳过不必要的 all_reduce\n+            # synced_cudagraph_mode 取 DP 间最小值, 安全降级 graph mode\n+            (\n+                _max_tokens_across_dp,\n+                num_tokens_across_dp,\n+                synced_cudagraph_mode,\n+            ) = self.runner._sync_metadata_across_dp(\n+                num_tokens=num_tokens_padded,\n+                is_draft_model=True,\n+                cudagraph_mode=cudagraph_mode,\n+                allow_dp_padding=use_cudagraphs,\n+            )\n+            # Re-dispatch with DP-synced padding\n             cudagraph_mode, batch_desc = self.cudagraph_dispatcher.dispatch(\n                 num_tokens_padded,\n-                valid_modes={cudagraph_mode},\n+                valid_modes={synced_cudagraph_mode},\n             )\n             assert batch_desc.num_tokens == num_tokens_padded\n-        # 直接使用本地 cudagraph_mode，未与其他 DP rank 对齐\n-        # 导致不同 DP rank 的 graph mode 不一致 → 设备端集合通信失步 → 死锁\n         return cudagraph_mode, batch_desc\n",
+      "stats": "1 file changed, +18 lines, -9 lines",
+      "key_changes": [
+        "-# （根据评审意见推断）多 DP 场景下缺少 _sync_metadata_across_dp 调用",
+        "-# lilinsiman 评论: \"Check whether the synchronization operation here",
+        "-#                   affects the graph mode.\"",
+        "-# 不同 DP rank 的 num_tokens 不一致，cudagraph_mode 不同步，引发死锁",
+        "+# 使用 runner._sync_metadata_across_dp 同步 DP rank 间的元数据",
+        "+# 确保所有 DP rank 使用一致的 cudagraph_mode，避免死锁",
+        "+# 同步操作以安全方式降级 graph mode（取 DP 间最小值），不破坏 graph capture",
+        "-        # 直接读取本地 DP rank 的 num_tokens，未进行 DP 间同步",
+        "-            num_tokens_across_dp[self.dp_rank] = num_tokens_padded",
+        "+            # 修复: 使用 runner._sync_metadata_across_dp 同步 DP rank 间的元数据",
+        "+            # is_draft_model=True 跳过不必要的 all_reduce",
+        "+            # synced_cudagraph_mode 取 DP 间最小值, 安全降级 graph mode",
+        "+            (",
+        "+                _max_tokens_across_dp,",
+        "+                num_tokens_across_dp,",
+        "+                synced_cudagraph_mode,",
+        "+            ) = self.runner._sync_metadata_across_dp(",
+        "+                num_tokens=num_tokens_padded,",
+        "+                is_draft_model=True,",
+        "+                cudagraph_mode=cudagraph_mode,",
+        "+                allow_dp_padding=use_cudagraphs,",
+        "+            )",
+        "+            # Re-dispatch with DP-synced padding",
+        "-                valid_modes={cudagraph_mode},",
+        "+                valid_modes={synced_cudagraph_mode},",
+        "-        # 直接使用本地 cudagraph_mode，未与其他 DP rank 对齐",
+        "-        # 导致不同 DP rank 的 graph mode 不一致 → 设备端集合通信失步 → 死锁"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

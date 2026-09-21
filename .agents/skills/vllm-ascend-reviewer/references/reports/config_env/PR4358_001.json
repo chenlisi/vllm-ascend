@@ -1,0 +1,76 @@
+{
+  "report_id": "PR4358_001",
+  "pr_number": 4358,
+  "pr_title": "[Doc] Add Qwen3-235B tutorial",
+  "pr_status": "merged",
+  "merged_at": "2025-12-08T12:06:46Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/Qwen3-Moe.md:22",
+    "docs/source/tutorials/Qwen3-235B.md:37",
+    "docs/source/tutorials/Qwen3-235B-A22B.md:254",
+    "docs/source/tutorials/Qwen3-235B.md:151",
+    "docs/source/tutorials/Qwen3-235B-A22B.md:253",
+    "docs/source/tutorials/Qwen3-Moe.md:1",
+    "docs/source/tutorials/Qwen3-Moe.md:35",
+    "docs/source/tutorials/Qwen3-Moe.md:33",
+    "docs/source/tutorials/Qwen3-235B-A22B.md:125",
+    "docs/source/tutorials/Qwen3-235B.md:210",
+    "docs/source/tutorials/Qwen3-235B.md:221",
+    "docs/source/tutorials/Qwen3-Moe.md:41",
+    "docs/source/tutorials/Qwen3-Moe.md:101",
+    "docs/source/tutorials/Qwen3-Moe.md:71",
+    "docs/source/tutorials/Qwen3-235B-A22B.md:117",
+    "docs/source/tutorials/Qwen3-235B-A22B.md:147",
+    "docs/source/tutorials/Qwen3-235B-A22B.md:130"
+  ],
+  "landing_sha": "c391580",
+  "source_quote": "check Atlas 800 A2（64G × 8）can run this model",
+  "correspondence": [
+    {
+      "review_quote": "1. 1092626063 要求验证硬件兼容性、提供 docker 命令、合并文件、删除已废弃的引用 → 作者多次 commit 更新文档内容\n2. leo-pony 建议使用 `|vllm_ascend_version|` 替代固定版本号 → 文档中移除了特定版本链接\n3. leo-pony 发现 `max-model-len` 超过模型限制导致报错 → 修正为 131072\n4. leo-pony 发现 `--rope-scaling` 参数在新版本中不可用 → 作者更新为 `--hf-overrides` 并说明版本适用范围\n5. menogrey 指出代码块有多余缩进、补充设备路径说明",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "c391580",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "**检查点**: 教程中提供的启动命令和参数（如 max-model-len、rope-scaling）必须在对应版本上实际运行验证",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "Run performance evaluation of `wen3-235B-A22B-w8a8` as an example.\n<!-- gemini-bot: 应为 Qwen3-235B-A22B-w8a8，缺少首字母 Q -->\n\nvllm bench serve --model vllm-ascend/wen3-235B-A22B-w8a8 \\\n    --dataset-name random --random-input 200 --num-prompt 200 \\\n    --request-rate 1 --save-result --result-dir ./\n<!-- gemini-bot: 模型名拼写错误，命令会失败 -->\n\npython -m vllm.entrypoints.openai.api_server \\\n    --compilation-config '{\"cudagraph_capture_sizes\":[1,4,8],\"cudagraph_mode\":\"FULL_DECODE_ONLY\"}' \\\n    --max-num-seqs 4\n<!-- gemini-bot: capture_sizes 含 8 但 max-num-seqs=4，batch=8 不可能 -->\n\n    --max-model-len 133000\n<!-- leo-pony: 超过模型限制 131072，会报 ValidationError -->\n\n    --rope-scaling '{\"rope_type\":\"yarn\",\"factor\":4,\"original_max_position_embeddings\":32768}'\n<!-- leo-pony: 最新版中 --rope-scaling 参数不可用，会报 unrecognized arguments -->",
+      "context": "check Atlas 800 A2（64G × 8）can run this model"
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "Run performance evaluation of `Qwen3-235B-A22B-w8a8` as an example.\n\nvllm bench serve --model vllm-ascend/Qwen3-235B-A22B-w8a8 \\\n    --dataset-name random --random-input 200 --num-prompt 200 \\\n    --request-rate 1 --save-result --result-dir ./\n\npython -m vllm.entrypoints.openai.api_server \\\n    --compilation-config '{\"cudagraph_capture_sizes\":[1,4],\"cudagraph_mode\":\"FULL_DECODE_ONLY\"}' \\\n    --max-num-seqs 4\n\n    --max-model-len 131072\n\n    --hf-overrides '{\"rope_parameters\": {\"rope_type\":\"yarn\",\"rope_theta\":1000,\"factor\":4,\"original_max_position_embeddings\":32768}}'",
+      "context": "check Atlas 800 A2（64G × 8）can run this model"
+    },
+    "diff": {
+      "unified": "--- a/a/file\n+++ b/b/file\n@@ -1,18 +1,13 @@\n-Run performance evaluation of `wen3-235B-A22B-w8a8` as an example.\n-<!-- gemini-bot: 应为 Qwen3-235B-A22B-w8a8，缺少首字母 Q -->\n+Run performance evaluation of `Qwen3-235B-A22B-w8a8` as an example.\n \n-vllm bench serve --model vllm-ascend/wen3-235B-A22B-w8a8 \\\n+vllm bench serve --model vllm-ascend/Qwen3-235B-A22B-w8a8 \\\n     --dataset-name random --random-input 200 --num-prompt 200 \\\n     --request-rate 1 --save-result --result-dir ./\n-<!-- gemini-bot: 模型名拼写错误，命令会失败 -->\n \n python -m vllm.entrypoints.openai.api_server \\\n-    --compilation-config '{\"cudagraph_capture_sizes\":[1,4,8],\"cudagraph_mode\":\"FULL_DECODE_ONLY\"}' \\\n+    --compilation-config '{\"cudagraph_capture_sizes\":[1,4],\"cudagraph_mode\":\"FULL_DECODE_ONLY\"}' \\\n     --max-num-seqs 4\n-<!-- gemini-bot: capture_sizes 含 8 但 max-num-seqs=4，batch=8 不可能 -->\n \n-    --max-model-len 133000\n-<!-- leo-pony: 超过模型限制 131072，会报 ValidationError -->\n+    --max-model-len 131072\n \n-    --rope-scaling '{\"rope_type\":\"yarn\",\"factor\":4,\"original_max_position_embeddings\":32768}'\n-<!-- leo-pony: 最新版中 --rope-scaling 参数不可用，会报 unrecognized arguments -->\n+    --hf-overrides '{\"rope_parameters\": {\"rope_type\":\"yarn\",\"rope_theta\":1000,\"factor\":4,\"original_max_position_embeddings\":32768}}'",
+      "stats": "1 file changed, +5 lines, -10 lines",
+      "key_changes": [
+        "修改了第 1-2 行的代码",
+        "修改了第 4-4 行的代码",
+        "删除了第 7-7 行的代码",
+        "修改了第 10-10 行的代码",
+        "删除了第 12-12 行的代码",
+        "修改了第 14-15 行的代码",
+        "修改了第 17-18 行的代码"
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

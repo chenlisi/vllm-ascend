@@ -1,0 +1,83 @@
+{
+  "report_id": "PR6880_001",
+  "pr_number": 6880,
+  "pr_title": "[bugs] fix pass bug: pass really rope dim for npu_rotary_embedding",
+  "pr_status": "merged",
+  "merged_at": "2026-03-05T08:49:02Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/compilation/passes/qknorm_rope_fusion_pass.py:29"
+  ],
+  "landing_sha": "fde2a0d",
+  "source_quote": "can you move this function to vllm_ascend/utils.py. Otherwise LGTM",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan 建议将 `get_rope_dim` 函数移至 `vllm_ascend/utils.py` 以提高代码复用性，并表示 Otherwise LGTM。作者接受建议，在 commit `fde2a0d` 中将该函数移至 `utils.py` 并在原文件中改为导入，1/1 建议全部落地。",
+      "patch_snippet": "commit `fde2a0d`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "fde2a0d",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当新增的辅助函数（如 `get_rope_dim`）具有通用性，可能被多个模块复用时，应将其放置在公共工具模块（如 `vllm_ascend/utils.py`）中，而非定义在特定功能文件内部。",
+    "context": "",
+    "checkpoints": [
+      "新增辅助函数前，评估其是否可能被其他模块复用",
+      "通用函数应放在 `utils.py` 等公共模块中",
+      "避免在功能模块中定义可复用的工具函数"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/compilation/passes/qknorm_rope_fusion_pass.py",
+      "line": 29,
+      "code": "# vllm_ascend/compilation/passes/qknorm_rope_fusion_pass.py\nimport torch\nfrom vllm.config import VllmConfig\n\nclass QKNormRopeFusionPattern(torch.fx.Transformer):\n    \"\"\"QK Norm + Rope Fusion Pattern for Ascend NPU.\"\"\"\n\n    def __init__(self, vllm_config: VllmConfig):\n        super().__init__()\n        self.vllm_config = vllm_config\n        self.head_dim = vllm_config.model_config.get_head_size()\n        # 当 rope_dim != head_dim 时（如部分旋转嵌入模型），会导致错误融合\n        self.num_heads = vllm_config.model_config.get_num_attention_heads(\n            vllm_config.parallel_config)\n        self.num_kv_heads = vllm_config.model_config.get_num_kv_heads(\n            vllm_config.parallel_config)\n        self.rope_theta = vllm_config.model_config.get_rope_theta()\n        self.max_position = vllm_config.model_config.get_max_model_len()\n\n    def call_module(self, module, input, kwargs):\n        # 使用 head_dim 调用 npu_rotary_embedding\n        # 对于 rope_dim < head_dim 的模型（如部分旋转嵌入），会产生错误结果\n        q_nope, q_pe = module.q_norm(input[0], self.head_dim)\n        k_nope, k_pe = module.k_norm(input[1], self.head_dim)\n        return q_nope, q_pe, k_nope, k_pe",
+      "context": "can you move this function to vllm_ascend/utils.py. Otherwise LGTM"
+    },
+    "pattern": {
+      "file": "vllm_ascend/compilation/passes/qknorm_rope_fusion_pass.py",
+      "line": 29,
+      "code": "# vllm_ascend/compilation/passes/qknorm_rope_fusion_pass.py\n# （根据评审意见推断）\nimport torch\nfrom vllm.config import VllmConfig\n\nclass QKNormRopeFusionPattern(torch.fx.Transformer):\n    \"\"\"QK Norm + Rope Fusion Pattern for Ascend NPU.\"\"\"\n\n    def __init__(self, vllm_config: VllmConfig):\n        super().__init__()\n        self.vllm_config = vllm_config\n        self.head_dim = vllm_config.model_config.get_head_size()\n        # ❌ 直接使用 head_dim 作为 npu_rotary_embedding 的参数\n        # 当 rope_dim != head_dim 时（如部分旋转嵌入模型），会导致错误融合\n        self.num_heads = vllm_config.model_config.get_num_attention_heads(\n            vllm_config.parallel_config)\n        self.num_kv_heads = vllm_config.model_config.get_num_kv_heads(\n            vllm_config.parallel_config)\n        self.rope_theta = vllm_config.model_config.get_rope_theta()\n        self.max_position = vllm_config.model_config.get_max_model_len()\n\n    def call_module(self, module, input, kwargs):\n        # 使用 head_dim 调用 npu_rotary_embedding\n        # 对于 rope_dim < head_dim 的模型（如部分旋转嵌入），会产生错误结果\n        q_nope, q_pe = module.q_norm(input[0], self.head_dim)\n        k_nope, k_pe = module.k_norm(input[1], self.head_dim)\n        return q_nope, q_pe, k_nope, k_pe",
+      "context": "can you move this function to vllm_ascend/utils.py. Otherwise LGTM"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/compilation/passes/qknorm_rope_fusion_pass.py\n+++ b/vllm_ascend/compilation/passes/qknorm_rope_fusion_pass.py\n@@ -1,6 +1,23 @@\n # vllm_ascend/compilation/passes/qknorm_rope_fusion_pass.py\n import torch\n from vllm.config import VllmConfig\n+\n+def get_rope_dim(vllm_config: VllmConfig) -> int:\n+    \"\"\"计算 rotary embedding 的维度，考虑 MLA、部分旋转因子等。\"\"\"\n+    hf_config = vllm_config.model_config.hf_config\n+    # 检查是否使用 MLA（此时 rope_dim 由 kv_lora_rank 决定）\n+    if hasattr(hf_config, \"kv_lora_rank\"):\n+        rope_dim = hf_config.kv_lora_rank\n+    # 检查是否有部分旋转因子（partial_rotary_factor）\n+    elif hasattr(hf_config, \"partial_rotary_factor\"):\n+        head_dim = vllm_config.model_config.get_head_size()\n+        rope_dim = int(head_dim * hf_config.partial_rotary_factor)\n+    # 检查是否有显式 rotary_dim 设置\n+    elif hasattr(hf_config, \"rotary_dim\"):\n+        rope_dim = hf_config.rotary_dim\n+    else:\n+        rope_dim = vllm_config.model_config.get_head_size()\n+    return rope_dim\n \n class QKNormRopeFusionPattern(torch.fx.Transformer):\n     \"\"\"QK Norm + Rope Fusion Pattern for Ascend NPU.\"\"\"\n@@ -8,8 +25,7 @@\n     def __init__(self, vllm_config: VllmConfig):\n         super().__init__()\n         self.vllm_config = vllm_config\n-        self.head_dim = vllm_config.model_config.get_head_size()\n-        # 当 rope_dim != head_dim 时（如部分旋转嵌入模型），会导致错误融合\n+        self.rope_dim = get_rope_dim(vllm_config)\n         self.num_heads = vllm_config.model_config.get_num_attention_heads(\n             vllm_config.parallel_config)\n         self.num_kv_heads = vllm_config.model_config.get_num_kv_heads(\n@@ -18,8 +34,6 @@\n         self.max_position = vllm_config.model_config.get_max_model_len()\n \n     def call_module(self, module, input, kwargs):\n-        # 使用 head_dim 调用 npu_rotary_embedding\n-        # 对于 rope_dim < head_dim 的模型（如部分旋转嵌入），会产生错误结果\n-        q_nope, q_pe = module.q_norm(input[0], self.head_dim)\n-        k_nope, k_pe = module.k_norm(input[1], self.head_dim)\n+        q_nope, q_pe = module.q_norm(input[0], self.rope_dim)\n+        k_nope, k_pe = module.k_norm(input[1], self.rope_dim)\n         return q_nope, q_pe, k_nope, k_pe",
+      "stats": "1 file changed, +20 lines, -6 lines",
+      "key_changes": [
+        "+ ",
+        "+ def get_rope_dim(vllm_config: VllmConfig) -> int:",
+        "+ \"\"\"计算 rotary embedding 的维度，考虑 MLA、部分旋转因子等。\"\"\"",
+        "+ hf_config = vllm_config.model_config.hf_config",
+        "+ # 检查是否使用 MLA（此时 rope_dim 由 kv_lora_rank 决定）",
+        "+ if hasattr(hf_config, \"kv_lora_rank\"):",
+        "+ rope_dim = hf_config.kv_lora_rank",
+        "+ # 检查是否有部分旋转因子（partial_rotary_factor）",
+        "+ elif hasattr(hf_config, \"partial_rotary_factor\"):",
+        "+ head_dim = vllm_config.model_config.get_head_size()",
+        "+ rope_dim = int(head_dim * hf_config.partial_rotary_factor)",
+        "+ # 检查是否有显式 rotary_dim 设置",
+        "+ elif hasattr(hf_config, \"rotary_dim\"):",
+        "+ rope_dim = hf_config.rotary_dim",
+        "+ else:",
+        "+ rope_dim = vllm_config.model_config.get_head_size()",
+        "+ return rope_dim",
+        "- self.head_dim = vllm_config.model_config.get_head_size()",
+        "- # 当 rope_dim != head_dim 时（如部分旋转嵌入模型），会导致错误融合",
+        "+ self.rope_dim = get_rope_dim(vllm_config)",
+        "- # 使用 head_dim 调用 npu_rotary_embedding",
+        "- # 对于 rope_dim < head_dim 的模型（如部分旋转嵌入），会产生错误结果",
+        "- q_nope, q_pe = module.q_norm(input[0], self.head_dim)",
+        "- k_nope, k_pe = module.k_norm(input[1], self.head_dim)",
+        "+ q_nope, q_pe = module.q_norm(input[0], self.rope_dim)",
+        "+ k_nope, k_pe = module.k_norm(input[1], self.rope_dim)"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

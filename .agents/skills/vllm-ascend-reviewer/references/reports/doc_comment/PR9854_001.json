@@ -1,0 +1,75 @@
+{
+  "report_id": "PR9854_001",
+  "pr_number": 9854,
+  "pr_title": "[BugFix][310P] fix Qwen3-Embedding-8B and Qwen3-VL-Embedding-8B run failed on 310P",
+  "pr_status": "merged",
+  "merged_at": "2026-06-08T06:29:54Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "blocker",
+  "affected_files": [
+    "vllm_ascend/utils.py:214",
+    "vllm_ascend/_310p/quantization/methods/w8a8_dynamic.py:200"
+  ],
+  "landing_sha": "25b7446",
+  "source_quote": "What does `is_meta` mean?\nCan we move it to process_weight_after_loading or it is a runtime attr?\nremoved\nMaybe we can explain more, e.g., \"meta tensor only keeps shape/dtype meta info without physical memory, it is not necessary to trans it to NZ\"",
+  "correspondence": [
+    {
+      "review_quote": "linfeng-yuan: vllm_ascend/utils.py:214(2026-06-08 03:13:43)",
+      "patch_snippet": "评后sha 25b7446 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "linfeng-yuan: vllm_ascend/_310p/quantization/methods/w8a8_dynamic.py:200(2026-06-08 03:14:11)",
+      "patch_snippet": "评后sha 25b7446 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "linfeng-yuan: vllm_ascend/utils.py:214(2026-06-08 03:18:31)",
+      "patch_snippet": "评后sha 25b7446 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "25b7446",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "涉及 meta tensor 判断和处理的代码应添加注释说明 meta tensor 的含义（仅保存 shape/dtype 元信息，无物理内存），以及为何不需要进行格式转换。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/utils.py:214",
+      "line": 214,
+      "code": "# （根据评审意见推断）is_meta 变量无注释说明含义\n# linfeng-yuan 评论: \"What does is_meta mean?\"\n# linfeng-yuan 建议: \"Maybe we can explain more, e.g., meta tensor only keeps\n# shape/dtype meta info without physical memory, it is not necessary to trans it to NZ\"\nimport torch\nfrom typing import Optional\n\n# ... 其他工具函数 ...\n\n\ndef _should_trans_nz(tensor: torch.Tensor) -> bool:\n    \"\"\"Determine whether a tensor should be converted to NZ format.\n\n    Args:\n        tensor: The tensor to check.\n\n    Returns:\n        True if the tensor should be converted to FRACTAL_NZ format.\n    \"\"\"\n    # is_meta 变量无注释说明含义\n    is_meta = tensor.is_meta\n    if is_meta:\n        # 直接跳过 NZ 格式转换，无注释说明原因\n        return False\n    # 检查 tensor dtype 和 shape 是否满足 NZ 转换条件\n    if tensor.dtype not in (torch.float16, torch.bfloat16, torch.int8):\n        return False\n    return True",
+      "context": "What does `is_meta` mean?\nCan we move it to process_weight_after_loading or it is a runtime attr?\nremoved\nMaybe we can explain more, e.g., \"meta tensor only keeps shape/dtype meta info without physica"
+    },
+    "pattern": {
+      "file": "vllm_ascend/utils.py:214",
+      "line": 214,
+      "code": "# 添加详细注释说明 meta tensor 的含义\n# linfeng-yuan 建议: \"meta tensor only keeps shape/dtype meta info without\n# physical memory, it is not necessary to trans it to NZ\"\nimport torch\nfrom typing import Optional\n\n# ... 其他工具函数 ...\n\n\ndef _should_trans_nz(tensor: torch.Tensor) -> bool:\n    \"\"\"Determine whether a tensor should be converted to NZ format.\n\n    Args:\n        tensor: The tensor to check.\n\n    Returns:\n        True if the tensor should be converted to FRACTAL_NZ format.\n    \"\"\"\n    # meta tensor only keeps shape/dtype meta info without physical memory,\n    # it is not necessary to trans it to NZ\n    is_meta = tensor.is_meta\n    if is_meta:\n        return False\n    # 检查 tensor dtype 和 shape 是否满足 NZ 转换条件\n    if tensor.dtype not in (torch.float16, torch.bfloat16, torch.int8):\n        return False\n    return True",
+      "context": "What does `is_meta` mean?\nCan we move it to process_weight_after_loading or it is a runtime attr?\nremoved\nMaybe we can explain more, e.g., \"meta tensor only keeps shape/dtype meta info without physica"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/utils.py:214\n+++ b/vllm_ascend/utils.py:214\n@@ -1,7 +1,6 @@\n-# （根据评审意见推断）is_meta 变量无注释说明含义\n-# linfeng-yuan 评论: \"What does is_meta mean?\"\n-# linfeng-yuan 建议: \"Maybe we can explain more, e.g., meta tensor only keeps\n-# shape/dtype meta info without physical memory, it is not necessary to trans it to NZ\"\n+# 添加详细注释说明 meta tensor 的含义\n+# linfeng-yuan 建议: \"meta tensor only keeps shape/dtype meta info without\n+# physical memory, it is not necessary to trans it to NZ\"\n import torch\n from typing import Optional\n \n@@ -17,10 +16,10 @@\n     Returns:\n         True if the tensor should be converted to FRACTAL_NZ format.\n     \"\"\"\n-    # is_meta 变量无注释说明含义\n+    # meta tensor only keeps shape/dtype meta info without physical memory,\n+    # it is not necessary to trans it to NZ\n     is_meta = tensor.is_meta\n     if is_meta:\n-        # 直接跳过 NZ 格式转换，无注释说明原因\n         return False\n     # 检查 tensor dtype 和 shape 是否满足 NZ 转换条件\n     if tensor.dtype not in (torch.float16, torch.bfloat16, torch.int8):\n",
+      "stats": "1 file changed, +5 lines, -6 lines",
+      "key_changes": [
+        "-# （根据评审意见推断）is_meta 变量无注释说明含义",
+        "-# linfeng-yuan 评论: \"What does is_meta mean?\"",
+        "-# linfeng-yuan 建议: \"Maybe we can explain more, e.g., meta tensor only keeps",
+        "-# shape/dtype meta info without physical memory, it is not necessary to trans it to NZ\"",
+        "+# 添加详细注释说明 meta tensor 的含义",
+        "+# linfeng-yuan 建议: \"meta tensor only keeps shape/dtype meta info without",
+        "+# physical memory, it is not necessary to trans it to NZ\"",
+        "-    # is_meta 变量无注释说明含义",
+        "+    # meta tensor only keeps shape/dtype meta info without physical memory,",
+        "+    # it is not necessary to trans it to NZ",
+        "-        # 直接跳过 NZ 格式转换，无注释说明原因"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

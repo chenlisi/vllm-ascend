@@ -1,0 +1,82 @@
+{
+  "report_id": "PR9969_001",
+  "pr_number": 9969,
+  "pr_title": "[Doc] Add doc of Kimi 2.6",
+  "pr_status": "merged",
+  "merged_at": "2026-06-16T04:48:55Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "docs/source/tutorials/models/Kimi-K2.6.md:814",
+    "docs/source/tutorials/models/Kimi-K2.6.md:797",
+    "docs/source/tutorials/models/Kimi-K2.6.md:867",
+    "docs/source/tutorials/models/Kimi-K2.6.md:767",
+    "docs/source/tutorials/models/Kimi-K2.6.md:820"
+  ],
+  "landing_sha": "04ccb36",
+  "source_quote": "The \"Best Practice Recommendations\" text in Section 9.1 is redundant with the subsequent tables. It is recommended to delete the text and keep only the tables.\nSection 9.2 is missing from the document structure. If no model-specific tuning is involved, a feature matrix table along with a link to the public performance tuning documentation should be provided for reference. It is recommended to add this section.\nAccording to the template requirements, the FAQ section (Chapter 10) should only include model-specific issues. The document should not include the generic issues \"HCCL port conflicts\" or \"OOM or unstable startup.\" It is recommended to delete these.\nThe description in Chapter 7 — \"Here are two accuracy evaluation methods.\" — does not match the actual content of the section. It is recommended to revise the description.\nYou can adjust the header fields referring to the changes in PR: https://github.com/vllm-project/vllm-ascend/pull/10337/changes.",
+  "correspondence": [
+    {
+      "review_quote": "herizhen: docs/source/tutorials/models/Kimi-K2.6.md:814(2026-06-10 02:41:09)",
+      "patch_snippet": "评后sha 04ccb36 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "herizhen: docs/source/tutorials/models/Kimi-K2.6.md:797(2026-06-10 02:41:33)",
+      "patch_snippet": "评后sha 04ccb36 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "herizhen: docs/source/tutorials/models/Kimi-K2.6.md:867(2026-06-10 02:41:52)",
+      "patch_snippet": "评后sha 04ccb36 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "herizhen: docs/source/tutorials/models/Kimi-K2.6.md:767(2026-06-10 02:42:11)",
+      "patch_snippet": "评后sha 04ccb36 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "herizhen: docs/source/tutorials/models/Kimi-K2.6.md:820(2026-06-11 13:29:14)",
+      "patch_snippet": "评后sha 04ccb36 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "04ccb36",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "模型文档的 FAQ 章节应仅包含该模型特有的问题，不应包含通用问题（如 HCCL 端口冲突、OOM 等），通用问题应放在通用 FAQ 文档中。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/Kimi-K2.6.md",
+      "line": 810,
+      "code": "## 9. Best Practices\n\n### 9.1 Best Practice Recommendations\n以下是针对 Kimi-K2.6 模型的最佳实践建议，包括推荐的推理参数配置、\n环境变量设置以及常见场景的优化方案。请根据实际业务需求进行调整。\n（冗余文字，与后续表格内容重复）\n\n| 参数 | 推荐值 | 说明 |\n|------|--------|------|\n| max_model_len | 32768 | 最大模型长度 |\n| tensor_parallel_size | 8 | 张量并行度 |\n| ... | ... | ... |",
+      "context": "The \"Best Practice Recommendations\" text in Section 9.1 is redundant with the subsequent tables. It is recommended to delete the text and keep only the tables.\nSection 9.2 is missing from the document"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/Kimi-K2.6.md",
+      "line": 810,
+      "code": "## 9. Best Practices\n\n### 9.1 Best Practice Recommendations\n<!-- herizhen: \"The 'Best Practice Recommendations' text in Section 9.1 is -->\n<!-- redundant with the subsequent tables. Delete the text, keep only the tables.\" -->\n\n| 参数 | 推荐值 | 说明 |\n|------|--------|------|\n| max_model_len | 32768 | 最大模型长度 |\n| tensor_parallel_size | 8 | 张量并行度 |\n| ... | ... | ... |",
+      "context": "The \"Best Practice Recommendations\" text in Section 9.1 is redundant with the subsequent tables. It is recommended to delete the text and keep only the tables.\nSection 9.2 is missing from the document"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/Kimi-K2.6.md\n+++ b/docs/source/tutorials/models/Kimi-K2.6.md\n@@ -1,9 +1,8 @@\n ## 9. Best Practices\n \n ### 9.1 Best Practice Recommendations\n-以下是针对 Kimi-K2.6 模型的最佳实践建议，包括推荐的推理参数配置、\n-环境变量设置以及常见场景的优化方案。请根据实际业务需求进行调整。\n-（冗余文字，与后续表格内容重复）\n+<!-- herizhen: \"The 'Best Practice Recommendations' text in Section 9.1 is -->\n+<!-- redundant with the subsequent tables. Delete the text, keep only the tables.\" -->\n \n | 参数 | 推荐值 | 说明 |\n |------|--------|------|\n",
+      "stats": "1 file changed, +2 lines, -3 lines",
+      "key_changes": [
+        "-以下是针对 Kimi-K2.6 模型的最佳实践建议，包括推荐的推理参数配置、",
+        "-环境变量设置以及常见场景的优化方案。请根据实际业务需求进行调整。",
+        "-（冗余文字，与后续表格内容重复）",
+        "+<!-- herizhen: \"The 'Best Practice Recommendations' text in Section 9.1 is -->",
+        "+<!-- redundant with the subsequent tables. Delete the text, keep only the tables.\" -->"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

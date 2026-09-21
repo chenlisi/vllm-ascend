@@ -1,0 +1,61 @@
+{
+  "report_id": "PR13063_003",
+  "pr_number": 13063,
+  "pr_title": "[CI] support daily image and A5 build",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    ".github/workflows/_schedule_image_build.yaml:351"
+  ],
+  "landing_sha": "ca13e96",
+  "source_quote": "输入默认值为 26.1.0.B110：\n`triton_ascend_version: default: '26.1.0.B110'`\n但环境变量的回退值是 26.1.0.B120：\n`TRITON_ASCEND_VERSION=${{ inputs.triton_ascend_version || '26.1.0.B120' }}`\n这两者永远不会保持一致，因为输入总是有值。回退值 B120 是死代码且具有误导性。请选择一个并保持一致。",
+  "correspondence": [
+    {
+      "review_quote": ".github/workflows/_schedule_image_build.yaml:351",
+      "patch_snippet": "评后sha ca13e96 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "ca13e96",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "GitHub Actions 中 `workflow_dispatch` 输入项的 `default` 值与下游 `${{ inputs.xxx || '<fallback>' }}` 的回退值必须一致；因输入总有值，不一致的回退值是永不命中的死代码且具误导性，应统一（常见做法是统一为空串，由实际场景注入）。",
+    "context": "",
+    "checkpoints": [
+      "检查 `inputs.xxx.default` 与 `${{ inputs.xxx || '<fallback>' }}` 是否不一致",
+      "不一致的回退值即为死代码，须统一",
+      "优先统一为空串 `''`，由调用方/构建矩阵注入真实值"
+    ],
+    "antipattern": {
+      "file": ".github/workflows/_schedule_image_build.yaml",
+      "line": 351,
+      "code": "on:\n  workflow_dispatch:\n    inputs:\n      cann_version:\n        description: 'CANN version'\n        required: false\n        type: string\n        default: '8.1.RC1'\n      triton_ascend_version:\n        description: 'Triton Ascend version'\n        required: false\n        type: string\n        default: '26.1.0.B110'          # 输入默认值 B110\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Set environment variables\n        env:\n          CANN_VERSION: ${{ inputs.cann_version || '8.1.RC1' }}\n          TRITON_ASCEND_VERSION: ${{ inputs.triton_ascend_version || '26.1.0.B120' }}   # 回退值 B120，永不命中\n        run: |\n          echo \"Building with CANN=${CANN_VERSION} Triton=${TRITON_ASCEND_VERSION}\"",
+      "context": "输入默认值为 26.1.0.B110：\n`triton_ascend_version: default: '26.1.0.B110'`\n但环境变量的回退值是 26.1.0.B120：\n`TRITON_ASCEND_VERSION=${{ inputs.triton_ascend_version || '26.1.0.B120' }}`\n这两者永远不会保持一致，因为输入总是有值。回退值 B120 是"
+    },
+    "pattern": {
+      "file": ".github/workflows/_schedule_image_build.yaml",
+      "line": 351,
+      "code": "on:\n  workflow_dispatch:\n    inputs:\n      cann_version:\n        description: 'CANN version'\n        required: false\n        type: string\n        default: ''\n      triton_ascend_version:\n        description: 'Triton Ascend version'\n        required: false\n        type: string\n        default: ''                      # 输入默认值改为空\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Set environment variables\n        env:\n          CANN_VERSION: ${{ inputs.cann_version || '' }}\n          TRITON_ASCEND_VERSION: ${{ inputs.triton_ascend_version || '' }}   # 回退值同步改为空，两者一致\n        run: |\n          echo \"Building with CANN=${CANN_VERSION} Triton=${TRITON_ASCEND_VERSION}\"",
+      "context": "输入默认值为 26.1.0.B110：\n`triton_ascend_version: default: '26.1.0.B110'`\n但环境变量的回退值是 26.1.0.B120：\n`TRITON_ASCEND_VERSION=${{ inputs.triton_ascend_version || '26.1.0.B120' }}`\n这两者永远不会保持一致，因为输入总是有值。回退值 B120 是"
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/_schedule_image_build.yaml\n+++ b/.github/workflows/_schedule_image_build.yaml\n@@ -5,12 +5,12 @@\n         description: 'CANN version'\n         required: false\n         type: string\n-        default: '8.1.RC1'\n+        default: ''\n       triton_ascend_version:\n         description: 'Triton Ascend version'\n         required: false\n         type: string\n-        default: '26.1.0.B110'          # 输入默认值 B110\n+        default: ''                      # 输入默认值改为空\n \n jobs:\n   build:\n@@ -18,7 +18,7 @@\n     steps:\n       - name: Set environment variables\n         env:\n-          CANN_VERSION: ${{ inputs.cann_version || '8.1.RC1' }}\n-          TRITON_ASCEND_VERSION: ${{ inputs.triton_ascend_version || '26.1.0.B120' }}   # 回退值 B120，永不命中\n+          CANN_VERSION: ${{ inputs.cann_version || '' }}\n+          TRITON_ASCEND_VERSION: ${{ inputs.triton_ascend_version || '' }}   # 回退值同步改为空，两者一致\n         run: |\n           echo \"Building with CANN=${CANN_VERSION} Triton=${TRITON_ASCEND_VERSION}\"\n",
+      "stats": "1 file changed, +4 lines, -4 lines",
+      "key_changes": [
+        "移除: default: '26.1.0.B110'          # 输入默认值 B110",
+        "移除: default: '8.1.RC1'",
+        "移除: TRITON_ASCEND_VERSION: ${{ inputs.triton_ascend_version || '26.1.0.B120' }}   # ",
+        "新增: default: ''",
+        "新增: default: ''                      # 输入默认值改为空"
+      ]
+    },
+    "language": "yaml",
+    "_status": "processed"
+  }
+}

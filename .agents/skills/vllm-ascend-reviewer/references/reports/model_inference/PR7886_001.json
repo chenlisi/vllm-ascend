@@ -1,0 +1,79 @@
+{
+  "report_id": "PR7886_001",
+  "pr_number": 7886,
+  "pr_title": "[Ops][Feature] Add vLLM Ascend Support for Qwen2.5-Math-RM-72B",
+  "pr_status": "merged",
+  "merged_at": "2026-05-19T15:10:54Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/e2e/models/configs/accuracy_groups_a2.json:59",
+    "tests/e2e/models/configs/Qwen2.5-Math-RM-72B.yaml:1",
+    "tests/e2e/models/configs/Qwen2.5-Math-RM-72B.yaml:7",
+    "docs/source/tutorials/models/Qwen2.5-Math-RM-72B.md:137",
+    "docs/source/tutorials/models/Qwen2.5-Math-RM-72B.md:152"
+  ],
+  "landing_sha": "cbdea5b",
+  "source_quote": "plz add new mode into https://github.com/vllm-project/vllm-ascend/blob/main/.github/workflows/misc/model_list.json, and we will add lable to download\nYou can delete it to test after rebase the latest code.\nThis is a reward model, whereas the lm_eval tool only supports generative models. It is recommended to construct simple inputs to verify the model's ranking accuracy.\nplz add results of  Batch Reward Scoring\nCurrently，aisbench  does not support reward models, please delete this part.",
+  "correspondence": [
+    {
+      "review_quote": "zhangxinyuehfad: tests/e2e/models/configs/accuracy_groups_a2.json:59",
+      "patch_snippet": "评后sha cbdea5b 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "zhangxinyuehfad: tests/e2e/models/configs/Qwen2.5-Math-RM-72B.yaml:1",
+      "patch_snippet": "评后sha cbdea5b 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "zhangxinyuehfad: tests/e2e/models/configs/Qwen2.5-Math-RM-72B.yaml:7",
+      "patch_snippet": "评后sha cbdea5b 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "zhangxinyuehfad: docs/source/tutorials/models/Qwen2.5-Math-RM-72B.md:137",
+      "patch_snippet": "评后sha cbdea5b 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "zhangxinyuehfad: docs/source/tutorials/models/Qwen2.5-Math-RM-72B.md:152",
+      "patch_snippet": "评后sha cbdea5b 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "cbdea5b",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "plz add new mode into https://github.com/vllm-project/vllm-ascend/blob/main/.github/workflows/misc/model_list.json, and we will add lable to download",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "tests/e2e/models/configs/accuracy_groups_a2.json",
+      "line": 59,
+      "code": "# tests/e2e/models/configs/accuracy_groups_a2.json:59",
+      "context": "plz add new mode into https://github.com/vllm-project/vllm-ascend/blob/main/.github/workflows/misc/model_list.json, and we will add lable to download\nYou can delete it to test after rebase the latest "
+    },
+    "pattern": {
+      "file": "tests/e2e/models/configs/accuracy_groups_a2.json",
+      "line": 59,
+      "code": "# 根据评审意见修改后的代码",
+      "context": "plz add new mode into https://github.com/vllm-project/vllm-ascend/blob/main/.github/workflows/misc/model_list.json, and we will add lable to download\nYou can delete it to test after rebase the latest "
+    },
+    "diff": {
+      "unified": "--- a/tests/e2e/models/configs/accuracy_groups_a2.json\n+++ b/tests/e2e/models/configs/accuracy_groups_a2.json\n@@ -1 +1 @@\n-# tests/e2e/models/configs/accuracy_groups_a2.json:59\n+# 根据评审意见修改后的代码\n",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "-# tests/e2e/models/configs/accuracy_groups_a2.json:59",
+        "+# 根据评审意见修改后的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

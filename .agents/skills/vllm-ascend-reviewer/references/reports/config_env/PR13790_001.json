@@ -1,0 +1,63 @@
+{
+  "report_id": "PR13790_001",
+  "pr_number": 13790,
+  "pr_title": "[BugFix][Config] Validate MC2 hierarchy and profiling timing",
+  "pr_status": "merged",
+  "dimension": [
+    "design"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/platform.py:392"
+  ],
+  "landing_sha": "873180f",
+  "source_quote": "Please move this block to ascend_config",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/platform.py:392",
+      "patch_snippet": "评后sha 873180f 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "873180f",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当新增配置项的合法性校验（如设备类型限制、数值上限、互斥配置）时，校验逻辑应作为对应配置类的 `_validate_*` 私有方法实现，并在该配置类 `__init__` 中紧跟配置项解析后立即调用。不应散落到平台抽象层（`platform.py`）或其他模块，避免校验逻辑分散、职责越界。",
+    "context": "",
+    "checkpoints": [
+      "新增配置校验时，确认校验逻辑所在文件是否与配置类位于同一模块（如 `ascend_config.py`）",
+      "校验方法命名遵循 `_validate_<feature>` 模式，与同文件其他校验方法风格一致",
+      "在配置类 `__init__` 中紧跟配置项解析后立即调用校验方法（早失败原则）",
+      "平台抽象层（`platform.py`）只负责 NPU 平台抽象，不应承载业务配置校验",
+      "配套单测在对应配置类的测试文件中（如 `tests/ut/test_ascend_config.py`），覆盖正常 + 异常 + 边界场景"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/platform.py",
+      "line": 385,
+      "code": "# ❌ 校验逻辑放在 platform.py，与 platform 职责（NPU 平台抽象）不符\n# 且与 ascend_config 中其他校验（_validate_sparse_c8_kv_offload_compatibility 等）分散两处\n\ndef validate_mc2_hierarchy_comm_config(additional_config):\n    \"\"\"Validate MC2 hierarchy communication configuration.\"\"\"\n    enable_mc2_hierarchy_comm = additional_config.get(\"enable_mc2_hierarchy_comm\", False)\n    if not enable_mc2_hierarchy_comm:\n        return\n\n    device_type = get_ascend_device_type()\n    if device_type not in MC2_HIERARCHY_COMM_SUPPORTED_DEVICES:\n        raise NotImplementedError(\n            f\"enable_mc2_hierarchy_comm is only supported on A2 and A3, \"\n            f\"but got {device_type.name}.\"\n        )\n\n    num_logical_experts = vllm_config.model_config.get_num_experts()\n    num_experts = num_logical_experts  # 未考虑 EPLB 冗余专家\n    if num_experts > 512:\n        raise ValueError(...)",
+      "context": "❌ 校验逻辑放在 platform.py，与 platform 职责（NPU 平台抽象）不符 且与 ascend_config 中其他校验（_validate_sparse_c8_kv_offload_compatibility 等）分散两处"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ascend_config.py",
+      "line": 1,
+      "code": "class AscendConfig:\n    def __init__(self, vllm_config: \"VllmConfig\"):\n        # ... 其他配置项解析 ...\n\n        # Enable dispatch/combine op inter-node communication by ROCE\n        self.enable_mc2_hierarchy_comm = additional_config.get(\n            \"enable_mc2_hierarchy_comm\", False\n        )\n        self._validate_mc2_hierarchy_comm()  # 紧跟解析后调用（早失败原则）\n\n        # ... 其他校验调用 ...\n\n    def _validate_mc2_hierarchy_comm(self) -> None:\n        if not self.enable_mc2_hierarchy_comm:\n            return\n\n        from vllm_ascend.utils import AscendDeviceType, get_ascend_device_type\n\n        device_type = get_ascend_device_type()\n        if device_type not in (AscendDeviceType.A2, AscendDeviceType.A3):\n            raise NotImplementedError(\n                f\"enable_mc2_hierarchy_comm is only supported on A2 and A3, \"\n                f\"but got {device_type.name}.\"\n            )\n\n        num_logical_experts = self.vllm_config.model_config.get_num_experts()\n        num_redundant_experts = (\n            self.eplb_config.num_redundant_experts\n            if self.eplb_config.dynamic_eplb else 0\n        )\n        num_experts = num_logical_experts + num_redundant_experts\n        if num_experts > 512:\n            raise ValueError(\n                \"enable_mc2_hierarchy_comm supports at most 512 experts, \"\n                f\"but got {num_experts} experts \"\n                f\"({num_logical_experts} logical experts + \"\n                f\"{num_redundant_experts} EPLB redundant experts).\"\n            )",
+      "context": "... 其他配置项解析 ... Enable dispatch/combine op inter-node communication by ROCE ... 其他校验调用 ..."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/platform.py\n+++ b/vllm_ascend/platform.py\n@@ -1,20 +1,38 @@\n-# ❌ 校验逻辑放在 platform.py，与 platform 职责（NPU 平台抽象）不符\n-# 且与 ascend_config 中其他校验（_validate_sparse_c8_kv_offload_compatibility 等）分散两处\n+class AscendConfig:\n+    def __init__(self, vllm_config: \"VllmConfig\"):\n+        # ... 其他配置项解析 ...\n \n-def validate_mc2_hierarchy_comm_config(additional_config):\n-    \"\"\"Validate MC2 hierarchy communication configuration.\"\"\"\n-    enable_mc2_hierarchy_comm = additional_config.get(\"enable_mc2_hierarchy_comm\", False)\n-    if not enable_mc2_hierarchy_comm:\n-        return\n+        # Enable dispatch/combine op inter-node communication by ROCE\n+        self.enable_mc2_hierarchy_comm = additional_config.get(\n+            \"enable_mc2_hierarchy_comm\", False\n+        )\n+        self._validate_mc2_hierarchy_comm()  # 紧跟解析后调用（早失败原则）\n \n-    device_type = get_ascend_device_type()\n-    if device_type not in MC2_HIERARCHY_COMM_SUPPORTED_DEVICES:\n-        raise NotImplementedError(\n-            f\"enable_mc2_hierarchy_comm is only supported on A2 and A3, \"\n-            f\"but got {device_type.name}.\"\n+        # ... 其他校验调用 ...\n+\n+    def _validate_mc2_hierarchy_comm(self) -> None:\n+        if not self.enable_mc2_hierarchy_comm:\n+            return\n+\n+        from vllm_ascend.utils import AscendDeviceType, get_ascend_device_type\n+\n+        device_type = get_ascend_device_type()\n+        if device_type not in (AscendDeviceType.A2, AscendDeviceType.A3):\n+            raise NotImplementedError(\n+                f\"enable_mc2_hierarchy_comm is only supported on A2 and A3, \"\n+                f\"but got {device_type.name}.\"\n+            )\n+\n+        num_logical_experts = self.vllm_config.model_config.get_num_experts()\n+        num_redundant_experts = (\n+            self.eplb_config.num_redundant_experts\n+            if self.eplb_config.dynamic_eplb else 0\n         )\n-\n-    num_logical_experts = vllm_config.model_config.get_num_experts()\n-    num_experts = num_logical_experts  # 未考虑 EPLB 冗余专家\n-    if num_experts > 512:\n-        raise ValueError(...)\n+        num_experts = num_logical_experts + num_redundant_experts\n+        if num_experts > 512:\n+            raise ValueError(\n+                \"enable_mc2_hierarchy_comm supports at most 512 experts, \"\n+                f\"but got {num_experts} experts \"\n+                f\"({num_logical_experts} logical experts + \"\n+                f\"{num_redundant_experts} EPLB redundant experts).\"\n+            )\n",
+      "stats": "1 file changed, +35 lines, -17 lines",
+      "key_changes": [
+        "移除: if device_type not in MC2_HIERARCHY_COMM_SUPPORTED_DEVICES:",
+        "移除: if num_experts > 512:",
+        "移除: raise NotImplementedError(",
+        "新增: raise NotImplementedError(",
+        "新增: num_redundant_experts = ("
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

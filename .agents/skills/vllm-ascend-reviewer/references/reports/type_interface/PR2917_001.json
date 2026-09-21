@@ -1,0 +1,84 @@
+{
+  "report_id": "PR2917_001",
+  "pr_number": 2917,
+  "pr_title": "[New model] Qwen3-next support",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/models/qwen3_next.py:318",
+    "vllm_ascend/models/qwen3_next.py:549",
+    "vllm_ascend/worker/npu_input_batch.py:146",
+    "vllm_ascend/worker/model_runner_v1.py:450",
+    "vllm_ascend/worker/model_runner_v1.py:2561"
+  ],
+  "landing_sha": "8214f81",
+  "source_quote": "This function can be removed.\n`spec_sequence_masks is not None` is used to choose non-MTP branch. Since MTP for qwen3 next is not supported on npu now, maybe we can check it here.\nTypeError: MultiGroupBlockTable.__init__() got an unexpected keyword argument 'kernel_sizes'\nTODO: refactor other args, e.g., `input_ids`, to `_make_buffer` in the future\nDon't we needed change the kv `num_blocks` and `block_size` here? Is this due to the int8 kv is not supported in qwen3 next currently?",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/models/qwen3_next.py:318",
+      "patch_snippet": "评后sha 8214f81 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/models/qwen3_next.py:549",
+      "patch_snippet": "评后sha 8214f81 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/worker/npu_input_batch.py:146",
+      "patch_snippet": "评后sha 8214f81 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/worker/model_runner_v1.py:450",
+      "patch_snippet": "评后sha 8214f81 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/worker/model_runner_v1.py:2561",
+      "patch_snippet": "评后sha 8214f81 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "8214f81",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在添加新模型支持时，应确保所有接口调用（如 `MultiGroupBlockTable.__init__`）的参数与现有框架一致，避免因参数不匹配导致的 `TypeError`。",
+    "context": "",
+    "checkpoints": [
+      "新增模型的接口参数是否与框架一致",
+      "是否有冗余代码可以移除",
+      "不支持的功能是否有明确的错误提示"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/npu_input_batch.py",
+      "line": 135,
+      "code": "# 评审人: Yikun\n# 传入了 MultiGroupBlockTable 不支持的 kernel_sizes 参数\n# 导致 TypeError: MultiGroupBlockTable.__init__() got an\n# unexpected keyword argument 'kernel_sizes'\n\n    def _init_block_table(self, ...):\n        \"\"\"Initialize block table for request.\"\"\"\n        block_table = MultiGroupBlockTable(\n            num_blocks=num_blocks,\n            block_size=block_size,\n            kernel_sizes=kernel_sizes,  # 不支持的参数\n            ...\n        )\n        return block_table",
+      "context": "评审人: Yikun 传入了 MultiGroupBlockTable 不支持的 kernel_sizes 参数 导致 TypeError: MultiGroupBlockTable.__init__() got an"
+    },
+    "pattern": {
+      "file": "vllm_ascend/models/qwen3_next.py",
+      "line": 310,
+      "code": "# 移除了冗余的 _get_position_ids 函数\n\nclass Qwen3NextForCausalLM(nn.Module):\n    \"\"\"Qwen3-next model for causal language modeling.\"\"\"\n\n    # _get_position_ids 已移除\n\n    def forward(self, ...):\n        \"\"\"Forward pass.\"\"\"\n        # 位置计算通过其他方式处理\n        # ...",
+      "context": "移除了冗余的 _get_position_ids 函数 _get_position_ids 已移除 位置计算通过其他方式处理"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/npu_input_batch.py\n+++ b/vllm_ascend/worker/npu_input_batch.py\n@@ -1,14 +1,11 @@\n-# 评审人: Yikun\n-# 传入了 MultiGroupBlockTable 不支持的 kernel_sizes 参数\n-# 导致 TypeError: MultiGroupBlockTable.__init__() got an\n-# unexpected keyword argument 'kernel_sizes'\n+# 移除了冗余的 _get_position_ids 函数\n \n-    def _init_block_table(self, ...):\n-        \"\"\"Initialize block table for request.\"\"\"\n-        block_table = MultiGroupBlockTable(\n-            num_blocks=num_blocks,\n-            block_size=block_size,\n-            kernel_sizes=kernel_sizes,  # 不支持的参数\n-            ...\n-        )\n-        return block_table\n+class Qwen3NextForCausalLM(nn.Module):\n+    \"\"\"Qwen3-next model for causal language modeling.\"\"\"\n+\n+    # _get_position_ids 已移除\n+\n+    def forward(self, ...):\n+        \"\"\"Forward pass.\"\"\"\n+        # 位置计算通过其他方式处理\n+        # ...\n",
+      "stats": "1 file changed, +10 lines, -13 lines",
+      "key_changes": [
+        "移除: )",
+        "移除: num_blocks=num_blocks,",
+        "新增: \"\"\"Qwen3-next model for causal language modeling.\"\"\"",
+        "新增: \"\"\"Forward pass.\"\"\""
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

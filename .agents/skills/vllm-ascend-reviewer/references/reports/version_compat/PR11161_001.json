@@ -1,0 +1,73 @@
+{
+  "report_id": "PR11161_001",
+  "pr_number": 11161,
+  "pr_title": "[BugFix][Ops] Move GDN conv1d metadata to device tensors",
+  "pr_status": "merged",
+  "merged_at": "2026-07-10T01:24:53Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "csrc/moe/causal_conv1d/op_host/causal_conv1d_def.cpp:46",
+    "csrc/moe/causal_conv1d/op_host/causal_conv1d_tiling_validation.h:183",
+    "csrc/moe/causal_conv1d_v310/op_host/causal_conv1d_v310_tiling.cpp:310",
+    "csrc/moe/causal_conv1d_v310/op_kernel/causal_conv1d_v310.h:91",
+    "csrc/moe/causal_conv1d/op_kernel/causal_conv1d_fn.h:54",
+    "vllm_ascend/patch/worker/patch_idex_310.py:1"
+  ],
+  "landing_sha": "4c69270",
+  "source_quote": "Now using device tensor instead of host, so you can just remove the INT64",
+  "correspondence": [
+    {
+      "review_quote": "LiuZonggu 指出 conv1d 元数据已迁移到 device tensor，应移除多余的 INT64 host 元数据、不必要的 if-else 分支和过多的 GM global tensors。zzzzwwjj 指出修改 patch 文件需要在 `__init__.py` 中添加 patch 指令。作者通过 commit `4c69270` 完成了所有修改，6/6 建议全部落地。",
+      "patch_snippet": "commit `4c69270`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "4c69270",
+    "approvals": 4
+  },
+  "rule": {
+    "description": "当将元数据从 host 端迁移到 device tensor 时，应同步清理所有依赖 host 元数据的冗余代码（如 INT64 常量、不必要的 if-else 分支、多余的 validation checks），避免遗留无用代码导致混淆。",
+    "context": "",
+    "checkpoints": [
+      "确认 host 端元数据相关代码是否已完全移除",
+      "检查 tiling validation 中是否有被移除的 checks 需要在 device 端补充",
+      "确认 global tensor 分配是否只保留实际使用的部分",
+      "修改 patch 文件时是否在 `__init__.py` 中添加了对应的 patch 指令"
+    ],
+    "antipattern": {
+      "file": "csrc/moe/causal_conv1d/op_host/causal_conv1d_def.cpp",
+      "line": 35,
+      "code": "#include \"causal_conv1d_def.h\"\n#include \"causal_conv1d_tiling_validation.h\"\n\nvoid CausalConv1dDef::InitTiling(\n    const aclmdlAclnnContext* context,\n    const std::vector<aclDataBuffer*>& inputs,\n    const std::vector<aclDataBuffer*>& outputs) {\n    // 使用 host 端 INT64 元数据 tensor\n    auto metadata_tensor = host_metadata_int64;\n    auto tiling_data = ParseTilingFromHostMeta(metadata_tensor);\n\n    // 根据 INT64 元数据设置 tiling 参数\n    tiling_data.batch_size = metadata_tensor.GetShape()[0];\n    tiling_data.seq_len = metadata_tensor.GetShape()[1];\n    tiling_data.kernel_size = metadata_tensor.GetShape()[2];\n\n    SetTilingBuffer(tiling_data);\n}",
+      "context": "Now using device tensor instead of host, so you can just remove the INT64"
+    },
+    "pattern": {
+      "file": "csrc/moe/causal_conv1d/op_host/causal_conv1d_def.cpp",
+      "line": 35,
+      "code": "#include \"causal_conv1d_def.h\"\n#include \"causal_conv1d_tiling_validation.h\"\n\nvoid CausalConv1dDef::InitTiling(\n    const aclmdlAclnnContext* context,\n    const std::vector<aclDataBuffer*>& inputs,\n    const std::vector<aclDataBuffer*>& outputs) {\n    // 已切换到 device tensor，移除 INT64 host 元数据\n    // INT64 行已移除，直接使用 device tensor\n    auto device_tensor = GetDeviceTensor(context, 0);\n    auto tiling_data = ParseTilingFromDeviceTensor(device_tensor);\n\n    tiling_data.batch_size = device_tensor.GetShape()[0];\n    tiling_data.seq_len = device_tensor.GetShape()[1];\n    tiling_data.kernel_size = device_tensor.GetShape()[2];\n\n    SetTilingBuffer(tiling_data);\n}",
+      "context": "Now using device tensor instead of host, so you can just remove the INT64"
+    },
+    "diff": {
+      "unified": "--- a/csrc/moe/causal_conv1d/op_host/causal_conv1d_def.cpp\n+++ b/csrc/moe/causal_conv1d/op_host/causal_conv1d_def.cpp\n@@ -5,14 +5,14 @@\n     const aclmdlAclnnContext* context,\n     const std::vector<aclDataBuffer*>& inputs,\n     const std::vector<aclDataBuffer*>& outputs) {\n-    // 使用 host 端 INT64 元数据 tensor\n-    auto metadata_tensor = host_metadata_int64;\n-    auto tiling_data = ParseTilingFromHostMeta(metadata_tensor);\n+    // 已切换到 device tensor，移除 INT64 host 元数据\n+    // INT64 行已移除，直接使用 device tensor\n+    auto device_tensor = GetDeviceTensor(context, 0);\n+    auto tiling_data = ParseTilingFromDeviceTensor(device_tensor);\n \n-    // 根据 INT64 元数据设置 tiling 参数\n-    tiling_data.batch_size = metadata_tensor.GetShape()[0];\n-    tiling_data.seq_len = metadata_tensor.GetShape()[1];\n-    tiling_data.kernel_size = metadata_tensor.GetShape()[2];\n+    tiling_data.batch_size = device_tensor.GetShape()[0];\n+    tiling_data.seq_len = device_tensor.GetShape()[1];\n+    tiling_data.kernel_size = device_tensor.GetShape()[2];\n \n     SetTilingBuffer(tiling_data);\n }",
+      "stats": "1 file changed, +7 lines, -7 lines",
+      "key_changes": [
+        "移除: // 使用 host 端 INT64 元数据 tensor",
+        "移除: auto metadata_tensor = host_metadata_int64;",
+        "移除: auto tiling_data = ParseTilingFromHostMeta(metadata_tensor);",
+        "新增: // 已切换到 device tensor，移除 INT64 host 元数据",
+        "新增: // INT64 行已移除，直接使用 device tensor",
+        "新增: auto device_tensor = GetDeviceTensor(context, 0);",
+        "新增: auto tiling_data = ParseTilingFromDeviceTensor(device_tensor);",
+        "移除: // 根据 INT64 元数据设置 tiling 参数",
+        "移除: tiling_data.batch_size = metadata_tensor.GetShape()[0];",
+        "移除: tiling_data.seq_len = metadata_tensor.GetShape()[1];"
+      ]
+    },
+    "language": "cpp",
+    "_status": "extracted"
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "report_id": "PR11195_001",
+  "pr_number": 11195,
+  "pr_title": "[BugFix] fix qwen3.5+pcp accuray error",
+  "pr_status": "merged",
+  "merged_at": "2026-07-01T11:34:20Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/triton/fla/chunk.py:123"
+  ],
+  "landing_sha": "be64bab",
+  "source_quote": "can we move this calculation away from this hot path?",
+  "correspondence": [
+    {
+      "review_quote": "pisceskkk 指出 `chunk.py:123` 处的计算位于热路径中，建议将其移出以减少运行时开销。作者回复 \"done\" 并通过 commit `be64bab` 将该计算从热路径移出，1/1 建议全部落地。",
+      "patch_snippet": "commit `be64bab`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "be64bab",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "在高频调用的函数（热路径）中，应避免进行可以预计算或缓存的冗余计算。将计算移到调用方或使用缓存机制，以减少每次调用的开销。",
+    "context": "",
+    "checkpoints": [
+      "检查热路径函数中是否有可以预计算的值",
+      "确认计算结果是否可以缓存或从调用方传入",
+      "评估计算的时间复杂度对整体性能的影响"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/triton/fla/chunk.py",
+      "line": 123,
+      "code": "import torch\nimport triton\nfrom typing import Optional\n\ndef chunk_forward(\n    q: torch.Tensor,\n    k: torch.Tensor,\n    v: torch.Tensor,\n    cu_seqlens: torch.Tensor,\n    head_dim: int,\n    ...\n) -> torch.Tensor:\n    \"\"\"Chunk-based forward for FLA attention.\"\"\"\n    batch_size = cu_seqlens.shape[0] - 1\n    seq_len = q.shape[1]\n\n    # 热路径中每次都重新计算 num_decode\n    # 评审人建议将此计算移出热路径\n    num_decode = compute_decode_count(cu_seqlens, batch_size)\n\n    # 执行 chunk attention 计算\n    output = triton_chunk_attention(\n        q, k, v, cu_seqlens, num_decode, head_dim\n    )\n    return output",
+      "context": "can we move this calculation away from this hot path?"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/triton/fla/chunk.py",
+      "line": 123,
+      "code": "import torch\nimport triton\nfrom typing import Optional\n\ndef chunk_forward(\n    q: torch.Tensor,\n    k: torch.Tensor,\n    v: torch.Tensor,\n    cu_seqlens: torch.Tensor,\n    head_dim: int,\n    num_decode: Optional[int] = None,  # 从外部传入预计算的值\n    ...\n) -> torch.Tensor:\n    \"\"\"Chunk-based forward for FLA attention.\"\"\"\n    batch_size = cu_seqlens.shape[0] - 1\n    seq_len = q.shape[1]\n\n    # num_decode 已从调用方预计算并传入，不再在热路径中计算\n    assert num_decode is not None, \"num_decode must be provided\"\n\n    # 执行 chunk attention 计算\n    output = triton_chunk_attention(\n        q, k, v, cu_seqlens, num_decode, head_dim\n    )\n    return output",
+      "context": "can we move this calculation away from this hot path?"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/triton/fla/chunk.py\n+++ b/vllm_ascend/ops/triton/fla/chunk.py\n@@ -8,15 +8,15 @@\n     v: torch.Tensor,\n     cu_seqlens: torch.Tensor,\n     head_dim: int,\n+    num_decode: Optional[int] = None,  # 从外部传入预计算的值\n     ...\n ) -> torch.Tensor:\n     \"\"\"Chunk-based forward for FLA attention.\"\"\"\n     batch_size = cu_seqlens.shape[0] - 1\n     seq_len = q.shape[1]\n \n-    # 热路径中每次都重新计算 num_decode\n-    # 评审人建议将此计算移出热路径\n-    num_decode = compute_decode_count(cu_seqlens, batch_size)\n+    # num_decode 已从调用方预计算并传入，不再在热路径中计算\n+    assert num_decode is not None, \"num_decode must be provided\"\n \n     # 执行 chunk attention 计算\n     output = triton_chunk_attention(",
+      "stats": "1 file changed, +3 lines, -3 lines",
+      "key_changes": [
+        "新增: num_decode: Optional[int] = None,  # 从外部传入预计算的值",
+        "移除: # 热路径中每次都重新计算 num_decode",
+        "移除: # 评审人建议将此计算移出热路径",
+        "移除: num_decode = compute_decode_count(cu_seqlens, batch_size)",
+        "新增: # num_decode 已从调用方预计算并传入，不再在热路径中计算",
+        "新增: assert num_decode is not None, \"num_decode must be provided\""
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

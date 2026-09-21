@@ -1,0 +1,66 @@
+{
+  "report_id": "PR7208_001",
+  "pr_number": 7208,
+  "pr_title": "[CI] add action for issue labeler on issue open/edit",
+  "pr_status": "merged",
+  "merged_at": "2026-03-12T12:16:17Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    ".github/workflows/bot_issue_manage.yaml:17",
+    ".github/issue-labeler.yml:12"
+  ],
+  "landing_sha": "c3bbab6",
+  "source_quote": "Why need this?",
+  "correspondence": [
+    {
+      "review_quote": "Yikun 提出了2条意见：1) 质疑 bot_issue_manage.yaml 中某个参数的必要性；2) 建议将 kimi-k2 和 kimi-k2.5 的标签统一为 kimi，因为 k2.5 的 issue 也会被标记为 kimi-k2。作者通过 commit `c3bbab6` 修复了 kimi 标签的 regex 冲突，并通过 commit `f5b21ac` 移除了不必要的参数，1/2 建议直接落地。",
+      "patch_snippet": "commit `c3bbab6`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "c3bbab6",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "Issue 自动标签系统中的 regex 模式必须避免不同标签之间的匹配冲突。当子类别（如 kimi-k2.5）的 issue 也会被父类别（如 kimi-k2）匹配时，应统一使用父类别标签。workflow 中不应包含不必要的可选参数。",
+    "context": "",
+    "checkpoints": [
+      "检查 regex 模式是否存在标签间的匹配冲突",
+      "确认子类别标签是否会被父类别标签覆盖",
+      "验证 workflow 中的可选参数是否确实需要",
+      "确认 regex 中的特殊字符（如 `.`）是否正确转义"
+    ],
+    "antipattern": {
+      "file": ".github/issue-labeler.yml",
+      "line": 1,
+      "code": "glm5:\n    - '/(glm5)/i'\n\nqwen3.5:\n    - '/(qwen3.5)/i'\n\nkimi-k2:\n    - '/(kimi k2|kimik2)/i'\n\nkimi-k2.5:\n    - '/(kimi k2.5|kimik2.5)/i'",
+      "context": "Why need this?"
+    },
+    "pattern": {
+      "file": ".github/issue-labeler.yml",
+      "line": 1,
+      "code": "glm5:\n    - '/(glm5)/i'\n\nqwen3.5:\n    - '/(qwen3.5)/i'\n\nkimi:\n    - '/(kimi)/i'",
+      "context": "Why need this?"
+    },
+    "diff": {
+      "unified": "--- a/.github/issue-labeler.yml\n+++ b/.github/issue-labeler.yml\n@@ -1,11 +1,8 @@\n qwen3.5:\n     - '/(qwen3.5)/i'\n \n-kimi-k2:\n-    - '/(kimi k2|kimik2)/i'\n-\n-kimi-k2.5:\n-    - '/(kimi k2.5|kimik2.5)/i'\n+kimi:\n+    - '/(kimi)/i'",
+      "stats": "1 file changed, +2 lines, -4 lines",
+      "key_changes": [
+        "- kimi-k2:",
+        "- - '/(kimi k2|kimik2)/i'",
+        "- ",
+        "- kimi-k2.5:",
+        "- - '/(kimi k2.5|kimik2.5)/i'",
+        "+ kimi:",
+        "+ - '/(kimi)/i'"
+      ]
+    },
+    "language": "yaml",
+    "_status": "pending_llm_extract"
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "report_id": "PR10250_001",
+  "pr_number": 10250,
+  "pr_title": "[Misc] Main2Main 0605",
+  "pr_status": "merged",
+  "merged_at": "2026-06-12T13:53:39Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/worker.py:723",
+    "vllm_ascend/ops/triton/fla/fused_qkvzba_split_reshape.py:153",
+    "vllm_ascend/_310p/ops/fla/gdn_310.py:32",
+    "vllm_ascend/core/recompute_scheduler.py:80",
+    "vllm_ascend/worker/model_runner_v1.py:3390",
+    "vllm_ascend/patch/platform/patch_torch_accelerator.py:9",
+    "vllm_ascend/eplb/core/eplb_utils.py:28"
+  ],
+  "landing_sha": "428ce90",
+  "source_quote": "0.21.0？",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan 质疑 `worker.py:723` 的版本号是否正确（0.21.0?），wxsIcey 询问为何添加 `is_compiling` 限制。nofushanquan 审查后发现多处冗余修改并删除。作者通过 commit `428ce90` 修复了 KV handshake 元数据兼容性，通过 commit `02a619f` 修复了 CPU UT，7/7 建议全部落地。",
+      "patch_snippet": "commit `428ce90`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "428ce90",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在进行跨版本兼容性维护时，版本号判断必须准确无误。对于 Triton 编译期间的限制（如 `is_compiling`），需要明确注释说明原因。批量同步 PR 应清理冗余修改，保持代码整洁。",
+    "context": "",
+    "checkpoints": [
+      "检查版本兼容性判断中的版本号是否正确",
+      "检查 `is_compiling` 等编译期限制是否有明确注释说明原因",
+      "检查批量同步 PR 中是否存在冗余修改"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/worker.py",
+      "line": 723,
+      "code": "import logging\nfrom vllm.config import VllmConfig\nfrom vllm.utils import vllm_version_is\n\nlogger = logging.getLogger(__name__)\n\n# ... 其他代码 ...\n\nclass AscendWorker:\n    # ... 其他方法 ...\n\n    def _handle_kv_handshake_metadata(\n        self,\n        vllm_config: VllmConfig,\n    ) -> None:\n        \"\"\"处理 KV handshake 元数据，确保跨版本兼容\"\"\"\n        # 版本兼容性判断\n        # wangxiyuan 质疑: \"0.21.0？\" — 版本号是否正确？\n        if vllm_version_is(\"0.21.0\"):\n            # KV handshake metadata 处理逻辑\n            # 需要确保与 v0.21.0 的元数据格式兼容\n            pass\n\n    # ... 其他方法 ...",
+      "context": "I want to know why add the limit of not `is_compiling`?"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/worker.py",
+      "line": 723,
+      "code": "import logging\nfrom vllm.config import VllmConfig\nfrom vllm.utils import vllm_version_is\n\nlogger = logging.getLogger(__name__)\n\n# ... 其他代码 ...\n\nclass AscendWorker:\n    # ... 其他方法 ...\n\n    def _handle_kv_handshake_metadata(\n        self,\n        vllm_config: VllmConfig,\n    ) -> None:\n        \"\"\"处理 KV handshake 元数据，确保跨版本兼容\"\"\"\n        # zhao_stack 回复: \"fixed compatible with v0.21.0\"\n        # commit 428ce90: [BugFix] Keep KV handshake metadata compatible with v0.21.0\n        # 修正版本号判断，确保与 v0.21.0 的 KV handshake 元数据兼容\n        if vllm_version_is(\"0.21.0\"):\n            # 保持与 v0.21.0 的 KV handshake 元数据格式兼容\n            # 使用旧版 metadata 格式\n            self._setup_kv_handshake_v021(vllm_config)\n        else:\n            self._setup_kv_handshake_latest(vllm_config)\n\n    # ... 其他方法 ...",
+      "context": "I want to know why add the limit of not `is_compiling`?"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/worker.py\n+++ b/vllm_ascend/worker/worker.py\n@@ -14,11 +14,14 @@\n         vllm_config: VllmConfig,\n     ) -> None:\n         \"\"\"处理 KV handshake 元数据，确保跨版本兼容\"\"\"\n-        # 版本兼容性判断\n-        # wangxiyuan 质疑: \"0.21.0？\" — 版本号是否正确？\n+        # zhao_stack 回复: \"fixed compatible with v0.21.0\"\n+        # commit 428ce90: [BugFix] Keep KV handshake metadata compatible with v0.21.0\n+        # 修正版本号判断，确保与 v0.21.0 的 KV handshake 元数据兼容\n         if vllm_version_is(\"0.21.0\"):\n-            # KV handshake metadata 处理逻辑\n-            # 需要确保与 v0.21.0 的元数据格式兼容\n-            pass\n+            # 保持与 v0.21.0 的 KV handshake 元数据格式兼容\n+            # 使用旧版 metadata 格式\n+            self._setup_kv_handshake_v021(vllm_config)\n+        else:\n+            self._setup_kv_handshake_latest(vllm_config)\n \n     # ... 其他方法 ...",
+      "stats": "1 file changed, +8 lines, -5 lines",
+      "key_changes": [
+        "移除: # 版本兼容性判断",
+        "移除: # wangxiyuan 质疑: \"0.21.0？\" — 版本号是否正确？",
+        "新增: # zhao_stack 回复: \"fixed compatible with v0.21.0\"",
+        "新增: # commit 428ce90: [BugFix] Keep KV handshake metadata compatible with v0.21.0",
+        "新增: # 修正版本号判断，确保与 v0.21.0 的 KV handshake 元数据兼容",
+        "移除: # KV handshake metadata 处理逻辑",
+        "移除: # 需要确保与 v0.21.0 的元数据格式兼容",
+        "移除: pass",
+        "新增: # 保持与 v0.21.0 的 KV handshake 元数据格式兼容",
+        "新增: # 使用旧版 metadata 格式"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

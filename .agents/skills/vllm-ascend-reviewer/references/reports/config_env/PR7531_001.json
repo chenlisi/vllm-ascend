@@ -1,0 +1,61 @@
+{
+  "report_id": "PR7531_001",
+  "pr_number": 7531,
+  "pr_title": "[CI] refine issue triage rules, wan regex and update stale setting",
+  "pr_status": "merged",
+  "merged_at": "2026-03-24T01:55:32Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "important",
+  "affected_files": [
+    ".github/workflows/bot_issue_manage.yaml:13"
+  ],
+  "landing_sha": "1ca3003",
+  "source_quote": "当前配置是否满足 wangxiyuan 的需求。\nDoes this meet your requirements? @wangxiyuan\n还应添加 `[Misc]` 类型到 issue labeler 配置中。\n[Misc] should be added as well",
+  "correspondence": [
+    {
+      "review_quote": "Yikun: .github/workflows/bot_issue_manage.yaml:13",
+      "patch_snippet": "评后sha 1ca3003 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wangxiyuan: .github/workflows/bot_issue_manage.yaml:13",
+      "patch_snippet": "评后sha 1ca3003 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "1ca3003",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "CI 中的 issue labeler 配置应覆盖仓库中使用的所有类型前缀（包括 `[Misc]`），确保所有 issue 都能被正确分类。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": ".github/workflows/bot_issue_manage.yaml",
+      "line": 1,
+      "code": "name: Bot Issue Manage\non:\n  issues:\n    types: [opened, edited]\n\njobs:\n  issue-labeler:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: github/issue-labeler@v3.4\n        with:\n          configuration-path: .github/issue-labeler.yml\n          enable_title_based_labeling: true\n          title-labels:\n            - prefix: \"[Bug]\"\n              labels: [\"bug\"]\n            - prefix: \"[Usage]\"\n              labels: [\"usage\"]\n            - prefix: \"[Doc]\"\n              labels: [\"documentation\"]\n            - prefix: \"[Feature]\"\n              labels: [\"enhancement\"]\n            - prefix: \"[CI]\"\n              labels: [\"ci\"]\n            # [Misc] 类型缺失",
+      "context": "当前配置是否满足 wangxiyuan 的需求。\nDoes this meet your requirements? @wangxiyuan\n还应添加 `[Misc]` 类型到 issue labeler 配置中。\n[Misc] should be added as well"
+    },
+    "pattern": {
+      "file": ".github/workflows/bot_issue_manage.yaml",
+      "line": 1,
+      "code": "name: Bot Issue Manage\non:\n  issues:\n    types: [opened, edited]\n\njobs:\n  issue-labeler:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: github/issue-labeler@v3.4\n        with:\n          configuration-path: .github/issue-labeler.yml\n          enable_title_based_labeling: true\n          title-labels:\n            - prefix: \"[Bug]\"\n              labels: [\"bug\"]\n            - prefix: \"[Usage]\"\n              labels: [\"usage\"]\n            - prefix: \"[Doc]\"\n              labels: [\"documentation\"]\n            - prefix: \"[Feature]\"\n              labels: [\"enhancement\"]\n            - prefix: \"[CI]\"\n              labels: [\"ci\"]\n            - prefix: \"[Misc]\"\n              labels: [\"misc\"]",
+      "context": "当前配置是否满足 wangxiyuan 的需求。\nDoes this meet your requirements? @wangxiyuan\n还应添加 `[Misc]` 类型到 issue labeler 配置中。\n[Misc] should be added as well"
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/bot_issue_manage.yaml\n+++ b/.github/workflows/bot_issue_manage.yaml\n@@ -22,4 +22,5 @@\n               labels: [\"enhancement\"]\n             - prefix: \"[CI]\"\n               labels: [\"ci\"]\n-            # [Misc] 类型缺失\n+            - prefix: \"[Misc]\"\n+              labels: [\"misc\"]\n",
+      "stats": "1 file changed, +2 lines, -1 lines",
+      "key_changes": [
+        "-            # [Misc] 类型缺失",
+        "+            - prefix: \"[Misc]\"",
+        "+              labels: [\"misc\"]"
+      ]
+    },
+    "language": "yaml",
+    "_status": "pending_llm_extract"
+  }
+}

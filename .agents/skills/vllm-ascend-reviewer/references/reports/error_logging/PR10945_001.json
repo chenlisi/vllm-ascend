@@ -1,0 +1,64 @@
+{
+  "report_id": "PR10945_001",
+  "pr_number": 10945,
+  "pr_title": "[Feature]:Modify the UvaBufferWrapper class to enable UVA features",
+  "pr_status": "merged",
+  "merged_at": "2026-06-27T07:32:09Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/patch/worker/patch_v2/patch_uva.py:43",
+    ".github/workflows/scripts/test_config.yaml:678"
+  ],
+  "landing_sha": "d55a4dc",
+  "source_quote": "Plz use log.",
+  "correspondence": [
+    {
+      "review_quote": "weijinqian0 建议使用 `log` 替代 `print` 输出警告信息。kunpengW-code 指出 UT 触发规则需要同步修改。作者通过 commit `d55a4dc` 将 print 改为 log，并同步更新了测试配置。",
+      "patch_snippet": "commit `d55a4dc`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "d55a4dc",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 Python 代码中应使用 `logger.warning()` 而非 `print(..., file=sys.stderr)` 输出警告信息，以保持日志格式一致性并支持日志级别控制。",
+    "context": "",
+    "checkpoints": [
+      "检查是否使用 `print` 输出警告信息",
+      "确认是否使用了项目统一的 logger",
+      "验证日志级别是否正确（warning/error/info）"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/patch/worker/patch_v2/patch_uva.py",
+      "line": 25,
+      "code": "import os\nimport sys\n\nfrom importlib.metadata import version\n\n\ndef check_triton_ascend_version_valid() -> bool:\n    \"\"\"\n    Check triton-ascend version and warn about UVA feature disablement.\n    \"\"\"\n    DISABLE_UVA_VERSION = \"3.2.1\"\n    installed_version = version(\"triton-ascend\")\n    if installed_version == DISABLE_UVA_VERSION:\n        warning_msg = (\n            f\"WARNING: triton-ascend {DISABLE_UVA_VERSION} \"\n            f\"disables the UVA feature.\\n\"\n            f\"Related bug issue: https://github.com/\"\n            f\"triton-lang/triton-ascend/issues/783\"\n        )\n        print(warning_msg, file=sys.stderr)\n        return False\n    return True\n\n\ndef is_uva_available() -> bool:\n    \"\"\"check if uva feature is supported in this environment\"\"\"\n    return (\"pinned_mem_register:True\" in os.environ.get(\n        \"PYTORCH_NPU_ALLOC_CONF\", {})\n            and check_triton_ascend_version_valid())",
+      "context": "Plz use log."
+    },
+    "pattern": {
+      "file": "vllm_ascend/patch/worker/patch_v2/patch_uva.py",
+      "line": 25,
+      "code": "import os\nimport sys\n\nfrom importlib.metadata import version\nfrom logging import getLogger\n\nlogger = getLogger(__name__)\n\n\ndef check_triton_ascend_version_valid() -> bool:\n    \"\"\"\n    Check triton-ascend version and warn about UVA feature disablement.\n    \"\"\"\n    DISABLE_UVA_VERSION = \"3.2.1\"\n    installed_version = version(\"triton-ascend\")\n    if installed_version == DISABLE_UVA_VERSION:\n        warning_msg = (\n            f\"WARNING: triton-ascend {DISABLE_UVA_VERSION} \"\n            f\"disables the UVA feature.\\n\"\n            f\"Related bug issue: https://github.com/\"\n            f\"triton-lang/triton-ascend/issues/783\"\n        )\n        logger.warning(warning_msg)\n        return False\n    return True\n\n\ndef is_uva_available() -> bool:\n    \"\"\"check if uva feature is supported in this environment\"\"\"\n    return (\"pinned_mem_register:True\" in os.environ.get(\n        \"PYTORCH_NPU_ALLOC_CONF\", \"\")\n            and check_triton_ascend_version_valid())",
+      "context": "Plz use log."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/patch/worker/patch_v2/patch_uva.py\n+++ b/vllm_ascend/patch/worker/patch_v2/patch_uva.py\n@@ -2,6 +2,9 @@\n import sys\n \n from importlib.metadata import version\n+from logging import getLogger\n+\n+logger = getLogger(__name__)\n \n \n def check_triton_ascend_version_valid() -> bool:\n@@ -17,7 +20,7 @@\n             f\"Related bug issue: https://github.com/\"\n             f\"triton-lang/triton-ascend/issues/783\"\n         )\n-        print(warning_msg, file=sys.stderr)\n+        logger.warning(warning_msg)\n         return False\n     return True\n \n@@ -25,5 +28,5 @@\n def is_uva_available() -> bool:\n     \"\"\"check if uva feature is supported in this environment\"\"\"\n     return (\"pinned_mem_register:True\" in os.environ.get(\n-        \"PYTORCH_NPU_ALLOC_CONF\", {})\n+        \"PYTORCH_NPU_ALLOC_CONF\", \"\")\n             and check_triton_ascend_version_valid())",
+      "stats": "1 file changed, +5 lines, -2 lines",
+      "key_changes": [
+        "新增: from logging import getLogger",
+        "新增: logger = getLogger(__name__)",
+        "移除: print(warning_msg, file=sys.stderr)",
+        "新增: logger.warning(warning_msg)",
+        "移除: \"PYTORCH_NPU_ALLOC_CONF\", {})",
+        "新增: \"PYTORCH_NPU_ALLOC_CONF\", \"\")"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

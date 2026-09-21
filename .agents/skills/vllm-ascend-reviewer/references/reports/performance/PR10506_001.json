@@ -1,0 +1,67 @@
+{
+  "report_id": "PR10506_001",
+  "pr_number": 10506,
+  "pr_title": "[Performance] update seq_lens_cpu by valid_sampled_token_count_cpu",
+  "pr_status": "merged",
+  "merged_at": "2026-06-25T11:11:32Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/model_runner_v1.py:1206"
+  ],
+  "landing_sha": "5c99bf3",
+  "source_quote": "I think it is unnecessary here. because we do sync in _update_states",
+  "correspondence": [
+    {
+      "review_quote": "zhenwenqi2024 指出 model_runner_v1.py:1206 处的同步操作是不必要的，因为在 `_update_states` 中已经做了同步。作者采纳建议，通过 commit `5c99bf3` 移除了冗余的 NPU-to-CPU 同步，改为直接使用已异步拷贝的 `valid_sampled_token_count_cpu` 在 CPU 上计算修正值，减少了不必要的同步开销。",
+      "patch_snippet": "commit `5c99bf3`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "5c99bf3",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在异步 speculative decoding 模式下，`seq_lens_cpu` 的修正应利用已有的异步拷贝结果（`valid_sampled_token_count_cpu`），在 CPU 上直接计算，避免额外的 NPU-to-CPU 同步操作。",
+    "context": "",
+    "checkpoints": [
+      "检查是否存在冗余的 `.cpu()` 调用或 NPU-to-CPU 同步",
+      "确认 `_update_states` 中是否已包含必要的同步操作",
+      "评估 `valid_sampled_token_count_cpu` 在非 DSV4/Qwen3.5 模型中的可用性"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 1190,
+      "code": "# zhenwenqi2024 评审: \"I think it is unnecessary here. because we do sync in _update_states\"\n# HF-001 回复: \"thank you, i will try it\"\n\n    def _prepare_input_for_spec_decode(self, scheduler_output):\n        \"\"\"Prepare inputs for speculative decoding, correcting seq_lens_cpu.\"\"\"\n        # 在 _update_states 中已经做了 seq_lens 的异步拷贝到 CPU\n        # seq_lens_cpu 此时已经是有效的 CPU tensor\n\n        # BUG: 这里额外执行 .cpu() 触发冗余的 NPU-to-CPU 同步\n        # _update_states 中已经同步过，此处不需要再次同步\n        seq_lens_cpu = self.input_batch.seq_lens.cpu()  # 触发不必要的同步\n        valid_sampled_token_count_cpu = (\n            self.input_batch.valid_sampled_token_count_cpu\n        )\n\n        # 使用冗余同步后的结果计算修正值\n        optimistic_seq_lens_cpu = seq_lens_cpu + valid_sampled_token_count_cpu\n\n        # 更新 attention metadata 中的 seq_lens_cpu\n        self.attn_metadata.seq_lens_cpu = optimistic_seq_lens_cpu\n        return optimistic_seq_lens_cpu",
+      "context": "I think it is unnecessary here. because we do sync in _update_states"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 1190,
+      "code": "# 移除冗余的 .cpu() 调用，利用 _update_states 中已有的同步\n# 直接使用 valid_sampled_token_count_cpu（已在 _update_states 中异步拷贝）\n\n    def _prepare_input_for_spec_decode(self, scheduler_output):\n        \"\"\"Prepare inputs for speculative decoding, correcting seq_lens_cpu.\"\"\"\n        # _update_states 中已经完成了 seq_lens 到 CPU 的同步\n        # seq_lens_cpu 已经是有效的 CPU tensor，无需再次 .cpu()\n        seq_lens_cpu = self.input_batch.seq_lens_cpu  # 直接使用已同步的结果\n        valid_sampled_token_count_cpu = (\n            self.input_batch.valid_sampled_token_count_cpu\n        )\n\n        # FIX: 移除冗余的 .cpu() 调用，避免不必要的 NPU-to-CPU 同步\n        # 直接在 CPU 上计算修正值\n        optimistic_seq_lens_cpu = seq_lens_cpu + valid_sampled_token_count_cpu\n\n        # 更新 attention metadata 中的 seq_lens_cpu\n        self.attn_metadata.seq_lens_cpu = optimistic_seq_lens_cpu\n        return optimistic_seq_lens_cpu",
+      "context": "I think it is unnecessary here. because we do sync in _update_states"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/model_runner_v1.py\n+++ b/vllm_ascend/worker/model_runner_v1.py\n@@ -1,19 +1,17 @@\n-# zhenwenqi2024 评审: \"I think it is unnecessary here. because we do sync in _update_states\"\n-# HF-001 回复: \"thank you, i will try it\"\n+# 移除冗余的 .cpu() 调用，利用 _update_states 中已有的同步\n+# 直接使用 valid_sampled_token_count_cpu（已在 _update_states 中异步拷贝）\n \n     def _prepare_input_for_spec_decode(self, scheduler_output):\n         \"\"\"Prepare inputs for speculative decoding, correcting seq_lens_cpu.\"\"\"\n-        # 在 _update_states 中已经做了 seq_lens 的异步拷贝到 CPU\n-        # seq_lens_cpu 此时已经是有效的 CPU tensor\n-\n-        # BUG: 这里额外执行 .cpu() 触发冗余的 NPU-to-CPU 同步\n-        # _update_states 中已经同步过，此处不需要再次同步\n-        seq_lens_cpu = self.input_batch.seq_lens.cpu()  # 触发不必要的同步\n+        # _update_states 中已经完成了 seq_lens 到 CPU 的同步\n+        # seq_lens_cpu 已经是有效的 CPU tensor，无需再次 .cpu()\n+        seq_lens_cpu = self.input_batch.seq_lens_cpu  # 直接使用已同步的结果\n         valid_sampled_token_count_cpu = (\n             self.input_batch.valid_sampled_token_count_cpu\n         )\n \n-        # 使用冗余同步后的结果计算修正值\n+        # FIX: 移除冗余的 .cpu() 调用，避免不必要的 NPU-to-CPU 同步\n+        # 直接在 CPU 上计算修正值\n         optimistic_seq_lens_cpu = seq_lens_cpu + valid_sampled_token_count_cpu\n \n         # 更新 attention metadata 中的 seq_lens_cpu",
+      "stats": "1 file changed, +7 lines, -9 lines",
+      "key_changes": [
+        "移除: # zhenwenqi2024 评审: \"I think it is unnecessary here. because we do sync in _upda",
+        "移除: # HF-001 回复: \"thank you, i will try it\"",
+        "新增: # 移除冗余的 .cpu() 调用，利用 _update_states 中已有的同步",
+        "新增: # 直接使用 valid_sampled_token_count_cpu（已在 _update_states 中异步拷贝）",
+        "移除: # 在 _update_states 中已经做了 seq_lens 的异步拷贝到 CPU",
+        "移除: # seq_lens_cpu 此时已经是有效的 CPU tensor",
+        "移除: # BUG: 这里额外执行 .cpu() 触发冗余的 NPU-to-CPU 同步",
+        "移除: # _update_states 中已经同步过，此处不需要再次同步",
+        "移除: seq_lens_cpu = self.input_batch.seq_lens.cpu()  # 触发不必要的同步",
+        "新增: # _update_states 中已经完成了 seq_lens 到 CPU 的同步"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

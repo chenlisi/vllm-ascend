@@ -1,0 +1,74 @@
+{
+  "report_id": "PR7368_001",
+  "pr_number": 7368,
+  "pr_title": "[features]support split qkv rmsnorm rmope for qwen3.5",
+  "pr_status": "merged",
+  "merged_at": "2026-03-20T09:22:28Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/patch/worker/patch_qwen3_next.py:356",
+    "vllm_ascend/patch/worker/patch_qwen3_next.py:314"
+  ],
+  "landing_sha": "888729b",
+  "source_quote": "weijinqian0 指出 Qwen3.5 特定的代码应该移到 `patch_qwen3_5.py` 文件中，而不是放在通用的 `patch_qwen3_next.py` 中。",
+  "correspondence": [
+    {
+      "review_quote": "weijinqian0 指出 Qwen3.5 特定代码不应放在通用的 `patch_qwen3_next.py` 中，应移至 `patch_qwen3_5.py`，并用 `pass` 替代原位置代码。作者通过 commit `888729b` 及后续 commits 完成了代码迁移，2/2 建议全部落地。",
+      "patch_snippet": "commit `888729b`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "888729b",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "不同模型变体的特定逻辑应放在对应的 patch 文件中（如 `patch_qwen3_5.py`），不应放在通用的父类 patch 文件（如 `patch_qwen3_next.py`）中，以保持代码结构的清晰和可维护性。",
+    "context": "",
+    "checkpoints": [
+      "模型特定代码是否放在了对应的 patch 文件中",
+      "通用 patch 文件中是否包含不应有的模型特定逻辑",
+      "不需要的代码是否用 `pass` 正确替代"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/patch/worker/patch_qwen3_next.py",
+      "line": 0,
+      "code": "from vllm.model_executor.models.qwen3_next import Qwen3NextAttention\n\nclass AscendQwen3NextAttention:\n    \"\"\"Ascend 优化的 Qwen3Next Attention 实现\"\"\"\n\n    def forward(self, qkv, positions, cos_sin_cache):\n        if is_qwen3_5_model():\n            cos_sin = cos_sin_cache[positions]\n            cos_sin = cos_sin.to(qkv.device, qkv.dtype)\n            q, k, v = qkv.split(...)\n            fused_split_qkv_rmsnorm_mrope(q, k, v, cos_sin, ...)\n        else:\n            cos_sin = self.rotary_emb.cos_sin_cache[positions]\n            cos_sin = cos_sin.to(qkv.device, qkv.dtype)\n            q, k, v = qkv.split(...)\n            q = self.q_norm(q)\n            k = self.k_norm(k)\n\nQwen3NextAttention.forward = AscendQwen3NextAttention().forward",
+      "context": "weijinqian0 指出 Qwen3.5 特定的代码应该移到 `patch_qwen3_5.py` 文件中，而不是放在通用的 `patch_qwen3_next.py` 中。"
+    },
+    "pattern": {
+      "file": "vllm_ascend/patch/worker/patch_qwen3_next.py",
+      "line": 0,
+      "code": "from vllm.model_executor.models.qwen3_next import Qwen3NextAttention\n\nclass AscendQwen3NextAttention:\n    \"\"\"Ascend 优化的 Qwen3Next Attention 实现\n    Qwen3.5 特定的 fused 算子逻辑已移至 patch_qwen3_5.py\n    \"\"\"\n\n    def forward(self, qkv, positions, cos_sin_cache):\n        pass\n\nQwen3NextAttention.forward = AscendQwen3NextAttention().forward",
+      "context": "weijinqian0 指出 Qwen3.5 特定的代码应该移到 `patch_qwen3_5.py` 文件中，而不是放在通用的 `patch_qwen3_next.py` 中。"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/patch/worker/patch_qwen3_next.py\n+++ b/vllm_ascend/patch/worker/patch_qwen3_next.py\n@@ -1,19 +1,11 @@\n from vllm.model_executor.models.qwen3_next import Qwen3NextAttention\n \n class AscendQwen3NextAttention:\n-    \"\"\"Ascend 优化的 Qwen3Next Attention 实现\"\"\"\n+    \"\"\"Ascend 优化的 Qwen3Next Attention 实现\n+    Qwen3.5 特定的 fused 算子逻辑已移至 patch_qwen3_5.py\n+    \"\"\"\n \n     def forward(self, qkv, positions, cos_sin_cache):\n-        if is_qwen3_5_model():\n-            cos_sin = cos_sin_cache[positions]\n-            cos_sin = cos_sin.to(qkv.device, qkv.dtype)\n-            q, k, v = qkv.split(...)\n-            fused_split_qkv_rmsnorm_mrope(q, k, v, cos_sin, ...)\n-        else:\n-            cos_sin = self.rotary_emb.cos_sin_cache[positions]\n-            cos_sin = cos_sin.to(qkv.device, qkv.dtype)\n-            q, k, v = qkv.split(...)\n-            q = self.q_norm(q)\n-            k = self.k_norm(k)\n+        pass\n \n Qwen3NextAttention.forward = AscendQwen3NextAttention().forward",
+      "stats": "1 file changed, +4 lines, -12 lines",
+      "key_changes": [
+        "- \"\"\"Ascend 优化的 Qwen3Next Attention 实现\"\"\"",
+        "+ \"\"\"Ascend 优化的 Qwen3Next Attention 实现",
+        "+ Qwen3.5 特定的 fused 算子逻辑已移至 patch_qwen3_5.py",
+        "+ \"\"\"",
+        "- if is_qwen3_5_model():",
+        "- cos_sin = cos_sin_cache[positions]",
+        "- cos_sin = cos_sin.to(qkv.device, qkv.dtype)",
+        "- q, k, v = qkv.split(...)",
+        "- fused_split_qkv_rmsnorm_mrope(q, k, v, cos_sin, ...)",
+        "- else:",
+        "- cos_sin = self.rotary_emb.cos_sin_cache[positions]",
+        "- cos_sin = cos_sin.to(qkv.device, qkv.dtype)",
+        "- q, k, v = qkv.split(...)",
+        "- q = self.q_norm(q)",
+        "- k = self.k_norm(k)",
+        "+ pass"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

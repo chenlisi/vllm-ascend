@@ -1,0 +1,77 @@
+{
+  "report_id": "PR9900_001",
+  "pr_number": 9900,
+  "pr_title": "[Performance] Improve CPP performance on var-len seqence",
+  "pr_status": "merged",
+  "merged_at": "2026-06-17T13:46:05Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/core/profiling_chunk_predictor.py:226",
+    "vllm_ascend/core/profiling_chunk_predictor.py:258"
+  ],
+  "landing_sha": "6d367d9",
+  "source_quote": "函数相关参数需要添加参数说明和功能说明\nok\n变量命名需要调整下，难以理解含义\nok",
+  "correspondence": [
+    {
+      "review_quote": "LookAround0301: vllm_ascend/core/profiling_chunk_predictor.py:226(2026-06-08 06:55:33)",
+      "patch_snippet": "评后sha 6d367d9 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "LookAround0301: vllm_ascend/core/profiling_chunk_predictor.py:258(2026-06-08 06:56:03)",
+      "patch_snippet": "评后sha 6d367d9 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "6d367d9",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "所有公开函数的定义处应添加 docstring，包含参数说明（Args）和功能描述，帮助后续维护者理解函数用途。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/core/profiling_chunk_predictor.py",
+      "line": 218,
+      "code": "class ChunkPredictor:\n    \"\"\"Predicts optimal chunk sizes for profiling-based scheduling.\"\"\"\n\n    def __init__(self, ...):\n        self.target_latency = None\n        ...\n\n    def predict(self, seq_lens, num_tokens):\n        # 缺少 docstring 和参数说明\n        if self.target_latency is None:\n            return [num_tokens]\n\n        chunk_sizes = []\n        remaining = num_tokens\n        for seq_len in seq_lens:\n            estimated_time = self._estimate_time(seq_len)\n            ...\n        return chunk_sizes",
+      "context": "函数相关参数需要添加参数说明和功能说明\nok\n变量命名需要调整下，难以理解含义\nok"
+    },
+    "pattern": {
+      "file": "vllm_ascend/core/profiling_chunk_predictor.py",
+      "line": 218,
+      "code": "class ChunkPredictor:\n    \"\"\"Predicts optimal chunk sizes for profiling-based scheduling.\"\"\"\n\n    def __init__(self, ...):\n        self.target_latency = None\n        ...\n\n    def predict(self,\n                seq_lens: torch.Tensor,\n                num_tokens: int) -> list[int]:\n        \"\"\"Predict chunk sizes for variable-length sequences.\n\n        Estimates per-request prefill time based on sequence length\n        and splits tokens into chunks that fit within the target\n        latency budget.\n\n        Args:\n            seq_lens: sequence lengths of current requests, shape (num_reqs,).\n            num_tokens: total number of tokens to process in this step.\n\n        Returns:\n            A list of chunk sizes whose sum equals num_tokens.\n        \"\"\"\n        if self.target_latency is None:\n            return [num_tokens]\n\n        chunk_sizes = []\n        remaining = num_tokens\n        for seq_len in seq_lens:\n            estimated_time = self._estimate_time(seq_len)\n            ...\n        return chunk_sizes",
+      "context": "函数相关参数需要添加参数说明和功能说明\nok\n变量命名需要调整下，难以理解含义\nok"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/core/profiling_chunk_predictor.py\n+++ b/vllm_ascend/core/profiling_chunk_predictor.py\n@@ -5,8 +5,22 @@\n         self.target_latency = None\n         ...\n \n-    def predict(self, seq_lens, num_tokens):\n-        # 缺少 docstring 和参数说明\n+    def predict(self,\n+                seq_lens: torch.Tensor,\n+                num_tokens: int) -> list[int]:\n+        \"\"\"Predict chunk sizes for variable-length sequences.\n+\n+        Estimates per-request prefill time based on sequence length\n+        and splits tokens into chunks that fit within the target\n+        latency budget.\n+\n+        Args:\n+            seq_lens: sequence lengths of current requests, shape (num_reqs,).\n+            num_tokens: total number of tokens to process in this step.\n+\n+        Returns:\n+            A list of chunk sizes whose sum equals num_tokens.\n+        \"\"\"\n         if self.target_latency is None:\n             return [num_tokens]\n \n",
+      "stats": "1 file changed, +16 lines, -2 lines",
+      "key_changes": [
+        "-    def predict(self, seq_lens, num_tokens):",
+        "-        # 缺少 docstring 和参数说明",
+        "+    def predict(self,",
+        "+                seq_lens: torch.Tensor,",
+        "+                num_tokens: int) -> list[int]:",
+        "+        \"\"\"Predict chunk sizes for variable-length sequences.",
+        "+",
+        "+        Estimates per-request prefill time based on sequence length",
+        "+        and splits tokens into chunks that fit within the target",
+        "+        latency budget.",
+        "+",
+        "+        Args:",
+        "+            seq_lens: sequence lengths of current requests, shape (num_reqs,).",
+        "+            num_tokens: total number of tokens to process in this step.",
+        "+",
+        "+        Returns:",
+        "+            A list of chunk sizes whose sum equals num_tokens.",
+        "+        \"\"\""
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

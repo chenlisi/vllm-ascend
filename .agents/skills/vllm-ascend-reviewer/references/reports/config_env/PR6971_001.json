@@ -1,0 +1,82 @@
+{
+  "report_id": "PR6971_001",
+  "pr_number": 6971,
+  "pr_title": "[Feature] Add end-to-end release management skill",
+  "pr_status": "merged",
+  "merged_at": "2026-04-03T09:56:53Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    ".agents/skills/vllm-ascend-release/SKILL.md:247",
+    ".agents/skills/vllm-ascend-release/SKILL.md:497"
+  ],
+  "landing_sha": "1b39006",
+  "source_quote": "Currently we do not have this label, and we currently use milestone to trace PRs waiting to be merged, a possible expression is:\n```md\n# List all milestones and choose one\ngh api repos/vllm-project/vllm-ascend/milestones --template '{{range .}}{{.title}}{{\"\\n\"}}{{end}}'\n\n# List open PRs with milestone\ngh pr list --repo vllm-project/vllm-ascend \\\n--state open \\\n--milestone \"YOUR_MILESTONE_NAME\" \\\n--json number,title,url\n```",
+  "correspondence": [
+    {
+      "review_quote": "yiz-liu 指出两处问题：1) 文档中引用了不存在的 label，应改为使用 milestone 追踪 PR；2) 版本更新文件列表不完整，需要补充完整的文件清单。作者通过 commit `1b39006` 修复了这两处问题，2/2 建议全部落地。",
+      "patch_snippet": "commit `1b39006`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "1b39006",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在自动化 skill 文档中引用的 GitHub 操作方式（如 label、milestone 等）必须与项目实际使用的工作流一致，不能使用不存在的标签或过时的追踪方式。版本更新文件列表必须完整覆盖所有需要更新的文件。",
+    "context": "",
+    "checkpoints": [
+      "确认文档中引用的 label 是否在项目中实际存在",
+      "确认 PR 追踪方式是否与项目当前的 milestone 工作流一致",
+      "验证版本更新文件列表是否完整覆盖所有需要更新的文件",
+      "确认 GitHub API 命令是否可正确执行"
+    ],
+    "antipattern": {
+      "file": ".agents/skills/vllm-ascend-release/SKILL.md",
+      "line": 247,
+      "code": "# .agents/skills/vllm-ascend-release/SKILL.md:247\n\n### Phase 3: PR Management\n\nIdentify must-merge PRs before release:",
+      "context": "Currently we do not have this label, and we currently use milestone to trace PRs waiting to be merged, a possible expression is:\n```md\n# List all milestones and choose one\ngh api repos/vllm-project/vllm-ascend/milestones --template '{{range .}}{{.title}}{{\"\\n\"}}{{end}}'\n\n# List open PRs with milestone\ngh pr list --repo vllm-project/vllm-ascend \\\n--state open \\\n--milestone \"YOUR_MILESTONE_NAME\" \\\n--json number,title,url\n```"
+    },
+    "pattern": {
+      "file": ".agents/skills/vllm-ascend-release/SKILL.md",
+      "line": 247,
+      "code": "# .agents/skills/vllm-ascend-release/scripts/update_version_references.py\n# ❌ 使用硬编码文件列表，仅覆盖部分文件，与 version-files.yaml 配置不一致\n\nimport re\nimport sys\n\n# 硬编码文件列表，缺少 workflow 文件和 Dockerfile\nFILES_TO_UPDATE = [\"README.md\", \"docs/conf.py\"]\n\nOLD_VERSION = \"0.16.0\"\nNEW_VERSION = \"0.17.0\"\n\ndef update_file(filepath):\n    \"\"\"Update version references in a single file.\"\"\"\n    with open(filepath, \"r\") as f:\n        content = f.read()\n    content = content.replace(OLD_VERSION, NEW_VERSION)\n    with open(filepath, \"w\") as f:\n        f.write(content)\n\nfor f in FILES_TO_UPDATE:\n    update_file(f)",
+      "context": "Currently we do not have this label, and we currently use milestone to trace PRs waiting to be merged, a possible expression is:\n```md\n# List all milestones and choose one\ngh api repos/vllm-project/vllm-ascend/milestones --template '{{range .}}{{.title}}{{\"\\n\"}}{{end}}'\n\n# List open PRs with milestone\ngh pr list --repo vllm-project/vllm-ascend \\\n--state open \\\n--milestone \"YOUR_MILESTONE_NAME\" \\\n--json number,title,url\n```"
+    },
+    "diff": {
+      "unified": "--- a/.agents/skills/vllm-ascend-release/SKILL.md\n+++ b/.agents/skills/vllm-ascend-release/SKILL.md\n@@ -1,5 +1,22 @@\n-# .agents/skills/vllm-ascend-release/SKILL.md:247\n+# .agents/skills/vllm-ascend-release/scripts/update_version_references.py\n+# ❌ 使用硬编码文件列表，仅覆盖部分文件，与 version-files.yaml 配置不一致\n \n-### Phase 3: PR Management\n+import re\n+import sys\n \n-Identify must-merge PRs before release:\n+# 硬编码文件列表，缺少 workflow 文件和 Dockerfile\n+FILES_TO_UPDATE = [\"README.md\", \"docs/conf.py\"]\n+\n+OLD_VERSION = \"0.16.0\"\n+NEW_VERSION = \"0.17.0\"\n+\n+def update_file(filepath):\n+    \"\"\"Update version references in a single file.\"\"\"\n+    with open(filepath, \"r\") as f:\n+        content = f.read()\n+    content = content.replace(OLD_VERSION, NEW_VERSION)\n+    with open(filepath, \"w\") as f:\n+        f.write(content)\n+\n+for f in FILES_TO_UPDATE:\n+    update_file(f)",
+      "stats": "1 file changed, +20 lines, -3 lines",
+      "key_changes": [
+        "- # .agents/skills/vllm-ascend-release/SKILL.md:247",
+        "+ # .agents/skills/vllm-ascend-release/scripts/update_version_references.py",
+        "+ # ❌ 使用硬编码文件列表，仅覆盖部分文件，与 version-files.yaml 配置不一致",
+        "- ### Phase 3: PR Management",
+        "+ import re",
+        "+ import sys",
+        "- Identify must-merge PRs before release:",
+        "+ # 硬编码文件列表，缺少 workflow 文件和 Dockerfile",
+        "+ FILES_TO_UPDATE = [\"README.md\", \"docs/conf.py\"]",
+        "+ ",
+        "+ OLD_VERSION = \"0.16.0\"",
+        "+ NEW_VERSION = \"0.17.0\"",
+        "+ ",
+        "+ def update_file(filepath):",
+        "+ \"\"\"Update version references in a single file.\"\"\"",
+        "+ with open(filepath, \"r\") as f:",
+        "+ content = f.read()",
+        "+ content = content.replace(OLD_VERSION, NEW_VERSION)",
+        "+ with open(filepath, \"w\") as f:",
+        "+ f.write(content)",
+        "+ ",
+        "+ for f in FILES_TO_UPDATE:",
+        "+ update_file(f)"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

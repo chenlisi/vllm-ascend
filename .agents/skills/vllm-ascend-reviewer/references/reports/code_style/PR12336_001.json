@@ -1,0 +1,56 @@
+{
+  "report_id": "PR12336_001",
+  "pr_number": 12336,
+  "pr_title": "[BugFix] Fix qsfa",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/device/device_op.py:1129"
+  ],
+  "landing_sha": "c04f7f4",
+  "source_quote": "This interface is only called as an internal interface. Please add a \"_\" before the interface.",
+  "correspondence": [
+    {
+      "review_quote": "zzzzwwjj: vllm_ascend/device/device_op.py:1129",
+      "patch_snippet": "评后sha c04f7f4 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "c04f7f4",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "仅作为内部使用的接口/方法应使用下划线 `_` 前缀命名，以符合 Python 的命名约定，明确表示该接口不应用于外部调用。",
+    "context": "",
+    "checkpoints": [
+      "检查仅在模块/类内部调用的方法是否使用了 `_` 前缀",
+      "确认公共接口和内部接口的命名有明确区分"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/device/device_op.py",
+      "line": 1125,
+      "code": "# vllm_ascend/device/device_op.py:1125-1170\n# 根据评审意见推断，zzzzwwjj 指出该接口仅作为内部接口调用\nclass AscendDevice:\n    # ... 其他方法 ...\n\n    @staticmethod\n    def execute_sparse_flash_attention_process(\n        sfa_impl,\n        ql_nope: torch.Tensor,\n        q_pe: torch.Tensor,\n        kv: torch.Tensor,\n        block_table: torch.Tensor,\n        topk_indices: torch.Tensor,\n        actual_seq_lengths_query: torch.Tensor,\n        actual_seq_lengths_key: torch.Tensor,\n        *,\n        sparse_mode: int = 3,\n        return_lse: bool = False,\n    ):\n        # 内部调用 kv_quant 分支\n        if quant_mode == \"kv_quant\":\n            return cls.execute_kv_quant_sparse_flash_attention(  # ← 缺少下划线前缀\n                sfa_impl, ql_nope, q_pe, kv, block_table,\n                topk_indices, actual_seq_lengths_query,\n                actual_seq_lengths_key,\n                sparse_mode=sparse_mode, return_lse=return_lse,\n            )\n\n    @staticmethod\n    def execute_kv_quant_sparse_flash_attention(  # ← 公共命名风格，但仅供内部调用\n        sfa_impl,\n        ql_nope: torch.Tensor,\n        q_pe: torch.Tensor,\n        kv: torch.Tensor,\n        block_table: torch.Tensor,\n        topk_indices: torch.Tensor,\n        actual_seq_lengths_query: torch.Tensor,\n        actual_seq_lengths_key: torch.Tensor,\n        *,\n        sparse_mode: int = 3,\n        return_lse: bool = False,\n    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:\n        query = torch.cat([ql_nope, q_pe], dim=-1).contiguous()\n        result = torch_npu.npu_kv_quant_sparse_flash_attention(\n            query=query, key=kv, value=kv,\n            sparse_indices=topk_indices,\n            scale_value=sfa_impl.scale,\n            sparse_block_size=1,\n            block_table=block_table,\n            actual_seq_lengths_query=actual_seq_lengths_query,\n            actual_seq_lengths_kv=actual_seq_lengths_key,\n            layout_query=\"TND\", layout_kv=\"PA_BSND\",\n            sparse_mode=sparse_mode, attention_mode=2,\n            quant_scale_repo_mode=1,\n            tile_size=getattr(sfa_impl, \"sfa_qsfa_tile_size\", 128),\n            key_quant_mode=2, value_quant_mode=2,\n            rope_head_dim=getattr(sfa_impl, \"qk_rope_head_dim\", q_pe.shape[-1]),\n        )\n        return result",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/device/device_op.py",
+      "line": 1125,
+      "code": "# vllm_ascend/device/device_op.py:1125-1170\n# commit: c04f7f4 - Fix qsfa\nclass AscendDevice:\n    # ... 其他方法 ...\n\n    @staticmethod\n    def execute_sparse_flash_attention_process(\n        sfa_impl,\n        ql_nope: torch.Tensor,\n        q_pe: torch.Tensor,\n        kv: torch.Tensor,\n        block_table: torch.Tensor,\n        topk_indices: torch.Tensor,\n        actual_seq_lengths_query: torch.Tensor,\n        actual_seq_lengths_key: torch.Tensor,\n        *,\n        sparse_mode: int = 3,\n        return_lse: bool = False,\n    ):\n        # 内部调用 kv_quant 分支，同步更新调用点\n        if quant_mode == \"kv_quant\":\n            return cls._execute_kv_quant_sparse_flash_attention(  # ← 添加下划线前缀\n                sfa_impl, ql_nope, q_pe, kv, block_table,\n                topk_indices, actual_seq_lengths_query,\n                actual_seq_lengths_key,\n                sparse_mode=sparse_mode, return_lse=return_lse,\n            )\n\n    @staticmethod\n    def _execute_kv_quant_sparse_flash_attention(  # ← 添加 _ 前缀，表示私有/内部方法\n        sfa_impl,\n        ql_nope: torch.Tensor,\n        q_pe: torch.Tensor,\n        kv: torch.Tensor,\n        block_table: torch.Tensor,\n        topk_indices: torch.Tensor,\n        actual_seq_lengths_query: torch.Tensor,\n        actual_seq_lengths_key: torch.Tensor,\n        *,\n        sparse_mode: int = 3,\n        return_lse: bool = False,\n    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:\n        query = torch.cat([ql_nope, q_pe], dim=-1).contiguous()\n        result = torch_npu.npu_kv_quant_sparse_flash_attention(\n            query=query, key=kv, value=kv,\n            sparse_indices=topk_indices,\n            scale_value=sfa_impl.scale,\n            sparse_block_size=1,\n            block_table=block_table,\n            actual_seq_lengths_query=actual_seq_lengths_query,\n            actual_seq_lengths_kv=actual_seq_lengths_key,\n            layout_query=\"TND\", layout_kv=\"PA_BSND\",\n            sparse_mode=sparse_mode, attention_mode=2,\n            quant_scale_repo_mode=1,\n            tile_size=getattr(sfa_impl, \"sfa_qsfa_tile_size\", 128),\n            key_quant_mode=2, value_quant_mode=2,\n            rope_head_dim=getattr(sfa_impl, \"qk_rope_head_dim\", q_pe.shape[-1]),\n        )\n        return result",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/device/device_op.py\n+++ b/vllm_ascend/device/device_op.py\n@@ -1,5 +1,5 @@\n # vllm_ascend/device/device_op.py:1125-1170\n-# 根据评审意见推断，zzzzwwjj 指出该接口仅作为内部接口调用\n+# commit: c04f7f4 - Fix qsfa\n class AscendDevice:\n     # ... 其他方法 ...\n \n@@ -17,9 +17,9 @@\n         sparse_mode: int = 3,\n         return_lse: bool = False,\n     ):\n-        # 内部调用 kv_quant 分支\n+        # 内部调用 kv_quant 分支，同步更新调用点\n         if quant_mode == \"kv_quant\":\n-            return cls.execute_kv_quant_sparse_flash_attention(  # ← 缺少下划线前缀\n+            return cls._execute_kv_quant_sparse_flash_attention(  # ← 添加下划线前缀\n                 sfa_impl, ql_nope, q_pe, kv, block_table,\n                 topk_indices, actual_seq_lengths_query,\n                 actual_seq_lengths_key,\n@@ -27,7 +27,7 @@\n             )\n \n     @staticmethod\n-    def execute_kv_quant_sparse_flash_attention(  # ← 公共命名风格，但仅供内部调用\n+    def _execute_kv_quant_sparse_flash_attention(  # ← 添加 _ 前缀，表示私有/内部方法\n         sfa_impl,\n         ql_nope: torch.Tensor,\n         q_pe: torch.Tensor,",
+      "stats": "1 file changed, +4 lines, -4 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

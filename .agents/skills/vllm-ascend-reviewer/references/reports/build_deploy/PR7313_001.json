@@ -1,0 +1,59 @@
+{
+  "report_id": "PR7313_001",
+  "pr_number": 7313,
+  "pr_title": "[doc] Upload doc for qwen3.5-27B and qwen3.5-397B-A17B on Ascend",
+  "pr_status": "merged",
+  "merged_at": "2026-03-17T14:19:38Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/models/Qwen3.5-27B.md:137"
+  ],
+  "landing_sha": "3851f47",
+  "source_quote": "MengqingCao 指出文档中关于 prefix caching 的说明不完整，实际还需要设置 `--mamba-cache-mode align` 才能启用 prefix caching，现有注释会误导用户。",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 指出文档中 prefix caching 说明缺少 `--mamba-cache-mode align` 参数，会误导用户，并建议添加示例脚本。作者通过 commit `3851f47` 更新了 prefix cache 相关文档，2/2 建议全部落地。",
+      "patch_snippet": "commit `3851f47`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "3851f47",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "模型部署文档中的启动命令必须包含所有必要参数，特别是影响功能正确性的参数（如 `--mamba-cache-mode align` 对于 prefix caching），避免误导用户。",
+    "context": "",
+    "checkpoints": [
+      "文档中的启动命令是否包含所有必要参数",
+      "功能说明是否准确反映了实际配置要求",
+      "是否提供了可运行的示例脚本"
+    ],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "<!-- 文件: docs/source/tutorials/models/Qwen3.5-27B.md -->\n<!-- （根据评审意见推断补全上下文）在线推理章节，prefix caching 说明不完整 -->",
+      "context": "MengqingCao 指出文档中关于 prefix caching 的说明不完整，实际还需要设置 `--mamba-cache-mode align` 才能启用 prefix caching，现有注..."
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "<!-- 文件: docs/source/tutorials/models/Qwen3.5-27B.md -->\n<!-- （来自评审意见）补充 --mamba-cache-mode align 参数，并添加 prefix caching 示例脚本 -->",
+      "context": "MengqingCao 指出文档中关于 prefix caching 的说明不完整，实际还需要设置 `--mamba-cache-mode align` 才能启用 prefix caching，现有注..."
+    },
+    "diff": {
+      "unified": "--- a/file\n+++ b/file\n@@ -1,2 +1,2 @@\n <!-- 文件: docs/source/tutorials/models/Qwen3.5-27B.md -->\n-<!-- （根据评审意见推断补全上下文）在线推理章节，prefix caching 说明不完整 -->\n+<!-- （来自评审意见）补充 --mamba-cache-mode align 参数，并添加 prefix caching 示例脚本 -->",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "- <!-- （根据评审意见推断补全上下文）在线推理章节，prefix caching 说明不完整 -->",
+        "+ <!-- （来自评审意见）补充 --mamba-cache-mode align 参数，并添加 prefix caching 示例脚本 -->"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

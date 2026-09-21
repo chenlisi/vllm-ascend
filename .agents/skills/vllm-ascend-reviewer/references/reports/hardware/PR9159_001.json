@@ -1,0 +1,58 @@
+{
+  "report_id": "PR9159_001",
+  "pr_number": 9159,
+  "pr_title": "[Ascend950][BugFix] Fix w8a8_mxfp8 weight_scale group count: use cdiv for non-divisible input_size",
+  "pr_status": "merged",
+  "merged_at": "2026-05-18T01:53:23Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/quantization/methods/w8a8_mxfp8.py:67"
+  ],
+  "landing_sha": "1e30416",
+  "source_quote": "`num_groups = input_size // self.group_size if input_size % self.group_size == 0 else cdiv(input_size, self.group_size)`",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan: vllm_ascend/quantization/methods/w8a8_mxfp8.py:67",
+      "patch_snippet": "评后sha 1e30416 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "1e30416",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "`num_groups = input_size // self.group_size if input_size % self.group_size == 0 else cdiv(input_size, self.group_size)`",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/quantization/methods/w8a8_mxfp8.py",
+      "line": 67,
+      "code": "        num_groups = input_size // self.group_size\n        params_dict[\"weight_scale\"] = torch.empty(output_size, num_groups, dtype=torch.uint8)",
+      "context": "`num_groups = input_size // self.group_size if input_size % self.group_size == 0 else cdiv(input_size, self.group_size)`"
+    },
+    "pattern": {
+      "file": "vllm_ascend/quantization/methods/w8a8_mxfp8.py",
+      "line": 67,
+      "code": "# 经过多轮讨论，最终简化为直接使用 cdiv:\n# wangxiyuan 初始建议: num_groups = input_size // self.group_size if input_size % self.group_size == 0 else cdiv(input_size, self.group_size)\n# realliujiaxu 建议: just use cdiv(input_size, self.group_size)\n        num_groups = cdiv(input_size, self.group_size)\n        params_dict[\"weight_scale\"] = torch.empty(output_size, num_groups, dtype=torch.uint8)",
+      "context": "`num_groups = input_size // self.group_size if input_size % self.group_size == 0 else cdiv(input_size, self.group_size)`"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/quantization/methods/w8a8_mxfp8.py\n+++ b/vllm_ascend/quantization/methods/w8a8_mxfp8.py\n@@ -1,2 +1,5 @@\n-        num_groups = input_size // self.group_size\n+# 经过多轮讨论，最终简化为直接使用 cdiv:\n+# wangxiyuan 初始建议: num_groups = input_size // self.group_size if input_size % self.group_size == 0 else cdiv(input_size, self.group_size)\n+# realliujiaxu 建议: just use cdiv(input_size, self.group_size)\n+        num_groups = cdiv(input_size, self.group_size)\n         params_dict[\"weight_scale\"] = torch.empty(output_size, num_groups, dtype=torch.uint8)\n",
+      "stats": "1 file changed, +4 lines, -1 lines",
+      "key_changes": [
+        "-        num_groups = input_size // self.group_size",
+        "+# 经过多轮讨论，最终简化为直接使用 cdiv:",
+        "+# wangxiyuan 初始建议: num_groups = input_size // self.group_size if input_size % self.group_size == 0 else cdiv(input_size, self.group_size)",
+        "+# realliujiaxu 建议: just use cdiv(input_size, self.group_size)",
+        "+        num_groups = cdiv(input_size, self.group_size)"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

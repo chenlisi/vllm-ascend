@@ -1,0 +1,58 @@
+{
+  "report_id": "PR13285_001",
+  "pr_number": 13285,
+  "pr_title": "[CI] Add weely performance and accuracy test cases for Kimi-K2.6-W4A8 and Kimi-K2.7-W4A8",
+  "pr_status": "merged",
+  "dimension": [
+    "test"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/e2e/weekly/single_node/configs/Kimi-K2.6-w4a8-A3.yaml:57"
+  ],
+  "landing_sha": "b355733",
+  "source_quote": "The CLI argument `--speculative_config` uses an underscore, but vLLM's standard argument is `--speculative-config` (with a hyphen). Using `--speculative_config` will cause an unrecognized argument error and prevent the server from starting. Please update this to `--speculative-config` here and at lines 123, 189, and 249.",
+  "correspondence": [
+    {
+      "review_quote": "tests/e2e/weekly/single_node/configs/Kimi-K2.6-w4a8-A3.yaml:57",
+      "patch_snippet": "评后sha b355733 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "b355733",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "vLLM CLI 参数使用连字符（kebab-case），配置文件中引用 CLI 参数时必须与实际参数名完全一致，避免使用下划线导致参数无法识别。",
+    "context": "",
+    "checkpoints": [
+      "检查 yaml/配置文件中的 CLI 参数是否使用连字符（如 `--speculative-config`）而非下划线（如 `--speculative_config`）",
+      "确认参数名与 vLLM 实际支持的参数名一致",
+      "批量检查同一参数在多个配置文件中的一致性"
+    ],
+    "antipattern": {
+      "file": "tests/e2e/weekly/single_node/configs/Kimi-K2.6-w4a8-A3.yaml",
+      "line": 50,
+      "code": "    commands:\n      - \"vllm serve\"\n      - \"--model\"\n      - \"z-lab/Kimi-K2.5-DFlash\"\n      - \"--tensor-parallel-size\"\n      - \"1\"\n      - \"--data-parallel-size\"\n      - \"1\"\n      - \"--speculative_config\"\n      - '{\"method\": \"dflash\",\"model\": \"z-lab/Kimi-K2.5-DFlash\", \"num_speculative_tokens\": 7}'\n      - \"--max-model-len\"\n      - \"2048\"\n      - \"--enforce-eager\"\n      - \"--trust-remote-code\"\n      - \"--gpu-memory-utilization\"\n      - \"0.9\"",
+      "context": "The CLI argument `--speculative_config` uses an underscore, but vLLM's standard argument is `--speculative-config` (with a hyphen). Using `--speculative_config` will cause an unrecognized argument err"
+    },
+    "pattern": {
+      "file": "tests/e2e/weekly/single_node/configs/Kimi-K2.6-w4a8-A3.yaml",
+      "line": 50,
+      "code": "    commands:\n      - \"vllm serve\"\n      - \"--model\"\n      - \"z-lab/Kimi-K2.5-DFlash\"\n      - \"--tensor-parallel-size\"\n      - \"1\"\n      - \"--data-parallel-size\"\n      - \"1\"\n      - \"--speculative-config\"\n      - '{\"method\": \"dflash\",\"model\": \"z-lab/Kimi-K2.5-DFlash\", \"num_speculative_tokens\": 7}'\n      - \"--max-model-len\"\n      - \"2048\"\n      - \"--enforce-eager\"\n      - \"--trust-remote-code\"\n      - \"--gpu-memory-utilization\"\n      - \"0.9\"",
+      "context": "The CLI argument `--speculative_config` uses an underscore, but vLLM's standard argument is `--speculative-config` (with a hyphen). Using `--speculative_config` will cause an unrecognized argument err"
+    },
+    "diff": {
+      "unified": "--- a/tests/e2e/weekly/single_node/configs/Kimi-K2.6-w4a8-A3.yaml\n+++ b/tests/e2e/weekly/single_node/configs/Kimi-K2.6-w4a8-A3.yaml\n@@ -6,7 +6,7 @@\n       - \"1\"\n       - \"--data-parallel-size\"\n       - \"1\"\n-      - \"--speculative_config\"\n+      - \"--speculative-config\"\n       - '{\"method\": \"dflash\",\"model\": \"z-lab/Kimi-K2.5-DFlash\", \"num_speculative_tokens\": 7}'\n       - \"--max-model-len\"\n       - \"2048\"\n",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "移除: - \"--speculative_config\"",
+        "新增: - \"--speculative-config\""
+      ]
+    },
+    "language": "yaml",
+    "_status": "processed"
+  }
+}

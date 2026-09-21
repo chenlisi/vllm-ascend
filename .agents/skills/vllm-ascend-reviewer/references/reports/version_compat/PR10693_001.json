@@ -1,0 +1,67 @@
+{
+  "report_id": "PR10693_001",
+  "pr_number": 10693,
+  "pr_title": "[Doc] Standardize DeepSeek-V4-Flash and DeepSeek-V4-Pro deployment tutorial structure",
+  "pr_status": "merged",
+  "merged_at": "2026-06-26T02:14:33Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/models/DeepSeek-V4-Flash.md:42"
+  ],
+  "landing_sha": "6f4d27c",
+  "source_quote": "please follow a consistent order throughout the document for A3/A2 deployment example.",
+  "correspondence": [
+    {
+      "review_quote": "evakang777 指出 A3/A2 部署示例在文档中的顺序应保持一致。herizhen 建议使用 tab-set 配合 sync-group/sync 创建同步标签，使选择 A3 时页面所有 A3 标签自动切换。作者通过 commit `6f4d27c`（\"Use tab-set for A2/A3 series sections in V4 tutorials\"）完成修改，2/2 建议全部落地。",
+      "patch_snippet": "commit `6f4d27c`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "6f4d27c",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当文档包含多个硬件平台（如 A3/A2）的部署示例时，应使用 tab-set 配合 sync-group/sync 创建同步标签，确保用户选择某一平台后，页面所有标签组自动切换到对应平台。",
+    "context": "",
+    "checkpoints": [
+      "多平台文档是否使用了 tab-set 组件",
+      "是否配置了 sync-group/sync 实现标签同步",
+      "各章节中 A3/A2 的展示顺序是否一致"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/DeepSeek-V4-Flash.md",
+      "line": 42,
+      "code": "<!-- 文件: docs/source/tutorials/models/DeepSeek-V4-Flash.md -->\n<!-- 行号: 30-80 -->\n<!-- A3 和 A2 部署示例顺序不一致，没有使用同步标签 -->\n\n## Prerequisites\n\n- `DeepSeek-V4-Flash` (BF16): requires 1 Atlas 800 A3 (128G × 8) node.\n- `DeepSeek-V4-Flash-w8a8-mtp` (Quantized version): requires 1 Atlas 800 A3 (128G × 8) node.\n\n## Single-Node Deployment\n\n### A3 Deployment",
+      "context": "please follow a consistent order throughout the document for A3/A2 deployment example."
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/DeepSeek-V4-Flash.md",
+      "line": 42,
+      "code": "<!-- 文件: docs/source/tutorials/models/DeepSeek-V4-Flash.md -->\n<!-- 行号: 30-80 -->\n<!-- 使用 tab-set + sync-group/sync 创建同步标签 -->\n\n## Prerequisites\n\n- `DeepSeek-V4-Flash` (BF16): requires 1 Atlas 800 A3 (128G × 16) node.\n- `DeepSeek-V4-Flash-w8a8-mtp` (Quantized version): requires 1 Atlas 800 A3 (128G × 16) node\n  or 1 Atlas 800 A2 (64G × 8) node.\n\n## Single-Node Deployment\n\n::::{tab-set}\n:::{tab-item} A3 series\n:sync: group-a3",
+      "context": "please follow a consistent order throughout the document for A3/A2 deployment example."
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/DeepSeek-V4-Flash.md\n+++ b/docs/source/tutorials/models/DeepSeek-V4-Flash.md\n@@ -1,12 +1,15 @@\n <!-- 文件: docs/source/tutorials/models/DeepSeek-V4-Flash.md -->\n <!-- 行号: 30-80 -->\n-<!-- A3 和 A2 部署示例顺序不一致，没有使用同步标签 -->\n+<!-- 使用 tab-set + sync-group/sync 创建同步标签 -->\n \n ## Prerequisites\n \n-- `DeepSeek-V4-Flash` (BF16): requires 1 Atlas 800 A3 (128G × 8) node.\n-- `DeepSeek-V4-Flash-w8a8-mtp` (Quantized version): requires 1 Atlas 800 A3 (128G × 8) node.\n+- `DeepSeek-V4-Flash` (BF16): requires 1 Atlas 800 A3 (128G × 16) node.\n+- `DeepSeek-V4-Flash-w8a8-mtp` (Quantized version): requires 1 Atlas 800 A3 (128G × 16) node\n+  or 1 Atlas 800 A2 (64G × 8) node.\n \n ## Single-Node Deployment\n \n-### A3 Deployment\n+::::{tab-set}\n+:::{tab-item} A3 series\n+:sync: group-a3",
+      "stats": "1 file changed, +7 lines, -4 lines",
+      "key_changes": [
+        "移除: <!-- A3 和 A2 部署示例顺序不一致，没有使用同步标签 -->",
+        "新增: <!-- 使用 tab-set + sync-group/sync 创建同步标签 -->",
+        "移除: - `DeepSeek-V4-Flash` (BF16): requires 1 Atlas 800 A3 (128G × 8) node.",
+        "移除: - `DeepSeek-V4-Flash-w8a8-mtp` (Quantized version): requires 1 Atlas 800 A3 (128",
+        "新增: - `DeepSeek-V4-Flash` (BF16): requires 1 Atlas 800 A3 (128G × 16) node.",
+        "新增: - `DeepSeek-V4-Flash-w8a8-mtp` (Quantized version): requires 1 Atlas 800 A3 (128",
+        "新增: or 1 Atlas 800 A2 (64G × 8) node.",
+        "移除: ### A3 Deployment",
+        "新增: ::::{tab-set}",
+        "新增: :::{tab-item} A3 series"
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

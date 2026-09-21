@@ -1,0 +1,63 @@
+{
+  "report_id": "PR7364_001",
+  "pr_number": 7364,
+  "pr_title": "[BugFix]A2 MOE method&& layerwise MTP bugfix && Mamba gdn_metadata bugfix",
+  "pr_status": "merged",
+  "merged_at": "2026-03-17T11:12:48Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ascend_forward_context.py:241"
+  ],
+  "landing_sha": "6aadb4d",
+  "source_quote": "weijinqian0 指出 MOE 通信方法的选择可能需要同时满足两个条件，并提供了华为 Ascend 官方文档链接作为参考依据。",
+  "correspondence": [
+    {
+      "review_quote": "weijinqian0 指出 MOE 通信方法的选择需要同时满足多个条件，并提供了官方文档参考。作者通过 commit `6aadb4d` 添加了 `ep_size >= 16` 的条件，1/1 建议全部落地。",
+      "patch_snippet": "commit `6aadb4d`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "6aadb4d",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "Ascend 设备上 MOE 通信方法（MC2 vs ALLGATHER）的选择需要同时满足多个条件（如 num_experts_per_device 和 ep_size），不能仅依赖单一条件。应参考华为官方文档确定完整条件。",
+    "context": "",
+    "checkpoints": [
+      "MOE 通信方法选择是否考虑了所有相关条件",
+      "是否参考了华为 Ascend 官方文档",
+      "ep_size 条件是否被正确检查"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ascend_forward_context.py",
+      "line": 0,
+      "code": "def _select_a2_moe_comm_method(\n    num_tokens: int,\n    vllm_config: VllmConfig,\n    mc2_tokens_capacity: int,\n) -> MoECommType:\n    num_experts = vllm_config.model_config.get_num_experts()\n    ep_world_size = (\n        vllm_config.parallel_config.world_size_across_dp // vllm_config.parallel_config.pipeline_parallel_size\n    )\n    num_experts_per_device = num_experts // ep_world_size\n    if num_experts_per_device <= 16:\n        return MoECommType.MC2\n    return MoECommType.ALLGATHER",
+      "context": "weijinqian0 指出 MOE 通信方法的选择可能需要同时满足两个条件，并提供了华为 Ascend 官方文档链接作为参考依据。"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ascend_forward_context.py",
+      "line": 0,
+      "code": "def _select_a2_moe_comm_method(\n    num_tokens: int,\n    vllm_config: VllmConfig,\n    mc2_tokens_capacity: int,\n) -> MoECommType:\n    num_experts = vllm_config.model_config.get_num_experts()\n    ep_world_size = (\n        vllm_config.parallel_config.world_size_across_dp // vllm_config.parallel_config.pipeline_parallel_size\n    )\n    num_experts_per_device = num_experts // ep_world_size\n    if (\n        num_experts_per_device <= 24\n        and ep_world_size >= 16\n        and (num_tokens is None or num_tokens <= mc2_tokens_capacity)\n    ):\n        return MoECommType.MC2\n    return MoECommType.ALLGATHER",
+      "context": "weijinqian0 指出 MOE 通信方法的选择可能需要同时满足两个条件，并提供了华为 Ascend 官方文档链接作为参考依据。"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ascend_forward_context.py\n+++ b/vllm_ascend/ascend_forward_context.py\n@@ -1,13 +1,17 @@\n         vllm_config.parallel_config.world_size_across_dp // vllm_config.parallel_config.pipeline_parallel_size\n     )\n     num_experts_per_device = num_experts // ep_world_size\n-    if num_experts_per_device <= 16:\n+    if (\n+        num_experts_per_device <= 24\n+        and ep_world_size >= 16\n+        and (num_tokens is None or num_tokens <= mc2_tokens_capacity)\n+    ):\n         return MoECommType.MC2\n     return MoECommType.ALLGATHER",
+      "stats": "1 file changed, +5 lines, -1 lines",
+      "key_changes": [
+        "- if num_experts_per_device <= 16:",
+        "+ if (",
+        "+ num_experts_per_device <= 24",
+        "+ and ep_world_size >= 16",
+        "+ and (num_tokens is None or num_tokens <= mc2_tokens_capacity)",
+        "+ ):"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

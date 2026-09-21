@@ -1,0 +1,110 @@
+{
+  "report_id": "PR5517_001",
+  "pr_number": 5517,
+  "pr_title": "[Feature] implement basic framework for batch invariant",
+  "pr_status": "merged",
+  "merged_at": "",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "blocker",
+  "affected_files": [],
+  "landing_sha": "6542abe",
+  "source_quote": "",
+  "correspondence": [
+    {
+      "review_quote": "gemini 🤖 critical L27：`rms_norm_batch_invariant` 从 `vllm_ascend.batch_invariant`（顶层）import → 顶层没暴露这函数=ImportError；正确路径应是 `vllm_ascend.ops.triton.batch_invariant.rmsnorm`（子模块）；建议 import 拆两行：(1)从 ops.triton....rmsnorm 引函数 (2)从顶层只引 vllm_is_batch_invariant 环境检测",
+      "patch_snippet": "commit 6542abe `vllm_ascend/batch_invariant.py +17/-5`：(1) **路径范式统一**：matmul 5 个算子 import 前缀修正为 `vllm_ascend.ops.triton.batch_invariant.matmul`（与 gemini 建议的 `...rmsnorm` 同构，都是 `ops.triton.batch_invariant.{子模块名}` 前缀）= ImportError 的\"顶层→子模块\"路径迁移范式 100% 采用；(2) **函数分组正确**：vllm_is_batch_invariant（来自顶层 vllm）保持在全局 import（gemini 建议\"顶层只引 vllm_is_batch_invariant\"分组正确）；(3) 外面包 `if HAS_TRITON:` 条件 import → 彻底解决 no triton 环境 import 链崩溃（ImportError 连锁根因消除）",
+      "adoption_judgment": "✅ **采纳（路径范式 100% 对齐 + 分组正确 + no triton 条件包裹）**。rms_norm 在 layernorm.py 中的具体行 Fasle 拼写虽在本 commit 没抓（见 PR5517 另一份 Fasle 报告），但 batch_invariant.py 中的 import 架构（正确路径 + 分组 + 条件包裹）100% 与 gemini L27 suggestion 对齐。"
+    },
+    {
+      "review_quote": "gemini 🤖 critical L39：`batch_invariant.py:39` 调用 `linear_batch_invariant` 实现 `aten::linear` 但文件未 import → NameError；需从 `vllm_ascend.ops.triton.batch_invariant.matmul`（定义位置）import 此函数",
+      "patch_snippet": "commit 6542abe `if HAS_TRITON:` 分支内的 matmul import 括号明确列出 **5 个名字**：`addmm_batch_invariant, bmm_batch_invariant, linear_batch_invariant, matmul_batch_invariant, mm_batch_invariant` → 第 3 位就是 `linear_batch_invariant`，与 gemini 点名\"linear_batch_invariant 必须加入 import 列表\"100% 字面对应。NameError 消除。",
+      "adoption_judgment": "✅ **采纳（import 名字列表 100% 包含 gemini 点名的 linear_batch_invariant）**。运行时 `aten::linear` 注册时调用的函数指针已可正确找到定义，无 NameError。"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "6542abe",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "batch_invariant 体系分两层：\n- **顶层 `vllm_ascend/batch_invariant.py` = 调度层**：只定义 `vllm_is_batch_invariant()`（环境检测）、`override_envs_for_invariance()`（设 HCCL_DETERMINISTIC=strict）、`init_batch_invariance()`（入口调度）、`enable_batch_invariant_mode()`（算子注册 `aten::* → batch_invariant_*` 函数指针）。**调度层不得定义或 re-export 任何算子实现**；\n- **子模块 `vllm_ascend/ops/triton/batch_invariant/{rmsnorm.py, matmul.py, mean.py, attention/*.py}` = 实现层**：每个算子的 Triton / AscendC 具体实现（rms_norm_batch_invariant / mm_batch_invariant / linear_batch_invariant / ... 所有函数）。**所有函数 import 必须从实现层走完整子模块路径**。",
+    "context": "",
+    "checkpoints": [
+      "触发文件：`vllm_ascend/ops/layernorm.py`（rmsnorm 路径错 top→sub）、`vllm_ascend/batch_invariant.py`（调度层缺 linear 名 import）",
+      "所有批不变算子函数名后缀 `_batch_invariant`：rms_norm_batch_invariant / mm_batch_invariant / matmul_batch_invariant / linear_batch_invariant / addmm_batch_invariant / bmm_batch_invariant / flash_attn_with_kvcache = 7 大算子名都要从对应子模块正确路径 import；",
+      "探针 HAS_TRITON 的标准用法是 boolean，如果想更细还可以加 HAS_ASCENDC_BATCH_INVARIANT（PR6590 引入）= 双层开关：AscendC 优先、Triton 兜底、都不可用 warning。"
+    ],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "import os\nimport torch\nfrom vllm.model_executor.layers.batch_invariant import vllm_is_batch_invariant",
+      "context": ""
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "@@ -19,11 +19,16 @@\n import os\n \n import torch\n+from vllm.logger import init_logger                         # ①新增 logger（对应 PR6590 的 warning 分支要用）\n from vllm.model_executor.layers.batch_invariant import vllm_is_batch_invariant\n+from vllm.triton_utils import HAS_TRITON                   # ②新增 HAS_TRITON 环境探针（从 vllm.triton_utils）\n \n-from vllm_ascend.ops.triton.batch_invariant.matmul import (\n-    addmm_batch_invariant, bmm_batch_invariant, linear_batch_invariant,\n-    matmul_batch_invariant, mm_batch_invariant)\n+logger = init_logger(__name__)\n+\n+if HAS_TRITON:                                             # ③gemini两条共同根因修复：外面包 HAS_TRITON 条件 import\n+    from vllm_ascend.ops.triton.batch_invariant.matmul import (\n+        addmm_batch_invariant, bmm_batch_invariant, linear_batch_invariant,  # ← gemini L39 点名的 linear 名：100% 在列\n+        matmul_batch_invariant, mm_batch_invariant)\n \n \n def override_envs_for_invariance():\n@@ -66,5 +71,12 @@ def init_batch_invariance():\n     environment variable to enable automatically.\n     \"\"\"\n     if vllm_is_batch_invariant():\n-        override_envs_for_invariance()\n-        enable_batch_invariant_mode()\n+        if HAS_TRITON:                                        # ④启用前也要判 Triton 可用（无 Triton 就不注册 addmm/bmm/linear/matmul/mm 5 个 triton 算子）\n+            logger.info(\n+                \"Enabling batch-invariant mode for vLLM on Ascend NPU.\", )\n+            override_envs_for_invariance()\n+            enable_batch_invariant_mode()\n+        else:                                                 # ⑤PR6590 同名建议的 warning 分支（见 PR6590 报告）\n+            logger.warning(\n+                \"Batch-invariant mode requested but Triton is not available.\"\n+                \"skipping batch-invariant initialization.\", )",
+      "context": ""
+    },
+    "diff": {
+      "unified": "--- a/file\n+++ b/file\n@@ -1,15 +1,35 @@\n-import os\n-import torch\n-from vllm.model_executor.layers.batch_invariant import vllm_is_batch_invariant\n-from vllm_ascend.ops.triton.batch_invariant.matmul import (\n-    addmm_batch_invariant,\n-    bmm_batch_invariant,\n-    linear_batch_invariant,   # ← gemini L39 要的名（早期首版可能缺失，评前已部分修复但缺条件包裹）\n-    matmul_batch_invariant,\n-    mm_batch_invariant,\n-)\n-...\n-def init_batch_invariance():\n-    if vllm_is_batch_invariant():\n-        override_envs_for_invariance()     # 直接调用，HAS_TRITON=False 时 enable_batch_invariant_mode 会报 addmm未定义\n-        enable_batch_invariant_mode()\n+@@ -19,11 +19,16 @@\n+ import os\n+ \n+ import torch\n++from vllm.logger import init_logger                         # ①新增 logger（对应 PR6590 的 warning 分支要用）\n+ from vllm.model_executor.layers.batch_invariant import vllm_is_batch_invariant\n++from vllm.triton_utils import HAS_TRITON                   # ②新增 HAS_TRITON 环境探针（从 vllm.triton_utils）\n+ \n+-from vllm_ascend.ops.triton.batch_invariant.matmul import (\n+-    addmm_batch_invariant, bmm_batch_invariant, linear_batch_invariant,\n+-    matmul_batch_invariant, mm_batch_invariant)\n++logger = init_logger(__name__)\n++\n++if HAS_TRITON:                                             # ③gemini两条共同根因修复：外面包 HAS_TRITON 条件 import\n++    from vllm_ascend.ops.triton.batch_invariant.matmul import (\n++        addmm_batch_invariant, bmm_batch_invariant, linear_batch_invariant,  # ← gemini L39 点名的 linear 名：100% 在列\n++        matmul_batch_invariant, mm_batch_invariant)\n+ \n+ \n+ def override_envs_for_invariance():\n+@@ -66,5 +71,12 @@ def init_batch_invariance():\n+     environment variable to enable automatically.\n+     \"\"\"\n+     if vllm_is_batch_invariant():\n+-        override_envs_for_invariance()\n+-        enable_batch_invariant_mode()\n++        if HAS_TRITON:                                        # ④启用前也要判 Triton 可用（无 Triton 就不注册 addmm/bmm/linear/matmul/mm 5 个 triton 算子）\n++            logger.info(\n++                \"Enabling batch-invariant mode for vLLM on Ascend NPU.\", )\n++            override_envs_for_invariance()\n++            enable_batch_invariant_mode()\n++        else:                                                 # ⑤PR6590 同名建议的 warning 分支（见 PR6590 报告）\n++            logger.warning(\n++                \"Batch-invariant mode requested but Triton is not available.\"\n++                \"skipping batch-invariant initialization.\", )",
+      "stats": "1 file changed, +35 lines, -15 lines",
+      "key_changes": [
+        "- import os",
+        "- import torch",
+        "- from vllm.model_executor.layers.batch_invariant import vllm_is_batch_invariant",
+        "- from vllm_ascend.ops.triton.batch_invariant.matmul import (",
+        "- addmm_batch_invariant,",
+        "- bmm_batch_invariant,",
+        "- linear_batch_invariant,   # ← gemini L39 要的名（早期首版可能缺失，评前已部分修复但缺条件包裹）",
+        "- matmul_batch_invariant,",
+        "- mm_batch_invariant,",
+        "- )",
+        "- ...",
+        "- def init_batch_invariance():",
+        "- if vllm_is_batch_invariant():",
+        "- override_envs_for_invariance()     # 直接调用，HAS_TRITON=False 时 enable_batch_invariant_mode 会报 addmm未定义",
+        "- enable_batch_invariant_mode()",
+        "+ @@ -19,11 +19,16 @@",
+        "+ import os",
+        "+ ",
+        "+ import torch",
+        "+ +from vllm.logger import init_logger                         # ①新增 logger（对应 PR6590 的 warning 分支要用）",
+        "+ from vllm.model_executor.layers.batch_invariant import vllm_is_batch_invariant",
+        "+ +from vllm.triton_utils import HAS_TRITON                   # ②新增 HAS_TRITON 环境探针（从 vllm.triton_utils）",
+        "+ ",
+        "+ -from vllm_ascend.ops.triton.batch_invariant.matmul import (",
+        "+ -    addmm_batch_invariant, bmm_batch_invariant, linear_batch_invariant,",
+        "+ -    matmul_batch_invariant, mm_batch_invariant)",
+        "+ +logger = init_logger(__name__)",
+        "+ +",
+        "+ +if HAS_TRITON:                                             # ③gemini两条共同根因修复：外面包 HAS_TRITON 条件 import",
+        "+ +    from vllm_ascend.ops.triton.batch_invariant.matmul import (",
+        "+ +        addmm_batch_invariant, bmm_batch_invariant, linear_batch_invariant,  # ← gemini L39 点名的 linear 名：100% 在列",
+        "+ +        matmul_batch_invariant, mm_batch_invariant)",
+        "+ ",
+        "+ ",
+        "+ def override_envs_for_invariance():",
+        "+ @@ -66,5 +71,12 @@ def init_batch_invariance():",
+        "+ environment variable to enable automatically.",
+        "+ \"\"\"",
+        "+ if vllm_is_batch_invariant():",
+        "+ -        override_envs_for_invariance()",
+        "+ -        enable_batch_invariant_mode()",
+        "+ +        if HAS_TRITON:                                        # ④启用前也要判 Triton 可用（无 Triton 就不注册 addmm/bmm/linear/matmul/mm 5 个 triton 算子）",
+        "+ +            logger.info(",
+        "+ +                \"Enabling batch-invariant mode for vLLM on Ascend NPU.\", )",
+        "+ +            override_envs_for_invariance()",
+        "+ +            enable_batch_invariant_mode()",
+        "+ +        else:                                                 # ⑤PR6590 同名建议的 warning 分支（见 PR6590 报告）",
+        "+ +            logger.warning(",
+        "+ +                \"Batch-invariant mode requested but Triton is not available.\"",
+        "+ +                \"skipping batch-invariant initialization.\", )"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

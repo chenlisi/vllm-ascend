@@ -1,0 +1,61 @@
+{
+  "report_id": "PR13995_001",
+  "pr_number": 13995,
+  "pr_title": "[Refactor][DSA][3/N] unified the prefill and decode processes in DSA v1",
+  "pr_status": "merged",
+  "dimension": [
+    "test"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/ut/attention/test_dsa_v1.py:266"
+  ],
+  "landing_sha": "035dc95",
+  "source_quote": "The tests `test_prefill_and_decode_sas_wrappers_route_phase_specific_inputs` and `test_prefill_and_decode_qli_wrappers_route_decode_output_buffer` are broken and will fail with `AttributeError`. They attempt to call non-existent methods on `AscendDSAMetadataBuilder` (such as `_build_prefill_sas_metadata`, `_build_decode_sas_metadata`, `_build_prefill_qli_metadata`, and `_build_decode_qli_metadata`).\n> Since the prefill and decode metadata building processes have been unified into `_build_sas_metadata` and `_build_qli_metadata` (which are already thoroughly tested in the first two test cases), these wrapper-based tests are obsolete, redundant, and truncated at the end of the file. They should be removed.",
+  "correspondence": [
+    {
+      "review_quote": "tests/ut/attention/test_dsa_v1.py:266",
+      "patch_snippet": "评后sha 035dc95 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "035dc95",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当重构将多个方法统一为单一方法后，必须同步移除或更新调用旧方法名的测试，否则会导致 `AttributeError` 运行时失败。",
+    "context": "",
+    "checkpoints": [
+      "重构统一方法后，搜索测试代码中是否仍有调用旧方法名",
+      "确认旧方法已被新方法取代且不再存在",
+      "移除或更新所有引用旧方法名的测试用例",
+      "确保新测试覆盖统一后的方法逻辑"
+    ],
+    "antipattern": {
+      "file": "tests/ut/attention/test_dsa_v1.py",
+      "line": 266,
+      "code": "# tests/ut/attention/test_dsa_v1.py\n# 重构后 prefill/decode 已统一为 _build_sas_metadata / _build_qli_metadata\n# 但以下测试仍调用旧的 _build_prefill_sas_metadata / _build_decode_sas_metadata 等方法\n# 这些方法已不存在，运行时会抛出 AttributeError\n\n    rope_op.assert_called_once()\n    assert torch.equal(rope_op.call_args.args[0], input_positions)\n    assert rope_op.call_args.kwargs[\"use_cache\"] is (num_prefills == 0)\n    assert metadata_cache[\"cos\"] is cos\n    assert metadata_cache[\"sin\"] is sin\n\n    # ❌ 以下两个测试调用不存在的方法，会 AttributeError\n    def test_prefill_and_decode_sas_wrappers_route_phase_specific_inputs():\n        builder = _make_builder()\n        # _build_prefill_sas_metadata / _build_decode_sas_metadata 已不存在\n        prefill_actual = builder._build_prefill_sas_metadata(...)\n        decode_actual = builder._build_decode_sas_metadata(...)\n\n    def test_prefill_and_decode_qli_wrappers_route_decode_output_buffer():\n        builder = _make_builder()\n        # _build_prefill_qli_metadata / _build_decode_qli_metadata 已不存在\n        prefill_actual = builder._build_prefill_qli_metadata(...)\n        decode_actual = builder._build_decode_qli_metadata(...)",
+      "context": "tests/ut/attention/test_dsa_v1.py 重构后 prefill/decode 已统一为 _build_sas_metadata / _build_qli_metadata 但以下测试仍调用旧的 _build_prefill_sas_metadata / _build_decode_sas_metadata 等方法"
+    },
+    "pattern": {
+      "file": "tests/ut/attention/test_dsa_v1.py",
+      "line": 266,
+      "code": "# tests/ut/attention/test_dsa_v1.py\n# ✅ 过时的 wrapper 测试已移除，替换为使用统一方法的正确测试\n\n    rope_op.assert_called_once()\n    assert torch.equal(rope_op.call_args.args[0], input_positions)\n    assert rope_op.call_args.kwargs[\"use_cache\"] is (num_prefills == 0)\n    assert metadata_cache[\"cos\"] is cos\n    assert metadata_cache[\"sin\"] is sin\n    # ✅ 使用统一的 _build_sas_metadata / _build_qli_metadata 验证\n    sas_kwargs = builder._build_sas_metadata.call_args.kwargs\n    qli_kwargs = builder._build_qli_metadata.call_args.kwargs\n    assert sas_kwargs[\"metadata_cache\"] is metadata_cache\n    assert torch.equal(sas_kwargs[\"query_start_loc\"], query_start_loc)\n    assert torch.equal(sas_kwargs[\"seq_lens\"], builder.seq_lens)\n    assert sas_kwargs[\"max_seqlen_q\"] == 2\n    assert sas_kwargs[\"max_seqlen_kv\"] == 8\n    assert qli_kwargs[\"metadata_cache\"] is metadata_cache\n    assert torch.equal(qli_kwargs[\"query_start_loc\"], query_start_loc)\n    assert torch.equal(qli_kwargs[\"seq_lens\"], builder.seq_lens)\n    assert qli_kwargs[\"max_seqlen_q\"] == 2\n    assert qli_kwargs[\"max_seqlen_kv\"] == 8",
+      "context": "tests/ut/attention/test_dsa_v1.py ✅ 过时的 wrapper 测试已移除，替换为使用统一方法的正确测试 ✅ 使用统一的 _build_sas_metadata / _build_qli_metadata 验证"
+    },
+    "diff": {
+      "unified": "--- a/tests/ut/attention/test_dsa_v1.py\n+++ b/tests/ut/attention/test_dsa_v1.py\n@@ -1,23 +1,21 @@\n # tests/ut/attention/test_dsa_v1.py\n-# 重构后 prefill/decode 已统一为 _build_sas_metadata / _build_qli_metadata\n-# 但以下测试仍调用旧的 _build_prefill_sas_metadata / _build_decode_sas_metadata 等方法\n-# 这些方法已不存在，运行时会抛出 AttributeError\n+# ✅ 过时的 wrapper 测试已移除，替换为使用统一方法的正确测试\n \n     rope_op.assert_called_once()\n     assert torch.equal(rope_op.call_args.args[0], input_positions)\n     assert rope_op.call_args.kwargs[\"use_cache\"] is (num_prefills == 0)\n     assert metadata_cache[\"cos\"] is cos\n     assert metadata_cache[\"sin\"] is sin\n-\n-    # ❌ 以下两个测试调用不存在的方法，会 AttributeError\n-    def test_prefill_and_decode_sas_wrappers_route_phase_specific_inputs():\n-        builder = _make_builder()\n-        # _build_prefill_sas_metadata / _build_decode_sas_metadata 已不存在\n-        prefill_actual = builder._build_prefill_sas_metadata(...)\n-        decode_actual = builder._build_decode_sas_metadata(...)\n-\n-    def test_prefill_and_decode_qli_wrappers_route_decode_output_buffer():\n-        builder = _make_builder()\n-        # _build_prefill_qli_metadata / _build_decode_qli_metadata 已不存在\n-        prefill_actual = builder._build_prefill_qli_metadata(...)\n-        decode_actual = builder._build_decode_qli_metadata(...)\n+    # ✅ 使用统一的 _build_sas_metadata / _build_qli_metadata 验证\n+    sas_kwargs = builder._build_sas_metadata.call_args.kwargs\n+    qli_kwargs = builder._build_qli_metadata.call_args.kwargs\n+    assert sas_kwargs[\"metadata_cache\"] is metadata_cache\n+    assert torch.equal(sas_kwargs[\"query_start_loc\"], query_start_loc)\n+    assert torch.equal(sas_kwargs[\"seq_lens\"], builder.seq_lens)\n+    assert sas_kwargs[\"max_seqlen_q\"] == 2\n+    assert sas_kwargs[\"max_seqlen_kv\"] == 8\n+    assert qli_kwargs[\"metadata_cache\"] is metadata_cache\n+    assert torch.equal(qli_kwargs[\"query_start_loc\"], query_start_loc)\n+    assert torch.equal(qli_kwargs[\"seq_lens\"], builder.seq_lens)\n+    assert qli_kwargs[\"max_seqlen_q\"] == 2\n+    assert qli_kwargs[\"max_seqlen_kv\"] == 8\n",
+      "stats": "1 file changed, +14 lines, -16 lines",
+      "key_changes": [
+        "移除: decode_actual = builder._build_decode_sas_metadata(...)",
+        "移除: def test_prefill_and_decode_qli_wrappers_route_decode_output_buffer():",
+        "新增: assert torch.equal(qli_kwargs[\"seq_lens\"], builder.seq_lens)",
+        "新增: assert qli_kwargs[\"max_seqlen_q\"] == 2"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

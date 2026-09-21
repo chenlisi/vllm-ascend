@@ -1,0 +1,57 @@
+{
+  "report_id": "PR12950_003",
+  "pr_number": 12950,
+  "pr_title": "[Feature][v0.26.0rc] Support Kimi K3 on Ascend",
+  "pr_status": "merged",
+  "dimension": [
+    "design"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/spec_decode/dspark_proposer.py:136"
+  ],
+  "landing_sha": "23cfbd5",
+  "source_quote": "Can we remove this try-catch?",
+  "correspondence": [
+    {
+      "review_quote": "drslark: vllm_ascend/spec_decode/dspark_proposer.py:136",
+      "patch_snippet": "评后sha 23cfbd5 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "23cfbd5",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "不应使用 try-catch 来探测属性是否存在或进行条件分支，应通过显式参数传递和条件判断来处理。",
+    "context": "",
+    "checkpoints": [
+      "检查 try-catch 是否用于正常的控制流而非异常处理",
+      "确认是否有显式的条件判断可以替代异常探测",
+      "将可选数据通过参数传递而非运行时探测"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/spec_decode/dspark_proposer.py",
+      "line": 125,
+      "code": "class DSparkProposer:\n    \"\"\"GQA DSpark speculative decoding proposer.\"\"\"\n\n    def _get_block_size_for_group(\n        self,\n        gid: int,\n        runner,\n        kv_cache_spec,\n    ) -> int:\n        \"\"\"Get the logical block size for a KV-cache group.\"\"\"\n        # 使用 try-catch 探测 runner.input_batch.block_table\n        # 异常驱动的控制流：先尝试从 runner 获取，失败则回退到 kv_cache_spec\n        try:\n            block_size = runner.input_batch.block_table[gid]\n        except (KeyError, IndexError):\n            # runner 没有 block_table 或 gid 越界时回退\n            block_size = kv_cache_spec.block_size\n        return block_size\n\n    def propose(self, runner, ...):\n        \"\"\"Run one round of DSpark proposal.\"\"\"\n        # ... 省略前置逻辑 ...\n        for gid in range(num_kv_groups):\n            block_size = self._get_block_size_for_group(gid, runner, kv_cache_spec)\n            # 使用 block_size 进行后续 draft token 生成\n            ...",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/spec_decode/dspark_proposer.py",
+      "line": 125,
+      "code": "class DSparkProposer:\n    \"\"\"GQA DSpark speculative decoding proposer.\"\"\"\n\n    @staticmethod\n    def _resolve_kernel_block_size(\n        gid: int,\n        kv_cache_spec,\n        kernel_block_sizes: list[int] | None,\n    ) -> int:\n        \"\"\"Return the logical block size used by the expanded block table.\n\n        The runner now passes one normalized kernel block size per KV-cache\n        group, so we select the value directly by gid instead of probing\n        runner.input_batch.block_table with try-catch.\n        \"\"\"\n        if kernel_block_sizes is not None and gid < len(kernel_block_sizes):\n            return int(kernel_block_sizes[gid])\n        return int(kv_cache_spec.block_size)\n\n    def propose(self, runner, ...):\n        \"\"\"Run one round of DSpark proposal.\"\"\"\n        # ... 省略前置逻辑 ...\n        # runner 传入归一化的 kernel_block_sizes 列表\n        kernel_block_sizes = runner.get_kernel_block_sizes()\n        for gid in range(num_kv_groups):\n            block_size = self._resolve_kernel_block_size(\n                gid, kv_cache_spec, kernel_block_sizes)\n            # 使用 block_size 进行后续 draft token 生成\n            ...",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/spec_decode/dspark_proposer.py\n+++ b/vllm_ascend/spec_decode/dspark_proposer.py\n@@ -1,26 +1,29 @@\n class DSparkProposer:\n     \"\"\"GQA DSpark speculative decoding proposer.\"\"\"\n \n-    def _get_block_size_for_group(\n-        self,\n+    @staticmethod\n+    def _resolve_kernel_block_size(\n         gid: int,\n-        runner,\n         kv_cache_spec,\n+        kernel_block_sizes: list[int] | None,\n     ) -> int:\n-        \"\"\"Get the logical block size for a KV-cache group.\"\"\"\n-        # 使用 try-catch 探测 runner.input_batch.block_table\n-        # 异常驱动的控制流：先尝试从 runner 获取，失败则回退到 kv_cache_spec\n-        try:\n-            block_size = runner.input_batch.block_table[gid]\n-        except (KeyError, IndexError):\n-            # runner 没有 block_table 或 gid 越界时回退\n-            block_size = kv_cache_spec.block_size\n-        return block_size\n+        \"\"\"Return the logical block size used by the expanded block table.\n+\n+        The runner now passes one normalized kernel block size per KV-cache\n+        group, so we select the value directly by gid instead of probing\n+        runner.input_batch.block_table with try-catch.\n+        \"\"\"\n+        if kernel_block_sizes is not None and gid < len(kernel_block_sizes):\n+            return int(kernel_block_sizes[gid])\n+        return int(kv_cache_spec.block_size)\n \n     def propose(self, runner, ...):\n         \"\"\"Run one round of DSpark proposal.\"\"\"\n         # ... 省略前置逻辑 ...\n+        # runner 传入归一化的 kernel_block_sizes 列表\n+        kernel_block_sizes = runner.get_kernel_block_sizes()\n         for gid in range(num_kv_groups):\n-            block_size = self._get_block_size_for_group(gid, runner, kv_cache_spec)\n+            block_size = self._resolve_kernel_block_size(\n+                gid, kv_cache_spec, kernel_block_sizes)\n             # 使用 block_size 进行后续 draft token 生成\n             ...",
+      "stats": "1 file changed, +16 lines, -13 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

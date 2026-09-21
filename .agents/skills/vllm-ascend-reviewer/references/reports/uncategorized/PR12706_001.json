@@ -1,0 +1,45 @@
+{
+  "report_id": "PR12706_001",
+  "pr_number": 0,
+  "pr_title": "",
+  "pr_status": "unknown",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "",
+  "source_quote": "",
+  "correspondence": [],
+  "verification": {
+    "merged": false,
+    "modified_commit": "",
+    "approvals": 0
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "msgid \"\"\n\" the first release candidate for the v0.22.1 release line, building on \"\n\"v0.21.0rc1 and aligning the plugin with upstream vLLM v0.22.1. Please follow\"\n\" the [official \"\n\"doc](https://docs.vllm.ai/projects/ascend/en/releases-v0.22.1rc) to get \"\n\"started.\"\nmsgstr \"\"\n\"我们很高兴地宣布 vLLM Ascend 的 v0.22.1rc1 版本发布。这是 v0.22.1 发布系列的第一个候选版本，基于 v0.21.0rc1\"\n\" 构建，并将插件与上游 vLLM v0.22.1 \"\n\"对齐。请参考[官方文档](https://docs.vllm.ai/projects/ascend/en/releases-v0.22.1rc)开始使用。\"",
+      "context": "修改前代码 (gettext)"
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "msgid \"\"\n\" the first release candidate for the v0.22.1 release line, building on \"\n\"v0.21.0rc1 and aligning the plugin with upstream vLLM v0.22.1. Please follow\"\n\" the [official \"\n\"doc](https://docs.vllm.ai/projects/ascend/en/v0.22.1rc) to get \"\n\"started.\"\nmsgstr \"\"\n\"我们很高兴地宣布 vLLM Ascend 的 v0.22.1rc1 版本发布。这是 v0.22.1 发布系列的第一个候选版本，基于 v0.21.0rc1\"\n\" 构建，并将插件与上游 vLLM v0.22.1 \"\n\"对齐。请参考[官方文档](https://docs.vllm.ai/projects/ascend/en/v0.22.1rc)开始使用。\"",
+      "context": "修改后代码 (gettext)"
+    },
+    "diff": {
+      "unified": "--- a/file\n+++ b/file\n@@ -2,9 +2,9 @@\n \" the first release candidate for the v0.22.1 release line, building on \"\n \"v0.21.0rc1 and aligning the plugin with upstream vLLM v0.22.1. Please follow\"\n \" the [official \"\n-\"doc](https://docs.vllm.ai/projects/ascend/en/releases-v0.22.1rc) to get \"\n+\"doc](https://docs.vllm.ai/projects/ascend/en/v0.22.1rc) to get \"\n \"started.\"\n msgstr \"\"\n \"我们很高兴地宣布 vLLM Ascend 的 v0.22.1rc1 版本发布。这是 v0.22.1 发布系列的第一个候选版本，基于 v0.21.0rc1\"\n \" 构建，并将插件与上游 vLLM v0.22.1 \"\n-\"对齐。请参考[官方文档](https://docs.vllm.ai/projects/ascend/en/releases-v0.22.1rc)开始使用。\"\n+\"对齐。请参考[官方文档](https://docs.vllm.ai/projects/ascend/en/v0.22.1rc)开始使用。\"",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "修改代码逻辑"
+      ]
+    },
+    "language": "gettext",
+    "_status": "pending_llm_extract"
+  }
+}

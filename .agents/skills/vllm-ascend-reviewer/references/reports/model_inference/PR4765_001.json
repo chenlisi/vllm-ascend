@@ -1,0 +1,61 @@
+{
+  "report_id": "PR4765_001",
+  "pr_number": 4765,
+  "pr_title": "[Attention] Temporarily add back pa for small batch sizes.",
+  "pr_status": "merged",
+  "merged_at": "2025-12-15T12:35:50Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/attention_v1.py:726",
+    "vllm_ascend/attention/attention_v1.py:766",
+    "vllm_ascend/compilation/acl_graph.py:220"
+  ],
+  "landing_sha": "cda1964",
+  "source_quote": "The code that determines whether to use PA or FIA based on the BS size can only take effect in full graph mode. Is this as expected?",
+  "correspondence": [
+    {
+      "review_quote": "weijinqian0 询问基于 BS size 判断 PA/FIA 是否仅在 full graph mode 下生效是否符合预期，作者确认是。yiz-liu 建议使用 `num_input_tokens` 以避免多模态模型问题，并质疑 `seq_lens` 是否应为 `seq_lens_cpu` 或 `seq_lens_list`，作者解释 `seq_lens` 是 CPU tensor 为 PA 所需，yiz-liu 最终确认可以。作者通过 3 个 commit 添加了约束和 graph mode 检查，4/4 建议已处理。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "cda1964",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在 attention 实现中，基于 batch size 切换 PA/FIA 等注意力模式时，需确保逻辑仅在目标模式（如 full graph mode）下生效，并使用正确的 token 计数变量（`num_input_tokens`）以兼容多模态模型。",
+    "context": "",
+    "checkpoints": [
+      "基于 batch size 的模式切换逻辑是否限制在正确的执行模式（如 full graph mode）下",
+      "token 计数是否使用 `num_input_tokens` 以兼容多模态输入",
+      "`seq_lens` 相关参数是否使用了正确的设备类型（CPU/GPU tensor）",
+      "临时性性能优化代码是否有明确的适用范围约束"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 545,
+      "code": "    def _paged_attention_for_graph_capture(\n        self, query, attn_metadata, output, num_tokens, ...\n    ):\n        \"\"\"Paged attention for small batch sizes during graph capture.\"\"\"\n        if forward_context.capturing:\n            workspace = graph_params.workspaces.get(num_tokens)\n            if workspace is None:\n                workspace = torch_npu._npu_paged_attention_get_workspace(\n                    query=query,\n                    key_cache=self.key_cache,\n                    value_cache=self.value_cache,\n                    num_kv_heads=self.num_kv_heads,\n                    num_heads=self.num_heads,\n                    scale_value=self.scale,\n                    block_table=attn_metadata.block_tables,\n                    context_lens=attn_metadata.seq_lens,\n                    out=output)\n                update_graph_params_workspaces(num_tokens,\n                                               weak_ref_tensors(workspace))\n            return output",
+      "context": "weijinqian0: The code that determines whether to use PA or FIA based on the BS size can only take effect in full graph mode. Is this as expected?"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 545,
+      "code": "    def _paged_attention_for_graph_capture(\n        self, query, attn_metadata, output, num_tokens, ...\n    ):\n        \"\"\"Paged attention for small batch sizes during graph capture.\"\"\"\n        workspace = graph_params.workspaces.get(num_tokens)\n        if workspace is None:\n            workspace = torch_npu._npu_paged_attention_get_workspace(\n                query=query,\n                key_cache=self.key_cache,\n                value_cache=self.value_cache,\n                num_kv_heads=self.num_kv_heads,\n                num_heads=self.num_heads,\n                scale_value=self.scale,\n                block_table=attn_metadata.block_tables,\n                context_lens=attn_metadata.seq_lens,\n                out=output)\n            update_graph_params_workspaces(num_tokens,\n                                           weak_ref_tensors(workspace))\n\n        stream = torch_npu.npu.current_stream()\n        event = torch.npu.ExternalEvent()\n        event.wait(stream)\n        event.reset(stream)\n        graph_params.events[num_tokens].append(event)\n        graph_params.attn_params[num_tokens].append((\n            weak_ref_tensors(query),\n            weak_ref_tensors(self.key_cache),\n            weak_ref_tensors(self.value_cache),\n            self.num_kv_heads,\n            self.num_heads,\n            self.scale,\n            attn_metadata.block_tables,\n            attn_metadata.seq_lens,\n            weak_ref_tensors(output),\n        ))\n        torch.npu.graph_task_group_begin(stream)\n        torch_npu._npu_paged_attention(\n            query=query,\n            key_cache=self.key_cache,\n            value_cache=self.value_cache,\n            num_kv_heads=self.num_kv_heads,\n            num_heads=self.num_heads,\n            scale_value=self.scale,\n            block_table=attn_metadata.block_tables,\n            context_lens=attn_metadata.seq_lens,\n            out=output,\n            workspace=workspace)\n        handle = torch.npu.graph_task_group_end(stream)\n        graph_params.handles[num_tokens].append(handle)\n        return output",
+      "context": "weijinqian0: The code that determines whether to use PA or FIA based on the BS size can only take effect in full graph mode. Is this as expected?"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/attention_v1.py\n+++ b/vllm_ascend/attention/attention_v1.py\n@@ -545,20 +545,50 @@\n         self, query, attn_metadata, output, num_tokens, ...\n     ):\n         \"\"\"Paged attention for small batch sizes during graph capture.\"\"\"\n-        if forward_context.capturing:\n-            workspace = graph_params.workspaces.get(num_tokens)\n-            if workspace is None:\n-                workspace = torch_npu._npu_paged_attention_get_workspace(\n-                    query=query,\n-                    key_cache=self.key_cache,\n-                    value_cache=self.value_cache,\n-                    num_kv_heads=self.num_kv_heads,\n-                    num_heads=self.num_heads,\n-                    scale_value=self.scale,\n-                    block_table=attn_metadata.block_tables,\n-                    context_lens=attn_metadata.seq_lens,\n-                    out=output)\n-                update_graph_params_workspaces(num_tokens,\n-                                               weak_ref_tensors(workspace))\n-            return output\n+        workspace = graph_params.workspaces.get(num_tokens)\n+        if workspace is None:\n+            workspace = torch_npu._npu_paged_attention_get_workspace(\n+                query=query,\n+                key_cache=self.key_cache,\n+                value_cache=self.value_cache,\n+                num_kv_heads=self.num_kv_heads,\n+                num_heads=self.num_heads,\n+                scale_value=self.scale,\n+                block_table=attn_metadata.block_tables,\n+                context_lens=attn_metadata.seq_lens,\n+                out=output)\n+            update_graph_params_workspaces(num_tokens,\n+                                           weak_ref_tensors(workspace))\n+\n+        stream = torch_npu.npu.current_stream()\n+        event = torch.npu.ExternalEvent()\n+        event.wait(stream)\n+        event.reset(stream)\n+        graph_params.events[num_tokens].append(event)\n+        graph_params.attn_params[num_tokens].append((\n+            weak_ref_tensors(query),\n+            weak_ref_tensors(self.key_cache),\n+            weak_ref_tensors(self.value_cache),\n+            self.num_kv_heads,\n+            self.num_heads,\n+            self.scale,\n+            attn_metadata.block_tables,\n+            attn_metadata.seq_lens,\n+            weak_ref_tensors(output),\n+        ))\n+        torch.npu.graph_task_group_begin(stream)\n+        torch_npu._npu_paged_attention(\n+            query=query,\n+            key_cache=self.key_cache,\n+            value_cache=self.value_cache,\n+            num_kv_heads=self.num_kv_heads,\n+            num_heads=self.num_heads,\n+            scale_value=self.scale,\n+            block_table=attn_metadata.block_tables,\n+            context_lens=attn_metadata.seq_lens,\n+            out=output,\n+            workspace=workspace)\n+        handle = torch.npu.graph_task_group_end(stream)\n+        graph_params.handles[num_tokens].append(handle)\n+        return output",
+      "stats": "1 file changed, +46 lines, -16 lines",
+      "key_changes": [
+        "修改了第 5-20 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

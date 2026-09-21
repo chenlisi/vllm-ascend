@@ -1,0 +1,67 @@
+{
+  "report_id": "PR10513_001",
+  "pr_number": 10513,
+  "pr_title": "[Test][Misc] Refactor and consolidate long sequence E2E accuracy tests",
+  "pr_status": "merged",
+  "merged_at": "2026-06-23T01:20:22Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/e2e/pull_request/four_card/long_sequence/test_basic.py:128"
+  ],
+  "landing_sha": "af8b5ee",
+  "source_quote": "is it fine to remove this model test?",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan 质疑是否应该移除 test_basic.py:128 处的模型测试。作者承认这是一个错误（\"It's a mistake\"），并通过 commit `af8b5ee` 恢复了该测试用例，同时新增了 DeepSeek V4 DSA CP 的基础 greedy 测试。",
+      "patch_snippet": "commit `af8b5ee`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "af8b5ee",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在重构和整合测试套件时，需要仔细确认每个测试用例是否仍需要保留，避免误删有效的模型测试覆盖。",
+    "context": "",
+    "checkpoints": [
+      "检查重构后的测试套件是否覆盖了所有原有测试场景",
+      "确认被移除的测试用例是否已在其他测试中等价覆盖",
+      "评审人应特别关注测试删除操作"
+    ],
+    "antipattern": {
+      "file": "tests/e2e/pull_request/four_card/long_sequence/test_basic.py",
+      "line": 115,
+      "code": "# wangxiyuan 评审: \"is it fine to remove this model test?\"\n# pisceskkk 回复: \"It's a mistake, have restored this test.\"\n# 在重构过程中误删了部分模型测试用例\n\nimport pytest\nfrom tests.e2e.pull_request.four_card.long_sequence.test_accuracy import (\n    AccuracyCase,\n    run_accuracy_cases,\n)\n\n# 重构后移除了原有的 test_basic.py 中的多个模型测试\n# 包括 DeepSeek V4 DSA CP 的基础测试也被误删\n\n# 文件末尾无 DeepSeek V4 DSA CP 相关测试",
+      "context": "is it fine to remove this model test?"
+    },
+    "pattern": {
+      "file": "tests/e2e/pull_request/four_card/long_sequence/test_basic.py",
+      "line": 115,
+      "code": "# 恢复了被误删的模型测试用例\n# 新增 DeepSeek V4 DSA CP 基础 greedy 测试\n# commit message: \"test(deepseek): add basic greedy test for DeepSeek V4 DSA CP\"\n\nimport pytest\nfrom tests.e2e.pull_request.four_card.long_sequence.test_accuracy import (\n    AccuracyCase,\n    run_accuracy_cases,\n)\n\n# FIX: 恢复被误删的 DeepSeek V4 DSA CP 基础 greedy 测试\nDEEPSEEK_V4_DSA_CP_CASES = [\n    AccuracyCase(\n        name=\"deepseek_v4_dsa_cp_basic_greedy\",\n        model=\"deepseek-ai/DeepSeek-V4\",\n        tp_size=4,\n        additional_config={\"multistream_dsv4_dsa_overlap\": True},\n        max_num_seqs=1,\n        greedy=True,\n    ),\n]\n\n@pytest.mark.parametrize(\"case\", DEEPSEEK_V4_DSA_CP_CASES)\ndef test_deepseek_v4_dsa_cp_basic(case):\n    run_accuracy_cases(case)",
+      "context": "is it fine to remove this model test?"
+    },
+    "diff": {
+      "unified": "--- a/tests/e2e/pull_request/four_card/long_sequence/test_basic.py\n+++ b/tests/e2e/pull_request/four_card/long_sequence/test_basic.py\n@@ -1,6 +1,6 @@\n-# wangxiyuan 评审: \"is it fine to remove this model test?\"\n-# pisceskkk 回复: \"It's a mistake, have restored this test.\"\n-# 在重构过程中误删了部分模型测试用例\n+# 恢复了被误删的模型测试用例\n+# 新增 DeepSeek V4 DSA CP 基础 greedy 测试\n+# commit message: \"test(deepseek): add basic greedy test for DeepSeek V4 DSA CP\"\n \n import pytest\n from tests.e2e.pull_request.four_card.long_sequence.test_accuracy import (\n@@ -8,7 +8,18 @@\n     run_accuracy_cases,\n )\n \n-# 重构后移除了原有的 test_basic.py 中的多个模型测试\n-# 包括 DeepSeek V4 DSA CP 的基础测试也被误删\n+# FIX: 恢复被误删的 DeepSeek V4 DSA CP 基础 greedy 测试\n+DEEPSEEK_V4_DSA_CP_CASES = [\n+    AccuracyCase(\n+        name=\"deepseek_v4_dsa_cp_basic_greedy\",\n+        model=\"deepseek-ai/DeepSeek-V4\",\n+        tp_size=4,\n+        additional_config={\"multistream_dsv4_dsa_overlap\": True},\n+        max_num_seqs=1,\n+        greedy=True,\n+    ),\n+]\n \n-# 文件末尾无 DeepSeek V4 DSA CP 相关测试\n+@pytest.mark.parametrize(\"case\", DEEPSEEK_V4_DSA_CP_CASES)\n+def test_deepseek_v4_dsa_cp_basic(case):\n+    run_accuracy_cases(case)",
+      "stats": "1 file changed, +17 lines, -6 lines",
+      "key_changes": [
+        "移除: # wangxiyuan 评审: \"is it fine to remove this model test?\"",
+        "移除: # pisceskkk 回复: \"It's a mistake, have restored this test.\"",
+        "移除: # 在重构过程中误删了部分模型测试用例",
+        "新增: # 恢复了被误删的模型测试用例",
+        "新增: # 新增 DeepSeek V4 DSA CP 基础 greedy 测试",
+        "新增: # commit message: \"test(deepseek): add basic greedy test for DeepSeek V4 DSA CP\"",
+        "移除: # 重构后移除了原有的 test_basic.py 中的多个模型测试",
+        "移除: # 包括 DeepSeek V4 DSA CP 的基础测试也被误删",
+        "新增: # FIX: 恢复被误删的 DeepSeek V4 DSA CP 基础 greedy 测试",
+        "新增: DEEPSEEK_V4_DSA_CP_CASES = ["
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "report_id": "PR4224_001",
+  "pr_number": 4224,
+  "pr_title": "[Refactor] remove moe type of multicast.",
+  "pr_status": "merged",
+  "merged_at": "2025-11-24T09:32:38Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/model_runner_v1.py:2388",
+    "vllm_ascend/torchair/torchair_fused_moe_state.py:25",
+    "vllm_ascend/torchair/torchair_fused_moe_state.py:30",
+    "vllm_ascend/ascend_forward_context.py:14"
+  ],
+  "landing_sha": "df5430a",
+  "source_quote": "The parameter \"with_prefill\" is useless after removing multicast",
+  "correspondence": [
+    {
+      "review_quote": "三位评审人提出了 4 条意见：Pr0Wh1teGivee 指出移除 multicast 后 `with_prefill` 参数不再有用；Ronald1995 指出两处 else 语句可以移除以简化代码；wangxiyuan 指出不应在 torchair 模块之外导入 torchair 相关代码，违反了模块边界。作者通过多个 commit 完成了重构，移除了无用参数、简化了条件语句、修复了模块导入问题。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "df5430a",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "当移除某个功能（如 multicast）后，必须检查并清理所有因此变得无用的参数和代码路径。",
+    "context": "",
+    "checkpoints": [
+      "检查被移除功能的调用方是否还有无用参数",
+      "确认函数签名是否已更新",
+      "验证所有调用点是否已同步修改"
+    ],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "from enum import Enum\nfrom vllm_ascend.envs import envs_ascend\n\n\nclass FusedMoEState(Enum):\n    AllGather = 0\n    All2All = 1\n    MC2 = 2\n    AllGatherEP = 3\n    NaiveMulticast = 4  # multicast 实现已移除，但枚举值仍保留（死代码）\n\n\ndef get_fused_moe_state(ep_size: int, with_prefill: bool,\n                        is_deepseek_v3_r1: bool):\n    if (envs_ascend.VLLM_ENABLE_FUSED_EXPERTS_ALLGATHER_EP and ep_size > 1\n            and is_deepseek_v3_r1):\n        return FusedMoEState.AllGatherEP\n    elif ep_size == 1:\n        return FusedMoEState.AllGather\n    elif ep_size < 16 or with_prefill:\n        return FusedMoEState.All2All\n    else:\n        return FusedMoEState.NaiveMulticast  # 返回已无实现的状态\n\n\nfrom vllm_ascend.torchair.torchair_fused_moe_state import get_fused_moe_state",
+      "context": "The parameter \"with_prefill\" is useless after removing multicast"
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "from enum import Enum\nfrom vllm_ascend.envs import envs_ascend\n\n\nclass FusedMoEState(Enum):\n    AllGather = 0\n    All2All = 1\n    MC2 = 2\n    AllGatherEP = 3\n    All2AllSeq = 4  # 替代 NaiveMulticast，用于新的通信策略\n\n\ndef get_fused_moe_state(ep_size: int, with_prefill: bool,\n                        is_deepseek_v3_r1: bool):\n    if (envs_ascend.VLLM_ENABLE_FUSED_EXPERTS_ALLGATHER_EP and ep_size > 1\n            and is_deepseek_v3_r1):\n        return FusedMoEState.AllGatherEP\n    elif ep_size == 1:\n        return FusedMoEState.AllGather\n    elif ep_size < 16 or with_prefill:\n        return FusedMoEState.All2All\n    return FusedMoEState.MC2  # 移除 else，直接 return",
+      "context": "The parameter \"with_prefill\" is useless after removing multicast"
+    },
+    "diff": {
+      "unified": "--- a/a/file\n+++ b/b/file\n@@ -1,26 +1,22 @@\n     All2All = 1\n     MC2 = 2\n     AllGatherEP = 3\n-    NaiveMulticast = 4  # multicast 实现已移除，但枚举值仍保留（死代码）\n+    All2AllSeq = 4  # 替代 NaiveMulticast，用于新的通信策略\n \n \n def get_fused_moe_state(ep_size: int, with_prefill: bool,\n@@ -1,26 +1,22 @@\n         return FusedMoEState.AllGather\n     elif ep_size < 16 or with_prefill:\n         return FusedMoEState.All2All\n-    else:\n-        return FusedMoEState.NaiveMulticast  # 返回已无实现的状态\n-\n-\n-from vllm_ascend.torchair.torchair_fused_moe_state import get_fused_moe_state\n+    return FusedMoEState.MC2  # 移除 else，直接 return",
+      "stats": "1 file changed, +2 lines, -6 lines",
+      "key_changes": [
+        "修改了第 10-10 行的代码",
+        "修改了第 22-26 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "report_id": "PR4039_001",
+  "pr_number": 4039,
+  "pr_title": "[Test] Add tests for the multi-node DeepSeek-V2-Lite network in GE Graph",
+  "pr_status": "merged",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "tests/e2e/multicard/test_torchair_graph_mode.py:234",
+    ".github/workflows/_e2e_test.yaml:174",
+    "tests/e2e/nightly/multi_node/config/models/Deepseek-V2-Lite.yaml:1"
+  ],
+  "landing_sha": "4d842ba",
+  "source_quote": "If your case only need to test on single card, plz move it to `tests/e2e/singlecard/`. plz don't change this fixture.\nplz don't remove this\nplz also make sure if we need to add `deepseek-v2-lite` and `qwen3-30b-a3b` in nightly ci @Potabk\nadding these two tiny models to multi-node CI is inappropriate. From neither a functional perspective nor a model perspective",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao: tests/e2e/multicard/test_torchair_graph_mode.py:234(2025-11-18 08:21:58)",
+      "patch_snippet": "评后sha 4d842ba 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: .github/workflows/_e2e_test.yaml:174(2025-11-18 08:22:11)",
+      "patch_snippet": "评后sha 4d842ba 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: tests/e2e/nightly/multi_node/config/models/Deepseek-V2-Lite.yaml:1(2025-11-18 08:24:02)",
+      "patch_snippet": "评后sha 4d842ba 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Potabk: tests/e2e/nightly/multi_node/config/models/Deepseek-V2-Lite.yaml:1(2025-11-18 08:29:06)",
+      "patch_snippet": "评后sha 4d842ba 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "4d842ba",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [
+      "单卡测试用例应放在 `tests/e2e/singlecard/` 目录下，多卡测试用例放在 `tests/e2e/multicard/` 目录下。",
+      "不应修改已有的测试 fixture 来适配新的测试场景。"
+    ],
+    "antipattern": {
+      "file": "tests/e2e/multicard/test_torchair_graph_mode.py",
+      "line": 295,
+      "code": "# gemini-bot critical 评审：测试函数定义了 additional_config\n# 但未调用 test fixture，导致测试不会实际执行\n\ndef test_e2e_deepseekv2lite_with_nz():\n    additional_config = {\n        \"torchair_graph_config\": {\n            \"enable_kv_nz\": True,\n        },\n    }\n    # 缺少对 fixture 的调用，测试不会执行",
+      "context": "gemini-bot critical 评审：测试函数定义了 additional_config 但未调用 test fixture，导致测试不会实际执行 缺少对 fixture 的调用，测试不会执行"
+    },
+    "pattern": {
+      "file": "tests/e2e/multicard/test_torchair_graph_mode.py",
+      "line": 295,
+      "code": "# 补全 torchair_graph_config 和 fixture 调用\n\ndef test_e2e_deepseekv2lite_with_nz():\n    additional_config = {\n        \"torchair_graph_config\": {\n            \"enabled\": True,\n            \"enable_kv_nz\": True,\n        },\n    }\n    _deepseek_v2_lite_torchair_test_fixure(additional_config)",
+      "context": "补全 torchair_graph_config 和 fixture 调用"
+    },
+    "diff": {
+      "unified": "--- a/tests/e2e/multicard/test_torchair_graph_mode.py\n+++ b/tests/e2e/multicard/test_torchair_graph_mode.py\n@@ -1,10 +1,10 @@\n-# gemini-bot critical 评审：测试函数定义了 additional_config\n-# 但未调用 test fixture，导致测试不会实际执行\n+# 补全 torchair_graph_config 和 fixture 调用\n \n def test_e2e_deepseekv2lite_with_nz():\n     additional_config = {\n         \"torchair_graph_config\": {\n+            \"enabled\": True,\n             \"enable_kv_nz\": True,\n         },\n     }\n-    # 缺少对 fixture 的调用，测试不会执行\n+    _deepseek_v2_lite_torchair_test_fixure(additional_config)\n",
+      "stats": "1 file changed, +3 lines, -3 lines",
+      "key_changes": [
+        "新增: _deepseek_v2_lite_torchair_test_fixure(additional_config)",
+        "新增: \"enabled\": True,"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "report_id": "PR4543_001",
+  "pr_number": 4543,
+  "pr_title": "add multi_npu_qwen3_dense tutorials",
+  "pr_status": "merged",
+  "merged_at": "2025-12-10T08:09:56Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/index.md:16",
+    "docs/source/tutorials/multi_npu_qwen3_dense.md:1",
+    "docs/source/tutorials/multi_npu_qwen3_dense.md:102",
+    "docs/source/tutorials/Qwen3-Dense.md:100",
+    "docs/source/tutorials/Qwen3-Dense.md:80",
+    "docs/source/tutorials/Qwen3-Dense.md:94",
+    "docs/source/tutorials/Qwen3-Dense.md:169",
+    "docs/source/tutorials/Qwen3-Dense.md:195",
+    "docs/source/tutorials/Qwen3-Dense.md:205",
+    "docs/source/tutorials/Qwen3-Dense.md:14",
+    "docs/source/tutorials/Qwen3-Dense.md:347",
+    "docs/source/tutorials/Qwen3-Dense.md:358",
+    "docs/source/tutorials/Qwen3-Dense.md:375"
+  ],
+  "landing_sha": "0f533d0",
+  "source_quote": "The name needs to be uniformly changed to `Qwen3-Dense`",
+  "correspondence": [
+    {
+      "review_quote": "1092626063 指出命名需统一为 `Qwen3-Dense`、不要硬编码镜像版本、直接提供 docker run 命令。menogrey 指出大小写不一致(QWEN3→Qwen3)、删除不必要的 `VLLM_USE_V1=1`、精简 jemalloc2 安装指南。realliujiaxu 指出格式问题（空格、代码格式、删除不当章节、用词准确）。作者通过多个 commits 修改，19/19 条建议全部落地。",
+      "patch_snippet": "",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "0f533d0",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "教程文档中的产品名称、术语必须保持全局一致，包括大小写、标题格式、参数命名等。",
+    "context": "",
+    "checkpoints": [
+      "产品名称大小写是否统一（如 Qwen3 而非 QWEN3）",
+      "文档标题是否与索引页一致",
+      "参数名称是否准确（如 TP size 而非 TP count）",
+      "命令行参数是否使用代码格式（反引号）"
+    ],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "<!-- docs/source/tutorials/Qwen3-Dense.md:175-190 -->\n<!-- shell 脚本无条件执行 apt 和 yum 命令（逻辑错误） -->",
+      "context": "1092626063: The name needs to be uniformly changed to `Qwen3-Dense`"
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "<!-- docs/source/tutorials/Qwen3-Dense.md:175-195 — gemini-code-assist[bot] suggestion -->\n<!-- Performance optimization of memory management: 使用 if/elif 条件判断 -->",
+      "context": "1092626063: The name needs to be uniformly changed to `Qwen3-Dense`"
+    },
+    "diff": {
+      "unified": "--- a/a/file\n+++ b/b/file\n@@ -1,2 +1,2 @@\n-<!-- docs/source/tutorials/Qwen3-Dense.md:175-190 -->\n-<!-- shell 脚本无条件执行 apt 和 yum 命令（逻辑错误） -->\n+<!-- docs/source/tutorials/Qwen3-Dense.md:175-195 — gemini-code-assist[bot] suggestion -->\n+<!-- Performance optimization of memory management: 使用 if/elif 条件判断 -->",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "修改了第 1-2 行的代码"
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

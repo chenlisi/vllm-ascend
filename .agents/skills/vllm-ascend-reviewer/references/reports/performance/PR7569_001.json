@@ -1,0 +1,63 @@
+{
+  "report_id": "PR7569_001",
+  "pr_number": 7569,
+  "pr_title": "[Triton][Sampler] Add penalty-related Triton kernel for better performance of penalties",
+  "pr_status": "merged",
+  "merged_at": "2026-03-25T14:58:51Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/ops/triton/bincount.py:40",
+    "vllm_ascend/ops/triton/bincount.py:112"
+  ],
+  "landing_sha": "ca14fe5",
+  "source_quote": "代码中的类型注解将 `BIG_CORE_NUM` 和 `BIG_ROW_BLOCK_SIZE` 当作 `tl.constexpr` 处理，这会导致这些值更新时触发不必要的重编译问题，应该移除。\nThese type hints treat `BIG_CORE_NUM` and `BIG_ROW_BLOCK_SIZE` as `tl.constexpr` would lead to recompilation problems when these values are updated and first met when calling. Should remove it.\n在 tiling 时考虑 `seq_len` 维度，因为在 prefill 阶段通常存在 `bs` 较小但 `seq_len` 较大的输入序列，仅对 dim 0 做 tiling 会导致向量核利用率低。\nWould be better if we can take the `seq_len` dim into account while doing tiling, bcause there are usually input sequences with small `bs` during prefill stage. Doing tiling with dim 0 only would lead to low-utilization among all vector cores.",
+  "correspondence": [
+    {
+      "review_quote": "linfeng-yuan: vllm_ascend/ops/triton/bincount.py:40",
+      "patch_snippet": "评后sha ca14fe5 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "linfeng-yuan: vllm_ascend/ops/triton/bincount.py:112",
+      "patch_snippet": "评后sha ca14fe5 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "ca14fe5",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "Triton kernel 中不应将可能变化的参数标记为 `tl.constexpr`，因为每次值变化都会触发重编译；对于 batch 和 seq_len 两个维度的数据，应使用 2D tiling 以提高向量核利用率。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/ops/triton/bincount.py",
+      "line": 25,
+      "code": "import triton\nimport triton.language as tl\n\n\n@triton.jit\ndef token_bin_counts_and_mask_kernel(\n    input_ptr,\n    output_ptr,\n    mask_ptr,\n    seq_lens_ptr,\n    n_tokens,\n    n_bins,\n    BIG_CORE_NUM: tl.constexpr,\n    BIG_ROW_BLOCK_SIZE: tl.constexpr,\n    BLOCK_SIZE: tl.constexpr,\n):\n    \"\"\"Triton kernel for computing token bin counts on NPU.\"\"\"\n    pid = tl.program_id(axis=0)\n    # Compute bin counts using atomic operations\n    ...",
+      "context": "代码中的类型注解将 `BIG_CORE_NUM` 和 `BIG_ROW_BLOCK_SIZE` 当作 `tl.constexpr` 处理，这会导致这些值更新时触发不必要的重编译问题，应该移除。\nThese type hints treat `BIG_CORE_NUM` and `BIG_ROW_BLOCK_SIZE` as `tl.constexpr` would lead to recompil"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/triton/bincount.py",
+      "line": 25,
+      "code": "import triton\nimport triton.language as tl\n\n\n@triton.jit\ndef token_bin_counts_and_mask_kernel(\n    input_ptr,\n    output_ptr,\n    mask_ptr,\n    seq_lens_ptr,\n    n_tokens,\n    n_bins,\n    BIG_CORE_NUM,\n    BIG_ROW_BLOCK_SIZE,\n    BLOCK_SIZE: tl.constexpr,\n):\n    \"\"\"Triton kernel for computing token bin counts on NPU.\"\"\"\n    pid = tl.program_id(axis=0)\n    # Compute bin counts using atomic operations\n    ...",
+      "context": "代码中的类型注解将 `BIG_CORE_NUM` 和 `BIG_ROW_BLOCK_SIZE` 当作 `tl.constexpr` 处理，这会导致这些值更新时触发不必要的重编译问题，应该移除。\nThese type hints treat `BIG_CORE_NUM` and `BIG_ROW_BLOCK_SIZE` as `tl.constexpr` would lead to recompil"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/triton/bincount.py\n+++ b/vllm_ascend/ops/triton/bincount.py\n@@ -10,8 +10,8 @@\n     seq_lens_ptr,\n     n_tokens,\n     n_bins,\n-    BIG_CORE_NUM: tl.constexpr,\n-    BIG_ROW_BLOCK_SIZE: tl.constexpr,\n+    BIG_CORE_NUM,\n+    BIG_ROW_BLOCK_SIZE,\n     BLOCK_SIZE: tl.constexpr,\n ):\n     \"\"\"Triton kernel for computing token bin counts on NPU.\"\"\"\n",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "-    BIG_CORE_NUM: tl.constexpr,",
+        "-    BIG_ROW_BLOCK_SIZE: tl.constexpr,",
+        "+    BIG_CORE_NUM,",
+        "+    BIG_ROW_BLOCK_SIZE,"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

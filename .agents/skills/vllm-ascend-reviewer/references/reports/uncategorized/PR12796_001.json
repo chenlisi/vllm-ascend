@@ -1,0 +1,45 @@
+{
+  "report_id": "PR12796_001",
+  "pr_number": 12796,
+  "pr_title": "[TEST]Add A3 single-node weekly test case",
+  "pr_status": "merged",
+  "dimension": [
+    "test"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "bf65ae2",
+  "source_quote": "There is a typo in the command argument `--enable-expert-paralle`. It should be `--enable-expert-parallel`.\nThere is a typo in the command argument `--enable-expert-paralle`. It should be `--enable-expert-parallel`.",
+  "correspondence": [],
+  "verification": {
+    "merged": true,
+    "modified_commit": "bf65ae2",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 tests/e2e/weekly/**/*.yaml 的 `_server_cmd` YAML alias 中，所有 `--<kebab-case-long-opt>` 形式的 vLLM CLI 参数必须经过精确拼写核查。常见失误包括：平行 parallel/paralle（缺末尾 l）、量化 quantization/quantisation（英美拼写混用）、`--enforce-eager` 拼成 `-enforce-eager`（单双横杠错）。由于 YAML 是\"字符串复制 + alias 引用 + &/*****大量传播\"模式，一个拼写错误一旦进入 `_server_cmd` anchor，会通过 `<<: *server_cmd` 横向传染到数十条测试用例，周测批量 silent failure。**代码审查必须对 YAML 文件中的 `--` 开头 CLI 参数执行精确 spell-check，并特别留意 parallel、quantization 这两个多音节长词**。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "tests/e2e/weekly/single_node/configs/Deepseek_R1_W8A8_A3.yaml",
+      "line": 0,
+      "code": "# A3 weekly test config for Deepseek R1 W8A8\ntest_cases:\n  - name: deepseek_r1_w8a8_a3\n    config:\n      _server_cmd: &server_cmd\n        - \"$SERVER_PORT\"\n        - \"--data-parallel-size\"\n        - \"2\"\n        - \"--enable-expert-paralle\"   # paralle → 少末尾 l，CLI 将无法识别该参数\n        - \"--seed\"\n        - \"1024\"\n      _test_cmd: &test_cmd\n        - \"--dataset-name\"\n        - \"sonnet\"",
+      "context": "修改前代码 (yaml)"
+    },
+    "pattern": {
+      "file": "tests/e2e/weekly/single_node/configs/Deepseek_R1_W8A8_A3.yaml",
+      "line": 0,
+      "code": "# A3 weekly test config for Deepseek R1 W8A8\ntest_cases:\n  - name: deepseek_r1_w8a8_a3\n    config:\n      _server_cmd: &server_cmd\n        - \"$SERVER_PORT\"\n        - \"--data-parallel-size\"\n        - \"2\"\n        - \"--enable-expert-parallel\"  # 与 gemini suggestion 完全一致，末尾 l 补回\n        - \"--seed\"\n        - \"1024\"\n      _test_cmd: &test_cmd\n        - \"--dataset-name\"\n        - \"sonnet\"",
+      "context": "修改后代码 (yaml)"
+    },
+    "diff": {
+      "unified": "--- a/tests/e2e/weekly/single_node/configs/Deepseek_R1_W8A8_A3.yaml\n+++ b/tests/e2e/weekly/single_node/configs/Deepseek_R1_W8A8_A3.yaml\n@@ -6,7 +6,7 @@\n         - \"$SERVER_PORT\"\n         - \"--data-parallel-size\"\n         - \"2\"\n-        - \"--enable-expert-paralle\"   # paralle → 少末尾 l，CLI 将无法识别该参数\n+        - \"--enable-expert-parallel\"  # 与 gemini suggestion 完全一致，末尾 l 补回\n         - \"--seed\"\n         - \"1024\"\n       _test_cmd: &test_cmd",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "yaml",
+    "_status": "pending_llm_extract"
+  }
+}

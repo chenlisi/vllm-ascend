@@ -1,0 +1,59 @@
+{
+  "report_id": "PR5097_001",
+  "pr_number": 5097,
+  "pr_title": "[Refactor]5/N Extract common code of mla_v1.py & extract mla_cp",
+  "pr_status": "merged",
+  "merged_at": "2025-12-24T02:25:19Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/mla_v1.py:99",
+    "vllm_ascend/attention/mla_v1.py:562"
+  ],
+  "landing_sha": "1be68a6",
+  "source_quote": "move to mla_cp.py",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan 指出 mla_v1.py 中的 pcp 相关代码应移至 mla_cp.py 并彻底清理。作者通过 commit `1be68a6` 等完成代码迁移和清理，2/2 建议全部落地。",
+      "patch_snippet": "commit `1be68a6`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "1be68a6",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "重构过程中应确保特定功能的代码被移至对应模块，原模块中不应残留已迁移功能的代码。",
+    "context": "",
+    "checkpoints": [
+      "提取模块后，原文件中是否还残留已迁移的代码",
+      "pcp/cp 等特定功能代码是否已从通用模块中彻底移除"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/mla_v1.py",
+      "line": 0,
+      "code": "class AscendMLAMetadataBuilder:\n    \"\"\"Metadata builder for Ascend MLA attention.\"\"\"\n\n    def __init__(self, ...):\n        self.pcp_size = ...\n        self.dcp_size = ...\n        if self.pcp_size > 1 or self.dcp_size > 1:\n            self.chunk_size = ...\n            self.local_chunk_seq_lens = ...\n\n    def build(self, ...):\n        if self.pcp_size > 1:\n            chunked_context_metadata = ...\n        ...",
+      "context": "move to mla_cp.py"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/mla_v1.py",
+      "line": 0,
+      "code": "class AscendMLAMetadataBuilder:\n    \"\"\"Metadata builder for Ascend MLA attention.\"\"\"\n\n    def __init__(self, ...):\n        pass\n\n    def build(self, ...):\n        ...",
+      "context": "move to mla_cp.py"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/mla_v1.py\n+++ b/vllm_ascend/attention/mla_v1.py\n@@ -1,14 +1,8 @@\n     \"\"\"Metadata builder for Ascend MLA attention.\"\"\"\n \n     def __init__(self, ...):\n-        self.pcp_size = ...\n-        self.dcp_size = ...\n-        if self.pcp_size > 1 or self.dcp_size > 1:\n-            self.chunk_size = ...\n-            self.local_chunk_seq_lens = ...\n+        pass\n \n     def build(self, ...):\n-        if self.pcp_size > 1:\n-            chunked_context_metadata = ...\n         ...",
+      "stats": "1 file changed, +1 lines, -7 lines",
+      "key_changes": [
+        "修改了第 5-9 行的代码",
+        "删除了第 12-13 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

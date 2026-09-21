@@ -1,0 +1,75 @@
+{
+  "report_id": "PR6476_001",
+  "pr_number": 6476,
+  "pr_title": "[DOC]Add Memcache Usage Guide",
+  "pr_status": "merged",
+  "merged_at": "2026-02-02T07:17:05Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/user_guide/feature_guide/kv_pool.md:691",
+    "docs/source/user_guide/feature_guide/kv_pool.md:722",
+    "docs/source/user_guide/feature_guide/kv_pool.md:764",
+    "docs/source/user_guide/feature_guide/kv_pool.md:758",
+    "docs/source/user_guide/feature_guide/kv_pool.md:830",
+    "docs/source/user_guide/feature_guide/kv_pool.md:873",
+    "docs/source/user_guide/feature_guide/kv_pool.md:885",
+    "docs/source/user_guide/feature_guide/kv_pool.md:371",
+    "docs/source/user_guide/feature_guide/kv_pool.md:403",
+    "docs/source/user_guide/feature_guide/kv_pool.md:522",
+    "docs/source/user_guide/feature_guide/kv_pool.md:562",
+    "docs/source/user_guide/feature_guide/kv_pool.md:587",
+    "docs/source/user_guide/feature_guide/kv_pool.md:609",
+    "docs/source/user_guide/feature_guide/kv_pool.md:697",
+    "docs/source/user_guide/feature_guide/kv_pool.md:799",
+    "docs/source/user_guide/feature_guide/kv_pool.md:841",
+    "docs/source/user_guide/feature_guide/kv_pool.md:848",
+    "docs/source/user_guide/feature_guide/kv_pool.md:888"
+  ],
+  "landing_sha": "6e9bce7",
+  "source_quote": "\"chunked_prefill_for_mla\":true is deprecated, we can remove this.",
+  "correspondence": [
+    {
+      "review_quote": "Pz1116 对 Memcache 使用指南进行了全面审查，提出了 18 条建议，包括移除已废弃参数（chunked_prefill_for_mla、torchair_graph_config）、使用新参数名（lookup_rpc_port 替代 mooncake_rpc_port）、改善文档措辞和结构、添加依赖安装提示等。作者通过 commit `6e9bce7` 及后续 commit 全部采纳，18/18 建议全部落地（100%）。",
+      "patch_snippet": "commit `6e9bce7`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "6e9bce7",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "文档示例中不应使用已废弃（deprecated）的参数或配置项。当参数被标记为废弃时，应及时更新文档使用新的替代参数。",
+    "context": "",
+    "checkpoints": [
+      "检查文档示例中是否使用了已废弃的参数（如 `mooncake_rpc_port` → `lookup_rpc_port`）",
+      "移除已废弃的配置项（如 `chunked_prefill_for_mla`、`torchair_graph_config`）",
+      "配置项应放在正确的位置（如 `use_layerwise` 应放在 connector 配置中）"
+    ],
+    "antipattern": {
+      "file": "docs/source/user_guide/feature_guide/kv_pool.md",
+      "line": 715,
+      "code": "{\n    \"connector\": \"memcache\",\n    \"memcache_config\": {\n        \"meta_service_url\": \"192.168.1.100:8080\",\n        \"local_service\": {\n            \"dram\": {\n                \"size\": \"32GB\"\n            }\n        },\n        \"mooncake_rpc_port\": \"1\",\n        \"nic_name\": \"eth0\"\n    }\n}",
+      "context": "\"chunked_prefill_for_mla\":true is deprecated, we can remove this."
+    },
+    "pattern": {
+      "file": "docs/source/user_guide/feature_guide/kv_pool.md",
+      "line": 715,
+      "code": "{\n    \"connector\": \"memcache\",\n    \"memcache_config\": {\n        \"meta_service_url\": \"192.168.1.100:8080\",\n        \"local_service\": {\n            \"dram\": {\n                \"size\": \"32GB\"\n            }\n        },\n        \"lookup_rpc_port\": \"1\",\n        \"nic_name\": \"eth0\"\n    }\n}",
+      "context": "\"chunked_prefill_for_mla\":true is deprecated, we can remove this."
+    },
+    "diff": {
+      "unified": "--- a/docs/source/user_guide/feature_guide/kv_pool.md\n+++ b/docs/source/user_guide/feature_guide/kv_pool.md\n@@ -715,13 +715,13 @@\n                 \"size\": \"32GB\"\n             }\n         },\n-        \"mooncake_rpc_port\": \"1\",\n+        \"lookup_rpc_port\": \"1\",\n         \"nic_name\": \"eth0\"\n     }\n }",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "修改了第 10-10 行的代码"
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "report_id": "PR12611_001",
+  "pr_number": 0,
+  "pr_title": "",
+  "pr_status": "unknown",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "",
+  "source_quote": "",
+  "correspondence": [],
+  "verification": {
+    "merged": false,
+    "modified_commit": "",
+    "approvals": 0
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/Qwen3-30B-A3B.md",
+      "line": 74,
+      "code": "export IMAGE=quay.io/ascend/vllm-ascend:| vllm_ascend_version |-a3",
+      "context": "修改前代码 (markdown)：Sphinx substitution 竖线内带空格，导致 regex 不匹配"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/Qwen3-30B-A3B.md",
+      "line": 74,
+      "code": "export IMAGE=quay.io/ascend/vllm-ascend:|vllm_ascend_version|-a3",
+      "context": "修改后代码 (markdown)：无空格标准 Sphinx substitution，替换为 tag 版本号"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/Qwen3-30B-A3B.md\n+++ b/docs/source/tutorials/models/Qwen3-30B-A3B.md\n@@ -1,1 +1,1 @@\n-export IMAGE=quay.io/ascend/vllm-ascend:| vllm_ascend_version |-a3\n+export IMAGE=quay.io/ascend/vllm-ascend:|vllm_ascend_version|-a3",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "删除 Sphinx substitution 竖线内的空格，修复文档构建替换失败"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

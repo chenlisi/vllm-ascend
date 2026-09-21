@@ -1,0 +1,67 @@
+{
+  "report_id": "PR3896_001",
+  "pr_number": 3896,
+  "pr_title": "Update torch-npu version to 2.7.1",
+  "pr_status": "merged",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "tests/ut/ops/test_layernorm.py:47",
+    "vllm_ascend/ops/weight_prefetch.py:87"
+  ],
+  "landing_sha": "bbe67eb",
+  "source_quote": "mock_add_rms_norm_quant or mock_add_rms_norm_quant_with_bias is redundant, delete one.\nadd comment here: # layer_idx is subtracted by 1 because layer_idx was incremented by 1 at layernorm.\nbe aware if delete mock_add_rms_norm_quant_with_bias, need to add bias param in func mock_add_rms_norm_quant. side_effect could be set to mock_add_rms_norm_quant directly.",
+  "correspondence": [
+    {
+      "review_quote": "huangdong2022: tests/ut/ops/test_layernorm.py:47(2025-10-30 08:27:56)",
+      "patch_snippet": "评后sha bbe67eb 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "huangdong2022: vllm_ascend/ops/weight_prefetch.py:87(2025-10-30 08:31:38)",
+      "patch_snippet": "评后sha bbe67eb 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "huangdong2022: tests/ut/ops/test_layernorm.py:47(2025-10-30 08:35:45)",
+      "patch_snippet": "评后sha bbe67eb 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "bbe67eb",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [
+      "升级依赖版本（如 torch-npu）后，应检查并删除因旧版本兼容而保留的冗余 mock 函数或条件分支。",
+      "删除冗余代码时，需确保相关参数和 side_effect 设置同步调整，避免测试失败。"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/utils.py",
+      "line": 615,
+      "code": "# gemini-bot critical 评审：torch-npu 升级到 2.7.1 后，AscendRMSNorm\n# 已处理 bias，但 AscendQuantRMSNorm 仍被注册且也添加 bias，\n# 导致 bias 被重复应用（critical bug）\n\nif not version_check():\n    # 旧版本路径：注册 AscendQuantRMSNorm 处理 bias\n    register_quant_rms_norm(AscendQuantRMSNorm)\n# ... other registrations ...",
+      "context": "gemini-bot critical 评审：torch-npu 升级到 2.7.1 后，AscendRMSNorm 已处理 bias，但 AscendQuantRMSNorm 仍被注册且也添加 bias， 导致 bias 被重复应用（critical bug）"
+    },
+    "pattern": {
+      "file": "vllm_ascend/utils.py",
+      "line": 615,
+      "code": "# 移除整个 if 块，AscendRMSNorm (torch-npu 2.7.1) 已正确处理 bias\n# 不再需要注册 AscendQuantRMSNorm\n\n# 已移除:\n# if not version_check():\n#     register_quant_rms_norm(AscendQuantRMSNorm)\n\n# ... other registrations continue ...",
+      "context": "移除整个 if 块，AscendRMSNorm (torch-npu 2.7.1) 已正确处理 bias 不再需要注册 AscendQuantRMSNorm if not version_check():"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/utils.py\n+++ b/vllm_ascend/utils.py\n@@ -1,8 +1,8 @@\n-# gemini-bot critical 评审：torch-npu 升级到 2.7.1 后，AscendRMSNorm\n-# 已处理 bias，但 AscendQuantRMSNorm 仍被注册且也添加 bias，\n-# 导致 bias 被重复应用（critical bug）\n+# 移除整个 if 块，AscendRMSNorm (torch-npu 2.7.1) 已正确处理 bias\n+# 不再需要注册 AscendQuantRMSNorm\n \n-if not version_check():\n-    # 旧版本路径：注册 AscendQuantRMSNorm 处理 bias\n-    register_quant_rms_norm(AscendQuantRMSNorm)\n-# ... other registrations ...\n+# 已移除:\n+# if not version_check():\n+#     register_quant_rms_norm(AscendQuantRMSNorm)\n+\n+# ... other registrations continue ...\n",
+      "stats": "1 file changed, +7 lines, -7 lines",
+      "key_changes": [
+        "代码结构或逻辑调整"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

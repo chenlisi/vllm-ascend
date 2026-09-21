@@ -1,0 +1,55 @@
+{
+  "report_id": "PR8508_001",
+  "pr_number": 8508,
+  "pr_title": "[BugFix] Fix sliding window attention computation and improve throughput",
+  "pr_status": "merged",
+  "merged_at": "2026-05-15T02:24:39Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/attention_v1.py:541"
+  ],
+  "landing_sha": "8058616",
+  "source_quote": "The code can be optimized through predicate statements, resulting in more concise and clear code.",
+  "correspondence": [
+    {
+      "review_quote": "Sparkheart: vllm_ascend/attention/attention_v1.py:541",
+      "patch_snippet": "评后sha 8058616 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "8058616",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "The code can be optimized through predicate statements, resulting in more concise and clear code.",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 541,
+      "code": "# vllm_ascend/attention/attention_v1.py:541",
+      "context": "The code can be optimized through predicate statements, resulting in more concise and clear code."
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 541,
+      "code": "# 根据评审意见修改后的代码",
+      "context": "The code can be optimized through predicate statements, resulting in more concise and clear code."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/attention_v1.py\n+++ b/vllm_ascend/attention/attention_v1.py\n@@ -1 +1 @@\n-# vllm_ascend/attention/attention_v1.py:541\n+# 根据评审意见修改后的代码\n",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "-# vllm_ascend/attention/attention_v1.py:541",
+        "+# 根据评审意见修改后的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

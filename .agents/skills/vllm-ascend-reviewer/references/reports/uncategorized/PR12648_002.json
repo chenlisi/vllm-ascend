@@ -1,0 +1,45 @@
+{
+  "report_id": "PR12648_002",
+  "pr_number": 0,
+  "pr_title": "",
+  "pr_status": "unknown",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "",
+  "source_quote": "",
+  "correspondence": [],
+  "verification": {
+    "merged": false,
+    "modified_commit": "",
+    "approvals": 0
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/worker/v2/spec_decode/dspark/speculator.py",
+      "line": 0,
+      "code": "from vllm.v1.spec_decode.dspark import (\n    DSparkSpeculator,\n)\nfrom vllm_ascend.worker.v2.attn_utils import build_attn_metadata_wrapper\n\n# （无 vllm_version_is import）",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/v2/spec_decode/dspark/speculator.py",
+      "line": 0,
+      "code": "from vllm.v1.spec_decode.dspark import (\n    DSparkSpeculator,\n)\nfrom vllm_ascend.utils import vllm_version_is\nfrom vllm_ascend.worker.v2.attn_utils import build_attn_metadata_wrapper",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/v2/spec_decode/dspark/speculator.py\n+++ b/vllm_ascend/worker/v2/spec_decode/dspark/speculator.py\n@@ -1,6 +1,5 @@\n from vllm.v1.spec_decode.dspark import (\n     DSparkSpeculator,\n )\n+from vllm_ascend.utils import vllm_version_is\n from vllm_ascend.worker.v2.attn_utils import build_attn_metadata_wrapper\n-\n-# （无 vllm_version_is import）",
+      "stats": "1 file changed, +1 lines, -2 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

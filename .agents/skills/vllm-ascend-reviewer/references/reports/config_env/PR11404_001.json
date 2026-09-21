@@ -1,0 +1,69 @@
+{
+  "report_id": "PR11404_001",
+  "pr_number": 11404,
+  "pr_title": "[Doc] Add RecomputeCPUOffloadConnector user guide",
+  "pr_status": "merged",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "tests/e2e/nightly/multi_node/internal_dp/config/DeepSeek-V4-Flash-W8A8-A3-recompute-cpu-offload-pd.yaml:1",
+    "tests/e2e/nightly/multi_node/internal_dp/config/DeepSeek-V4-Flash-W8A8-A3-recompute-cpu-offload-pd.yaml:2",
+    "tests/e2e/nightly/multi_node/internal_dp/config/DeepSeek-V4-Flash-W8A8-A3-recompute-cpu-offload-pd.yaml:4"
+  ],
+  "landing_sha": "87a63b9",
+  "source_quote": "You should add case into https://github.com/vllm-project/vllm-ascend/blob/main/.github/workflows/configs/nightly_config.yaml\nThe model should be added into https://github.com/vllm-project/vllm-ascend/blob/main/.github/workflows/misc/model_dataset_list.json if it is new， and we will download it in ci.\n`npu_per_node` should be 16 if you use A3；",
+  "correspondence": [
+    {
+      "review_quote": "zhangxinyuehfad: tests/e2e/nightly/multi_node/internal_dp/config/DeepSeek-V4-Flash-W8A8-A3-recompute-cpu-offload-pd.yaml:1",
+      "patch_snippet": "评后sha 87a63b9 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "zhangxinyuehfad: tests/e2e/nightly/multi_node/internal_dp/config/DeepSeek-V4-Flash-W8A8-A3-recompute-cpu-offload-pd.yaml:2",
+      "patch_snippet": "评后sha 87a63b9 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "zhangxinyuehfad: tests/e2e/nightly/multi_node/internal_dp/config/DeepSeek-V4-Flash-W8A8-A3-recompute-cpu-offload-pd.yaml:4",
+      "patch_snippet": "评后sha 87a63b9 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "87a63b9",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "新增的 e2e 测试配置文件必须注册到 nightly_config.yaml 中，新模型必须添加到 model_dataset_list.json 以便 CI 自动下载。硬件相关的配置参数（如 npu_per_node）必须与硬件规格匹配。",
+    "context": "",
+    "checkpoints": [
+      "新增测试 yaml 是否已注册到 nightly_config.yaml",
+      "新模型是否已添加到 model_dataset_list.json",
+      "npu_per_node 等硬件参数是否与目标硬件匹配（如 A3 应为 16）"
+    ],
+    "antipattern": {
+      "file": ".github/workflows/configs/nightly_config.yaml",
+      "line": 1,
+      "code": "# Nightly test configuration for vllm-ascend\n# Each entry maps a test config to its CI parameters\n\ntest_suites:\n  - name: multi-node-DSV4-Flash-pd\n    config_file: tests/e2e/nightly/multi_node/internal_dp/config/DeepSeek-V4-Flash-W8A8-A3-pd.yaml\n    hardware: A3\n    timeout: 120\n\n  - name: multi-node-Qwen-disagg-pd\n    config_file: tests/e2e/nightly/multi_node/internal_dp/config/Qwen-Disagg-PD.yaml\n    hardware: A3\n    timeout: 90\n  # DeepSeek-V4-Flash recompute-cpu-offload 测试未注册",
+      "context": "修改前代码 (yaml)"
+    },
+    "pattern": {
+      "file": ".github/workflows/configs/nightly_config.yaml",
+      "line": 1,
+      "code": "# Nightly test configuration for vllm-ascend\n# Each entry maps a test config to its CI parameters\n\ntest_suites:\n  - name: multi-node-DSV4-Flash-pd\n    config_file: tests/e2e/nightly/multi_node/internal_dp/config/DeepSeek-V4-Flash-W8A8-A3-pd.yaml\n    hardware: A3\n    timeout: 120\n\n  - name: multi-node-Qwen-disagg-pd\n    config_file: tests/e2e/nightly/multi_node/internal_dp/config/Qwen-Disagg-PD.yaml\n    hardware: A3\n    timeout: 90\n\n  - name: multi-node-DSV4-Flash-recompute-offload  # 新增注册\n    config_file: tests/e2e/nightly/multi_node/internal_dp/config/DeepSeek-V4-Flash-W8A8-A3-recompute-cpu-offload-pd.yaml\n    hardware: A3\n    timeout: 120",
+      "context": "修改后代码 (yaml)"
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/configs/nightly_config.yaml\n+++ b/.github/workflows/configs/nightly_config.yaml\n@@ -11,4 +11,8 @@\n     config_file: tests/e2e/nightly/multi_node/internal_dp/config/Qwen-Disagg-PD.yaml\n     hardware: A3\n     timeout: 90\n-  # DeepSeek-V4-Flash recompute-cpu-offload 测试未注册\n+\n+  - name: multi-node-DSV4-Flash-recompute-offload  # 新增注册\n+    config_file: tests/e2e/nightly/multi_node/internal_dp/config/DeepSeek-V4-Flash-W8A8-A3-recompute-cpu-offload-pd.yaml\n+    hardware: A3\n+    timeout: 120",
+      "stats": "1 file changed, +5 lines, -1 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "yaml",
+    "_status": "pending_llm_extract"
+  }
+}

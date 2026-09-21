@@ -1,0 +1,73 @@
+{
+  "report_id": "PR7804_001",
+  "pr_number": 7804,
+  "pr_title": "[Feature] Verify and support Qwen3-ASR-1.7B",
+  "pr_status": "merged",
+  "merged_at": "2026-05-19T12:37:58Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/models/Qwen3-ASR-1.7B.md:5",
+    "tests/e2e/models/configs/accuracy_groups_a2.json:57",
+    "tests/e2e/models/configs/accuracy_groups_a2.json:50",
+    "tests/e2e/models/configs/accuracy_groups_a2.json:61"
+  ],
+  "landing_sha": "661a83e",
+  "source_quote": "remove `The newly`, no model will keep `new`\nYou do not need to use 4 NPUs, your model has only 1.7B, 1 NPU is enough\nDo not modify the existed items\nRemove the change here, it's already in line `52`",
+  "correspondence": [
+    {
+      "review_quote": "wjunLu: docs/source/tutorials/models/Qwen3-ASR-1.7B.md:5",
+      "patch_snippet": "评后sha 661a83e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wjunLu: tests/e2e/models/configs/accuracy_groups_a2.json:57",
+      "patch_snippet": "评后sha 661a83e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wjunLu: tests/e2e/models/configs/accuracy_groups_a2.json:50",
+      "patch_snippet": "评后sha 661a83e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wjunLu: tests/e2e/models/configs/accuracy_groups_a2.json:61",
+      "patch_snippet": "评后sha 661a83e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "661a83e",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "remove `The newly`, no model will keep `new`",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/Qwen3-ASR-1.7B.md",
+      "line": 5,
+      "code": "# docs/source/tutorials/models/Qwen3-ASR-1.7B.md:5",
+      "context": "remove `The newly`, no model will keep `new`\nYou do not need to use 4 NPUs, your model has only 1.7B, 1 NPU is enough\nDo not modify the existed items\nRemove the change here, it's already in line `52`"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/Qwen3-ASR-1.7B.md",
+      "line": 5,
+      "code": "# 根据评审意见修改后的代码",
+      "context": "remove `The newly`, no model will keep `new`\nYou do not need to use 4 NPUs, your model has only 1.7B, 1 NPU is enough\nDo not modify the existed items\nRemove the change here, it's already in line `52`"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/Qwen3-ASR-1.7B.md\n+++ b/docs/source/tutorials/models/Qwen3-ASR-1.7B.md\n@@ -1 +1 @@\n-# docs/source/tutorials/models/Qwen3-ASR-1.7B.md:5\n+# 根据评审意见修改后的代码\n",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "-# docs/source/tutorials/models/Qwen3-ASR-1.7B.md:5",
+        "+# 根据评审意见修改后的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

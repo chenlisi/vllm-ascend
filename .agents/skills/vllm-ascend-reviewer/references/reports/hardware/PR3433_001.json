@@ -1,0 +1,66 @@
+{
+  "report_id": "PR3433_001",
+  "pr_number": 3433,
+  "pr_title": "[Feat] add native kvcache offload",
+  "pr_status": "merged",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "csrc/torch_binding.cpp:51",
+    "csrc/torch_binding.cpp:75"
+  ],
+  "landing_sha": "10548b1",
+  "source_quote": "print `src_device` and `dst_device` maybe better when check fails\nfunc name is swap_blocks_npu, but there is only copy from src to dst?\nyes, swap_blocks is better",
+  "correspondence": [
+    {
+      "review_quote": "csrc/torch_binding.cpp:51",
+      "patch_snippet": "评后sha 10548b1 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "csrc/torch_binding.cpp:75",
+      "patch_snippet": "评后sha 10548b1 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "csrc/torch_binding.cpp:75",
+      "patch_snippet": "评后sha 10548b1 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "10548b1",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "print `src_device` and `dst_device` maybe better when check fails",
+    "context": "",
+    "checkpoints": [
+      "在检查失败时输出相关设备/变量信息便于调试"
+    ],
+    "antipattern": {
+      "file": "csrc/torch_binding.cpp",
+      "line": 51,
+      "code": "# csrc/torch_binding.cpp:51",
+      "context": "csrc/torch_binding.cpp:51"
+    },
+    "pattern": {
+      "file": "csrc/torch_binding.cpp",
+      "line": 51,
+      "code": "# 根据评审意见修改后的代码",
+      "context": "根据评审意见修改后的代码"
+    },
+    "diff": {
+      "unified": "--- a/csrc/torch_binding.cpp\n+++ b/csrc/torch_binding.cpp\n@@ -1 +1 @@\n-# csrc/torch_binding.cpp:51\n+# 根据评审意见修改后的代码\n",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "代码结构或逻辑调整"
+      ]
+    },
+    "language": "cpp",
+    "_status": "processed"
+  }
+}

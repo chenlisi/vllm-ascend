@@ -1,0 +1,72 @@
+{
+  "report_id": "PR7757_001",
+  "pr_number": 7757,
+  "pr_title": "[Performance][model_runner_v2]:optimize the performance of the bincount_kernel",
+  "pr_status": "merged",
+  "merged_at": "2026-04-08T09:37:42Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/e2e/nightly/single_node/ops/singlecard_ops/triton/test_bincount.py:123",
+    "tests/e2e/nightly/single_node/ops/singlecard_ops/triton/test_bincount.py:88"
+  ],
+  "landing_sha": "57e778f",
+  "source_quote": "print(f'Error during execution: {e}')\nremove try .. exception ...",
+  "correspondence": [
+    {
+      "review_quote": "realliujiaxu: tests/e2e/nightly/single_node/ops/singlecard_ops/triton/test_bincount.py:123",
+      "patch_snippet": "评后sha 57e778f 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "realliujiaxu: tests/e2e/nightly/single_node/ops/singlecard_ops/triton/test_bincount.py:88",
+      "patch_snippet": "评后sha 57e778f 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "57e778f",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "测试代码中不应使用 `try..except: pass` 来静默吞掉异常。测试应当让异常正常抛出，以便及时发现和定位问题。如果需要错误信息，应使用 `print` 输出或让测试框架捕获。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "tests/e2e/nightly/single_node/ops/singlecard_ops/triton/test_bincount.py",
+      "line": 75,
+      "code": "import torch\nimport pytest\nfrom vllm_ascend.triton_kernels.bincount import bincount_kernel\n\ndef test_bincount_kernel_basic():\n    \"\"\"测试 bincount kernel 基本功能\"\"\"\n    # 准备测试数据\n    batch_size = 4\n    num_bins = 32\n    input_data = torch.randint(0, num_bins, (batch_size, 128),\n                                dtype=torch.int32, device=\"npu\")\n    expected_counts = torch.zeros(batch_size, num_bins,\n                                   dtype=torch.int32, device=\"npu\")\n    for i in range(batch_size):\n        for j in range(num_bins):\n            expected_counts[i, j] = (input_data[i] == j).sum()\n\n    # ❌ 使用 try..exception 静默吞掉异常\n    try:\n        output_counts = bincount_kernel(input_data, num_bins)\n        assert torch.equal(output_counts, expected_counts), \\\n            \"bincount output differs from reference\"\n    except Exception as e:\n        # 异常被静默吞掉，测试框架无法发现问题\n        print(f'Error during execution: {e}')\n\ndef test_bincount_kernel_edge_cases():\n    \"\"\"测试 bincount kernel 边界情况\"\"\"\n    # 空输入、全零输入等边界测试\n    ...",
+      "context": "print(f'Error during execution: {e}')\nremove try .. exception ..."
+    },
+    "pattern": {
+      "file": "tests/e2e/nightly/single_node/ops/singlecard_ops/triton/test_bincount.py",
+      "line": 75,
+      "code": "import torch\nimport pytest\nfrom vllm_ascend.triton_kernels.bincount import bincount_kernel\n\ndef test_bincount_kernel_basic():\n    \"\"\"测试 bincount kernel 基本功能\"\"\"\n    # 准备测试数据\n    batch_size = 4\n    num_bins = 32\n    input_data = torch.randint(0, num_bins, (batch_size, 128),\n                                dtype=torch.int32, device=\"npu\")\n    expected_counts = torch.zeros(batch_size, num_bins,\n                                   dtype=torch.int32, device=\"npu\")\n    for i in range(batch_size):\n        for j in range(num_bins):\n            expected_counts[i, j] = (input_data[i] == j).sum()\n\n    # ✅ 移除 try..exception，让异常正常抛出\n    # 异常会被测试框架正确捕获和报告\n    output_counts = bincount_kernel(input_data, num_bins)\n    assert torch.equal(output_counts, expected_counts), \\\n        \"bincount output differs from reference\"\n\ndef test_bincount_kernel_edge_cases():\n    \"\"\"测试 bincount kernel 边界情况\"\"\"\n    # 空输入、全零输入等边界测试\n    ...",
+      "context": "print(f'Error during execution: {e}')\nremove try .. exception ..."
+    },
+    "diff": {
+      "unified": "--- a/tests/e2e/nightly/single_node/ops/singlecard_ops/triton/test_bincount.py\n+++ b/tests/e2e/nightly/single_node/ops/singlecard_ops/triton/test_bincount.py\n@@ -15,14 +15,11 @@\n         for j in range(num_bins):\n             expected_counts[i, j] = (input_data[i] == j).sum()\n \n-    # ❌ 使用 try..exception 静默吞掉异常\n-    try:\n-        output_counts = bincount_kernel(input_data, num_bins)\n-        assert torch.equal(output_counts, expected_counts), \\\n-            \"bincount output differs from reference\"\n-    except Exception as e:\n-        # 异常被静默吞掉，测试框架无法发现问题\n-        print(f'Error during execution: {e}')\n+    # ✅ 移除 try..exception，让异常正常抛出\n+    # 异常会被测试框架正确捕获和报告\n+    output_counts = bincount_kernel(input_data, num_bins)\n+    assert torch.equal(output_counts, expected_counts), \\\n+        \"bincount output differs from reference\"\n \n def test_bincount_kernel_edge_cases():\n     \"\"\"测试 bincount kernel 边界情况\"\"\"\n",
+      "stats": "1 file changed, +5 lines, -8 lines",
+      "key_changes": [
+        "-    # ❌ 使用 try..exception 静默吞掉异常",
+        "-    try:",
+        "-        output_counts = bincount_kernel(input_data, num_bins)",
+        "-        assert torch.equal(output_counts, expected_counts), \\",
+        "-            \"bincount output differs from reference\"",
+        "-    except Exception as e:",
+        "-        # 异常被静默吞掉，测试框架无法发现问题",
+        "-        print(f'Error during execution: {e}')",
+        "+    # ✅ 移除 try..exception，让异常正常抛出",
+        "+    # 异常会被测试框架正确捕获和报告",
+        "+    output_counts = bincount_kernel(input_data, num_bins)",
+        "+    assert torch.equal(output_counts, expected_counts), \\",
+        "+        \"bincount output differs from reference\""
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "report_id": "PR13003_001",
+  "pr_number": 13003,
+  "pr_title": "[Doc] AIDD related documentation modifications",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "docs/source/faqs.md:283"
+  ],
+  "landing_sha": "3780f73",
+  "source_quote": "The verb after the auxiliary verb 'does' should be in its base form ('increase' instead of 'increases').",
+  "correspondence": [
+    {
+      "review_quote": "gemini-code-assist[bot]: docs/source/faqs.md:283",
+      "patch_snippet": "评后sha 3780f73 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "3780f73",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "文档英文内容须符合基础语法（如助动词 does/does not 后使用动词原形，而非 -s 第三人称形式）与标点间距规范（括号前留空格、逗号/句号后留空格），避免阅读歧义与风格不一致。",
+    "context": "",
+    "checkpoints": [
+      "检查 \"does/does not + 动词\" 结构中动词是否为原形（非 -s/-es 形式）",
+      "检查 \"PD(Prefill/Decode)\" 等括号前是否缺少空格",
+      "检查 \"(64 GB,A3)\" 等逗号后是否缺少空格、句号后是否缺少空格"
+    ],
+    "antipattern": {
+      "file": "docs/source/faqs.md",
+      "line": 283,
+      "code": "### 21. What is the recommended way to handle long-tail requests?\n\nUse request-level priority scheduling...\n\n### 22. Why does TPOT increases drastically as concurrency grows?\n\nWhen the number of concurrent requests exceeds the KV cache capacity,\nthe scheduler starts to preempt low-priority requests, which causes\nthe TPOT of preempted requests to increase significantly.\n\n### 23. How to enable speculative decoding on Ascend NPU?\n\nSet `speculative_config` in the engine configuration...",
+      "context": "修改前代码 (markdown)"
+    },
+    "pattern": {
+      "file": "docs/source/faqs.md",
+      "line": 283,
+      "code": "### 21. What is the recommended way to handle long-tail requests?\n\nUse request-level priority scheduling...\n\n### 22. Why does TPOT increase drastically as concurrency grows?\n\nWhen the number of concurrent requests exceeds the KV cache capacity,\nthe scheduler starts to preempt low-priority requests, which causes\nthe TPOT of preempted requests to increase significantly.\n\n### 23. How to enable speculative decoding on Ascend NPU?\n\nSet `speculative_config` in the engine configuration...",
+      "context": "修改后代码 (markdown)"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/faqs.md\n+++ b/docs/source/faqs.md\n@@ -2,7 +2,7 @@\n \n Use request-level priority scheduling...\n \n-### 22. Why does TPOT increases drastically as concurrency grows?\n+### 22. Why does TPOT increase drastically as concurrency grows?\n \n When the number of concurrent requests exceeds the KV cache capacity,\n the scheduler starts to preempt low-priority requests, which causes",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "添加注释说明"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "report_id": "PR7293_001",
+  "pr_number": 7293,
+  "pr_title": "[Perf] Simplify FIA prefill context merge path",
+  "pr_status": "merged",
+  "merged_at": "2026-03-23T07:47:43Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/mla_v1.py:1059",
+    "vllm_ascend/attention/mla_v1.py:1068",
+    "vllm_ascend/attention/mla_v1.py:1066"
+  ],
+  "landing_sha": "97eb758",
+  "source_quote": "maybe len(iters) ==0",
+  "correspondence": [
+    {
+      "review_quote": "weijinqian0 建议简化边界条件检查为 `len(iters) == 0`。lcfenglinwan 质疑了 output/lse 类型转换和转置的必要性。作者通过 commit `97eb758` 移除了不必要的 lse 转置操作，简化了 merge 路径，3/3 建议全部落地。",
+      "patch_snippet": "commit `97eb758`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "97eb758",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 FIA（Flash Infer Attention）prefill context merge 路径中，应避免不必要的 tensor 操作（如转置、类型转换、cat/stack/split 中间 tensor）。当可以直接构建 list 传给 `npu_attention_update` 时，不应先构建中间 tensor 再拆分。类型转换需有明确原因并添加注释。",
+    "context": "",
+    "checkpoints": [
+      "检查是否存在不必要的 tensor 转置操作",
+      "确认类型转换是否有明确原因和注释",
+      "验证是否可以用直接构建 list 替代 cat/stack/split 流程",
+      "检查边界条件检查是否使用了最简洁的形式",
+      "确认 merge 路径的内存开销是否已最小化"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/mla_v1.py",
+      "line": 1050,
+      "code": "    def _merge_prefill_context(self, chunks, lses, iters):\n        \"\"\"Merge prefill context chunks using npu_attention_update.\"\"\"\n        if len(iters) > 0:\n            cat_out = torch.cat(chunks, dim=0)\n            cat_lse = torch.cat(lses, dim=0)\n            stacked = torch.stack([cat_out, cat_lse])\n            split_result = torch.split(stacked, split_size, dim=0)\n            out_tensor = split_result[0]\n            lse_tensor = split_result[1]\n\n            lse_t = lse_tensor.transpose(0, 1)\n\n            out_tensor = out_tensor.to(torch.float32)\n            lse_t = lse_t.to(torch.float32)\n\n            torch_npu.npu_attention_update(out_tensor, lse_t)",
+      "context": "maybe len(iters) ==0"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/mla_v1.py",
+      "line": 1050,
+      "code": "    def _merge_prefill_context(self, chunks, lses, iters):\n        \"\"\"Merge prefill context chunks using npu_attention_update.\"\"\"\n        if len(iters) == 0:\n            return\n\n        out_list = [chunk_out.to(torch.float32).view(...) for chunk_out in chunks]\n        lse_list = [chunk_lse.view(...) for chunk_lse in lses]\n\n        torch_npu.npu_attention_update(tuple(out_list), tuple(lse_list))",
+      "context": "maybe len(iters) ==0"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/mla_v1.py\n+++ b/vllm_ascend/attention/mla_v1.py\n@@ -1050,16 +1050,9 @@\n     def _merge_prefill_context(self, chunks, lses, iters):\n         \"\"\"Merge prefill context chunks using npu_attention_update.\"\"\"\n-        if len(iters) > 0:\n-            cat_out = torch.cat(chunks, dim=0)\n-            cat_lse = torch.cat(lses, dim=0)\n-            stacked = torch.stack([cat_out, cat_lse])\n-            split_result = torch.split(stacked, split_size, dim=0)\n-            out_tensor = split_result[0]\n-            lse_tensor = split_result[1]\n+        if len(iters) == 0:\n+            return\n \n-            lse_t = lse_tensor.transpose(0, 1)\n+        out_list = [chunk_out.to(torch.float32).view(...) for chunk_out in chunks]\n+        lse_list = [chunk_lse.view(...) for chunk_lse in lses]\n \n-            out_tensor = out_tensor.to(torch.float32)\n-            lse_t = lse_t.to(torch.float32)\n-\n-            torch_npu.npu_attention_update(out_tensor, lse_t)\n+        torch_npu.npu_attention_update(tuple(out_list), tuple(lse_list))",
+      "stats": "1 file changed, +5 lines, -11 lines",
+      "key_changes": [
+        "- if len(iters) > 0:",
+        "- cat_out = torch.cat(chunks, dim=0)",
+        "- cat_lse = torch.cat(lses, dim=0)",
+        "- stacked = torch.stack([cat_out, cat_lse])",
+        "- split_result = torch.split(stacked, split_size, dim=0)",
+        "- out_tensor = split_result[0]",
+        "- lse_tensor = split_result[1]",
+        "+ if len(iters) == 0:",
+        "+ return",
+        "- lse_t = lse_tensor.transpose(0, 1)",
+        "+ out_list = [chunk_out.to(torch.float32).view(...) for chunk_out in chunks]",
+        "+ lse_list = [chunk_lse.view(...) for chunk_lse in lses]",
+        "- out_tensor = out_tensor.to(torch.float32)",
+        "- lse_t = lse_t.to(torch.float32)",
+        "- ",
+        "- torch_npu.npu_attention_update(out_tensor, lse_t)",
+        "+ torch_npu.npu_attention_update(tuple(out_list), tuple(lse_list))"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

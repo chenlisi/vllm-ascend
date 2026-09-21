@@ -1,0 +1,62 @@
+{
+  "report_id": "PR11068_001",
+  "pr_number": 11068,
+  "pr_title": "[BugFix][Model] Remove redundant SFA o_proj TP weights",
+  "pr_status": "merged",
+  "merged_at": "2026-07-01T02:22:23Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/quantization/methods/w4a8_mxfp4.py:94"
+  ],
+  "landing_sha": "39a64e1",
+  "source_quote": "",
+  "correspondence": [
+    {
+      "review_quote": "lijiahang226 指出权重已经转换为 NZ（Non-Zero contiguous）格式，不能再执行 `.contiguous()` 操作，因为 NZ 格式与标准 contiguous 格式不兼容。作者确认并修复，通过 commit `39a64e1` 移除了 NZ 格式转换后的 `.contiguous()` 调用。",
+      "patch_snippet": "commit `39a64e1`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "39a64e1",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 Ascend NPU 上，权重转换为 NZ（Non-Zero contiguous）格式后，不应再调用 `.contiguous()` 操作。NZ 格式使用不同的内存布局，`.contiguous()` 可能破坏 NZ 格式或导致运行时错误。",
+    "context": "",
+    "checkpoints": [
+      "NZ 格式转换后是否有 `.contiguous()` 调用",
+      "其他量化方法中是否存在类似问题"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/quantization/methods/w4a8_mxfp4.py",
+      "line": 94,
+      "code": "import torch\nfrom typing import Optional\n\nNZ_FORMAT = \"NZ\"\n\nclass W4A8MXFP4QuantMethod:\n    \"\"\"W4A8 MXFP4 quantization method for Ascend NPU.\"\"\"\n\n    def __init__(self, quant_config):\n        self.quant_config = quant_config\n\n    def process_weights(self, weight: torch.Tensor) -> torch.Tensor:\n        \"\"\"Process weights after loading from checkpoint.\"\"\"\n        # 对权重进行量化处理\n        weight = self._quantize_weight(weight)\n\n        # 将权重转换为 NZ 格式\n        # 错误：NZ 格式后再调用 .contiguous() 会破坏内存布局\n        weight = weight.npu_format_cast(NZ_FORMAT).contiguous()\n\n        # 处理 weight scale\n        if hasattr(self, \"weight_scale\"):\n            self.weight_scale = self.weight_scale.npu_format_cast(\n                NZ_FORMAT\n            ).contiguous()\n\n        return weight",
+      "context": "The weight has already been converted to NZ format and can no longer undergo contiguous operation."
+    },
+    "pattern": {
+      "file": "vllm_ascend/quantization/methods/w4a8_mxfp4.py",
+      "line": 94,
+      "code": "import torch\nfrom typing import Optional\n\nNZ_FORMAT = \"NZ\"\n\nclass W4A8MXFP4QuantMethod:\n    \"\"\"W4A8 MXFP4 quantization method for Ascend NPU.\"\"\"\n\n    def __init__(self, quant_config):\n        self.quant_config = quant_config\n\n    def process_weights(self, weight: torch.Tensor) -> torch.Tensor:\n        \"\"\"Process weights after loading from checkpoint.\"\"\"\n        # 对权重进行量化处理\n        weight = self._quantize_weight(weight)\n\n        # 将权重转换为 NZ 格式\n        # 修复：NZ 格式后不再调用 .contiguous()，因为 NZ 格式已确定内存布局\n        weight = weight.npu_format_cast(NZ_FORMAT)\n\n        # 处理 weight scale\n        if hasattr(self, \"weight_scale\"):\n            self.weight_scale = self.weight_scale.npu_format_cast(\n                NZ_FORMAT\n            )\n\n        return weight",
+      "context": "The weight has already been converted to NZ format and can no longer undergo contiguous operation."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/quantization/methods/w4a8_mxfp4.py\n+++ b/vllm_ascend/quantization/methods/w4a8_mxfp4.py\n@@ -15,13 +15,13 @@\n         weight = self._quantize_weight(weight)\n \n         # 将权重转换为 NZ 格式\n-        # 错误：NZ 格式后再调用 .contiguous() 会破坏内存布局\n-        weight = weight.npu_format_cast(NZ_FORMAT).contiguous()\n+        # 修复：NZ 格式后不再调用 .contiguous()，因为 NZ 格式已确定内存布局\n+        weight = weight.npu_format_cast(NZ_FORMAT)\n \n         # 处理 weight scale\n         if hasattr(self, \"weight_scale\"):\n             self.weight_scale = self.weight_scale.npu_format_cast(\n                 NZ_FORMAT\n-            ).contiguous()\n+            )\n \n         return weight",
+      "stats": "1 file changed, +3 lines, -3 lines",
+      "key_changes": [
+        "移除: # 错误：NZ 格式后再调用 .contiguous() 会破坏内存布局",
+        "移除: weight = weight.npu_format_cast(NZ_FORMAT).contiguous()",
+        "新增: # 修复：NZ 格式后不再调用 .contiguous()，因为 NZ 格式已确定内存布局",
+        "新增: weight = weight.npu_format_cast(NZ_FORMAT)",
+        "移除: ).contiguous()",
+        "新增: )"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

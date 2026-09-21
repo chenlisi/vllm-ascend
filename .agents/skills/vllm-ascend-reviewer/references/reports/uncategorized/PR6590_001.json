@@ -1,0 +1,63 @@
+{
+  "report_id": "PR6590_001",
+  "pr_number": 6590,
+  "pr_title": "implement batch invariant with ascendc",
+  "pr_status": "merged",
+  "merged_at": "",
+  "dimension": [
+    "correctness",
+    "engineering"
+  ],
+  "severity": "blocker",
+  "affected_files": [
+    "vllm_ascend/batch_invariant.py:62"
+  ],
+  "landing_sha": "165ab49",
+  "source_quote": "",
+  "correspondence": [
+    {
+      "review_quote": "评审点: #(原文语义)",
+      "patch_snippet": "评后sha 落地链 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "gemini 🤖 critical batch_invariant.py L62: 1(addmm/bmm 的 Triton 实现不可用时不能静默跳过不注册，必须 else logger.warning 告知用户批定不完整)",
+      "patch_snippet": "评后sha ① PR5517 6542abe 铺垫：单 HAS_TRITON 条件包裹 + else warning ② PR6590 8347110/165ab49 迭代：加入 HAS_ASCENDC_BATCH_INVARIANT 双开关，warning 文案从\"Triton\"→\"Triton or AscendC\"精细升级 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "165ab49",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当用户显式通过配置/environment variable/API flag 打开某项非默认能力（例如 `batch_invariant_mode=True`、`enforce_eager=True`、`speculative_config=` 等），初始化函数必须在**依赖后端不可用**分支（Triton 没装 / AscendC custom_ops 没编 / CANN 版本不兼容）走 `logger.warning(...)`，明确写出\"能力降级 + 可能影响语义（非确定/性能下降/不完整）\"。绝对禁止 `if HAS_xxx: do_init()` 单边 if 不写 else，因为这会让用户误判\"已生效\"，实际跑非确定结果或静默性能劣化，CRASH 都比静默错好。",
+    "context": "",
+    "checkpoints": [
+      "扫项目中所有 `if HAS_BACKEND:` / `if TRITON_AVAILABLE:` / `if CUSTOM_OPS_AVAILABLE:` 结构：必须存在对应的 `else: logger.warning(...)`，不得出现单边 if 空悬",
+      "`else: logger.warning(...)` 文案必须包含三要素齐全：① 用户请求了什么模式 ② 缺失哪些后端 ③ 不处理的后果（may lead to non-determinism / performance degradation / skipped initialization）",
+      "当能力经历\"单后端 → 多后端\"演进时（如本 PR Triton → Triton+AscendC），warning 文案必须同步扩展到覆盖全部**新加入**的后端名，避免报的错与当前代码结构脱节",
+      "对应 UT 必须显式断言 `logger.warning.assert_called_once_with(\"精确文案\")` 在 `后端不存在` 分支被触发——UT 里的断言文案就是实际运行会写进日志的文案，是本类规则**最强审计证据**"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/batch_invariant.py",
+      "line": 62,
+      "code": "",
+      "context": ""
+    },
+    "pattern": {
+      "file": "vllm_ascend/batch_invariant.py",
+      "line": 62,
+      "code": "    if HAS_TRITON:\n        _aten_batch_invariant_LIB.impl(\"aten::addmm\", addmm_batch_invariant, \"NPU\")\n        _aten_batch_invariant_LIB.impl(\"aten::bmm\", bmm_batch_invariant, \"NPU\")\n    else:\n        logger.warning(\n            \"Triton is not available. Batch invariance for 'addmm' and 'bmm' \"\n            \"operators is not enabled, which may lead to non-deterministic \"\n            \"behavior.\")",
+      "context": ""
+    },
+    "diff": {
+      "unified": "",
+      "stats": "1 file changed, +0 lines, -0 lines",
+      "key_changes": []
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

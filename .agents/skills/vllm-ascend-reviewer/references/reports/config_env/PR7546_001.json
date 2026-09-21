@@ -1,0 +1,71 @@
+{
+  "report_id": "PR7546_001",
+  "pr_number": 7546,
+  "pr_title": "[BugFix][310p]Handle null quantization config in ShardedStateLoader310",
+  "pr_status": "merged",
+  "merged_at": "2026-03-24T09:43:37Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/_310p/worker_310p.py:52",
+    "vllm_ascend/_310p/sharded_state_loader_310p.py:63"
+  ],
+  "landing_sha": "28d31d4",
+  "source_quote": "简化方法调用，直接写为更简洁直观的形式。\n建议直接写为：\nShardedStateLoader310.generate_quant_description(\nself.model_runner.model,\npath,\nself.vllm_config.quant_config\n)\n简洁直观\n简化量化类型获取逻辑，使用 `.get()` 方法并提供默认值。\n直接写为：\ntry:\nquantize_type = quant_config.quant_description.get(\"model_quant_type\", \"FLOAT\")\nexcept AttributeError:\nquantize_type = \"FLOAT\"",
+  "correspondence": [
+    {
+      "review_quote": "pu-zhe: vllm_ascend/_310p/worker_310p.py:52",
+      "patch_snippet": "评后sha 28d31d4 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "pu-zhe: vllm_ascend/_310p/sharded_state_loader_310p.py:63",
+      "patch_snippet": "评后sha 28d31d4 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "28d31d4",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "获取字典值时应使用 `.get(key, default)` 提供默认值，避免多层嵌套判断；方法调用应选择最简洁直观的形式。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/_310p/worker_310p.py",
+      "line": 40,
+      "code": "class NPUWorker310(NPUWorker):\n    \"\"\"Worker implementation for 310P with quantization support.\"\"\"\n\n    def __init__(self, vllm_config, local_rank, rank, distributed_init_manager):\n        super().__init__(vllm_config, local_rank, rank,\n                         distributed_init_manager)\n        self.model_runner = None\n\n    def save_sharded_state(self, path: str) -> None:\n        \"\"\"Save sharded state for 310P quantized models.\"\"\"\n        # Complex call chain through model runner\n        quant_description = self.model_runner.model.generate_quant_description(\n            path)\n        # Write quant description to file\n        with open(os.path.join(path, \"quant_description.json\"), \"w\") as f:\n            json.dump(quant_description, f)",
+      "context": "简化方法调用，直接写为更简洁直观的形式。\n建议直接写为：\nShardedStateLoader310.generate_quant_description(\nself.model_runner.model,\npath,\nself.vllm_config.quant_config\n)\n简洁直观\n简化量化类型获取逻辑，使用 `.get()` 方法并提供默认值。\n直接写为：\ntry:\nquantize_"
+    },
+    "pattern": {
+      "file": "vllm_ascend/_310p/worker_310p.py",
+      "line": 40,
+      "code": "class NPUWorker310(NPUWorker):\n    \"\"\"Worker implementation for 310P with quantization support.\"\"\"\n\n    def __init__(self, vllm_config, local_rank, rank, distributed_init_manager):\n        super().__init__(vllm_config, local_rank, rank,\n                         distributed_init_manager)\n        self.model_runner = None\n\n    def save_sharded_state(self, path: str) -> None:\n        \"\"\"Save sharded state for 310P quantized models.\"\"\"\n        # Direct static method call - cleaner and more intuitive\n        ShardedStateLoader310.generate_quant_description(\n            self.model_runner.model,\n            path,\n            self.vllm_config.quant_config\n        )",
+      "context": "简化方法调用，直接写为更简洁直观的形式。\n建议直接写为：\nShardedStateLoader310.generate_quant_description(\nself.model_runner.model,\npath,\nself.vllm_config.quant_config\n)\n简洁直观\n简化量化类型获取逻辑，使用 `.get()` 方法并提供默认值。\n直接写为：\ntry:\nquantize_"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/_310p/worker_310p.py\n+++ b/vllm_ascend/_310p/worker_310p.py\n@@ -8,9 +8,9 @@\n \n     def save_sharded_state(self, path: str) -> None:\n         \"\"\"Save sharded state for 310P quantized models.\"\"\"\n-        # Complex call chain through model runner\n-        quant_description = self.model_runner.model.generate_quant_description(\n-            path)\n-        # Write quant description to file\n-        with open(os.path.join(path, \"quant_description.json\"), \"w\") as f:\n-            json.dump(quant_description, f)\n+        # Direct static method call - cleaner and more intuitive\n+        ShardedStateLoader310.generate_quant_description(\n+            self.model_runner.model,\n+            path,\n+            self.vllm_config.quant_config\n+        )\n",
+      "stats": "1 file changed, +6 lines, -6 lines",
+      "key_changes": [
+        "-        # Complex call chain through model runner",
+        "-        quant_description = self.model_runner.model.generate_quant_description(",
+        "-            path)",
+        "-        # Write quant description to file",
+        "-        with open(os.path.join(path, \"quant_description.json\"), \"w\") as f:",
+        "-            json.dump(quant_description, f)",
+        "+        # Direct static method call - cleaner and more intuitive",
+        "+        ShardedStateLoader310.generate_quant_description(",
+        "+            self.model_runner.model,",
+        "+            path,",
+        "+            self.vllm_config.quant_config",
+        "+        )"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "report_id": "PR9558_001",
+  "pr_number": 9558,
+  "pr_title": "[Misc] update dockerfile and e2e for py3.12",
+  "pr_status": "merged",
+  "merged_at": "2026-06-03T14:33:02Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "setup.py:523",
+    "docs/source/developer_guide/performance_and_debug/optimization_and_tuning.md:87",
+    "requirements-dev.txt:24"
+  ],
+  "landing_sha": "dbf95f2",
+  "source_quote": "let's remove this comment\nIs there any issue on bisheng then?\n# TODO: update the version after py312_bisheng.tar.gz update\nIs this confirmed with xlite team?",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao: setup.py:523",
+      "patch_snippet": "评后sha dbf95f2 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: docs/source/developer_guide/performance_and_debug/optimization_and_tuning.md:87",
+      "patch_snippet": "评后sha dbf95f2 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: requirements-dev.txt:24",
+      "patch_snippet": "评后sha dbf95f2 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "dbf95f2",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "升级 Python 版本（如 3.11 → 3.12）时，需要同步更新 Dockerfile、setup.py、requirements-dev.txt 和文档中的版本引用，并对尚未完全适配的组件添加 TODO 标注。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "docs/source/developer_guide/performance_and_debug/optimization_and_tuning.md",
+      "line": 80,
+      "code": "<!-- （根据评审意见推断）Python 3.12 升级后，bisheng 包尚未完全适配，文档中缺少版本说明 -->\n\n## CANN Image Configuration\n\nThe CANN image tag is configured in `docs/source/conf.py`:",
+      "context": "let's remove this comment\nIs there any issue on bisheng then?\n# TODO: update the version after py312_bisheng.tar.gz update\nIs this confirmed with xlite team?"
+    },
+    "pattern": {
+      "file": "docs/source/developer_guide/performance_and_debug/optimization_and_tuning.md",
+      "line": 80,
+      "code": "<!-- 根据 MengqingCao 的 suggestion 添加 TODO 标注 -->\n\n## CANN Image Configuration\n\nThe CANN image tag is configured in `docs/source/conf.py`:",
+      "context": "let's remove this comment\nIs there any issue on bisheng then?\n# TODO: update the version after py312_bisheng.tar.gz update\nIs this confirmed with xlite team?"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/developer_guide/performance_and_debug/optimization_and_tuning.md\n+++ b/docs/source/developer_guide/performance_and_debug/optimization_and_tuning.md\n@@ -1,4 +1,4 @@\n-<!-- （根据评审意见推断）Python 3.12 升级后，bisheng 包尚未完全适配，文档中缺少版本说明 -->\n+<!-- 根据 MengqingCao 的 suggestion 添加 TODO 标注 -->\n \n ## CANN Image Configuration\n \n",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "-<!-- （根据评审意见推断）Python 3.12 升级后，bisheng 包尚未完全适配，文档中缺少版本说明 -->",
+        "+<!-- 根据 MengqingCao 的 suggestion 添加 TODO 标注 -->"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

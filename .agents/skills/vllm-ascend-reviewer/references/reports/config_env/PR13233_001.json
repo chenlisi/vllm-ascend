@@ -1,0 +1,61 @@
+{
+  "report_id": "PR13233_001",
+  "pr_number": 13233,
+  "pr_title": "[Bugfix]Modify the VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS timeout duration.",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/platform.py:1261"
+  ],
+  "landing_sha": "3c9f30e",
+  "source_quote": "Directly calling `int()` on `os.environ.get(\"VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS\", \"300\")` can raise a `ValueError` if the environment variable is set to an invalid integer string (e.g., an empty string, a float, or non-numeric characters). This would crash the server during initialization. We should safely parse the environment variable with a fallback to the default value of `300`.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/platform.py:1261",
+      "patch_snippet": "评后sha 3c9f30e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "3c9f30e",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "读取 vLLM 配置类环境变量时，必须使用项目统一的 `vllm.envs` 访问器（如 `envs_vllm.VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS`），不得直接 `int(os.environ.get(...))`。直接转换在变量为空串/浮点/非数字时会抛 `ValueError`，导致服务初始化崩溃；envs 访问器封装了带默认值的安全解析。",
+    "context": "",
+    "checkpoints": [
+      "全局搜索 `int(os.environ.get(` 形式的配置读取",
+      "确认是否已存在对应的 `envs_vllm.*` 访问器",
+      "改用访问器统一读写，避免裸 `int()`/`os.environ` 赋值"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/platform.py",
+      "line": 1255,
+      "code": "import os\nfrom vllm.logger import init_logger\n\nlogger = init_logger(__name__)\n\ndef _configure_ascend_envs():\n    \"\"\"Configure Ascend-specific environment variables.\"\"\"\n    # ... 前面的配置项 ...\n\n    # ==================== 11. VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS ====================\n    # ❌ 直接 int() 解析环境变量：空串/浮点/非数字 → ValueError 崩溃\n    if int(os.environ.get(\"VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS\", \"300\")) < 1836:\n        os.environ[\"VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS\"] = \"3000\"\n        logger.info(\n            \"The timeout interval of the HCCL operator is 1836s. Timeout in \"\n            \"seconds for execute_model RPC calls in multiprocessing must be \"\n            \"greater than 1836s, Set VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=3000\"\n        )",
+      "context": "... 前面的配置项 ... ==================== 11. VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS ==================== ❌ 直接 int() 解析环境变量：空串/浮点/非数字 → ValueError 崩溃"
+    },
+    "pattern": {
+      "file": "vllm_ascend/platform.py",
+      "line": 1255,
+      "code": "import os\nfrom vllm.envs import envs as envs_vllm\nfrom vllm.logger import init_logger\n\nlogger = init_logger(__name__)\n\ndef _configure_ascend_envs():\n    \"\"\"Configure Ascend-specific environment variables.\"\"\"\n    # ... 前面的配置项 ...\n\n    # ==================== 11. VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS ====================\n    # ✅ 经 envs 访问器安全读取/写入，封装了带默认值的安全解析\n    if envs_vllm.VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS < 1836:\n        envs_vllm.VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS = 3000\n        logger.info(\n            \"The timeout interval of the HCCL operator is 1836s. Timeout in \"\n            \"seconds for execute_model RPC calls in multiprocessing must be \"\n            \"greater than 1836s, Set VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=3000\"\n        )",
+      "context": "... 前面的配置项 ... ==================== 11. VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS ==================== ✅ 经 envs 访问器安全读取/写入，封装了带默认值的安全解析"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/platform.py\n+++ b/vllm_ascend/platform.py\n@@ -1,4 +1,5 @@\n import os\n+from vllm.envs import envs as envs_vllm\n from vllm.logger import init_logger\n \n logger = init_logger(__name__)\n@@ -8,9 +9,9 @@\n     # ... 前面的配置项 ...\n \n     # ==================== 11. VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS ====================\n-    # ❌ 直接 int() 解析环境变量：空串/浮点/非数字 → ValueError 崩溃\n-    if int(os.environ.get(\"VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS\", \"300\")) < 1836:\n-        os.environ[\"VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS\"] = \"3000\"\n+    # ✅ 经 envs 访问器安全读取/写入，封装了带默认值的安全解析\n+    if envs_vllm.VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS < 1836:\n+        envs_vllm.VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS = 3000\n         logger.info(\n             \"The timeout interval of the HCCL operator is 1836s. Timeout in \"\n             \"seconds for execute_model RPC calls in multiprocessing must be \"\n",
+      "stats": "1 file changed, +4 lines, -3 lines",
+      "key_changes": [
+        "移除: if int(os.environ.get(\"VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS\", \"300\")) < 1836:",
+        "移除: os.environ[\"VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS\"] = \"3000\"",
+        "新增: from vllm.envs import envs as envs_vllm",
+        "新增: envs_vllm.VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS = 3000",
+        "新增: if envs_vllm.VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS < 1836:"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

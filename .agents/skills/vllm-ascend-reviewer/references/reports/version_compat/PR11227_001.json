@@ -1,0 +1,75 @@
+{
+  "report_id": "PR11227_001",
+  "pr_number": 11227,
+  "pr_title": "[CI] main2mian v0.24.0",
+  "pr_status": "merged",
+  "merged_at": "2026-07-05T10:49:07Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "examples/offline_data_parallel.py:126",
+    "tests/e2e/conftest.py:877",
+    "tests/ut/core/test_profiling_chunk.py:93",
+    "tests/ut/quantization/methods/test_w4a16_mxfp4.py:68",
+    "vllm_ascend/patch/worker/__init__.py:80",
+    "vllm_ascend/worker/v2/spec_decode/rejection_sampler_utils.py:343",
+    "vllm_ascend/__init__.py:78",
+    "vllm_ascend/worker/worker.py:444",
+    "vllm_ascend/worker/worker.py:415"
+  ],
+  "landing_sha": "a0702cc",
+  "source_quote": "I think we should add `_build_device_ids` in `vllm/entrypoints/openai/dp_supervisor.py` in the example.",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 提出了 9 条修改建议，包括：使用 `_build_device_ids` 替代 `ASCEND_RT_VISIBLE_DEVICES`、patch `MambaCopyBuffers` 而非 `CpuGpuBuffer`、对齐上游 `init_device` 实现、添加 speculative decoding 的 TODO 注释、移除 ray 分布式后端下无效的 device-ids 检查等。作者通过 commit `a0702cc` 完成了所有修改，9/9 建议全部落地。",
+      "patch_snippet": "commit `a0702cc`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "a0702cc",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在升级 vLLM 版本时，应确保设备初始化、patch 目标等与上游实现保持一致。避免使用与上游冲突的环境变量设置方式，patch 应选择更精确的目标类。",
+    "context": "",
+    "checkpoints": [
+      "设备 ID 分配是否使用了 `_build_device_ids` 而非 `ASCEND_RT_VISIBLE_DEVICES`",
+      "patch 目标是否选择了最精确的类（如 `MambaCopyBuffers` 而非 `CpuGpuBuffer`）",
+      "`init_device` 是否与上游 `gpu_worker.py` 对齐",
+      "ray 分布式后端下是否有无效的 device-ids 检查需要移除",
+      "新增的 speculative decoding 功能是否添加了 TODO 注释"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/patch/worker/__init__.py",
+      "line": 126,
+      "code": "from vllm_ascend.patch.worker.base import patch\nfrom vllm.worker.gpu_model_runner import CpuGpuBuffer\n\n# ... 其他 patch 注册\n\n# patch 宽泛的基类 CpuGpuBuffer\n# 评审人建议改为 patch 更精确的 MambaCopyBuffers\npatch(CpuGpuBuffer, \"allocate\", _patched_allocate)\n\n# ... 其他 patch",
+      "context": "I think we should add `_build_device_ids` in `vllm/entrypoints/openai/dp_supervisor.py` in the example."
+    },
+    "pattern": {
+      "file": "vllm_ascend/patch/worker/__init__.py",
+      "line": 126,
+      "code": "from vllm_ascend.patch.worker.base import patch\nfrom vllm.worker.mamba_utils import MambaCopyBuffers\n\n# ... 其他 patch 注册\n\n# 改为 patch 更精确的 MambaCopyBuffers\n# （评审人建议：patch MambaCopyBuffers 比 CpuGpuBuffer 更合理）\npatch(MambaCopyBuffers, \"allocate\", _patched_allocate)\n\n# ... 其他 patch",
+      "context": "I think we should add `_build_device_ids` in `vllm/entrypoints/openai/dp_supervisor.py` in the example."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/patch/worker/__init__.py\n+++ b/vllm_ascend/patch/worker/__init__.py\n@@ -1,10 +1,10 @@\n from vllm_ascend.patch.worker.base import patch\n-from vllm.worker.gpu_model_runner import CpuGpuBuffer\n+from vllm.worker.mamba_utils import MambaCopyBuffers\n \n # ... 其他 patch 注册\n \n-# patch 宽泛的基类 CpuGpuBuffer\n-# 评审人建议改为 patch 更精确的 MambaCopyBuffers\n-patch(CpuGpuBuffer, \"allocate\", _patched_allocate)\n+# 改为 patch 更精确的 MambaCopyBuffers\n+# （评审人建议：patch MambaCopyBuffers 比 CpuGpuBuffer 更合理）\n+patch(MambaCopyBuffers, \"allocate\", _patched_allocate)\n \n # ... 其他 patch",
+      "stats": "1 file changed, +4 lines, -4 lines",
+      "key_changes": [
+        "移除: from vllm.worker.gpu_model_runner import CpuGpuBuffer",
+        "新增: from vllm.worker.mamba_utils import MambaCopyBuffers",
+        "移除: # patch 宽泛的基类 CpuGpuBuffer",
+        "移除: # 评审人建议改为 patch 更精确的 MambaCopyBuffers",
+        "移除: patch(CpuGpuBuffer, \"allocate\", _patched_allocate)",
+        "新增: # 改为 patch 更精确的 MambaCopyBuffers",
+        "新增: # （评审人建议：patch MambaCopyBuffers 比 CpuGpuBuffer 更合理）",
+        "新增: patch(MambaCopyBuffers, \"allocate\", _patched_allocate)"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

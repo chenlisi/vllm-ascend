@@ -1,0 +1,66 @@
+{
+  "report_id": "PR10309_001",
+  "pr_number": 10309,
+  "pr_title": "[Feature][310p]Qwen3.5 Support MTP and graphmode",
+  "pr_status": "merged",
+  "merged_at": "2026-06-11T08:51:32Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/e2e/pull_request/one_card/_310p/test_spec_decode_mtp_310p.py:33",
+    "vllm_ascend/_310p/ops/fla/gdn_310.py:154"
+  ],
+  "landing_sha": "d81dc61",
+  "source_quote": "Whether qwen3.5's MTP can directly handle the scenario where num_speculative_token is not equal to 1. If so, we need to add test cases to safeguard it.",
+  "correspondence": [
+    {
+      "review_quote": "momo609 询问 Qwen3.5 MTP 是否能处理 `num_speculative_token != 1` 的场景，以及 `gdn_310.py:154` 处的 CPU 同步是否会影响图模式。作者回复 Qwen3.5 虽然只有一层 MTP，但实际支持 MTP > 1 的场景，目前仅验证了等于 1 的情况。通过 commit `d81dc61` 移除了 310P 上的 warmup skill policy，2/2 建议全部落地。",
+      "patch_snippet": "commit `d81dc61`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "d81dc61",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在支持图模式（graph mode）的硬件架构上，代码路径中不应存在 CPU 同步操作（如 `.cpu()`、`.item()`），否则会导致图捕获失败或性能下降。",
+    "context": "",
+    "checkpoints": [
+      "检查图模式相关代码路径中是否有 CPU 同步操作",
+      "检查 MTP  speculative decoding 是否支持 `num_speculative_token != 1` 的场景",
+      "检查测试用例是否覆盖了关键参数的不同取值"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/_310p/sample/sampler.py",
+      "line": 33,
+      "code": "import torch\nfrom typing import Optional\n\n# ... 其他代码 ...\n\nclass AscendSampler310P:\n    # ... 其他方法 ...\n\n    def _sample_exponential(\n        self,\n        q: torch.Tensor,\n        generators: list[torch.Generator],\n        has_draft_mask: Optional[torch.Tensor] = None,\n    ) -> torch.Tensor:\n        \"\"\"310P 上的指数采样，使用 CPU RNG\"\"\"\n        # has_draft_mask 在 NPU 上创建\n        # 但 _fill_cpu_exponential_310p 操作 CPU tensor\n        # 直接传入 NPU tensor 会导致设备不匹配 RuntimeError\n        q_cpu = q.cpu()\n        _fill_cpu_exponential_310p(\n            q_cpu, generators, has_draft_mask)  # 设备不匹配！\n\n        return q_cpu\n\n    # ... 其他方法 ...",
+      "context": "Whether qwen3.5's MTP can directly handle the scenario where num_speculative_token is not equal to 1. If so, we need to add test cases to safeguard it."
+    },
+    "pattern": {
+      "file": "vllm_ascend/_310p/sample/sampler.py",
+      "line": 33,
+      "code": "import torch\nfrom typing import Optional\n\n# ... 其他代码 ...\n\nclass AscendSampler310P:\n    # ... 其他方法 ...\n\n    def _sample_exponential(\n        self,\n        q: torch.Tensor,\n        generators: list[torch.Generator],\n        has_draft_mask: Optional[torch.Tensor] = None,\n    ) -> torch.Tensor:\n        \"\"\"310P 上的指数采样，使用 CPU RNG\"\"\"\n        # 将 has_draft_mask 也移到 CPU，避免设备不匹配 RuntimeError\n        q_cpu = q.cpu()\n        has_draft_mask_cpu = (\n            has_draft_mask.cpu() if has_draft_mask is not None else None)\n        _fill_cpu_exponential_310p(\n            q_cpu, generators, has_draft_mask_cpu)\n\n        return q_cpu\n\n    # ... 其他方法 ...",
+      "context": "Whether qwen3.5's MTP can directly handle the scenario where num_speculative_token is not equal to 1. If so, we need to add test cases to safeguard it."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/_310p/sample/sampler.py\n+++ b/vllm_ascend/_310p/sample/sampler.py\n@@ -13,12 +13,12 @@\n         has_draft_mask: Optional[torch.Tensor] = None,\n     ) -> torch.Tensor:\n         \"\"\"310P 上的指数采样，使用 CPU RNG\"\"\"\n-        # has_draft_mask 在 NPU 上创建\n-        # 但 _fill_cpu_exponential_310p 操作 CPU tensor\n-        # 直接传入 NPU tensor 会导致设备不匹配 RuntimeError\n+        # 将 has_draft_mask 也移到 CPU，避免设备不匹配 RuntimeError\n         q_cpu = q.cpu()\n+        has_draft_mask_cpu = (\n+            has_draft_mask.cpu() if has_draft_mask is not None else None)\n         _fill_cpu_exponential_310p(\n-            q_cpu, generators, has_draft_mask)  # 设备不匹配！\n+            q_cpu, generators, has_draft_mask_cpu)\n \n         return q_cpu\n ",
+      "stats": "1 file changed, +4 lines, -4 lines",
+      "key_changes": [
+        "移除: # has_draft_mask 在 NPU 上创建",
+        "移除: # 但 _fill_cpu_exponential_310p 操作 CPU tensor",
+        "移除: # 直接传入 NPU tensor 会导致设备不匹配 RuntimeError",
+        "新增: # 将 has_draft_mask 也移到 CPU，避免设备不匹配 RuntimeError",
+        "新增: has_draft_mask_cpu = (",
+        "新增: has_draft_mask.cpu() if has_draft_mask is not None else None)",
+        "移除: q_cpu, generators, has_draft_mask)  # 设备不匹配！",
+        "新增: q_cpu, generators, has_draft_mask_cpu)"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

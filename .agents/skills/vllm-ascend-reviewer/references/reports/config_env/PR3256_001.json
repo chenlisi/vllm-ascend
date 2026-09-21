@@ -1,0 +1,72 @@
+{
+  "report_id": "PR3256_001",
+  "pr_number": 3256,
+  "pr_title": "[Core]Append padding logic for Attention",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/attention/attention_v1.py:241",
+    "vllm_ascend/worker/model_runner_v1.py:1589",
+    "vllm_ascend/attention/attention_v1.py:220"
+  ],
+  "landing_sha": "2309ebd",
+  "source_quote": "Why don't we handle this in `prepare_inputs` — make everything in `common_attn_metadata` final so it doesn't need further modification? I'm worried this version will add maintenance overhead, since there are other attention implementations.\nPlease use attn_state instead of modifying this method.\nwhy this only affect decodeonly state.",
+  "correspondence": [
+    {
+      "review_quote": "yiz-liu: vllm_ascend/attention/attention_v1.py:241(2025-10-09 02:03:11)",
+      "patch_snippet": "评后sha 2309ebd 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "yiz-liu: vllm_ascend/worker/model_runner_v1.py:1589(2025-10-17 08:33:19)",
+      "patch_snippet": "评后sha 2309ebd 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "momo609: vllm_ascend/attention/attention_v1.py:220(2025-10-22 03:34:33)",
+      "patch_snippet": "评后sha 2309ebd 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "2309ebd",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在 ACL graph capture 场景下为 attention metadata 添加 padding 时，应通过 `attn_state` 控制 padding 行为，而非修改方法签名（如添加 `with_prefill` 参数），以减少对其他 attention 实现的维护开销。",
+    "context": "",
+    "checkpoints": [
+      "padding 逻辑是否通过状态（attn_state）控制而非修改方法签名",
+      "`query_start_loc_cpu` 的 `torch.arange` 是否存在 off-by-one 错误（end 参数是排他的）",
+      "`query_lens` 是否也进行了相应的 padding",
+      "修改是否会影响其他 attention backend 实现",
+      "是否与 MTP（Multi-Token Prediction）逻辑冲突"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 210,
+      "code": "# 评审人: gemini-code-assist[bot] 🔴 critical\n# Commit: dc3fb6e (fix padding logic)\n# query_start_loc_cpu padding 有 off-by-one 错误，query_lens 未 padding\n\n    def build(self, ...):\n        \"\"\"Build attention metadata with padding for ACL graph.\"\"\"\n        # ...\n        if common_attn_metadata.graph_pad_size > 0:\n            padded_num_tokens = common_attn_metadata.graph_pad_size - num_actual_tokens\n            seq_lens = torch.cat([seq_lens, torch.ones(padded_num_tokens, ...)])\n            # query_lens 未 padding，导致 tensor size mismatch\n            block_table_padding = torch.zeros(\n                (padded_num_tokens,) + block_table.shape[1:],\n                dtype=block_table.dtype, device=block_table.device)\n            block_table = torch.cat([block_table, block_table_padding], dim=0)\n            # end 参数错误，少生成了 1 个元素\n            new_query_locs = torch.arange(\n                query_start_loc_cpu[-1] + 1,\n                query_start_loc_cpu[-1] + padded_num_tokens,  # off-by-one\n                dtype=query_start_loc_cpu.dtype,\n                device=query_start_loc_cpu.device)\n            query_start_loc_cpu = torch.cat([query_start_loc_cpu, new_query_locs])",
+      "context": "评审人: gemini-code-assist[bot] 🔴 critical Commit: dc3fb6e (fix padding logic) query_start_loc_cpu padding 有 off-by-one 错误，query_lens 未 padding"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 210,
+      "code": "# 修复 off-by-one 错误，添加 query_lens padding\n\n    def build(self, ...):\n        \"\"\"Build attention metadata with padding for ACL graph.\"\"\"\n        # ...\n        if common_attn_metadata.graph_pad_size > 0:\n            padded_num_tokens = common_attn_metadata.graph_pad_size - num_actual_tokens\n            seq_lens = torch.cat([seq_lens, torch.ones(\n                padded_num_tokens, dtype=seq_lens.dtype, device=seq_lens.device)])\n            # 修复：添加 query_lens padding\n            query_lens = torch.cat([query_lens, torch.ones(\n                padded_num_tokens, dtype=query_lens.dtype, device=query_lens.device)])\n            block_table_padding = torch.zeros(\n                (padded_num_tokens,) + block_table.shape[1:],\n                dtype=block_table.dtype, device=block_table.device)\n            block_table = torch.cat([block_table, block_table_padding], dim=0)\n            # 修复：end + 1 修正 off-by-one\n            new_query_locs = torch.arange(\n                query_start_loc_cpu[-1] + 1,\n                query_start_loc_cpu[-1] + padded_num_tokens + 1,\n                dtype=query_start_loc_cpu.dtype,\n                device=query_start_loc_cpu.device)\n            query_start_loc_cpu = torch.cat([query_start_loc_cpu, new_query_locs])",
+      "context": "修复 off-by-one 错误，添加 query_lens padding 修复：添加 query_lens padding 修复：end + 1 修正 off-by-one"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/attention_v1.py\n+++ b/vllm_ascend/attention/attention_v1.py\n@@ -1,22 +1,23 @@\n-# 评审人: gemini-code-assist[bot] 🔴 critical\n-# Commit: dc3fb6e (fix padding logic)\n-# query_start_loc_cpu padding 有 off-by-one 错误，query_lens 未 padding\n+# 修复 off-by-one 错误，添加 query_lens padding\n \n     def build(self, ...):\n         \"\"\"Build attention metadata with padding for ACL graph.\"\"\"\n         # ...\n         if common_attn_metadata.graph_pad_size > 0:\n             padded_num_tokens = common_attn_metadata.graph_pad_size - num_actual_tokens\n-            seq_lens = torch.cat([seq_lens, torch.ones(padded_num_tokens, ...)])\n-            # query_lens 未 padding，导致 tensor size mismatch\n+            seq_lens = torch.cat([seq_lens, torch.ones(\n+                padded_num_tokens, dtype=seq_lens.dtype, device=seq_lens.device)])\n+            # 修复：添加 query_lens padding\n+            query_lens = torch.cat([query_lens, torch.ones(\n+                padded_num_tokens, dtype=query_lens.dtype, device=query_lens.device)])\n             block_table_padding = torch.zeros(\n                 (padded_num_tokens,) + block_table.shape[1:],\n                 dtype=block_table.dtype, device=block_table.device)\n             block_table = torch.cat([block_table, block_table_padding], dim=0)\n-            # end 参数错误，少生成了 1 个元素\n+            # 修复：end + 1 修正 off-by-one\n             new_query_locs = torch.arange(\n                 query_start_loc_cpu[-1] + 1,\n-                query_start_loc_cpu[-1] + padded_num_tokens,  # off-by-one\n+                query_start_loc_cpu[-1] + padded_num_tokens + 1,\n                 dtype=query_start_loc_cpu.dtype,\n                 device=query_start_loc_cpu.device)\n             query_start_loc_cpu = torch.cat([query_start_loc_cpu, new_query_locs])\n",
+      "stats": "1 file changed, +8 lines, -7 lines",
+      "key_changes": [
+        "新增: query_start_loc_cpu[-1] + padded_num_tokens + 1,",
+        "新增: padded_num_tokens, dtype=query_lens.dtype, device=query_lens.device)])"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

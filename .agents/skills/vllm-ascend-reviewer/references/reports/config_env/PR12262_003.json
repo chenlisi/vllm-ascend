@@ -1,0 +1,57 @@
+{
+  "report_id": "PR12262_003",
+  "pr_number": 12262,
+  "pr_title": "[BugFix][GLM-5.2][SpecDecode] Fix DSpark W8A8 eager acceptance",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/models/qwen3_dspark.py:11"
+  ],
+  "landing_sha": "d9cd4b1",
+  "source_quote": "Please add comments indicating that this code is for `quarot`.",
+  "correspondence": [
+    {
+      "review_quote": "drslark: vllm_ascend/models/qwen3_dspark.py:11",
+      "patch_snippet": "评后sha d9cd4b1 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "d9cd4b1",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "当代码实现依赖特定外部技术/算法（如 QuaRot 旋转量化、Rope Scaling 等）时，应在函数或关键逻辑上方加注释，指明技术名称与用途，降低后续维护者的理解门槛。",
+    "context": "",
+    "checkpoints": [
+      "检查从名称无法自解释的函数（如 `process_weight`）是否说明其关联技术",
+      "检查导入特殊模块（如 `patch_draft_quarot`）后，使用该模块的代码段是否有注释说明",
+      "注释应包含技术名（QuaRot/RoPE/…）和函数在该技术下的作用"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/models/qwen3_dspark.py",
+      "line": 1,
+      "code": "from typing import List, Tuple\n\nimport torch\nfrom vllm.model_executor.models.qwen3_dspark import (\n    Qwen3DSparkForCausalLM,\n)\n\nfrom vllm_ascend.patch.worker.patch_draft_quarot import (\n    get_rotataion_matrix,\n    get_rotation_path,\n)\n\n\ndef process_weight(linear_weight: torch.Tensor,\n                   rotation_weight: torch.Tensor):\n    assert linear_weight.shape[1] % rotation_weight.shape[0] == 0\n    tile = linear_weight.shape[1] // rotation_weight.shape[0]\n    rotation_weight = rotation_weight.repeat(1, tile)\n    return torch.matmul(linear_weight, rotation_weight)\n\n\nclass AscendQwen3DSparkForCausalLM(Qwen3DSparkForCausalLM):\n\n    def __init__(self, *, vllm_config, prefix, **kwargs):\n        super().__init__(vllm_config=vllm_config, prefix=prefix, **kwargs)\n        self.rotation_path = get_rotation_path()",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/models/qwen3_dspark.py",
+      "line": 1,
+      "code": "from typing import List, Tuple\n\nimport torch\nfrom vllm.model_executor.models.qwen3_dspark import (\n    Qwen3DSparkForCausalLM,\n)\n\nfrom vllm_ascend.patch.worker.patch_draft_quarot import (\n    get_rotataion_matrix,\n    get_rotation_path,\n)\n\n\n# Process the first linear weight with rotation matrix, if the target\n# model uses rotary quantization (QuaRot)\ndef process_weight(linear_weight: torch.Tensor,\n                   rotation_weight: torch.Tensor):\n    assert linear_weight.shape[1] % rotation_weight.shape[0] == 0\n    tile = linear_weight.shape[1] // rotation_weight.shape[0]\n    rotation_weight = rotation_weight.repeat(1, tile)\n    return torch.matmul(linear_weight, rotation_weight)\n\n\nclass AscendQwen3DSparkForCausalLM(Qwen3DSparkForCausalLM):\n\n    def __init__(self, *, vllm_config, prefix, **kwargs):\n        super().__init__(vllm_config=vllm_config, prefix=prefix, **kwargs)\n        self.rotation_path = get_rotation_path()",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/models/qwen3_dspark.py\n+++ b/vllm_ascend/models/qwen3_dspark.py\n@@ -11,6 +11,8 @@\n )\n \n \n+# Process the first linear weight with rotation matrix, if the target\n+# model uses rotary quantization (QuaRot)\n def process_weight(linear_weight: torch.Tensor,\n                    rotation_weight: torch.Tensor):\n     assert linear_weight.shape[1] % rotation_weight.shape[0] == 0",
+      "stats": "1 file changed, +2 lines, -0 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

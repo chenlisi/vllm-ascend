@@ -1,0 +1,47 @@
+{
+  "report_id": "PR6602_001",
+  "pr_number": 6602,
+  "pr_title": "",
+  "pr_status": "unknown",
+  "merged_at": "",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [],
+  "landing_sha": "",
+  "source_quote": "",
+  "correspondence": [],
+  "verification": {
+    "merged": false,
+    "modified_commit": "",
+    "approvals": 0
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/compilation/passes/qknorm_rope_fusion_pass.py",
+      "line": 0,
+      "code": "def get_inputs(self):\n        ...\n    def register(self, pm_pass: PatternMatcherPass):\n        def def pattern(      # <---致命语法错，导入时报SyntaxError\n            qkv: torch.Tensor,\n            q_weight: torch.Tensor,\n            k_weight: torch.Tensor,\n            ...",
+      "context": ""
+    },
+    "pattern": {
+      "file": "vllm_ascend/compilation/passes/qknorm_rope_fusion_pass.py",
+      "line": 0,
+      "code": "def get_inputs(self):\n        ...\n    def register(self, pm_pass: PatternMatcherPass):\n        def pattern(           # <---精确保留1个def\n            qkv: torch.Tensor,\n            q_weight: torch.Tensor,\n            k_weight: torch.Tensor,\n            ...",
+      "context": ""
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/compilation/passes/qknorm_rope_fusion_pass.py\n+++ b/vllm_ascend/compilation/passes/qknorm_rope_fusion_pass.py\n@@ -1,7 +1,7 @@\n def get_inputs(self):\n         ...\n     def register(self, pm_pass: PatternMatcherPass):\n-        def def pattern(      # <---致命语法错，导入时报SyntaxError\n+        def pattern(           # <---精确保留1个def\n             qkv: torch.Tensor,\n             q_weight: torch.Tensor,\n             k_weight: torch.Tensor,",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "- def def pattern(      # <---致命语法错，导入时报SyntaxError",
+        "+ def pattern(           # <---精确保留1个def"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

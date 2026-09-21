@@ -1,0 +1,64 @@
+{
+  "report_id": "PR7372_001",
+  "pr_number": 7372,
+  "pr_title": "[Refactor] [310p] Support Mamba Cache and support attn_head_size larger than 128",
+  "pr_status": "merged",
+  "merged_at": "2026-03-18T13:22:29Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/_310p/model_runner_310p.py:441"
+  ],
+  "landing_sha": "ffd8bee",
+  "source_quote": "MengqingCao 建议添加常量（如 `ATTENTION_BLOCK_SIZE_LIMIT=128*128`）来替代魔法数字，提高代码可读性和可维护性。",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 指出应使用命名常量替代魔法数字 `128*128`。作者通过 commit `cfa1ff3` 添加了 `ATTENTION_BLOCK_SIZE_LIMIT` 常量，1/1 建议全部落地。",
+      "patch_snippet": "commit `cfa1ff3`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "ffd8bee",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "代码中不应直接使用魔法数字（如 `128*128`），应使用命名常量（如 `ATTENTION_BLOCK_SIZE_LIMIT=128*128`）来提高代码可读性和可维护性。",
+    "context": "",
+    "checkpoints": [
+      "代码中是否存在未解释的魔法数字",
+      "魔法数字是否有对应的命名常量",
+      "常量命名是否清晰表达了其含义"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/_310p/model_runner_310p.py",
+      "line": 430,
+      "code": "    def _select_kernel_block_size(\n        self,\n        block_size: int,\n        head_size: int,\n    ) -> int:\n        \"\"\"Select appropriate kernel block size for the attention backend.\"\"\"\n        if block_size * head_size <= 128 * 128:\n            supported = self.attn_backend.get_supported_kernel_block_sizes()\n            for candidate in sorted(supported, reverse=True):\n                if block_size * head_size <= candidate:\n                    return candidate\n            return supported[0]\n        else:\n            return block_size",
+      "context": "MengqingCao 建议添加常量（如 `ATTENTION_BLOCK_SIZE_LIMIT=128*128`）来替代魔法数字，提高代码可读性和可维护性。"
+    },
+    "pattern": {
+      "file": "vllm_ascend/_310p/model_runner_310p.py",
+      "line": 430,
+      "code": "ATTENTION_BLOCK_SIZE_LIMIT = 128 * 128\n\n\nclass NPUModelRunner310(NPUModelRunner):\n\n    def _select_kernel_block_size(\n        self,\n        block_size: int,\n        head_size: int,\n    ) -> int:\n        \"\"\"Select appropriate kernel block size for the attention backend.\"\"\"\n        if block_size * head_size <= ATTENTION_BLOCK_SIZE_LIMIT:\n            supported = self.attn_backend.get_supported_kernel_block_sizes()\n            for candidate in sorted(supported, reverse=True):\n                if block_size * head_size <= candidate:\n                    return candidate\n            return supported[0]\n        else:\n            return block_size",
+      "context": "MengqingCao 建议添加常量（如 `ATTENTION_BLOCK_SIZE_LIMIT=128*128`）来替代魔法数字，提高代码可读性和可维护性。"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/_310p/model_runner_310p.py\n+++ b/vllm_ascend/_310p/model_runner_310p.py\n@@ -430,14 +430,19 @@\n+ATTENTION_BLOCK_SIZE_LIMIT = 128 * 128\n+\n+\n+class NPUModelRunner310(NPUModelRunner):\n+\n     def _select_kernel_block_size(\n         self,\n         block_size: int,\n         head_size: int,\n     ) -> int:\n         \"\"\"Select appropriate kernel block size for the attention backend.\"\"\"\n-        if block_size * head_size <= 128 * 128:\n+        if block_size * head_size <= ATTENTION_BLOCK_SIZE_LIMIT:\n             supported = self.attn_backend.get_supported_kernel_block_sizes()\n             for candidate in sorted(supported, reverse=True):\n                 if block_size * head_size <= candidate:",
+      "stats": "1 file changed, +3 lines, -1 lines",
+      "key_changes": [
+        "+ ATTENTION_BLOCK_SIZE_LIMIT = 128 * 128",
+        "+ ",
+        "+ ",
+        "+ class NPUModelRunner310(NPUModelRunner):",
+        "+ ",
+        "- if block_size * head_size <= 128 * 128:",
+        "+ if block_size * head_size <= ATTENTION_BLOCK_SIZE_LIMIT:"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

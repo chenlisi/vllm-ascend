@@ -1,0 +1,58 @@
+{
+  "report_id": "PR6126_001",
+  "pr_number": 6126,
+  "pr_title": "[Bugfix]Fix of Pooling Code and Update of Pooling Usage Guide",
+  "pr_status": "merged",
+  "merged_at": "2026-01-26T01:41:05Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/user_guide/feature_guide/kv_pool.md:371"
+  ],
+  "landing_sha": "d890b56",
+  "source_quote": "LGTM\n\nAdd an equation for Device memory consumption of HCCL link creation.",
+  "correspondence": [
+    {
+      "review_quote": "Pz1116 在 LGTM 的同时提出了一个 TODO：需要添加 HCCL link 创建的设备内存消耗公式。作者通过后续 commit 补充了相关内容，1/1 建议落地。",
+      "patch_snippet": "",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "c58a2b6",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当文档涉及设备内存、网络带宽等资源消耗时，应提供具体的计算公式或量化说明，帮助用户评估资源需求。",
+    "context": "",
+    "checkpoints": [
+      "涉及内存消耗的文档应提供计算公式",
+      "涉及资源配置的指南应给出具体数值或范围",
+      "TODO 类评审意见应在合入前解决或记录"
+    ],
+    "antipattern": {
+      "file": "docs/source/user_guide/feature_guide/kv_pool.md",
+      "line": 365,
+      "code": "Device memory is consumed during HCCL link creation.\n<!-- 缺少具体的内存消耗公式说明 -->",
+      "context": "LGTM"
+    },
+    "pattern": {
+      "file": "docs/source/user_guide/feature_guide/kv_pool.md",
+      "line": 365,
+      "code": "Device memory consumption of HCCL link creation:\n\n`Memory_per_link = num_ranks * buffer_size * 2` (bytes)\n\nFor example, with 8 ranks and a buffer size of 1024 bytes:\n`Memory_per_link = 8 * 1024 * 2 = 16384 bytes`",
+      "context": "LGTM"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/user_guide/feature_guide/kv_pool.md\n+++ b/docs/source/user_guide/feature_guide/kv_pool.md\n@@ -365,2 +365,6 @@\n-Device memory is consumed during HCCL link creation.\n-<!-- 缺少具体的内存消耗公式说明 -->\n+Device memory consumption of HCCL link creation:\n+\n+`Memory_per_link = num_ranks * buffer_size * 2` (bytes)\n+\n+For example, with 8 ranks and a buffer size of 1024 bytes:\n+`Memory_per_link = 8 * 1024 * 2 = 16384 bytes`",
+      "stats": "1 file changed, +6 lines, -2 lines",
+      "key_changes": [
+        "修改了第 1-2 行的代码"
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

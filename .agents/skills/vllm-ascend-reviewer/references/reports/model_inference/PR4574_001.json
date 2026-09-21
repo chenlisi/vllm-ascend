@@ -1,0 +1,61 @@
+{
+  "report_id": "PR4574_001",
+  "pr_number": 4574,
+  "pr_title": "[Bugfix] Fix kvpool precision synchronization",
+  "pr_status": "merged",
+  "merged_at": "2025-11-30T01:39:08Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "blocker",
+  "affected_files": [
+    "vllm_ascend/worker/model_runner_v1.py:2605",
+    "vllm_ascend/distributed/kvpool/kv_transfer.py:120",
+    "vllm_ascend/distributed/kvpool/kv_transfer.py:208"
+  ],
+  "landing_sha": "04b7188",
+  "source_quote": "LGTM",
+  "correspondence": [
+    {
+      "review_quote": "Pz1116 对修复方案表示 LGTM。gemini-code-assist[bot] 确认将 `maybe_wait_for_kv_save()` 从 `execute_model` 移到 `sample_tokens` 之后是修复竞态条件的关键修复，并确认删除冗余 `synchronize()` 调用是正确的。作者通过 commit `04b7188` 删除 synchronize，1/1 人工建议落地。",
+      "patch_snippet": "commit `04b7188`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "04b7188",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "KV cache 的保存操作必须在模型 forward pass 完全完成后才能触发，需要确保数据完整性。无效的跨线程 synchronize 调用应当删除。",
+    "context": "",
+    "checkpoints": [
+      "KV cache 保存触发点是否在 forward pass 和 sampling 完成之后",
+      "是否存在无效的 `synchronize()` 调用（仅同步当前线程 stream，无法跨 stream 同步）",
+      "方法名是否准确反映其行为（触发 vs 等待）"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 2590,
+      "code": "class NPUModelRunner:\n    def execute_model(\n        self,\n        scheduler_output: SchedulerOutput,\n        intermediate_tensors: Optional[IntermediateTensors] = None,\n    ) -> ModelRunnerOutput:\n        hidden_states = self._execute_model_forward(\n            scheduler_output, intermediate_tensors)\n\n        self.maybe_wait_for_kv_save()\n\n        sampler_output = self.sampler(\n            hidden_states=hidden_states,\n            sampling_metadata=sampling_metadata,\n        )\n        return sampler_output",
+      "context": "Pz1116: LGTM"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 2590,
+      "code": "class NPUModelRunner:\n    def execute_model(\n        self,\n        scheduler_output: SchedulerOutput,\n        intermediate_tensors: Optional[IntermediateTensors] = None,\n    ) -> ModelRunnerOutput:\n        hidden_states = self._execute_model_forward(\n            scheduler_output, intermediate_tensors)\n\n\n        sampler_output = self.sampler(\n            hidden_states=hidden_states,\n            sampling_metadata=sampling_metadata,\n        )\n        return sampler_output\n\n    def sample_tokens(self, hidden_states, sampling_metadata):\n        sampler_output = self.sampler(\n            hidden_states=hidden_states,\n            sampling_metadata=sampling_metadata,\n        )\n        self.maybe_wait_for_kv_save()\n        return sampler_output",
+      "context": "Pz1116: LGTM"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/model_runner_v1.py\n+++ b/vllm_ascend/worker/model_runner_v1.py\n@@ -2590,16 +2590,23 @@\n         hidden_states = self._execute_model_forward(\n             scheduler_output, intermediate_tensors)\n \n-        self.maybe_wait_for_kv_save()\n \n         sampler_output = self.sampler(\n             hidden_states=hidden_states,\n             sampling_metadata=sampling_metadata,\n         )\n         return sampler_output\n+\n+    def sample_tokens(self, hidden_states, sampling_metadata):\n+        sampler_output = self.sampler(\n+            hidden_states=hidden_states,\n+            sampling_metadata=sampling_metadata,\n+        )\n+        self.maybe_wait_for_kv_save()\n+        return sampler_output",
+      "stats": "1 file changed, +8 lines, -1 lines",
+      "key_changes": [
+        "删除了第 10-10 行的代码",
+        "在第 16-23 行新增了代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

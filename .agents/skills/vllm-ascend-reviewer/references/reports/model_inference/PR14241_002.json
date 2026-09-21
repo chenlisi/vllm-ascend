@@ -1,0 +1,60 @@
+{
+  "report_id": "PR14241_002",
+  "pr_number": 14241,
+  "pr_title": "[BugFix][Proxy] Preserve multimodal content on recompute",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "examples/disaggregated_prefill_v1/proxy_utils.py:13"
+  ],
+  "landing_sha": "9f32e29",
+  "source_quote": "![high]\nIn OpenAI-compatible APIs, the `content` field of a message can be explicitly set to `null` (which parses as `None` in Python), especially for assistant messages with tool calls or empty messages. If `content` is `None`, `messages[0].get(\"content\", \"\")` will return `None` rather than the default `\"\"`. Passing `None` to `append_generated_text_to_chat_content` will result in a `TypeError` during recomputation, crashing the request stream.\n> To prevent this, we should handle `None` gracefully by treating it as an empty string `\"\"` while preserving empty lists `[]`.",
+  "correspondence": [
+    {
+      "review_quote": "examples/disaggregated_prefill_v1/proxy_utils.py:13",
+      "patch_snippet": "评后sha 9f32e29 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "9f32e29",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "OpenAI 兼容 API 中，消息的 `content` 字段可以显式为 `null`（Python `None`），常见于 assistant 消息（带 tool calls）或空消息。`dict.get(\"content\", \"\")` 在键存在但值为 `None` 时返回 `None` 而非默认值 `\"\"`（`.get` 的默认值仅在键不存在时生效）。后续对返回值做字符串拼接（`content + generated_text`）会触发 `TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'`。必须用 `(content or \"\")` 或 `if content is None: content = \"\"` 显式兜底 None。",
+    "context": "",
+    "checkpoints": [
+      "识别从 OpenAI 消息或外部 API 响应中取 `content` 字段的代码：`messages[0].get(\"content\", \"\")`",
+      "确认返回值后续是否用于字符串拼接、`len()`、迭代等会因 `None` 崩溃的操作",
+      "`.get(key, default)` 的 default 仅在键不存在时生效，键存在但值为 `None` 时返回 `None`——不能依赖 `.get` 防御 None",
+      "用 `(content or \"\")` 兜底（同时处理 None 和空字符串），或显式 `if content is None: content = \"\"`",
+      "注意保留空 list `[]` 的语义：`[]` 是合法的 multimodal content，不能用 `or` 把 `[]` 也转成 `\"\"`（`[] or \"\"` 求值为 `\"\"`）。若需区分 str/list/None，用显式 `if content is None` 而非 `or`"
+    ],
+    "antipattern": {
+      "file": "examples/disaggregated_prefill_v1/proxy_utils.py",
+      "line": 13,
+      "code": "# examples/disaggregated_prefill_v1/proxy_utils.py (已被移除)\ndef append_generated_text_to_chat_content(content, generated_text):\n    \"\"\"Append generated text without flattening multimodal chat content.\"\"\"\n    # ❌ 未处理 content=None 的情况\n    if isinstance(content, str):\n        return content + generated_text\n    if isinstance(content, list):\n        updated_content = list(content)\n        if generated_text:\n            updated_content.append({\"type\": \"text\", \"text\": generated_text})\n        return updated_content\n    raise TypeError(f\"Unsupported chat content type: {type(content).__name__}\")\n    # ❌ content=None 会走到这里 raise TypeError，崩溃请求流\n\n# 调用点（原 proxy_utils 已移除前的形态）\norigin_prompt = messages[0].get(\"content\", \"\")\n# ❌ content 键存在但值为 None 时，返回 None 而非 \"\"",
+      "context": "examples/disaggregated_prefill_v1/proxy_utils.py (已被移除) ❌ 未处理 content=None 的情况 ❌ content=None 会走到这里 raise TypeError，崩溃请求流"
+    },
+    "pattern": {
+      "file": "examples/disaggregated_prefill_v1/proxy_utils.py",
+      "line": 13,
+      "code": "# proxy_utils.py 被移除，逻辑内联到两个 example 文件\n# examples/disaggregated_prefill_v1/load_balance_proxy_server_example.py\n# examples/disaggregated_prefill_v1/load_balance_proxy_layerwise_server_example.py\n                            retry_count += 1\n                            if chat_flag:\n                                messages[0][\"content\"] = (\n                                    origin_prompt\n                                    + ([{\"type\": \"text\", \"text\": generated_token}] if generated_token else [])\n                                    if isinstance(origin_prompt, list)\n                                    else (origin_prompt or \"\") + generated_token\n                                    # ✅ (origin_prompt or \"\") 兜底 None：None or \"\" → \"\"\n                                    # ✅ content=None 时当作空字符串处理，避免 TypeError\n                                )",
+      "context": "proxy_utils.py 被移除，逻辑内联到两个 example 文件 examples/disaggregated_prefill_v1/load_balance_proxy_server_example.py examples/disaggregated_prefill_v1/load_balance_proxy_layerwise_server_example.py"
+    },
+    "diff": {
+      "unified": "--- a/examples/disaggregated_prefill_v1/proxy_utils.py\n+++ b/examples/disaggregated_prefill_v1/proxy_utils.py\n@@ -1,17 +1,13 @@\n-# examples/disaggregated_prefill_v1/proxy_utils.py (已被移除)\n-def append_generated_text_to_chat_content(content, generated_text):\n-    \"\"\"Append generated text without flattening multimodal chat content.\"\"\"\n-    # ❌ 未处理 content=None 的情况\n-    if isinstance(content, str):\n-        return content + generated_text\n-    if isinstance(content, list):\n-        updated_content = list(content)\n-        if generated_text:\n-            updated_content.append({\"type\": \"text\", \"text\": generated_text})\n-        return updated_content\n-    raise TypeError(f\"Unsupported chat content type: {type(content).__name__}\")\n-    # ❌ content=None 会走到这里 raise TypeError，崩溃请求流\n-\n-# 调用点（原 proxy_utils 已移除前的形态）\n-origin_prompt = messages[0].get(\"content\", \"\")\n-# ❌ content 键存在但值为 None 时，返回 None 而非 \"\"\n+# proxy_utils.py 被移除，逻辑内联到两个 example 文件\n+# examples/disaggregated_prefill_v1/load_balance_proxy_server_example.py\n+# examples/disaggregated_prefill_v1/load_balance_proxy_layerwise_server_example.py\n+                            retry_count += 1\n+                            if chat_flag:\n+                                messages[0][\"content\"] = (\n+                                    origin_prompt\n+                                    + ([{\"type\": \"text\", \"text\": generated_token}] if generated_token else [])\n+                                    if isinstance(origin_prompt, list)\n+                                    else (origin_prompt or \"\") + generated_token\n+                                    # ✅ (origin_prompt or \"\") 兜底 None：None or \"\" → \"\"\n+                                    # ✅ content=None 时当作空字符串处理，避免 TypeError\n+                                )\n",
+      "stats": "1 file changed, +13 lines, -17 lines",
+      "key_changes": [
+        "移除: if generated_text:",
+        "移除: return updated_content"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

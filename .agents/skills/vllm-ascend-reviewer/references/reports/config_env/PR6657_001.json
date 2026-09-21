@@ -1,0 +1,61 @@
+{
+  "report_id": "PR6657_001",
+  "pr_number": 6657,
+  "pr_title": "[Feature] adapt to uva buffer and main2main",
+  "pr_status": "merged",
+  "merged_at": "",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "blocker",
+  "affected_files": [
+    "vllm_ascend/worker/v2/input_batch.py:82"
+  ],
+  "landing_sha": "fdc9273",
+  "source_quote": "",
+  "correspondence": [
+    {
+      "review_quote": "| # | bot suggestion 关键操作 | 落地 commit fdc9273 的对应改动 | 对应度 |\n|---|--------------------------|--------------------------------|--------|\n| 1 | 显式调用 `InputBatch.make_dummy()` 禁止 `super().make_dummy()` 绕过 dataclass 继承 cls 绑定语义 | diff L150-L151 `super().make_dummy` → `InputBatch.make_dummy` | 100% 逐字 |\n|",
+      "patch_snippet": "",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "fdc9273",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当子类 dataclass 新增了 `required=True`（无默认值）的字段，同时重写了一个基类里定义的 `@classmethod`（例如 `make_dummy`、`from_config`、`deserialize`）时，**绝对不能写 `super().classmethod_name(...)`**。原因是 `@classmethod` 的第一参数 `cls` 永远绑定\"实际调用者的类型\"——即 `super().make_dummy()` 内部 `cls` 仍然是 `AscendInputBatch`（子类），基类 `InputBatch.make_dummy` 走到最后 `return cls(**kwargs)` 时会用子类 `__init__` 签名检查 kwargs，发现子类新增的 required 字段（如 `seq_lens_np`）缺失，直接抛 `TypeError: __init__() missing 1 required positional argument: 'new_field'`。正确范式：**显式写 `BaseClass.classmethod_name(...)`** → 强制 `cls=BaseClass` 返回基类实例 → 再 `dataclasses.asdict()` 展开 + 补充子类新字段 → `return SubClass(**asdict(base_inst), new_field=new_val)`。",
+    "context": "",
+    "checkpoints": [
+      "扫描所有继承自其他 dataclass 的子类 `@classmethod`：任何出现 `super().xxx(` 的位置必须替换为显式基类名",
+      "只要子类 dataclass 定义里加了 `field_a: SomeType` 而没有 `= default(...)`，这条规则就强制生效",
+      "修复代码里必须显式 `from dataclasses import asdict`（不要用 `__dict__`，因为 dataclass 有 exclude 逻辑）",
+      "修复后的 return 行必须是 **`cls(**asdict(base_instance), new_subclass_field_1=..., new_subclass_field_2=...)`**，不能通过 `base_instance.new_field = x` 的 monkey-patch 动态塞属性再 return 基类实例——下游 `isinstance(base_instance, SubClass)` 会 False，mypy 也不会过",
+      "本类 CRITICAL 错误在 graph capture / dummy batch 构造路径尤其高发（因为 make_dummy 正是用来 fake 一个 batch 做 CUDA graph tracing），一触发会让整个 graph 路径 100% 启动失败"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/v2/input_batch.py",
+      "line": 82,
+      "code": "from dataclasses import dataclass",
+      "context": ""
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/v2/input_batch.py",
+      "line": 82,
+      "code": "from dataclasses import dataclass, asdict",
+      "context": ""
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/v2/input_batch.py\n+++ b/vllm_ascend/worker/v2/input_batch.py\n@@ -1 +1 @@\n-from dataclasses import dataclass\n+from dataclasses import dataclass, asdict",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "- from dataclasses import dataclass",
+        "+ from dataclasses import dataclass, asdict"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "report_id": "PR12928_001",
+  "pr_number": 12928,
+  "pr_title": "[Config] Fix QWEN3_235B PD config missing params",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "4b231bd",
+  "source_quote": "",
+  "correspondence": [],
+  "verification": {
+    "merged": true,
+    "modified_commit": "4b231bd",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "configs/ascend/device/QWEN3_235B_PD_3_5K_1_5k.yaml",
+      "line": 100,
+      "code": "# ===== Node1（L100-L120 区域，produce 端） =====\nNode1:\n  device_ids: \"[0:15]\"\n  role: \"produce\"\n  nnodes: 1\n  nproc_per_node: 16\n  # ... 省略其他配置 ...\n  kv_connector_extra_config:\n    \"device_ids\": \"[16:19]\"\n    \"mooncake_protocol\": \"rdma\"\n    # ↑ 无 \"use_ascend_direct\": true → 默认 false，走普通传输通路\n\n# ===== Node2（L140-L160 区域，consume 端） =====\nNode2:\n  device_ids: \"[0:15]\"\n  role: \"consume\"\n  nnodes: 1\n  nproc_per_node: 16\n  # ... 省略其他配置 ...\n  kv_connector_extra_config:\n    \"device_ids\": \"[16:19]\"\n    \"mooncake_protocol\": \"rdma\"\n    \"use_ascend_direct\": true,   # 已配置正确",
+      "context": "修改前代码 (yaml)"
+    },
+    "pattern": {
+      "file": "configs/ascend/device/QWEN3_235B_PD_3_5K_1_5k.yaml",
+      "line": 100,
+      "code": "# ===== Node1（produce 端 L110 附近） =====\nNode1:\n  device_ids: \"[0:15]\"\n  role: \"produce\"\n  nnodes: 1\n  nproc_per_node: 16\n  # ... 省略其他配置 ...\n  kv_connector_extra_config:\n    \"device_ids\": \"[16:19]\"\n    \"mooncake_protocol\": \"rdma\"\n    \"use_ascend_direct\": true,   # ← 新增，与 Node2 对齐\n\n# ===== Node2（consume 端 L150 附近） =====\nNode2:\n  device_ids: \"[0:15]\"\n  role: \"consume\"\n  nnodes: 1\n  nproc_per_node: 16\n  # ... 省略其他配置 ...\n  kv_connector_extra_config:\n    \"device_ids\": \"[16:19]\"\n    \"mooncake_protocol\": \"rdma\"\n    \"use_ascend_direct\": true,   # 加固，避免后续 yaml 合并时丢失",
+      "context": "修改后代码 (yaml)"
+    },
+    "diff": {
+      "unified": "--- a/configs/ascend/device/QWEN3_235B_PD_3_5K_1_5k.yaml\n+++ b/configs/ascend/device/QWEN3_235B_PD_3_5K_1_5k.yaml\n@@ -1,4 +1,4 @@\n-# ===== Node1（L100-L120 区域，produce 端） =====\n+# ===== Node1（produce 端 L110 附近） =====\n Node1:\n   device_ids: \"[0:15]\"\n   role: \"produce\"\n@@ -8,9 +8,9 @@\n   kv_connector_extra_config:\n     \"device_ids\": \"[16:19]\"\n     \"mooncake_protocol\": \"rdma\"\n-    # ↑ 无 \"use_ascend_direct\": true → 默认 false，走普通传输通路\n+    \"use_ascend_direct\": true,   # ← 新增，与 Node2 对齐\n \n-# ===== Node2（L140-L160 区域，consume 端） =====\n+# ===== Node2（consume 端 L150 附近） =====\n Node2:\n   device_ids: \"[0:15]\"\n   role: \"consume\"\n@@ -20,4 +20,4 @@\n   kv_connector_extra_config:\n     \"device_ids\": \"[16:19]\"\n     \"mooncake_protocol\": \"rdma\"\n-    \"use_ascend_direct\": true,   # 已配置正确\n+    \"use_ascend_direct\": true,   # 加固，避免后续 yaml 合并时丢失",
+      "stats": "1 file changed, +4 lines, -4 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "yaml",
+    "_status": "pending_llm_extract"
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "report_id": "PR10477_001",
+  "pr_number": 10477,
+  "pr_title": "[Feature] SSD support multiple DP in each machine",
+  "pr_status": "merged",
+  "merged_at": "2026-06-17T01:40:18Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/mooncake_backend.py:114"
+  ],
+  "landing_sha": "215394c",
+  "source_quote": "How about `torch.distributed.get_rank()`?",
+  "correspondence": [
+    {
+      "review_quote": "linfeng-yuan 建议使用 `torch.distributed.get_rank()` 来获取全局 rank，而非仅使用 local_rank。作者回复说明在 dense model 多 DP 场景下 not working，最终采用 global rank 方案，兼容 PP/CP/TP/DP 各种并行场景，确保每个进程有独立的 SSD offload 路径，避免不同 DP replica 在同一机器上互相覆盖文件。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "215394c",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在多并行（DP/TP/PP/CP）环境下，SSD offload 路径必须使用全局唯一的 rank 标识（如 `torch.distributed.get_rank()`），而非仅使用 local_rank，以避免不同并行组在同一机器上的文件冲突。",
+    "context": "",
+    "checkpoints": [
+      "检查 SSD offload 路径生成是否使用了全局唯一标识",
+      "确认多 DP 场景下不同 replica 的路径不会冲突",
+      "验证路径方案是否兼容 PP/CP/TP/DP 各种并行模式"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/mooncake_backend.py",
+      "line": 105,
+      "code": "import os\nimport torch\nfrom vllm_ascend.distributed.parallel_state import get_dp_group\n\n\nclass MooncakeBackend:\n    \"\"\"Mooncake KV cache backend with SSD offload support.\"\"\"\n\n    def _init_ssd_storage(self, ssd_kwargs: dict, local_rank: int) -> None:\n        \"\"\"Initialize SSD storage for KV cache offloading.\n\n        Args:\n            ssd_kwargs: SSD configuration parameters including offload path.\n            local_rank: Local rank within the current node.\n        \"\"\"\n        if \"ssd_offload_path\" in ssd_kwargs:\n            # 仅使用 local_rank 构建路径\n            # 问题：多 DP 场景下不同 replica 的 local_rank 从 0 开始\n            # 导致不同 DP group 写入相同的 SSD 子目录，互相覆盖\n            rank_path = os.path.join(\n                str(ssd_kwargs[\"ssd_offload_path\"]),\n                f\"tp{local_rank}\"\n            )\n            os.makedirs(rank_path, exist_ok=True)\n            self.ssd_path = rank_path",
+      "context": "How about `torch.distributed.get_rank()`?"
+    },
+    "pattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/mooncake_backend.py",
+      "line": 105,
+      "code": "import os\nimport torch\nfrom vllm_ascend.distributed.parallel_state import get_dp_group\n\n\nclass MooncakeBackend:\n    \"\"\"Mooncake KV cache backend with SSD offload support.\"\"\"\n\n    def _init_ssd_storage(self, ssd_kwargs: dict, local_rank: int) -> None:\n        \"\"\"Initialize SSD storage for KV cache offloading.\n\n        Args:\n            ssd_kwargs: SSD configuration parameters including offload path.\n            local_rank: Local rank within the current node.\n        \"\"\"\n        if \"ssd_offload_path\" in ssd_kwargs:\n            # 使用 global rank 替代 local_rank\n            # 兼容 PP/CP/TP/DP 各种并行场景\n            # 确保每个进程有唯一的 SSD offload 路径\n            rank_path = os.path.join(\n                str(ssd_kwargs[\"ssd_offload_path\"]),\n                f\"rank{torch.distributed.get_rank()}\"\n            )\n            os.makedirs(rank_path, exist_ok=True)\n            self.ssd_path = rank_path",
+      "context": "How about `torch.distributed.get_rank()`?"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/mooncake_backend.py\n+++ b/vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/backend/mooncake_backend.py\n@@ -14,12 +14,12 @@\n             local_rank: Local rank within the current node.\n         \"\"\"\n         if \"ssd_offload_path\" in ssd_kwargs:\n-            # 仅使用 local_rank 构建路径\n-            # 问题：多 DP 场景下不同 replica 的 local_rank 从 0 开始\n-            # 导致不同 DP group 写入相同的 SSD 子目录，互相覆盖\n+            # 使用 global rank 替代 local_rank\n+            # 兼容 PP/CP/TP/DP 各种并行场景\n+            # 确保每个进程有唯一的 SSD offload 路径\n             rank_path = os.path.join(\n                 str(ssd_kwargs[\"ssd_offload_path\"]),\n-                f\"tp{local_rank}\"\n+                f\"rank{torch.distributed.get_rank()}\"\n             )\n             os.makedirs(rank_path, exist_ok=True)\n             self.ssd_path = rank_path",
+      "stats": "1 file changed, +4 lines, -4 lines",
+      "key_changes": [
+        "移除: # 仅使用 local_rank 构建路径",
+        "移除: # 问题：多 DP 场景下不同 replica 的 local_rank 从 0 开始",
+        "移除: # 导致不同 DP group 写入相同的 SSD 子目录，互相覆盖",
+        "新增: # 使用 global rank 替代 local_rank",
+        "新增: # 兼容 PP/CP/TP/DP 各种并行场景",
+        "新增: # 确保每个进程有唯一的 SSD offload 路径",
+        "移除: f\"tp{local_rank}\"",
+        "新增: f\"rank{torch.distributed.get_rank()}\""
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

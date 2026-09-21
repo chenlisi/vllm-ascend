@@ -1,0 +1,68 @@
+{
+  "report_id": "PR4501_001",
+  "pr_number": 4501,
+  "pr_title": "[Performance] Add async exponential while model executing",
+  "pr_status": "merged",
+  "merged_at": "2025-12-20T13:23:21Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/model_runner_v1.py:4505",
+    "vllm_ascend/worker/model_runner_v1.py:643",
+    "vllm_ascend/worker/model_runner_v1.py:4607",
+    "vllm_ascend/worker/model_runner_v1.py:4731",
+    "vllm_ascend/worker/model_runner_v1.py:4719",
+    "vllm_ascend/worker/model_runner_v1.py:394",
+    "vllm_ascend/worker/model_runner_v1.py:1512",
+    "vllm_ascend/ascend_config.py:164",
+    "tests/e2e/singlecard/test_sampler.py:67",
+    "vllm_ascend/sample/sampler.py:68",
+    "vllm_ascend/ascend_config.py:167",
+    "vllm_ascend/sample/sampler.py:127"
+  ],
+  "landing_sha": "9fafd98",
+  "source_quote": "what if both `len(generators) != q.shape[0]` and `generators` are `True`?",
+  "correspondence": [
+    {
+      "review_quote": "1. jgong5 质疑 generators 条件判断逻辑 → 作者解释了处理流程\n2. Ronald1995 建议用 `not in (0, 1, 2)` 验证枚举值、解释魔法数字 → 添加了注释说明\n3. weijinqian0 建议将采样逻辑移至 sampler → commit `534c03b` 将 async exponential 移至 sampler.py\n4. zhenwenqi2024 质疑新增属性的必要性、getattr 性能问题 → 改用 config 控制（commit `384cf99`）\n5. MengqingCao 要求直接使用 ascend_config、更",
+      "patch_snippet": "commit `534c03b`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "**检查点**: 新增的性能优化开关应添加到 `ascend_config` 中作为 `additional_config` 的一部分，而非使用独立的环境变量",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "VLLM_ASCEND_ENABLE_ASYNC_EXPONENTIAL = int(\n    os.getenv(\"VLLM_ASCEND_ENABLE_ASYNC_EXPONENTIAL\", 1))  # 应为 \"1\"\n\n\nq = torch.empty((b_s, head_dim), device=\"npu\", dtype=torch.float32)\nq.exponential_()  # 对所有请求（含 greedy）都应用随机采样\n\nif self.enable_asnyc_exp == 2:\n    ...  # 魔法数字 2，无注释\n\nself._enable_async_exp = getattr(self, 'enable_async_exponential', 0)",
+      "context": "what if both `len(generators) != q.shape[0]` and `generators` are `True`?"
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "VLLM_ASCEND_ENABLE_ASYNC_EXPONENTIAL = int(\n    os.getenv(\"VLLM_ASCEND_ENABLE_ASYNC_EXPONENTIAL\", \"1\"))\n\n\nq = torch.ones((b_s, head_dim), device=\"npu\", dtype=torch.float32)\ngenerators = self.input_batch.sampling_metadata.generators\nif generators:\n    for i, generator in generators.items():\n        q[i].exponential_(generator=generator)\n\nif self.ascend_config.enable_async_exponential not in (0, 1, 2):\n    raise ValueError(...)\n\nif self.ascend_config.enable_async_exponential != 0:\n    ...",
+      "context": "what if both `len(generators) != q.shape[0]` and `generators` are `True`?"
+    },
+    "diff": {
+      "unified": "--- a/a/file\n+++ b/b/file\n@@ -1,11 +1,15 @@\n VLLM_ASCEND_ENABLE_ASYNC_EXPONENTIAL = int(\n-    os.getenv(\"VLLM_ASCEND_ENABLE_ASYNC_EXPONENTIAL\", 1))  # 应为 \"1\"\n+    os.getenv(\"VLLM_ASCEND_ENABLE_ASYNC_EXPONENTIAL\", \"1\"))\n \n \n-q = torch.empty((b_s, head_dim), device=\"npu\", dtype=torch.float32)\n-q.exponential_()  # 对所有请求（含 greedy）都应用随机采样\n+q = torch.ones((b_s, head_dim), device=\"npu\", dtype=torch.float32)\n+generators = self.input_batch.sampling_metadata.generators\n+if generators:\n+    for i, generator in generators.items():\n+        q[i].exponential_(generator=generator)\n \n-if self.enable_asnyc_exp == 2:\n-    ...  # 魔法数字 2，无注释\n+if self.ascend_config.enable_async_exponential not in (0, 1, 2):\n+    raise ValueError(...)\n \n-self._enable_async_exp = getattr(self, 'enable_async_exponential', 0)\n+if self.ascend_config.enable_async_exponential != 0:\n+    ...",
+      "stats": "1 file changed, +10 lines, -6 lines",
+      "key_changes": [
+        "修改了第 2-2 行的代码",
+        "修改了第 5-6 行的代码",
+        "修改了第 8-9 行的代码",
+        "修改了第 11-11 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

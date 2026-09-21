@@ -1,0 +1,78 @@
+{
+  "report_id": "PR9772_001",
+  "pr_number": 9772,
+  "pr_title": "[Feature][SpecDecode] fix Magic MTP and add Entropy Verify",
+  "pr_status": "merged",
+  "merged_at": "2026-06-09T13:14:26Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/sample/rejection_sampler.py:333",
+    "vllm_ascend/ascend_config.py:669"
+  ],
+  "landing_sha": "59a5fa2",
+  "source_quote": "When \"enable_block_verify\" is set to \"true\", there is no runtime guard. Will the result be incorrect?\nfixed. Now, block_verify will take effect only when \"enable_block_verify\" is set to \"true\" and num_speculative_tokens>=3.\nThank you for your clear and easy-to-understand explanation\nShould we validate these two config values? For example, `0 < posterior_threshold <= 1` and `posterior_alpha >= 0`.\n> Both values are used directly to compute the entropy-adjusted acceptance threshold:\n> `threshold = min(exp(-entropy * posterior_alpha), posterior_threshold)` then `_uniform_prob = threshold * uniform_prob`\n> If `posterior_threshold` is outside `(0, 1]` or `posterior_alpha` is negative, the effective threshold can become invalid or overly permissive (like `_uniform_prob` become negative), which may distort the rejection sampling distribution instead of only tuning the acceptance rate.",
+  "correspondence": [
+    {
+      "review_quote": "ming1212: vllm_ascend/sample/rejection_sampler.py:333(2026-06-01 03:04:30)",
+      "patch_snippet": "评后sha 59a5fa2 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "ming1212: vllm_ascend/sample/rejection_sampler.py:333(2026-06-03 02:06:57)",
+      "patch_snippet": "评后sha 59a5fa2 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "TmacAaron: vllm_ascend/ascend_config.py:669(2026-06-08 09:35:52)",
+      "patch_snippet": "评后sha 59a5fa2 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "59a5fa2",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当配置项（如 `enable_block_verify`）控制某个功能的启用时，应在运行时添加明确的保护条件，确保功能仅在满足前提条件时生效。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/sample/rejection_sampler.py",
+      "line": 320,
+      "code": "# （根据评审意见推断）enable_block_verify 设为 true 时无运行时保护\n# ming1212 评论: \"When enable_block_verify is set to true, there is no\n# runtime guard. Will the result be incorrect?\"\n# block_verify 在 num_speculative_tokens>=3 时默认启用，无配置开关保护\n\ndef rejection_sample(\n    target_probs: torch.Tensor,\n    draft_probs: Optional[torch.Tensor],\n    draft_token_ids: torch.Tensor,\n    num_speculative_tokens: int,\n    enable_block_verify: bool = False,\n    **kwargs,\n) -> torch.Tensor:\n    # ... 前置逻辑: 计算接受概率 ...\n    accepted = _sample_accepted_tokens(target_probs, draft_probs,\n                                       draft_token_ids)\n\n    # block_verify 在 num_speculative_tokens>=3 时默认生效\n    # 未检查 enable_block_verify 配置开关\n    if num_speculative_tokens >= 3:\n        # block_verify 默认生效，未检查 enable_block_verify 配置\n        block_verify_result = compute_block_verify(\n            target_probs, draft_token_ids, accepted\n        )\n        accepted = apply_block_verify(accepted, block_verify_result)\n\n    # ... 后续逻辑: 恢复 token 采样 ...\n    recovered = sample_recovered_tokens(target_probs, draft_token_ids,\n                                        use_block_verify=using_block_verify)\n    return accepted, recovered",
+      "context": "When \"enable_block_verify\" is set to \"true\", there is no runtime guard. Will the result be incorrect?\nfixed. Now, block_verify will take effect only when \"enable_block_verify\" is set to \"true\" and num"
+    },
+    "pattern": {
+      "file": "vllm_ascend/sample/rejection_sampler.py",
+      "line": 320,
+      "code": "# block_verify 仅在 enable_block_verify=true 且 num_speculative_tokens>=3 时生效\n# 作者回复: \"fixed. Now, block_verify will take effect only when\n# enable_block_verify is set to true and num_speculative_tokens>=3.\"\n\ndef rejection_sample(\n    target_probs: torch.Tensor,\n    draft_probs: Optional[torch.Tensor],\n    draft_token_ids: torch.Tensor,\n    num_speculative_tokens: int,\n    enable_block_verify: bool = False,\n    **kwargs,\n) -> torch.Tensor:\n    # ... 前置逻辑: 计算接受概率 ...\n    accepted = _sample_accepted_tokens(target_probs, draft_probs,\n                                       draft_token_ids)\n\n    # 修复: 添加运行时配置保护\n    # 同时检查 enable_block_verify 配置开关和 num_speculative_tokens 前提条件\n    if enable_block_verify and num_speculative_tokens >= 3:\n        block_verify_result = compute_block_verify(\n            target_probs, draft_token_ids, accepted\n        )\n        accepted = apply_block_verify(accepted, block_verify_result)\n\n    # ... 后续逻辑: 恢复 token 采样 ...\n    recovered = sample_recovered_tokens(target_probs, draft_token_ids,\n                                        use_block_verify=using_block_verify)\n    return accepted, recovered",
+      "context": "When \"enable_block_verify\" is set to \"true\", there is no runtime guard. Will the result be incorrect?\nfixed. Now, block_verify will take effect only when \"enable_block_verify\" is set to \"true\" and num"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/sample/rejection_sampler.py\n+++ b/vllm_ascend/sample/rejection_sampler.py\n@@ -1,7 +1,6 @@\n-# （根据评审意见推断）enable_block_verify 设为 true 时无运行时保护\n-# ming1212 评论: \"When enable_block_verify is set to true, there is no\n-# runtime guard. Will the result be incorrect?\"\n-# block_verify 在 num_speculative_tokens>=3 时默认启用，无配置开关保护\n+# block_verify 仅在 enable_block_verify=true 且 num_speculative_tokens>=3 时生效\n+# 作者回复: \"fixed. Now, block_verify will take effect only when\n+# enable_block_verify is set to true and num_speculative_tokens>=3.\"\n \n def rejection_sample(\n     target_probs: torch.Tensor,\n@@ -15,10 +14,9 @@\n     accepted = _sample_accepted_tokens(target_probs, draft_probs,\n                                        draft_token_ids)\n \n-    # block_verify 在 num_speculative_tokens>=3 时默认生效\n-    # 未检查 enable_block_verify 配置开关\n-    if num_speculative_tokens >= 3:\n-        # block_verify 默认生效，未检查 enable_block_verify 配置\n+    # 修复: 添加运行时配置保护\n+    # 同时检查 enable_block_verify 配置开关和 num_speculative_tokens 前提条件\n+    if enable_block_verify and num_speculative_tokens >= 3:\n         block_verify_result = compute_block_verify(\n             target_probs, draft_token_ids, accepted\n         )\n",
+      "stats": "1 file changed, +6 lines, -8 lines",
+      "key_changes": [
+        "-# （根据评审意见推断）enable_block_verify 设为 true 时无运行时保护",
+        "-# ming1212 评论: \"When enable_block_verify is set to true, there is no",
+        "-# runtime guard. Will the result be incorrect?\"",
+        "-# block_verify 在 num_speculative_tokens>=3 时默认启用，无配置开关保护",
+        "+# block_verify 仅在 enable_block_verify=true 且 num_speculative_tokens>=3 时生效",
+        "+# 作者回复: \"fixed. Now, block_verify will take effect only when",
+        "+# enable_block_verify is set to true and num_speculative_tokens>=3.\"",
+        "-    # block_verify 在 num_speculative_tokens>=3 时默认生效",
+        "-    # 未检查 enable_block_verify 配置开关",
+        "-    if num_speculative_tokens >= 3:",
+        "-        # block_verify 默认生效，未检查 enable_block_verify 配置",
+        "+    # 修复: 添加运行时配置保护",
+        "+    # 同时检查 enable_block_verify 配置开关和 num_speculative_tokens 前提条件",
+        "+    if enable_block_verify and num_speculative_tokens >= 3:"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

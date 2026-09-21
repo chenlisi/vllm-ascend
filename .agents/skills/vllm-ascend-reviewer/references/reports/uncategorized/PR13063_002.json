@@ -1,0 +1,59 @@
+{
+  "report_id": "PR13063_002",
+  "pr_number": 13063,
+  "pr_title": "[CI] support daily image and A5 build",
+  "pr_status": "merged",
+  "dimension": [
+    "design"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    ".github/workflows/dockerfiles/Dockerfile.nightly.a5:35"
+  ],
+  "landing_sha": "c6e124b",
+  "source_quote": "RUN 块在 Dockerfile、Dockerfile.a3、Dockerfile.a3.openEuler、Dockerfile.a5、Dockerfile.a5.openEuler 和 Dockerfile.openEuler 中反复出现重复。torch-npu 块在 Dockerfile.310p 和 Dockerfile.310p.openEuler 中也被重复定义。如果 URL 模式或版本逻辑发生变化，需要更新 6-8 个文件。建议：将其提取为共享的 shell 脚本（例如 scripts/install_daily_deps.sh），然后在所有 Dockerfile 中执行 COPY + RUN。",
+  "correspondence": [
+    {
+      "review_quote": ".github/workflows/dockerfiles/Dockerfile.nightly.a5:35",
+      "patch_snippet": "评后sha c6e124b 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "c6e124b",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当相同的依赖安装 RUN 块在多个 Dockerfile 中重复出现时，应抽离为单一共享 shell 脚本（如 `scripts/install_daily_deps.sh`），各 Dockerfile 通过 `COPY` + `bash` 调用，避免 URL/版本变更时需同步修改 6-8 个文件。",
+    "context": "",
+    "checkpoints": [
+      "检查多个 Dockerfile 是否存在高度重复的 RUN 安装块（仅架构/版本差异）",
+      "抽离为共享脚本并通过模式参数（如 `DAILY_DEPS_MODE`）区分差异",
+      "各 Dockerfile 统一 `COPY` 脚本并 `bash` 执行，构建后清理临时文件"
+    ],
+    "antipattern": {
+      "file": ".github/workflows/dockerfiles/Dockerfile.nightly.a5",
+      "line": 35,
+      "code": "# Dockerfile、Dockerfile.a3、Dockerfile.a3.openEuler、Dockerfile.a5、\n# Dockerfile.a5.openEuler、Dockerfile.openEuler 中各重复一遍（L110-140）：\nRUN if [ \"$BUILD_TYPE\" = \"daily\" ]; then \\\n        echo \"Building daily version with extra packages...\" && \\\n        echo \"Install memfabric_hybrid based on architecture...\" && \\\n        if [ \"$(uname -m)\" = \"x86_64\" ]; then \\\n            MEMFABRIC_URL=\"https://...x86_64...whl\"; \\\n        else \\\n            MEMFABRIC_URL=\"https://...aarch64...whl\"; \\\n        fi && \\\n        python3 -m pip install \"$MEMFABRIC_URL\" --force-reinstall --no-deps && \\\n        echo \"Install memcache_hybrid...\" && \\\n        python3 -m pip install \"$MEMCACHE_URL\" --force-reinstall --no-deps && \\\n        echo \"Install triton-ascend...\" && \\\n        python3 -m pip install \"$TRITON_ASCEND_URL\" --force-reinstall --no-deps && \\\n        echo \"Install torch-npu...\" && \\\n        wget -O /tmp/torch_npu.tar.gz \"$TORCH_NPU_URL\" && \\\n        python3 -m pip install /tmp/torch_npu/*.whl --force-reinstall --no-deps; \\\n    fi\n\n# Dockerfile.310p、Dockerfile.310p.openEuler 中 torch-npu 块也重复定义",
+      "context": "Dockerfile、Dockerfile.a3、Dockerfile.a3.openEuler、Dockerfile.a5、 Dockerfile.a5.openEuler、Dockerfile.openEuler 中各重复一遍（L110-140）： Dockerfile.310p、Dockerfile.310p.openEuler 中 torch-npu 块也重复定义"
+    },
+    "pattern": {
+      "file": ".github/workflows/dockerfiles/Dockerfile.nightly.a5",
+      "line": 35,
+      "code": "#!/bin/bash\n# .github/workflows/scripts/install_daily_deps.sh\n# 单一来源，按 DAILY_DEPS_MODE 区分 full / torch_npu_only\nset -euo pipefail\n\nif [ \"$BUILD_TYPE\" != \"daily\" ]; then exit 0; fi\n\nARCH=$(uname -m)\n\nif [ \"${DAILY_DEPS_MODE:-full}\" = \"torch_npu_only\" ]; then\n    # 310p 变体只装 torch-npu\n    mkdir -p /tmp/torch_npu\n    wget --retry-connrefused --tries=5 --timeout=30 --waitretry=10 \\\n        -O /tmp/torch_npu/torch_npu.tar.gz \"$TORCH_NPU_URL\"\n    tar -xzf /tmp/torch_npu/torch_npu.tar.gz -C /tmp/torch_npu\n    python3 -m pip install /tmp/torch_npu/*.whl --force-reinstall --no-deps\n    rm -rf /tmp/torch_npu\n    exit 0\nfi\n\n# full 模式：memfabric / memcache / triton-ascend / torch-npu 全装\nif [ \"$ARCH\" = \"x86_64\" ]; then\n    MEMFABRIC_URL=\"https://...x86_64...whl\"\nelse\n    MEMFABRIC_URL=\"https://...aarch64...whl\"\nfi\npython3 -m pip install \"$MEMFABRIC_URL\" --force-reinstall --no-deps\npython3 -m pip install \"$MEMCACHE_URL\" --force-reinstall --no-deps\npython3 -m pip install \"$TRITON_ASCEND_URL\" --force-reinstall --no-deps\n# ... torch-npu 同上 ...",
+      "context": "!/bin/bash .github/workflows/scripts/install_daily_deps.sh 单一来源，按 DAILY_DEPS_MODE 区分 full / torch_npu_only"
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/dockerfiles/Dockerfile.nightly.a5\n+++ b/.github/workflows/dockerfiles/Dockerfile.nightly.a5\n@@ -1,21 +1,30 @@\n-# Dockerfile、Dockerfile.a3、Dockerfile.a3.openEuler、Dockerfile.a5、\n-# Dockerfile.a5.openEuler、Dockerfile.openEuler 中各重复一遍（L110-140）：\n-RUN if [ \"$BUILD_TYPE\" = \"daily\" ]; then \\\n-        echo \"Building daily version with extra packages...\" && \\\n-        echo \"Install memfabric_hybrid based on architecture...\" && \\\n-        if [ \"$(uname -m)\" = \"x86_64\" ]; then \\\n-            MEMFABRIC_URL=\"https://...x86_64...whl\"; \\\n-        else \\\n-            MEMFABRIC_URL=\"https://...aarch64...whl\"; \\\n-        fi && \\\n-        python3 -m pip install \"$MEMFABRIC_URL\" --force-reinstall --no-deps && \\\n-        echo \"Install memcache_hybrid...\" && \\\n-        python3 -m pip install \"$MEMCACHE_URL\" --force-reinstall --no-deps && \\\n-        echo \"Install triton-ascend...\" && \\\n-        python3 -m pip install \"$TRITON_ASCEND_URL\" --force-reinstall --no-deps && \\\n-        echo \"Install torch-npu...\" && \\\n-        wget -O /tmp/torch_npu.tar.gz \"$TORCH_NPU_URL\" && \\\n-        python3 -m pip install /tmp/torch_npu/*.whl --force-reinstall --no-deps; \\\n-    fi\n+#!/bin/bash\n+# .github/workflows/scripts/install_daily_deps.sh\n+# 单一来源，按 DAILY_DEPS_MODE 区分 full / torch_npu_only\n+set -euo pipefail\n \n-# Dockerfile.310p、Dockerfile.310p.openEuler 中 torch-npu 块也重复定义\n+if [ \"$BUILD_TYPE\" != \"daily\" ]; then exit 0; fi\n+\n+ARCH=$(uname -m)\n+\n+if [ \"${DAILY_DEPS_MODE:-full}\" = \"torch_npu_only\" ]; then\n+    # 310p 变体只装 torch-npu\n+    mkdir -p /tmp/torch_npu\n+    wget --retry-connrefused --tries=5 --timeout=30 --waitretry=10 \\\n+        -O /tmp/torch_npu/torch_npu.tar.gz \"$TORCH_NPU_URL\"\n+    tar -xzf /tmp/torch_npu/torch_npu.tar.gz -C /tmp/torch_npu\n+    python3 -m pip install /tmp/torch_npu/*.whl --force-reinstall --no-deps\n+    rm -rf /tmp/torch_npu\n+    exit 0\n+fi\n+\n+# full 模式：memfabric / memcache / triton-ascend / torch-npu 全装\n+if [ \"$ARCH\" = \"x86_64\" ]; then\n+    MEMFABRIC_URL=\"https://...x86_64...whl\"\n+else\n+    MEMFABRIC_URL=\"https://...aarch64...whl\"\n+fi\n+python3 -m pip install \"$MEMFABRIC_URL\" --force-reinstall --no-deps\n+python3 -m pip install \"$MEMCACHE_URL\" --force-reinstall --no-deps\n+python3 -m pip install \"$TRITON_ASCEND_URL\" --force-reinstall --no-deps\n+# ... torch-npu 同上 ...\n",
+      "stats": "1 file changed, +29 lines, -20 lines",
+      "key_changes": [
+        "移除: python3 -m pip install /tmp/torch_npu/*.whl --force-reinstall --no-deps; \\",
+        "移除: python3 -m pip install \"$MEMFABRIC_URL\" --force-reinstall --no-deps && \\",
+        "新增: mkdir -p /tmp/torch_npu"
+      ]
+    },
+    "language": "dockerfile",
+    "_status": "processed"
+  }
+}

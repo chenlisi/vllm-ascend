@@ -1,0 +1,85 @@
+{
+  "report_id": "PR2958_001",
+  "pr_number": 2958,
+  "pr_title": "[refactor]support gatingtopk operator generalization",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/moe/experts_selector.py:190",
+    "vllm_ascend/ops/moe/experts_selector.py:205",
+    "vllm_ascend/ops/fused_moe/experts_selector.py:198",
+    "vllm_ascend/ops/moe/experts_selector.py:97",
+    "vllm_ascend/ops/fused_moe/experts_selector.py:184"
+  ],
+  "landing_sha": "023dad3",
+  "source_quote": "To avoid performing to_dtype per-layer, you should do to_dtype to `self.e_score_correction_bias` of `AscendFusedMoe`.\nIs it certain that the functionality of `torch_npu.npu_moe_gating_top_k_softmax` are included in `torch_npu.npu_moe_gating_top_k`?\nProvide pre- and post-replacement performance data to prevent degradation.\nYou can delete this code.\nThe necessity here is that GLM4 uses fp32 for gate. So we have to do this dtype transform here.",
+  "correspondence": [
+    {
+      "review_quote": "whx-sjtu: vllm_ascend/ops/moe/experts_selector.py:190(2025-09-23 01:50:16)",
+      "patch_snippet": "评后sha 023dad3 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "whx-sjtu: vllm_ascend/ops/moe/experts_selector.py:205(2025-09-23 01:54:46)",
+      "patch_snippet": "评后sha 023dad3 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "momo609: vllm_ascend/ops/fused_moe/experts_selector.py:198(2025-09-23 08:27:34)",
+      "patch_snippet": "评后sha 023dad3 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "weijinqian0: vllm_ascend/ops/moe/experts_selector.py:97(2025-09-29 03:38:46)",
+      "patch_snippet": "评后sha 023dad3 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "whx-sjtu: vllm_ascend/ops/fused_moe/experts_selector.py:184(2025-11-07 08:33:31)",
+      "patch_snippet": "评后sha 023dad3 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "023dad3",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在对 MoE gating top-k 算子进行泛化时，不应将算子调用变为无条件执行，需保留对不同 MoE 配置（如 softmax/sigmoid、grouped/non-grouped）的条件判断逻辑。",
+    "context": "",
+    "checkpoints": [
+      "泛化算子时是否保留了 fallback 路径",
+      "是否在 AscendFusedMoe 初始化时统一处理 dtype 转换，而非逐层执行",
+      "是否提供了替换前后的性能对比数据"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/moe/experts_selector.py",
+      "line": 175,
+      "code": "# 评审人: whx-sjtu 👤 (2025-09-23)\n# Commit: 023dad3 (refactor gatingtopk)\n# 每层推理时重复执行 to_dtype 转换，性能不佳\n\ndef select_experts(\n    self,\n    hidden_states: torch.Tensor,\n    top_k: int,\n    ...\n):\n    \"\"\"Select top-k experts for MoE routing.\"\"\"\n    # ...\n    # 每层推理时都执行 to_dtype，性能不佳\n    logits = self.e_score_correction_bias.to(dtype)\n    # ...\n    topk_weights, topk_ids = torch_npu.npu_moe_gating_top_k(\n        hidden_states,\n        logits=logits,\n        top_k=top_k,\n        norm_type=1,\n        ...\n    )\n    return topk_weights, topk_ids",
+      "context": "评审人: whx-sjtu 👤 (2025-09-23) Commit: 023dad3 (refactor gatingtopk) 每层推理时重复执行 to_dtype 转换，性能不佳"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/moe/experts_selector.py",
+      "line": 175,
+      "code": "# 在 AscendFusedMoe 初始化时对 e_score_correction_bias 统一做 to_dtype\n# 备注: GLM4.5 is special, it use float32 to calculate, but in\n# AscendFusedMoE::init() e_score_correction_bias changed dtype from\n# float32 to bfloat16, this is different from deepseek and qwen models.\n\nclass AscendFusedMoE(nn.Module):\n    def __init__(self, ...):\n        super().__init__()\n        # ...\n        # 在初始化时统一做 to_dtype，避免每层重复执行\n        self.e_score_correction_bias = self.e_score_correction_bias.to(dtype)\n\n    def select_experts(self, hidden_states, top_k, ...):\n        \"\"\"Select top-k experts for MoE routing.\"\"\"\n        # ...\n        # 不再需要每层执行 to_dtype\n        logits = self.e_score_correction_bias\n        # ...\n        topk_weights, topk_ids = torch_npu.npu_moe_gating_top_k(\n            hidden_states,\n            logits=logits,\n            top_k=top_k,\n            norm_type=1,\n            ...\n        )\n        return topk_weights, topk_ids",
+      "context": "在 AscendFusedMoe 初始化时对 e_score_correction_bias 统一做 to_dtype 备注: GLM4.5 is special, it use float32 to calculate, but in AscendFusedMoE::init() e_score_correction_bias changed dtype from"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/moe/experts_selector.py\n+++ b/vllm_ascend/ops/moe/experts_selector.py\n@@ -1,23 +1,26 @@\n-# 评审人: whx-sjtu 👤 (2025-09-23)\n-# Commit: 023dad3 (refactor gatingtopk)\n-# 每层推理时重复执行 to_dtype 转换，性能不佳\n+# 在 AscendFusedMoe 初始化时对 e_score_correction_bias 统一做 to_dtype\n+# 备注: GLM4.5 is special, it use float32 to calculate, but in\n+# AscendFusedMoE::init() e_score_correction_bias changed dtype from\n+# float32 to bfloat16, this is different from deepseek and qwen models.\n \n-def select_experts(\n-    self,\n-    hidden_states: torch.Tensor,\n-    top_k: int,\n-    ...\n-):\n-    \"\"\"Select top-k experts for MoE routing.\"\"\"\n-    # ...\n-    # 每层推理时都执行 to_dtype，性能不佳\n-    logits = self.e_score_correction_bias.to(dtype)\n-    # ...\n-    topk_weights, topk_ids = torch_npu.npu_moe_gating_top_k(\n-        hidden_states,\n-        logits=logits,\n-        top_k=top_k,\n-        norm_type=1,\n-        ...\n-    )\n-    return topk_weights, topk_ids\n+class AscendFusedMoE(nn.Module):\n+    def __init__(self, ...):\n+        super().__init__()\n+        # ...\n+        # 在初始化时统一做 to_dtype，避免每层重复执行\n+        self.e_score_correction_bias = self.e_score_correction_bias.to(dtype)\n+\n+    def select_experts(self, hidden_states, top_k, ...):\n+        \"\"\"Select top-k experts for MoE routing.\"\"\"\n+        # ...\n+        # 不再需要每层执行 to_dtype\n+        logits = self.e_score_correction_bias\n+        # ...\n+        topk_weights, topk_ids = torch_npu.npu_moe_gating_top_k(\n+            hidden_states,\n+            logits=logits,\n+            top_k=top_k,\n+            norm_type=1,\n+            ...\n+        )\n+        return topk_weights, topk_ids\n",
+      "stats": "1 file changed, +25 lines, -22 lines",
+      "key_changes": [
+        "移除: logits=logits,",
+        "移除: top_k: int,",
+        "移除: logits = self.e_score_correction_bias.to(dtype)",
+        "新增: topk_weights, topk_ids = torch_npu.npu_moe_gating_top_k(",
+        "新增: def select_experts(self, hidden_states, top_k, ...):"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

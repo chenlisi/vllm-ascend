@@ -1,0 +1,70 @@
+{
+  "report_id": "PR11335_001",
+  "pr_number": 11335,
+  "pr_title": "[Doc][Misc] Update and standardize model deployment tutorials for DeepSeek, GLM, and Kimi",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "docs/source/tutorials/models/DeepSeek-R1.md:133",
+    "docs/source/tutorials/models/DeepSeek-V3.1.md:907",
+    "docs/source/tutorials/models/Kimi-K2.6.md:831"
+  ],
+  "landing_sha": "a7e5020",
+  "source_quote": "Please change the section title to \"Online Service Deployment\" to align with the template.\n\"methods\" should be changed to \"method\".\nPlease add the required introductory note at the beginning of Section 9.1 as per the template.",
+  "correspondence": [
+    {
+      "review_quote": "herizhen: docs/source/tutorials/models/DeepSeek-R1.md:133",
+      "patch_snippet": "评后sha a7e5020 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "herizhen: docs/source/tutorials/models/DeepSeek-V3.1.md:907",
+      "patch_snippet": "评后sha a7e5020 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "herizhen: docs/source/tutorials/models/Kimi-K2.6.md:831",
+      "patch_snippet": "评后sha a7e5020 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "a7e5020",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "模型部署教程文档应严格遵循模板格式，包括：统一的章节标题命名、正确的语法（单复数等）、每个章节开头添加模板要求的介绍注释。",
+    "context": "",
+    "checkpoints": [
+      "章节标题是否与模板一致（如 \"Online Service Deployment\"）",
+      "英文语法是否正确（如 method vs methods）",
+      "每个章节是否包含模板要求的介绍注释",
+      "所有模型教程是否保持格式统一"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/DeepSeek-R1.md",
+      "line": 133,
+      "code": "## 10 Environment Verification\n\n```bash\n# Verify Ascend NPU environment\nnpu-smi info\n```\n\n## 在线服务部署  # 未对齐模板标题 \"Online Service Deployment\"\n\n### 10.1 启动推理服务\n\n使用以下命令启动 vLLM 推理服务：\n\n```bash\npython -m vllm.entrypoints.openai.api_server \\\n    --model deepseek-ai/DeepSeek-R1 \\\n    --tensor-parallel-size 16\n```",
+      "context": "Please change the section title to \"Online Service Deployment\" to align with the template."
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/DeepSeek-R1.md",
+      "line": 133,
+      "code": "## 10 Environment Verification\n\n```bash\n# Verify Ascend NPU environment\nnpu-smi info\n```\n\n## Online Service Deployment  # 已对齐模板标题\n\n### 10.1 启动推理服务\n\n使用以下命令启动 vLLM 推理服务：\n\n```bash\npython -m vllm.entrypoints.openai.api_server \\\n    --model deepseek-ai/DeepSeek-R1 \\\n    --tensor-parallel-size 16\n```",
+      "context": "Please change the section title to \"Online Service Deployment\" to align with the template."
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/DeepSeek-R1.md\n+++ b/docs/source/tutorials/models/DeepSeek-R1.md\n@@ -5,7 +5,7 @@\n npu-smi info\n ```\n \n-## 在线服务部署  # 未对齐模板标题 \"Online Service Deployment\"\n+## Online Service Deployment  # 已对齐模板标题\n \n ### 10.1 启动推理服务\n ",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "修改: ## 在线服务部署 → ## Online Service Deployment (对齐模板标题)"
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

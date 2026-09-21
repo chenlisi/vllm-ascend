@@ -1,0 +1,45 @@
+{
+  "report_id": "PR11496_001",
+  "pr_number": 0,
+  "pr_title": "",
+  "pr_status": "unknown",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "",
+  "source_quote": "",
+  "correspondence": [],
+  "verification": {
+    "merged": false,
+    "modified_commit": "",
+    "approvals": 0
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/spec_decode/llm_base_proposer.py",
+      "line": 1440,
+      "code": "    def set_inputs_first_pass(self, ...):\n        \"\"\"Set proposer inputs for the first decode pass.\n\n        Prepares decode request indices, query lengths, and offsets\n        for the speculative decoding proposer under PCP.\n        \"\"\"\n        num_decode_reqs = self.num_decode_reqs\n        num_tokens_d = self.num_tokens_d\n        query_start_loc_pcp_full = self.query_start_loc_pcp_full\n        query_lens_d_device = self.query_lens_d_device\n\n        # Keep decode unpadding indices on device to avoid a host index list.\n        decode_req_starts = query_start_loc_pcp_full[:num_decode_reqs].to(\n            torch.int64)  # ← 意见1锚点L1452：冗余显式to（上游本就是int64）\n        decode_query_lens = query_lens_d_device.to(\n            torch.int64)  # ← 紧接L1453：又一显式to（同类冗余）\n        decode_padded_starts = decode_req_starts * self.pcp_size\n        decode_offsets = self.arange[:num_tokens_d].to(\n            torch.int64  # ← 意见2锚点L1464：int64冗余to\n        ) - decode_req_starts_per_token\n        ...",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/spec_decode/llm_base_proposer.py",
+      "line": 1440,
+      "code": "    def set_inputs_first_pass(self, ...):\n        \"\"\"Set proposer inputs for the first decode pass.\n\n        Prepares decode request indices, query lengths, and offsets\n        for the speculative decoding proposer under PCP.\n        \"\"\"\n        num_decode_reqs = self.num_decode_reqs\n        num_tokens_d = self.num_tokens_d\n        query_start_loc_pcp_full = self.query_start_loc_pcp_full\n        query_lens_d_device = self.query_lens_d_device\n\n        # Keep decode unpadding indices on device to avoid a host index list.\n        # 意见1落地：删.to(torch.int64) ✅（上游本就是int64）\n        decode_req_starts = query_start_loc_pcp_full[:num_decode_reqs]\n        decode_query_lens = query_lens_d_device  # ← 删.to ✅\n        decode_padded_starts = decode_req_starts * self.pcp_size\n        # 意见2落地：删.to但保持int64语义 ✅（self.arange本就是int64）\n        decode_offsets = self.arange[:num_tokens_d] - decode_req_starts_per_token\n        ...",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/spec_decode/llm_base_proposer.py\n+++ b/vllm_ascend/spec_decode/llm_base_proposer.py\n@@ -10,12 +10,10 @@\n         query_lens_d_device = self.query_lens_d_device\n \n         # Keep decode unpadding indices on device to avoid a host index list.\n-        decode_req_starts = query_start_loc_pcp_full[:num_decode_reqs].to(\n-            torch.int64)  # ← 意见1锚点L1452：冗余显式to（上游本就是int64）\n-        decode_query_lens = query_lens_d_device.to(\n-            torch.int64)  # ← 紧接L1453：又一显式to（同类冗余）\n+        # 意见1落地：删.to(torch.int64) ✅（上游本就是int64）\n+        decode_req_starts = query_start_loc_pcp_full[:num_decode_reqs]\n+        decode_query_lens = query_lens_d_device  # ← 删.to ✅\n         decode_padded_starts = decode_req_starts * self.pcp_size\n-        decode_offsets = self.arange[:num_tokens_d].to(\n-            torch.int64  # ← 意见2锚点L1464：int64冗余to\n-        ) - decode_req_starts_per_token\n+        # 意见2落地：删.to但保持int64语义 ✅（self.arange本就是int64）\n+        decode_offsets = self.arange[:num_tokens_d] - decode_req_starts_per_token\n         ...",
+      "stats": "1 file changed, +5 lines, -7 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

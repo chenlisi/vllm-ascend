@@ -1,0 +1,69 @@
+{
+  "report_id": "PR10977_002",
+  "pr_number": 10977,
+  "pr_title": "[Feature][LoRA][MoE] Support LoRA with unquantified MoE models",
+  "pr_status": "merged",
+  "merged_at": "2026-07-09T00:42:39Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/lora/punica_npu.py:409"
+  ],
+  "landing_sha": "46175ec",
+  "source_quote": "Allocating `shrink_out` using `torch.zeros` inside the loop on every forward pass of every MoE layer is a significant performance bottleneck and can cause memory fragmentation, especially in graph mode.\n\nWe can cache the workspace buffer on `self` (the `PunicaWrapperNPU` instance) and reuse it across layers and steps, only reallocating/resizing it when the required batch size exceeds the cached size.",
+  "correspondence": [
+    {
+      "review_quote": "gemini 的核心判断是\"热路径里不允许每 step/layer 做 `torch.zeros`——分配 + 同步 + 碎片 + graph capture 的 re-trace 代价很高\"。作者在 `46175ec` 先**严格按建议**落地了 PunicaWrapperNPU 实例上的 `buffer_key → tensor` 缓存（跨 step 复用、按需扩容、复用前切片清零）。随后在 `1003ba8` 发现 `rank` 在同一 forward 里对所有 LoRA slice 是常量，于是进一步简化成\"循环外只分配一次\"——**方案变了，但针对的问题和最终收益完全一致**：每步 ",
+      "patch_snippet": "",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "46175ec",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 `forward()` / `sample()` / `attention()` / `MoE_apply_mlp()` / `add_lora_fused_moe()` 这种\"每 decoding step 都调用、或每层都调用、或每次 prefill 都进入\"的函数体内，**不得**出现 `torch.zeros` / `torch.empty` / `torch.full` 创建**shape 随请求变化但不会无限增长**的中间 tensor workspace（典型：bgmv shrink 的临时 fp32 buffer、softmax 前 fp32 cast 的 LSE workspace、topk index 的 int64 临时索引）。应当在以下三种策略中选一种：",
+    "context": "",
+    "checkpoints": [
+      "搜索 `**/ops/**/*.py`、`**/lora/punica*.py`、`**/sample/*.py` 中的 `torch.zeros` / `torch.empty`；过滤掉 module init / UT helper / `__init__` 里的 alloc",
+      "对每个命中点，确认调用栈深度：是否在 `sample_step / forward / apply_mlp` 这种每步都会进的函数内？是的话按上述方案改造",
+      "graph mode 的代码（`with torch.npu.graph` / `captured = True`）内必须保证 0 次原生分配（含中间 `.to(torch.float32)` 的临时 cast buffer——也要用 pre-alloc + copy_）",
+      "对缓存方案：检查扩容判断 (`shape[0] < required`) 是否正确，以及\"小 batch 后的大 batch\"能自然扩容",
+      "对循环外共享方案：确认下一轮写入是 bgmv_shrink / kernel 覆盖写，不会读到上一轮 slice 的残留（如果有读-改写-写依赖，就不能共享）"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/lora/punica_npu.py",
+      "line": 395,
+      "code": "def add_lora_fused_moe(\n    self,\n    x2d: torch.Tensor,\n    lora_a_stacked: list[torch.Tensor],\n    lora_b_stacked: list[torch.Tensor],\n    combined_idx: torch.Tensor,\n    y2d: torch.Tensor,\n    offset: int,\n    mul_routed_weight: bool = False,\n    topk_weights: Optional[torch.Tensor] = None,\n    **kwargs,\n) -> None:\n    \"\"\"Add LoRA deltas for fused MoE layers.\"\"\"\n    cur_offset = offset\n    for slice_idx in range(len(lora_a_stacked)):\n        a = lora_a_stacked[slice_idx]\n        b = lora_b_stacked[slice_idx]\n        rank = a.shape[-2]\n        a_flat = a.view(-1, a.shape[-1])\n        b_flat = b.view(-1, b.shape[-1])\n        out_size = b_flat.shape[-1]\n        # 每次 bgmv_shrink 都 torch.zeros → 每步 forward × 每层 × num_slices\n        shrink_out = torch.zeros((x2d.shape[0], rank),\n                                 dtype=torch.float32,\n                                 device=x2d.device)\n        self.bgmv_shrink(x2d, a_flat, shrink_out, combined_idx, 1.0)\n        delta = shrink_out\n        if mul_routed_weight and topk_weights is not None:\n            delta = shrink_out * topk_weights.view(-1, 1)\n        self.bgmv_expand_slice(delta, b_flat, y2d, combined_idx,\n                               cur_offset, out_size, add_inputs=True)\n        cur_offset += out_size",
+      "context": "Allocating `shrink_out` using `torch.zeros` inside the loop on every forward pass of every MoE layer is a significant performance bottleneck and can cause memory fragmentation, especially in graph mode."
+    },
+    "pattern": {
+      "file": "vllm_ascend/lora/punica_npu.py",
+      "line": 395,
+      "code": "def add_lora_fused_moe(\n    self,\n    x2d: torch.Tensor,\n    lora_a_stacked: list[torch.Tensor],\n    lora_b_stacked: list[torch.Tensor],\n    combined_idx: torch.Tensor,\n    y2d: torch.Tensor,\n    offset: int,\n    *,\n    mul_routed_weight: bool = False,\n    topk_weights: Optional[torch.Tensor] = None,\n    **kwargs,\n) -> None:\n    \"\"\"Add LoRA deltas for fused MoE layers.\"\"\"\n    # 循环外一次性分配 shrink_out，所有 slice 共用\n    rank = lora_a_stacked[0].shape[-2]\n    shrink_out = torch.zeros((x2d.shape[0], rank),\n                             dtype=torch.float32,\n                             device=x2d.device)\n    cur_offset = offset\n    for slice_idx in range(len(lora_a_stacked)):\n        a = lora_a_stacked[slice_idx]\n        b = lora_b_stacked[slice_idx]\n        a_flat = a.view(-1, a.shape[-1])\n        b_flat = b.view(-1, b.shape[-1])\n        out_size = b_flat.shape[-1]\n        # shrink_out 直接复用，bgmv_shrink 每次覆盖写入\n        self.bgmv_shrink(x2d, a_flat, shrink_out, combined_idx, 1.0)\n        delta = shrink_out\n        if mul_routed_weight and topk_weights is not None:\n            delta = shrink_out * topk_weights.view(-1, 1)\n        self.bgmv_expand_slice(delta, b_flat, y2d, combined_idx,\n                               cur_offset, out_size, add_inputs=True)\n        cur_offset += out_size",
+      "context": "Allocating `shrink_out` using `torch.zeros` inside the loop on every forward pass of every MoE layer is a significant performance bottleneck and can cause memory fragmentation, especially in graph mode."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/lora/punica_npu.py\n+++ b/vllm_ascend/lora/punica_npu.py\n@@ -6,23 +6,25 @@\n     combined_idx: torch.Tensor,\n     y2d: torch.Tensor,\n     offset: int,\n+    *,\n     mul_routed_weight: bool = False,\n     topk_weights: Optional[torch.Tensor] = None,\n     **kwargs,\n ) -> None:\n     \"\"\"Add LoRA deltas for fused MoE layers.\"\"\"\n+    # 循环外一次性分配 shrink_out，所有 slice 共用\n+    rank = lora_a_stacked[0].shape[-2]\n+    shrink_out = torch.zeros((x2d.shape[0], rank),\n+                             dtype=torch.float32,\n+                             device=x2d.device)\n     cur_offset = offset\n     for slice_idx in range(len(lora_a_stacked)):\n         a = lora_a_stacked[slice_idx]\n         b = lora_b_stacked[slice_idx]\n-        rank = a.shape[-2]\n         a_flat = a.view(-1, a.shape[-1])\n         b_flat = b.view(-1, b.shape[-1])\n         out_size = b_flat.shape[-1]\n-        # 每次 bgmv_shrink 都 torch.zeros → 每步 forward × 每层 × num_slices\n-        shrink_out = torch.zeros((x2d.shape[0], rank),\n-                                 dtype=torch.float32,\n-                                 device=x2d.device)\n+        # shrink_out 直接复用，bgmv_shrink 每次覆盖写入\n         self.bgmv_shrink(x2d, a_flat, shrink_out, combined_idx, 1.0)\n         delta = shrink_out\n         if mul_routed_weight and topk_weights is not None:",
+      "stats": "1 file changed, +7 lines, -5 lines",
+      "key_changes": [
+        "新增: *,",
+        "新增: # 循环外一次性分配 shrink_out，所有 slice 共用",
+        "新增: rank = lora_a_stacked[0].shape[-2]",
+        "新增: shrink_out = torch.zeros((x2d.shape[0], rank),",
+        "新增: dtype=torch.float32,",
+        "新增: device=x2d.device)",
+        "移除: rank = a.shape[-2]",
+        "移除: # 每次 bgmv_shrink 都 torch.zeros → 每步 forward × 每层 × num_slices",
+        "移除: shrink_out = torch.zeros((x2d.shape[0], rank),",
+        "移除: dtype=torch.float32,"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "report_id": "PR4728_001",
+  "pr_number": 4728,
+  "pr_title": "[CI] Fix unit test fault `no space left`",
+  "pr_status": "merged",
+  "merged_at": "2025-12-05T09:21:31Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    ".github/workflows/vllm_ascend_test_pr_light.yaml:77",
+    ".github/workflows/vllm_ascend_test_pr_light.yaml:111",
+    ".github/workflows/vllm_ascend_test_pr_light.yaml:127",
+    ".github/workflows/vllm_ascend_test_pr_light.yaml:134",
+    ".github/workflows/vllm_ascend_test_pr_light.yaml:125",
+    ".github/workflows/vllm_ascend_test_pr_light.yaml:123",
+    ".github/workflows/vllm_ascend_test_pr_light.yaml:122"
+  ],
+  "landing_sha": "a18fbda",
+  "source_quote": "I a little bit suspect `VLLM_TARGET_DEVICE=empty python3 -m pip install . --extra-index https://download.pytorch.org/whl/cpu/` x86 version required many extra space, so maybe you could switch to `ubuntu-22.04-arm` first to recover and investigate deeply then.",
+  "correspondence": [
+    {
+      "review_quote": "Yikun 指出 x86 版本占用空间过大建议切换 arm、删除不必要的安装参数和配置行、保留 PIP_EXTRA_INDEX_URL 以支持 torch dev。作者通过 commit `a18fbda` 及后续 commits 修复，7/7 建议全部落地。",
+      "patch_snippet": "commit `a18fbda`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "a18fbda",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "CI workflow 中应使用轻量级安装方式，避免不必要的 extra index 和冗余配置，优先使用 arm 架构 runner 以减少空间占用。",
+    "context": "",
+    "checkpoints": [
+      "是否使用了 `VLLM_TARGET_DEVICE=empty` 减少安装体积",
+      "是否包含不必要的 `--extra-index` URL",
+      "是否保留了必要的 `PIP_EXTRA_INDEX_URL` 以支持 torch dev",
+      "是否使用了冗余的安装配置行"
+    ],
+    "antipattern": {
+      "file": ".github/workflows/vllm_ascend_test_pr_light.yaml",
+      "line": 70,
+      "code": "name: vllm_ascend_test_pr_light\n\non:\n  pull_request:\n    branches: [main]\n\njobs:\n  unit-test:\n    runs-on: ubuntu-22.04\n\n    steps:\n      - uses: actions/checkout@v4\n\n      - name: Set up Python\n        run: |\n          python3 -m pip install --upgrade pip\n\n      - name: Install vllm-ascend\n        run: |\n          VLLM_TARGET_DEVICE=empty python3 -m pip install . --extra-index https://download.pytorch.org/whl/cpu/\n\n      - name: Install dev dependencies\n        run: |\n          export SOME_UNNECESSARY_VAR=1\n          export PIP_EXTRA_INDEX_URL=https://mirrors.huaweicloud.com/ascend/repos/pypi\n          export ANOTHER_UNNECESSARY_VAR=2\n          python3 -m pip install -r requirements-dev.txt\n          python3 -m pip install -v .\n          export YET_ANOTHER_UNNECESSARY_VAR=3",
+      "context": "Yikun: I a little bit suspect `VLLM_TARGET_DEVICE=empty python3 -m pip install . --extra-index https://download.pytorch.org/whl/cpu/` x86 version required many extra space, so maybe you could switch to `ubuntu-22.04-arm` first to recover and investigate deeply then."
+    },
+    "pattern": {
+      "file": ".github/workflows/vllm_ascend_test_pr_light.yaml",
+      "line": 70,
+      "code": "name: vllm_ascend_test_pr_light\n\non:\n  pull_request:\n    branches: [main]\n\njobs:\n  unit-test:\n    runs-on: ubuntu-22.04-arm\n\n    steps:\n      - uses: actions/checkout@v4\n\n      - name: Set up Python\n        run: |\n          python3 -m pip install --upgrade pip\n\n      - name: Install vllm-ascend\n        run: |\n          VLLM_TARGET_DEVICE=empty python3 -m pip install .\n\n      - name: Install dev dependencies\n        run: |\n          export PIP_EXTRA_INDEX_URL=https://mirrors.huaweicloud.com/ascend/repos/pypi\n          python3 -m pip install -r requirements-dev.txt\n          python3 -m pip install -v .",
+      "context": "Yikun: I a little bit suspect `VLLM_TARGET_DEVICE=empty python3 -m pip install . --extra-index https://download.pytorch.org/whl/cpu/` x86 version required many extra space, so maybe you could switch to `ubuntu-22.04-arm` first to recover and investigate deeply then."
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/vllm_ascend_test_pr_light.yaml\n+++ b/.github/workflows/vllm_ascend_test_pr_light.yaml\n@@ -70,29 +70,26 @@\n \n jobs:\n   unit-test:\n-    runs-on: ubuntu-22.04\n+    runs-on: ubuntu-22.04-arm\n \n     steps:\n       - uses: actions/checkout@v4\n@@ -70,29 +70,26 @@\n \n       - name: Install vllm-ascend\n         run: |\n-          VLLM_TARGET_DEVICE=empty python3 -m pip install . --extra-index https://download.pytorch.org/whl/cpu/\n+          VLLM_TARGET_DEVICE=empty python3 -m pip install .\n \n       - name: Install dev dependencies\n         run: |\n-          export SOME_UNNECESSARY_VAR=1\n           export PIP_EXTRA_INDEX_URL=https://mirrors.huaweicloud.com/ascend/repos/pypi\n-          export ANOTHER_UNNECESSARY_VAR=2\n           python3 -m pip install -r requirements-dev.txt\n           python3 -m pip install -v .\n-          export YET_ANOTHER_UNNECESSARY_VAR=3",
+      "stats": "1 file changed, +2 lines, -5 lines",
+      "key_changes": [
+        "修改了第 9-9 行的代码",
+        "修改了第 20-20 行的代码",
+        "删除了第 24-24 行的代码",
+        "删除了第 26-26 行的代码",
+        "删除了第 29-29 行的代码"
+      ]
+    },
+    "language": "yaml",
+    "_status": "extracted"
+  }
+}

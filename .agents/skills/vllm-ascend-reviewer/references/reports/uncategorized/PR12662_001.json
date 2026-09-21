@@ -1,0 +1,45 @@
+{
+  "report_id": "PR12662_001",
+  "pr_number": 12662,
+  "pr_title": "[feature] Support dspark speculative method and synchronize reorder batch threshold calculation with vLLM",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "367175a",
+  "source_quote": "For qwen-dspark, the q-len during draft model inference is **num_speculative_tokens**, not **`1 + num_speculative_tokens`**. Should this be changed to only num_speculative_tokens? (This setting is different from that of dflash.)",
+  "correspondence": [],
+  "verification": {
+    "merged": true,
+    "modified_commit": "367175a",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/ops/gdn_attn_builder.py",
+      "line": 0,
+      "code": "class AscendGDNAttentionMetadataBuilder:\n    \"\"\"Metadata builder for GDN attention.\"\"\"\n\n    def __init__(self, vllm_config: VllmConfig, ...):\n        self.vllm_config = vllm_config\n        self.reorder_batch_threshold = 1\n        # ... 其他初始化 ...\n        self._init_reorder_batch_threshold()\n\n    def _init_reorder_batch_threshold(self):\n        \"\"\"Initialize batch reorder threshold for speculative decoding.\"\"\"\n        if self.reorder_batch_threshold != 1:  # type: ignore\n            return\n        speculative_config = self.vllm_config.speculative_config\n        if (\n            speculative_config is not None\n            and speculative_config.num_speculative_tokens is not None\n            and hasattr(speculative_config, \"method\")\n            and speculative_config.method in (\"dflash\", \"dspark\")  # ← 错：dflash 和 dspark 混写一个分支\n        ):\n            # dflash 的 q-len = 1+N（含 base token），dspark 的 q-len = N（不含 base token）\n            # 统一写 1+N 对 dspark 来说多留了 1 个 token slot = 浪费吞吐 + 调度错位\n            self.reorder_batch_threshold = 1 + speculative_config.num_speculative_tokens\n            #                                                          ↑ 错：dspark 只应是 N",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/gdn_attn_builder.py",
+      "line": 0,
+      "code": "class AscendGDNAttentionMetadataBuilder:\n    \"\"\"Metadata builder for GDN attention.\"\"\"\n\n    def __init__(self, vllm_config: VllmConfig, ...):\n        self.vllm_config = vllm_config\n        self.reorder_batch_threshold = 1\n        # ... 其他初始化 ...\n        self._init_reorder_batch_threshold()\n\n    def _init_reorder_batch_threshold(self):\n        \"\"\"Initialize batch reorder threshold for speculative decoding.\"\"\"\n        if self.reorder_batch_threshold != 1:  # type: ignore\n            return\n        speculative_config = self.vllm_config.speculative_config\n        if speculative_config is None:\n            return\n        method = getattr(speculative_config, \"method\", None)\n        num_spec = getattr(speculative_config, \"num_speculative_tokens\", None)\n        if num_spec is not None:\n            # dflash counts the base token in addition to the N speculative\n            # tokens; dspark's threshold is just N by design.\n            if method == \"dflash\":\n                self.reorder_batch_threshold = 1 + num_spec    # ✅ dflash: q-len = 1+N\n            elif method == \"dspark\":\n                self.reorder_batch_threshold = num_spec        # ✅ dspark: q-len = N\n        # 净统计：gdn_attn_builder.py +9/-7\n        # 配套健壮性提升：speculative_config.method / num_speculative_tokens\n        # 改用 getattr(..., None) 模式获取，避免缺字段时抛 AttributeError",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/gdn_attn_builder.py\n+++ b/vllm_ascend/ops/gdn_attn_builder.py\n@@ -12,13 +12,17 @@\n         if self.reorder_batch_threshold != 1:  # type: ignore\n             return\n         speculative_config = self.vllm_config.speculative_config\n-        if (\n-            speculative_config is not None\n-            and speculative_config.num_speculative_tokens is not None\n-            and hasattr(speculative_config, \"method\")\n-            and speculative_config.method in (\"dflash\", \"dspark\")  # ← 错：dflash 和 dspark 混写一个分支\n-        ):\n-            # dflash 的 q-len = 1+N（含 base token），dspark 的 q-len = N（不含 base token）\n-            # 统一写 1+N 对 dspark 来说多留了 1 个 token slot = 浪费吞吐 + 调度错位\n-            self.reorder_batch_threshold = 1 + speculative_config.num_speculative_tokens\n-            #                                                          ↑ 错：dspark 只应是 N\n+        if speculative_config is None:\n+            return\n+        method = getattr(speculative_config, \"method\", None)\n+        num_spec = getattr(speculative_config, \"num_speculative_tokens\", None)\n+        if num_spec is not None:\n+            # dflash counts the base token in addition to the N speculative\n+            # tokens; dspark's threshold is just N by design.\n+            if method == \"dflash\":\n+                self.reorder_batch_threshold = 1 + num_spec    # ✅ dflash: q-len = 1+N\n+            elif method == \"dspark\":\n+                self.reorder_batch_threshold = num_spec        # ✅ dspark: q-len = N\n+        # 净统计：gdn_attn_builder.py +9/-7\n+        # 配套健壮性提升：speculative_config.method / num_speculative_tokens\n+        # 改用 getattr(..., None) 模式获取，避免缺字段时抛 AttributeError",
+      "stats": "1 file changed, +14 lines, -10 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

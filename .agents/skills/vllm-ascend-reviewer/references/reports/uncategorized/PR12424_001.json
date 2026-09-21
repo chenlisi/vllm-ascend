@@ -1,0 +1,45 @@
+{
+  "report_id": "PR12424_001",
+  "pr_number": 12424,
+  "pr_title": "[BugFix]Fix the precision issue of the npu_dequant_swiglu_quant operator when x.shape=[2,192]",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "ad7c9f7",
+  "source_quote": "**`tests/.../test_dequant_swiglu_quant.py:123`** — The helper function `_small_ops_dequant_swiglu_quant` is called here but is **neither defined in this test file nor imported from any other module**. This will result in a **`NameError`** when running the test. Please define or import this function.",
+  "correspondence": [],
+  "verification": {
+    "merged": true,
+    "modified_commit": "ad7c9f7",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "# tests/e2e/nightly/single_node/ops/singlecard_ops/test_dequant_swiglu_quant.py\n# 根据 gemini critical 评审推断，L123 调用未定义函数\nimport pytest\nimport torch\nimport torch_npu\n\n_REPRO_CASES = [\n    ([4608, 2048], 0.0, \"large_2048_aligned\"),\n    ([2, 192], 0.0, \"small_non_aligned\"),\n    # ...\n]\n\ndef _shared_dequant_swiglu_quant(x, weight_scale, activation_scale):\n    \"\"\"Shared fused dequant+swiglu+quant implementation.\"\"\"\n    if activation_scale.dim() > 1:\n        activation_scale = activation_scale.squeeze(-1)\n    hidden_states_fp = x.to(torch.float32)\n    hidden_states_fp = hidden_states_fp * activation_scale.unsqueeze(-1)\n    hidden_states_fp = hidden_states_fp * weight_scale.unsqueeze(0)\n    hidden_states_bf = hidden_states_fp.to(torch.bfloat16)\n    swiglu = torch_npu.npu_swiglu(hidden_states_bf)\n    return torch_npu.npu_dynamic_quant(swiglu)\n\n# ⚠️ _small_ops_dequant_swiglu_quant 定义在此处缺失（可能在 rebase 中丢失）\n\n@pytest.mark.parametrize(\"x_shape,clamp_limit,desc\", _REPRO_CASES)\ndef test_npu_dequant_swiglu_quant_with_limit(x_shape, clamp_limit, desc):\n    # 1. build graph + run to get fused output & golden\n    output, output_golden = run_fused_and_golden(...)\n\n    # 2. graph replay\n    graph.replay()\n\n    # 3. Small ops workaround — 调用未定义函数！\n    workaround_output, workaround_scale = _small_ops_dequant_swiglu_quant(\n        x, weight_scale, activate_scale)\n    # ↑ NameError: name '_small_ops_dequant_swiglu_quant' is not defined\n\n    # 三向对拍（实际不会执行到这里，因为上面已经挂死）\n    atol, rtol = 1e-4, 5e-3\n    torch.testing.assert_close(output.cpu(), output_golden.cpu(), atol=atol, rtol=rtol)\n    torch.testing.assert_close(output_scale.cpu(), output_scale_golden.cpu(), atol=atol, rtol=rtol)\n    torch.testing.assert_close(workaround_output.cpu(), output_golden.cpu(), atol=atol, rtol=rtol)",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "# tests/e2e/nightly/single_node/ops/singlecard_ops/test_dequant_swiglu_quant.py\n# commit: ad7c9f7 - test: clean up unused workaround and relax int8 tolerance\nimport pytest\nimport torch\nimport torch_npu\n\n_REPRO_CASES = [\n    ([4608, 2048], 0.0, \"large_2048_aligned\"),\n    ([2, 192], 0.0, \"small_non_aligned\"),\n    # ...\n]\n\ndef _shared_dequant_swiglu_quant(x, weight_scale, activation_scale):\n    \"\"\"Shared fused dequant+swiglu+quant implementation.\"\"\"\n    if activation_scale.dim() > 1:\n        activation_scale = activation_scale.squeeze(-1)\n    hidden_states_fp = x.to(torch.float32)\n    hidden_states_fp = hidden_states_fp * activation_scale.unsqueeze(-1)\n    hidden_states_fp = hidden_states_fp * weight_scale.unsqueeze(0)\n    hidden_states_bf = hidden_states_fp.to(torch.bfloat16)\n    swiglu = torch_npu.npu_swiglu(hidden_states_bf)\n    return torch_npu.npu_dynamic_quant(swiglu)\n\n# ✅ _small_ops_dequant_swiglu_quant 整块删除（约 -30 行），不再保留 workaround\n\n@pytest.mark.parametrize(\"x_shape,clamp_limit,desc\", _REPRO_CASES)\ndef test_npu_dequant_swiglu_quant_with_limit(x_shape, clamp_limit, desc):\n    # 1. build graph + run to get fused output & golden\n    output, output_golden = run_fused_and_golden(...)\n\n    # 2. graph replay\n    graph.replay()\n\n    # ✅ 删除 workaround 分支 + 三向对拍，仅保留双向对拍\n    # int8 quantization output: atol=1 covers the rounding error\n    torch.testing.assert_close(output.cpu(), output_golden.cpu(), atol=1, rtol=0.1)\n    # Dynamic quant scale: relax tolerance for aligned and non-64-aligned outDimy\n    torch.testing.assert_close(output_scale.cpu(), output_scale_golden.cpu(), atol=1e-4, rtol=5e-3)",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/file\n+++ b/file\n@@ -1,5 +1,5 @@\n # tests/e2e/nightly/single_node/ops/singlecard_ops/test_dequant_swiglu_quant.py\n-# 根据 gemini critical 评审推断，L123 调用未定义函数\n+# commit: ad7c9f7 - test: clean up unused workaround and relax int8 tolerance\n import pytest\n import torch\n import torch_npu\n@@ -21,7 +21,7 @@\n     swiglu = torch_npu.npu_swiglu(hidden_states_bf)\n     return torch_npu.npu_dynamic_quant(swiglu)\n \n-# ⚠️ _small_ops_dequant_swiglu_quant 定义在此处缺失（可能在 rebase 中丢失）\n+# ✅ _small_ops_dequant_swiglu_quant 整块删除（约 -30 行），不再保留 workaround\n \n @pytest.mark.parametrize(\"x_shape,clamp_limit,desc\", _REPRO_CASES)\n def test_npu_dequant_swiglu_quant_with_limit(x_shape, clamp_limit, desc):\n@@ -31,13 +31,8 @@\n     # 2. graph replay\n     graph.replay()\n \n-    # 3. Small ops workaround — 调用未定义函数！\n-    workaround_output, workaround_scale = _small_ops_dequant_swiglu_quant(\n-        x, weight_scale, activate_scale)\n-    # ↑ NameError: name '_small_ops_dequant_swiglu_quant' is not defined\n-\n-    # 三向对拍（实际不会执行到这里，因为上面已经挂死）\n-    atol, rtol = 1e-4, 5e-3\n-    torch.testing.assert_close(output.cpu(), output_golden.cpu(), atol=atol, rtol=rtol)\n-    torch.testing.assert_close(output_scale.cpu(), output_scale_golden.cpu(), atol=atol, rtol=rtol)\n-    torch.testing.assert_close(workaround_output.cpu(), output_golden.cpu(), atol=atol, rtol=rtol)\n+    # ✅ 删除 workaround 分支 + 三向对拍，仅保留双向对拍\n+    # int8 quantization output: atol=1 covers the rounding error\n+    torch.testing.assert_close(output.cpu(), output_golden.cpu(), atol=1, rtol=0.1)\n+    # Dynamic quant scale: relax tolerance for aligned and non-64-aligned outDimy\n+    torch.testing.assert_close(output_scale.cpu(), output_scale_golden.cpu(), atol=1e-4, rtol=5e-3)",
+      "stats": "1 file changed, +7 lines, -12 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "report_id": "PR4431_001",
+  "pr_number": 4431,
+  "pr_title": "[feature] Add Custom Op grouped_matmul_swiglu_quant",
+  "pr_status": "merged",
+  "merged_at": "2025-11-27T13:56:18Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "csrc/aclnn_torch_adapter/NPUBridge.cpp:1",
+    "csrc/aclnn_torch_adapter/NPUStorageImpl.cpp:2"
+  ],
+  "landing_sha": "58918df",
+  "source_quote": "Since 'aclnn' usually refers to a set of operations, it might be clearer to rename the folder to reflect that this is a Python adapter for aclnn operations.",
+  "correspondence": [
+    {
+      "review_quote": "1. ChenxiQ 建议重命名文件夹以更准确反映其功能 → 文件夹命名语义优化\n2. MengqingCao 要求检查 torch-npu 的许可证并添加版权声明 → commit `0740354` 更新了 license 声明",
+      "patch_snippet": "commit `0740354`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "0740354",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "**检查点**: 从 torch-npu 等外部项目适配的代码文件，必须在文件头部添加版权声明（如 \"Adapted from xxx.py\"）",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "// csrc/aclnn/op_api_common.h\n// gemini-code-assist[bot] 指出 3 个问题:\n// 1. (L240) AT_ERROR 后紧跟 return nullptr — 不可达代码（high）\n// 2. (L247) 冗余的 itemsize 检查（high）\n// 3. (torch_binding_meta.cpp:125) 魔法数字 8 重复定义（high）\n\n// --- L237 附近: ConvertType 函数 ---\nauto ConvertType(const at::Tensor& at_tensor) {\n    auto itemsize = at_tensor.itemsize();\n    // 问题1: AT_ERROR 抛异常后 return 不可达\n    if (itemsize == 0) {\n        AT_ERROR(\"When ConvertType, tensor item size cannot be zero.\");\n        return nullptr;  // 不可达代码\n    }\n\n    // 问题2: 冗余检查（函数开头已验证 itemsize != 0）\n    if (at_tensor.itemsize() > 0) {\n        // ... 转换逻辑 ...\n    }\n}\n\n// csrc/torch_binding_meta.cpp\n// --- L123 附近: 常量定义 ---\n// 问题3: 魔法数字 8，与 torch_binding.cpp 中 INT4_NUMS_IN_INT32 重复\nconstexpr int kScaleOffset = 8;  // 应提取到共享头文件",
+      "context": "Since 'aclnn' usually refers to a set of operations, it might be clearer to rename the folder to reflect that this is a Python adapter for aclnn operations."
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "// csrc/aclnn/op_api_common.h\n// gemini-code-assist[bot] suggestions\n\n// --- L237 附近: ConvertType 函数 ---\nauto ConvertType(const at::Tensor& at_tensor) {\n    auto itemsize = at_tensor.itemsize();\n    // 修复1: 使用 TORCH_CHECK 替代 AT_ERROR + return，消除不可达代码\n    TORCH_CHECK(itemsize != 0,\n                \"When ConvertType, tensor item size cannot be zero.\");\n    // 修复2: 移除冗余的 itemsize 检查\n    // ... 转换逻辑 ...\n}\n\n// csrc/torch_binding_meta.cpp\n// --- L123 附近: 常量定义 ---\n// 修复3: 将魔法数字提取到共享头文件 csrc/ops.h\n// 在 torch_binding.cpp 和 torch_binding_meta.cpp 中共同引用",
+      "context": "Since 'aclnn' usually refers to a set of operations, it might be clearer to rename the folder to reflect that this is a Python adapter for aclnn operations."
+    },
+    "diff": {
+      "unified": "--- a/a/file\n+++ b/b/file\n@@ -1,25 +1,17 @@\n // csrc/aclnn/op_api_common.h\n-// gemini-code-assist[bot] 指出 3 个问题:\n-// 1. (L240) AT_ERROR 后紧跟 return nullptr — 不可达代码（high）\n-// 2. (L247) 冗余的 itemsize 检查（high）\n-// 3. (torch_binding_meta.cpp:125) 魔法数字 8 重复定义（high）\n+// gemini-code-assist[bot] suggestions\n \n // --- L237 附近: ConvertType 函数 ---\n auto ConvertType(const at::Tensor& at_tensor) {\n     auto itemsize = at_tensor.itemsize();\n-    // 问题1: AT_ERROR 抛异常后 return 不可达\n-    if (itemsize == 0) {\n-        AT_ERROR(\"When ConvertType, tensor item size cannot be zero.\");\n-        return nullptr;  // 不可达代码\n-    }\n-\n-    // 问题2: 冗余检查（函数开头已验证 itemsize != 0）\n-    if (at_tensor.itemsize() > 0) {\n-        // ... 转换逻辑 ...\n-    }\n+    // 修复1: 使用 TORCH_CHECK 替代 AT_ERROR + return，消除不可达代码\n+    TORCH_CHECK(itemsize != 0,\n+                \"When ConvertType, tensor item size cannot be zero.\");\n+    // 修复2: 移除冗余的 itemsize 检查\n+    // ... 转换逻辑 ...\n }\n \n // csrc/torch_binding_meta.cpp\n // --- L123 附近: 常量定义 ---\n-// 问题3: 魔法数字 8，与 torch_binding.cpp 中 INT4_NUMS_IN_INT32 重复\n-constexpr int kScaleOffset = 8;  // 应提取到共享头文件\n+// 修复3: 将魔法数字提取到共享头文件 csrc/ops.h\n+// 在 torch_binding.cpp 和 torch_binding_meta.cpp 中共同引用",
+      "stats": "1 file changed, +8 lines, -16 lines",
+      "key_changes": [
+        "修改了第 2-5 行的代码",
+        "修改了第 10-19 行的代码",
+        "修改了第 24-25 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

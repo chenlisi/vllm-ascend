@@ -1,0 +1,65 @@
+{
+  "report_id": "PR7922_001",
+  "pr_number": 7922,
+  "pr_title": "[MRv2][Feature] Add initial MoE models support for MRv2",
+  "pr_status": "merged",
+  "merged_at": "2026-04-14T06:32:51Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/e2e/multicard/2-cards/test_qwen3_moe.py:77"
+  ],
+  "landing_sha": "e7461af",
+  "source_quote": "it's better to make a directory such as `model_runner_v2` for all e2e cases which are related to model runner v2.",
+  "correspondence": [
+    {
+      "review_quote": "Ronald1995: tests/e2e/multicard/2-cards/test_qwen3_moe.py:77",
+      "patch_snippet": "评后sha e7461af 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "e7461af",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当某个功能模块（如 model_runner_v2）有多个 e2e 测试用例时，应将这些测试放在独立的子目录中，而不是散落在通用测试目录下。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "tests/e2e/multicard/2-cards/test_qwen3_moe.py",
+      "line": 65,
+      "code": "# MRv2 相关的 e2e 测试用例直接放在 2-cards 目录下，与其他测试混在一起\n# `model_runner_v2` for all e2e cases which are related to model runner v2.\"\n\nimport pytest\nfrom tests.e2e.conftest import VllmRunner\n\n\n@pytest.mark.parametrize(\"model_name\", [\n    \"Qwen/Qwen3-30B-A3B\",\n])\ndef test_qwen3_moe_distributed_tp2(model_name):\n    \"\"\"Test Qwen3 MoE model with TP=2.\"\"\"\n    with VllmRunner(model_name, tensor_parallel_size=2) as runner:\n        runner.generate([\"Hello, world!\"])\n\n\n@pytest.mark.parametrize(\"model_name\", [\n    \"Qwen/Qwen3-30B-A3B\",\n])\ndef test_qwen3_moe_distributed_tp2_mrv2(model_name):\n    \"\"\"Test Qwen3 MoE model with TP=2 using Model Runner v2.\"\"\"\n    # MRv2 测试直接放在 2-cards 目录下\n    with VllmRunner(model_name, tensor_parallel_size=2,\n                    enforce_eager=True) as runner:\n        runner.generate([\"Hello, world!\"])",
+      "context": "it's better to make a directory such as `model_runner_v2` for all e2e cases which are related to model runner v2."
+    },
+    "pattern": {
+      "file": "tests/e2e/multicard/2-cards/test_qwen3_moe.py",
+      "line": 65,
+      "code": "# 作者 linfeng-yuan 回复: \"I think it's better to split MRV2-related e2e\n# tests in an isolated directory after enough features are supported.\n# Maybe at that time we can even add an optional pytest parameter of\n# `VLLM_USE_V2_MODEL_RUNNER=1` on existing e2e cases for MRV1.\"\n# 目录重构建议作为后续改进，未在本次 PR 中实施\n# 当前 commit e7461af 主要修复了 speculative decoding 的运行时错误\n# 目录结构保持不变，MRv2 测试仍在 2-cards 目录下\n\nimport pytest\nfrom tests.e2e.conftest import VllmRunner\n\n\n@pytest.mark.parametrize(\"model_name\", [\n    \"Qwen/Qwen3-30B-A3B\",\n])\ndef test_qwen3_moe_distributed_tp2(model_name):\n    \"\"\"Test Qwen3 MoE model with TP=2.\"\"\"\n    with VllmRunner(model_name, tensor_parallel_size=2) as runner:\n        runner.generate([\"Hello, world!\"])\n\n\n@pytest.mark.parametrize(\"model_name\", [\n    \"Qwen/Qwen3-30B-A3B\",\n])\ndef test_qwen3_moe_distributed_tp2_mrv2(model_name):\n    \"\"\"Test Qwen3 MoE model with TP=2 using Model Runner v2.\"\"\"\n    # TODO: 待 MRv2 支持足够功能后，拆分到独立目录\n    # tests/e2e/multicard/2-cards/model_runner_v2/\n    with VllmRunner(model_name, tensor_parallel_size=2,\n                    enforce_eager=True) as runner:\n        runner.generate([\"Hello, world!\"])",
+      "context": "it's better to make a directory such as `model_runner_v2` for all e2e cases which are related to model runner v2."
+    },
+    "diff": {
+      "unified": "--- a/tests/e2e/multicard/2-cards/test_qwen3_moe.py\n+++ b/tests/e2e/multicard/2-cards/test_qwen3_moe.py\n@@ -1,5 +1,10 @@\n-# MRv2 相关的 e2e 测试用例直接放在 2-cards 目录下，与其他测试混在一起\n-# `model_runner_v2` for all e2e cases which are related to model runner v2.\"\n+# 作者 linfeng-yuan 回复: \"I think it's better to split MRV2-related e2e\n+# tests in an isolated directory after enough features are supported.\n+# Maybe at that time we can even add an optional pytest parameter of\n+# `VLLM_USE_V2_MODEL_RUNNER=1` on existing e2e cases for MRV1.\"\n+# 目录重构建议作为后续改进，未在本次 PR 中实施\n+# 当前 commit e7461af 主要修复了 speculative decoding 的运行时错误\n+# 目录结构保持不变，MRv2 测试仍在 2-cards 目录下\n \n import pytest\n from tests.e2e.conftest import VllmRunner\n@@ -19,7 +24,8 @@\n ])\n def test_qwen3_moe_distributed_tp2_mrv2(model_name):\n     \"\"\"Test Qwen3 MoE model with TP=2 using Model Runner v2.\"\"\"\n-    # MRv2 测试直接放在 2-cards 目录下\n+    # TODO: 待 MRv2 支持足够功能后，拆分到独立目录\n+    # tests/e2e/multicard/2-cards/model_runner_v2/\n     with VllmRunner(model_name, tensor_parallel_size=2,\n                     enforce_eager=True) as runner:\n         runner.generate([\"Hello, world!\"])\n",
+      "stats": "1 file changed, +9 lines, -3 lines",
+      "key_changes": [
+        "-# MRv2 相关的 e2e 测试用例直接放在 2-cards 目录下，与其他测试混在一起",
+        "-# `model_runner_v2` for all e2e cases which are related to model runner v2.\"",
+        "+# 作者 linfeng-yuan 回复: \"I think it's better to split MRV2-related e2e",
+        "+# tests in an isolated directory after enough features are supported.",
+        "+# Maybe at that time we can even add an optional pytest parameter of",
+        "+# `VLLM_USE_V2_MODEL_RUNNER=1` on existing e2e cases for MRV1.\"",
+        "+# 目录重构建议作为后续改进，未在本次 PR 中实施",
+        "+# 当前 commit e7461af 主要修复了 speculative decoding 的运行时错误",
+        "+# 目录结构保持不变，MRv2 测试仍在 2-cards 目录下",
+        "-    # MRv2 测试直接放在 2-cards 目录下",
+        "+    # TODO: 待 MRv2 支持足够功能后，拆分到独立目录",
+        "+    # tests/e2e/multicard/2-cards/model_runner_v2/"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

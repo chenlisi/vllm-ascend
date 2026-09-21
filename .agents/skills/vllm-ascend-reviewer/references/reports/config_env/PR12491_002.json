@@ -1,0 +1,57 @@
+{
+  "report_id": "PR12491_002",
+  "pr_number": 12491,
+  "pr_title": "[Doc] add deepseek-v4-flash-dspark cookbook",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "docs/source/tutorials/models/DeepSeek-V4-Flash.md:91"
+  ],
+  "landing_sha": "d985bd3",
+  "source_quote": "![high](https://www.gstatic.com/codereviewagent/high-priority.svg)\n> The comments contain grammatical errors (\"use follow images\" instead of \"uses the following image\").\nfixed",
+  "correspondence": [
+    {
+      "review_quote": "gemini-code-assist[bot]: docs/source/tutorials/models/DeepSeek-V4-Flash.md:91(2026-07-21 08:43:45)",
+      "patch_snippet": "评后sha d985bd3 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "d985bd3",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "文档中的注释和说明文字应使用语法正确的英文，避免中式英语或语法错误影响文档专业性和可读性。",
+    "context": "",
+    "checkpoints": [
+      "检查文档注释中是否存在主谓一致、时态、单复数等语法错误",
+      "确认 \"use follow images\" 等常见错误表述已修正为 \"uses the following image\"",
+      "检查冠词、介词使用是否正确"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/DeepSeek-V4-Flash.md",
+      "line": 0,
+      "code": "## Prerequisites\n\n- A2 series GPU server (e.g., 910B4*8)\n- Docker installed and configured\n\n## Docker Image Configuration\n\n```bash\n    # deepseek-v4-flash use follow images\n    export IMAGE=quay.io/ascend/vllm-ascend:{{ vllm_ascend_version }}\n\n    # deepseek-v4-flash-dspark uses the following image\n    export IMAGE=swr.cn-north-4.myhuaweicloud.com/desaysv/vllm-ascend-dspark:910b4\n```\n# ↑ \"use follow images\" 语法错误，应为 \"uses the following image\"",
+      "context": "修改前代码 (markdown)"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/DeepSeek-V4-Flash.md",
+      "line": 0,
+      "code": "## Prerequisites\n\n- A2 series GPU server (e.g., 910B4*8)\n- Docker installed and configured\n\n## Docker Image Configuration\n\n```bash\n    # deepseek-v4-flash uses the following image\n    export IMAGE=quay.io/ascend/vllm-ascend:{{ vllm_ascend_version }}\n\n    # deepseek-v4-flash-dspark uses the following image\n    export IMAGE=swr.cn-north-4.myhuaweicloud.com/desaysv/vllm-ascend-dspark:910b4\n```\n# ↑ 已修正为语法正确的 \"uses the following image\"",
+      "context": "修改后代码 (markdown)"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/DeepSeek-V4-Flash.md\n+++ b/docs/source/tutorials/models/DeepSeek-V4-Flash.md\n@@ -6,10 +6,10 @@\n ## Docker Image Configuration\n \n ```bash\n-    # deepseek-v4-flash use follow images\n+    # deepseek-v4-flash uses the following image\n     export IMAGE=quay.io/ascend/vllm-ascend:{{ vllm_ascend_version }}\n \n     # deepseek-v4-flash-dspark uses the following image\n     export IMAGE=swr.cn-north-4.myhuaweicloud.com/desaysv/vllm-ascend-dspark:910b4\n ```\n-# ↑ \"use follow images\" 语法错误，应为 \"uses the following image\"\n+# ↑ 已修正为语法正确的 \"uses the following image\"",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "修改代码逻辑"
+      ]
+    },
+    "language": "bash",
+    "_status": "pending_llm_extract"
+  }
+}

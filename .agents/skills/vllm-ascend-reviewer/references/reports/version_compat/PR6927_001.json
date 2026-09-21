@@ -1,0 +1,67 @@
+{
+  "report_id": "PR6927_001",
+  "pr_number": 6927,
+  "pr_title": "[CI] Add label and comment to run e2e test",
+  "pr_status": "merged",
+  "merged_at": "2026-03-31T11:07:09Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    ".github/workflows/pr_test_full.yaml:194"
+  ],
+  "landing_sha": "4446bd8",
+  "source_quote": "refresh vllm version",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan 指出需要刷新 vllm 版本引用。作者通过 commit `4446bd8` 重构了 action 配置，更新了 CI workflow 中的 vllm 版本，1/1 建议全部落地。",
+      "patch_snippet": "commit `4446bd8`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "4446bd8",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 CI workflow 文件中引用的 vllm 版本必须与项目当前支持的版本保持同步，版本升级时需同步更新所有相关的 workflow 配置文件。",
+    "context": "",
+    "checkpoints": [
+      "检查 workflow 文件中的 vllm 版本引用是否为最新",
+      "确认版本升级时所有相关 workflow 文件是否同步更新",
+      "验证 CI 触发机制（label/comment）是否正常工作"
+    ],
+    "antipattern": {
+      "file": ".github/workflows/pr_test_full.yaml",
+      "line": 194,
+      "code": "# .github/workflows/pr_test_full.yaml\nname: PR Full Test\n\non:\n  pull_request:\n    branches: [main]\n\njobs:\n  e2e-test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n\n      - name: Set up vLLM\n        run: |\n          git clone https://github.com/vllm-project/vllm.git --branch v0.15.0\n          cd vllm && pip install -e .\n\n      - name: Run E2E tests\n        run: |\n          pytest tests/e2e/ -v",
+      "context": "refresh vllm version"
+    },
+    "pattern": {
+      "file": ".github/workflows/pr_test_full.yaml",
+      "line": 194,
+      "code": "# .github/workflows/pr_test_full.yaml\nname: PR Full Test\n\non:\n  pull_request:\n    branches: [main]\n  issue_comment:\n    types: [created]\n\njobs:\n  parse-trigger:\n    uses: ./.github/workflows/_parse_trigger.yaml  # ✅ 新增解析触发条件的 workflow\n\n  e2e-test:\n    needs: parse-trigger\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n\n      - name: Set up vLLM\n        run: |\n          git clone https://github.com/vllm-project/vllm.git --branch v0.17.0\n          cd vllm && pip install -e .\n\n      - name: Run E2E tests\n        run: |\n          pytest ${{ needs.parse-trigger.outputs.test_files }} -v",
+      "context": "refresh vllm version"
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/pr_test_full.yaml\n+++ b/.github/workflows/pr_test_full.yaml\n@@ -4,18 +4,24 @@\n on:\n   pull_request:\n     branches: [main]\n+  issue_comment:\n+    types: [created]\n \n jobs:\n+  parse-trigger:\n+    uses: ./.github/workflows/_parse_trigger.yaml  # ✅ 新增解析触发条件的 workflow\n+\n   e2e-test:\n+    needs: parse-trigger\n     runs-on: ubuntu-latest\n     steps:\n       - uses: actions/checkout@v4\n \n       - name: Set up vLLM\n         run: |\n-          git clone https://github.com/vllm-project/vllm.git --branch v0.15.0\n+          git clone https://github.com/vllm-project/vllm.git --branch v0.17.0\n           cd vllm && pip install -e .\n \n       - name: Run E2E tests\n         run: |\n-          pytest tests/e2e/ -v\n+          pytest ${{ needs.parse-trigger.outputs.test_files }} -v",
+      "stats": "1 file changed, +8 lines, -2 lines",
+      "key_changes": [
+        "+ issue_comment:",
+        "+ types: [created]",
+        "+ parse-trigger:",
+        "+ uses: ./.github/workflows/_parse_trigger.yaml  # ✅ 新增解析触发条件的 workflow",
+        "+ ",
+        "+ needs: parse-trigger",
+        "- git clone https://github.com/vllm-project/vllm.git --branch v0.15.0",
+        "+ git clone https://github.com/vllm-project/vllm.git --branch v0.17.0",
+        "- pytest tests/e2e/ -v",
+        "+ pytest ${{ needs.parse-trigger.outputs.test_files }} -v"
+      ]
+    },
+    "language": "yaml",
+    "_status": "pending_llm_extract"
+  }
+}

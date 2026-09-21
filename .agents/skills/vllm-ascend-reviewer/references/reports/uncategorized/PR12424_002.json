@@ -1,0 +1,45 @@
+{
+  "report_id": "PR12424_002",
+  "pr_number": 12424,
+  "pr_title": "[BugFix]Fix the precision issue of the npu_dequant_swiglu_quant operator when x.shape=[2,192]",
+  "pr_status": "merged",
+  "dimension": [
+    "test"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "194546f",
+  "source_quote": "![high] The correctness assertions for the 64-aligned cases are **commented out**. This prevents the test from actually verifying the correctness of the operator. **Please uncomment these assertions** so that the test can catch potential regressions.",
+  "correspondence": [],
+  "verification": {
+    "merged": true,
+    "modified_commit": "194546f",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "tests/e2e/nightly/single_node/ops/singlecard_ops/test_dequant_swiglu_quant.py",
+      "line": 120,
+      "code": "@pytest.mark.parametrize(\"x_shape, clamp_limit, desc\", [\n    ([8, 384], 0.0, \"small_384_aligned\"),\n    pytest.param([2, 192], 0.0, \"small_192_misaligned\",\n                 marks=pytest.mark.xfail(reason=\"broken for non-64-aligned\")),\n    pytest.param([4, 192], 0.0, \"small_192_misaligned_4rows\",\n                 marks=pytest.mark.xfail(reason=\"broken\")),\n])\ndef test_npu_dequant_swiglu_quant_with_limit(x_shape, clamp_limit, desc):\n    # ... 前置：构造输入、编译 graph、执行 fused 算子 ...\n    output, output_scale = run_dequant_swiglu_quant(x_shape, clamp_limit)\n    output_golden, output_scale_golden = run_golden_reference(x_shape, clamp_limit)\n\n    graph.replay()\n\n    # int8 quantization output: atol=1 covers the rounding error\n    # torch.testing.assert_close(output.cpu(), output_golden.cpu(), atol=1, rtol=0.1)\n    # ↑ 被 # 注释掉——CI 0% 概率验证 fused 算子输出 vs 参考实现输出\n    # Dynamic quant scale: atol/rtol to cover non-64-aligned outDimy\n    # torch.testing.assert_close(output_scale.cpu(), output_scale_golden.cpu(), atol=1e-4, rtol=5e-3)\n    # ↑ 也被注释掉——同样 scale 维度不验证\n    # 结果：整个 test 函数跑完 graph.replay() 就直接 return，不做任何 assert\n    #      + pytest.mark.xfail 标记 shape=[2,192] 等 non-64-aligned 用例，\n    #        即便实际跑挂了 CI 也不报红 = 0 回归防护",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "tests/e2e/nightly/single_node/ops/singlecard_ops/test_dequant_swiglu_quant.py",
+      "line": 120,
+      "code": "@pytest.mark.parametrize(\"x_shape, clamp_limit, desc\", [\n    ([8, 384], 0.0, \"small_384_aligned\"),\n    ([2, 192], 0.0, \"small_192_misaligned\"),          # xfail 标记已移除\n    ([4, 192], 0.0, \"small_192_misaligned_4rows\"),     # xfail 标记已移除\n])\ndef test_npu_dequant_swiglu_quant_with_limit(x_shape, clamp_limit, desc):\n    # ... 前置：构造输入、编译 graph、执行 fused 算子 ...\n    output, output_scale = run_dequant_swiglu_quant(x_shape, clamp_limit)\n    output_golden, output_scale_golden = run_golden_reference(x_shape, clamp_limit)\n\n    graph.replay()\n\n    # int8 quantization output: atol=1 covers the rounding error\n    torch.testing.assert_close(output.cpu(), output_golden.cpu(), atol=1, rtol=0.1)\n    # Dynamic quant scale: atol/rtol to cover non-64-aligned outDimy\n    torch.testing.assert_close(output_scale.cpu(), output_scale_golden.cpu(), atol=1e-4, rtol=5e-3)\n    # ↑ 两行 uncomment，参数与 gemini suggestion snippet 给出的字面完全一致",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/tests/e2e/nightly/single_node/ops/singlecard_ops/test_dequant_swiglu_quant.py\n+++ b/tests/e2e/nightly/single_node/ops/singlecard_ops/test_dequant_swiglu_quant.py\n@@ -1,9 +1,7 @@\n @pytest.mark.parametrize(\"x_shape, clamp_limit, desc\", [\n     ([8, 384], 0.0, \"small_384_aligned\"),\n-    pytest.param([2, 192], 0.0, \"small_192_misaligned\",\n-                 marks=pytest.mark.xfail(reason=\"broken for non-64-aligned\")),\n-    pytest.param([4, 192], 0.0, \"small_192_misaligned_4rows\",\n-                 marks=pytest.mark.xfail(reason=\"broken\")),\n+    ([2, 192], 0.0, \"small_192_misaligned\"),          # xfail 标记已移除\n+    ([4, 192], 0.0, \"small_192_misaligned_4rows\"),     # xfail 标记已移除\n ])\n def test_npu_dequant_swiglu_quant_with_limit(x_shape, clamp_limit, desc):\n     # ... 前置：构造输入、编译 graph、执行 fused 算子 ...\n@@ -13,11 +11,7 @@\n     graph.replay()\n \n     # int8 quantization output: atol=1 covers the rounding error\n-    # torch.testing.assert_close(output.cpu(), output_golden.cpu(), atol=1, rtol=0.1)\n-    # ↑ 被 # 注释掉——CI 0% 概率验证 fused 算子输出 vs 参考实现输出\n+    torch.testing.assert_close(output.cpu(), output_golden.cpu(), atol=1, rtol=0.1)\n     # Dynamic quant scale: atol/rtol to cover non-64-aligned outDimy\n-    # torch.testing.assert_close(output_scale.cpu(), output_scale_golden.cpu(), atol=1e-4, rtol=5e-3)\n-    # ↑ 也被注释掉——同样 scale 维度不验证\n-    # 结果：整个 test 函数跑完 graph.replay() 就直接 return，不做任何 assert\n-    #      + pytest.mark.xfail 标记 shape=[2,192] 等 non-64-aligned 用例，\n-    #        即便实际跑挂了 CI 也不报红 = 0 回归防护\n+    torch.testing.assert_close(output_scale.cpu(), output_scale_golden.cpu(), atol=1e-4, rtol=5e-3)\n+    # ↑ 两行 uncomment，参数与 gemini suggestion snippet 给出的字面完全一致",
+      "stats": "1 file changed, +5 lines, -11 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

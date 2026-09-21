@@ -1,0 +1,78 @@
+{
+  "report_id": "PR9801_001",
+  "pr_number": 9801,
+  "pr_title": "[CI][Feature] Add vLLM verified ref anchors",
+  "pr_status": "merged",
+  "merged_at": "2026-06-10T07:59:47Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    ".github/workflows/pr_test_light.yaml:53",
+    "docs/source/conf.py:70",
+    ".github/workflows/pr_test.yaml:44"
+  ],
+  "landing_sha": "cfcb8bd",
+  "source_quote": "Please move `v0.20.2` into the same xx.commit, too\nAddressed in a7efb7c: moved the matched release tag into .github/vllm-release-verified.commit and updated the PR/full/scheduled E2E matrices to read both verified refs from the .commit anchor files.\njust `_VLLM_MAIN_VERIFIED_COMMIT = VLLM_MAIN_VERIFIED_COMMIT_PATH.read_text(encoding=\"utf-8\").strip()` is enough IMO\nhave modified it already\nthis new job is totally useless IMO. Just add a new step in `lint-and-select-tests` is enough IMO.\ndelete the new job, and add the logic in the step of \"lint-and-select-tests\"",
+  "correspondence": [
+    {
+      "review_quote": "wjunLu: .github/workflows/pr_test_light.yaml:53(2026-06-01 07:14:05)",
+      "patch_snippet": "评后sha cfcb8bd 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wangxiyuan: docs/source/conf.py:70(2026-06-06 05:25:31)",
+      "patch_snippet": "评后sha cfcb8bd 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wangxiyuan: .github/workflows/pr_test.yaml:44(2026-06-06 05:29:21)",
+      "patch_snippet": "评后sha cfcb8bd 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "cfcb8bd",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "CI workflow 中的 vLLM 版本引用（commit hash、release tag）应集中在 `.commit` 文件中管理，避免在多个 workflow 文件中硬编码。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "docs/source/conf.py:70",
+      "line": 53,
+      "code": "# （根据评审意见推断）读取 verified commit 的逻辑过于复杂\n# wangxiyuan 评论: \"just `_VLLM_MAIN_VERIFIED_COMMIT = \n# VLLM_MAIN_VERIFIED_COMMIT_PATH.read_text(encoding=\\\"utf-8\\\").strip()` is enough IMO\"\nimport os\nfrom pathlib import Path\n\n# -- Project information -----------------------------------------------------\nproject = \"vLLM Ascend\"\nauthor = \"vLLM Ascend Authors\"\n\n# -- General configuration ---------------------------------------------------\nextensions = [\n    \"sphinx.ext.autodoc\",\n    \"sphinx.ext.intersphinx\",\n    \"sphinx.ext.napoleon\",\n]\n\n# Verified vLLM main commit anchor file\nVLLM_MAIN_VERIFIED_COMMIT_PATH = (\n    Path(__file__).resolve().parents[3]\n    / \".github\"\n    / \"vllm-main-verified.commit\"\n)\n\n# 读取逻辑过于复杂：先检查文件是否存在，再读取\n_VLLM_MAIN_VERIFIED_COMMIT = None\nif VLLM_MAIN_VERIFIED_COMMIT_PATH.exists():\n    _VLLM_MAIN_VERIFIED_COMMIT = VLLM_MAIN_VERIFIED_COMMIT_PATH.read_text(\n        encoding=\"utf-8\"\n    ).strip()\n\nmain_vllm_commit = _VLLM_MAIN_VERIFIED_COMMIT",
+      "context": "Please move `v0.20.2` into the same xx.commit, too\nAddressed in a7efb7c: moved the matched release tag into .github/vllm-release-verified.commit and updated the PR/full/scheduled E2E matrices to read "
+    },
+    "pattern": {
+      "file": "docs/source/conf.py:70",
+      "line": 53,
+      "code": "# 简化为一行读取，去除不必要的条件检查\n# 作者回复: \"have modified it already\"\nimport os\nfrom pathlib import Path\n\n# -- Project information -----------------------------------------------------\nproject = \"vLLM Ascend\"\nauthor = \"vLLM Ascend Authors\"\n\n# -- General configuration ---------------------------------------------------\nextensions = [\n    \"sphinx.ext.autodoc\",\n    \"sphinx.ext.intersphinx\",\n    \"sphinx.ext.napoleon\",\n]\n\n# Verified vLLM main commit anchor file\nVLLM_MAIN_VERIFIED_COMMIT_PATH = (\n    Path(__file__).resolve().parents[3]\n    / \".github\"\n    / \"vllm-main-verified.commit\"\n)\n\n# 简化为一行直接读取，文件必须存在\n_VLLM_MAIN_VERIFIED_COMMIT = VLLM_MAIN_VERIFIED_COMMIT_PATH.read_text(encoding=\"utf-8\").strip()\n\nmain_vllm_commit = _VLLM_MAIN_VERIFIED_COMMIT",
+      "context": "Please move `v0.20.2` into the same xx.commit, too\nAddressed in a7efb7c: moved the matched release tag into .github/vllm-release-verified.commit and updated the PR/full/scheduled E2E matrices to read "
+    },
+    "diff": {
+      "unified": "--- a/docs/source/conf.py:70\n+++ b/docs/source/conf.py:70\n@@ -1,6 +1,5 @@\n-# （根据评审意见推断）读取 verified commit 的逻辑过于复杂\n-# wangxiyuan 评论: \"just `_VLLM_MAIN_VERIFIED_COMMIT = \n-# VLLM_MAIN_VERIFIED_COMMIT_PATH.read_text(encoding=\\\"utf-8\\\").strip()` is enough IMO\"\n+# 简化为一行读取，去除不必要的条件检查\n+# 作者回复: \"have modified it already\"\n import os\n from pathlib import Path\n \n@@ -22,11 +21,7 @@\n     / \"vllm-main-verified.commit\"\n )\n \n-# 读取逻辑过于复杂：先检查文件是否存在，再读取\n-_VLLM_MAIN_VERIFIED_COMMIT = None\n-if VLLM_MAIN_VERIFIED_COMMIT_PATH.exists():\n-    _VLLM_MAIN_VERIFIED_COMMIT = VLLM_MAIN_VERIFIED_COMMIT_PATH.read_text(\n-        encoding=\"utf-8\"\n-    ).strip()\n+# 简化为一行直接读取，文件必须存在\n+_VLLM_MAIN_VERIFIED_COMMIT = VLLM_MAIN_VERIFIED_COMMIT_PATH.read_text(encoding=\"utf-8\").strip()\n \n main_vllm_commit = _VLLM_MAIN_VERIFIED_COMMIT\n",
+      "stats": "1 file changed, +4 lines, -9 lines",
+      "key_changes": [
+        "-# （根据评审意见推断）读取 verified commit 的逻辑过于复杂",
+        "-# wangxiyuan 评论: \"just `_VLLM_MAIN_VERIFIED_COMMIT = ",
+        "-# VLLM_MAIN_VERIFIED_COMMIT_PATH.read_text(encoding=\\\"utf-8\\\").strip()` is enough IMO\"",
+        "+# 简化为一行读取，去除不必要的条件检查",
+        "+# 作者回复: \"have modified it already\"",
+        "-# 读取逻辑过于复杂：先检查文件是否存在，再读取",
+        "-_VLLM_MAIN_VERIFIED_COMMIT = None",
+        "-if VLLM_MAIN_VERIFIED_COMMIT_PATH.exists():",
+        "-    _VLLM_MAIN_VERIFIED_COMMIT = VLLM_MAIN_VERIFIED_COMMIT_PATH.read_text(",
+        "-        encoding=\"utf-8\"",
+        "-    ).strip()",
+        "+# 简化为一行直接读取，文件必须存在",
+        "+_VLLM_MAIN_VERIFIED_COMMIT = VLLM_MAIN_VERIFIED_COMMIT_PATH.read_text(encoding=\"utf-8\").strip()"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

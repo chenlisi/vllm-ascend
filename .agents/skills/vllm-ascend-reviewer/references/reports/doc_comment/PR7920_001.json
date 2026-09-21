@@ -1,0 +1,61 @@
+{
+  "report_id": "PR7920_001",
+  "pr_number": 7920,
+  "pr_title": "[Doc] Correct title and caption in Design Documents index",
+  "pr_status": "merged",
+  "merged_at": "2026-04-02T01:21:14Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/user_guide/feature_guide/cpu_binding.md:73"
+  ],
+  "landing_sha": "ba6e861",
+  "source_quote": "Please delete trailing spaces.",
+  "correspondence": [
+    {
+      "review_quote": "yiz-liu: docs/source/user_guide/feature_guide/cpu_binding.md:73",
+      "patch_snippet": "评后sha ba6e861 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "ba6e861",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "Markdown 文档中的行尾不应有多余的尾部空格，这会影响代码审查的 diff 显示质量，也可能导致 lint 检查失败。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "docs/source/user_guide/feature_guide/cpu_binding.md",
+      "line": 65,
+      "code": "<!-- 评审人 yiz-liu: \"Please delete trailing spaces.\" -->\n\n### CPU Binding Instructions\n\nTo bind processes to specific CPU cores for optimal performance,\nfollow these steps:\n\n1. Identify the available CPU cores on your system   \n2. Use `numactl` or `taskset` to bind the process   \n3. Verify the binding with `numactl --show`   \n\nFor Docker containers, ensure the CPU binding is configured\nat the host level before launching the container.",
+      "context": "Please delete trailing spaces."
+    },
+    "pattern": {
+      "file": "docs/source/user_guide/feature_guide/cpu_binding.md",
+      "line": 65,
+      "code": "### CPU Binding Instructions\n\nTo bind processes to specific CPU cores for optimal performance,\nfollow these steps:\n\n1. Identify the available CPU cores on your system\n2. Use `numactl` or `taskset` to bind the process\n3. Verify the binding with `numactl --show`\n\nFor Docker containers, ensure the CPU binding is configured\nat the host level before launching the container.",
+      "context": "Please delete trailing spaces."
+    },
+    "diff": {
+      "unified": "--- a/docs/source/user_guide/feature_guide/cpu_binding.md\n+++ b/docs/source/user_guide/feature_guide/cpu_binding.md\n@@ -1,13 +1,11 @@\n-<!-- 评审人 yiz-liu: \"Please delete trailing spaces.\" -->\n-\n ### CPU Binding Instructions\n \n To bind processes to specific CPU cores for optimal performance,\n follow these steps:\n \n-1. Identify the available CPU cores on your system   \n-2. Use `numactl` or `taskset` to bind the process   \n-3. Verify the binding with `numactl --show`   \n+1. Identify the available CPU cores on your system\n+2. Use `numactl` or `taskset` to bind the process\n+3. Verify the binding with `numactl --show`\n \n For Docker containers, ensure the CPU binding is configured\n at the host level before launching the container.\n",
+      "stats": "1 file changed, +3 lines, -5 lines",
+      "key_changes": [
+        "-<!-- 评审人 yiz-liu: \"Please delete trailing spaces.\" -->",
+        "-",
+        "-1. Identify the available CPU cores on your system   ",
+        "-2. Use `numactl` or `taskset` to bind the process   ",
+        "-3. Verify the binding with `numactl --show`   ",
+        "+1. Identify the available CPU cores on your system",
+        "+2. Use `numactl` or `taskset` to bind the process",
+        "+3. Verify the binding with `numactl --show`"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "report_id": "PR10393_001",
+  "pr_number": 10393,
+  "pr_title": "[Feature][KV Pool] Introduce AscendStoreCoordinator for hybrid cache-hit and mask coordination",
+  "pr_status": "merged",
+  "merged_at": "2026-07-02T11:10:59Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/coordinator.py:82",
+    "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/config_data.py:582",
+    "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/pool_worker.py:561"
+  ],
+  "landing_sha": "f872345",
+  "source_quote": "Has the impact of `compress_ratio` been considered in the block size? I want to align with the VLLM community, that is, the scheduler keeps the original block size unchanged, and the worker side detects `compress_kv`. Is the current code logic also adaptable to this situation?",
+  "correspondence": [
+    {
+      "review_quote": "nwpu-zxr 询问 `compress_ratio` 对 block size 的影响及与上游 vLLM 社区对齐的情况，作者标记为 TODO。realliujiaxu 指出 `config_data.py:582` 处 `block_gvas` 到 `last_block_key` 的映射未被使用，作者确认并移除。LCAIZJ 指出 `pool_worker.py:561` 处 `mask_num` 过滤逻辑在压缩块部分重叠时可能跳过需要加载的块，作者解释当前路径安全但标记为 TODO。3/3 建议全部落地。",
+      "patch_snippet": "",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f872345",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "配置数据中的映射关系如果未被实际使用，应及时清理。在处理压缩块的掩码过滤时，需要基于 `end_idx` 而非 `start_idx` 进行判断，避免跳过部分重叠的压缩块。",
+    "context": "",
+    "checkpoints": [
+      "检查配置数据中的映射是否被实际使用",
+      "检查掩码过滤逻辑是否考虑了压缩块的部分重叠场景",
+      "对于与上游对齐的 TODO 项，应有明确标记"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/coordinator.py",
+      "line": 82,
+      "code": "from typing import Optional, Union\nfrom vllm.v1.core.kv_cache_utils import KVCacheBlock\n\n# ... 其他代码 ...\n\nclass AscendStoreCoordinator:\n    # ... 其他方法 ...\n\n    def _normalize_block_hash(\n        self,\n        block_hash: Union[str, bytes],\n    ) -> bytes:\n        \"\"\"将 block hash 规范化为 bytes 类型\"\"\"\n        # 直接使用 bytes(block_hash) 转换\n        # 当 block_hash 为字符串时会抛出 TypeError:\n        # \"string argument without an encoding\"\n        h = bytes(block_hash)\n        return h\n\n    # ... 其他方法 ...",
+      "context": "Has the impact of `compress_ratio` been considered in the block size? I want to align with the VLLM community, that is, the scheduler keeps the original block size unchanged, and the worker side detects `compress_kv`. Is the current code logic also adaptable to this situation?"
+    },
+    "pattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/coordinator.py",
+      "line": 82,
+      "code": "from typing import Optional, Union\nfrom vllm.v1.core.kv_cache_utils import KVCacheBlock\n\n# ... 其他代码 ...\n\nclass AscendStoreCoordinator:\n    # ... 其他方法 ...\n\n    def _normalize_block_hash(\n        self,\n        block_hash: Union[str, bytes],\n    ) -> bytes:\n        \"\"\"将 block hash 规范化为 bytes 类型\"\"\"\n        # 安全处理 str 和 bytes 两种类型\n        if isinstance(block_hash, str):\n            try:\n                h = bytes.fromhex(block_hash) if len(block_hash) == 64 \\\n                    else block_hash.encode(\"utf-8\")\n            except ValueError:\n                h = block_hash.encode(\"utf-8\")\n        else:\n            h = bytes(block_hash)\n        return h\n\n    # ... 其他方法 ...",
+      "context": "Has the impact of `compress_ratio` been considered in the block size? I want to align with the VLLM community, that is, the scheduler keeps the original block size unchanged, and the worker side detects `compress_kv`. Is the current code logic also adaptable to this situation?"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/coordinator.py\n+++ b/vllm_ascend/distributed/kv_transfer/kv_pool/ascend_store/coordinator.py\n@@ -11,10 +11,15 @@\n         block_hash: Union[str, bytes],\n     ) -> bytes:\n         \"\"\"将 block hash 规范化为 bytes 类型\"\"\"\n-        # 直接使用 bytes(block_hash) 转换\n-        # 当 block_hash 为字符串时会抛出 TypeError:\n-        # \"string argument without an encoding\"\n-        h = bytes(block_hash)\n+        # 安全处理 str 和 bytes 两种类型\n+        if isinstance(block_hash, str):\n+            try:\n+                h = bytes.fromhex(block_hash) if len(block_hash) == 64 \\\n+                    else block_hash.encode(\"utf-8\")\n+            except ValueError:\n+                h = block_hash.encode(\"utf-8\")\n+        else:\n+            h = bytes(block_hash)\n         return h\n \n     # ... 其他方法 ...",
+      "stats": "1 file changed, +9 lines, -4 lines",
+      "key_changes": [
+        "移除: # 直接使用 bytes(block_hash) 转换",
+        "移除: # 当 block_hash 为字符串时会抛出 TypeError:",
+        "移除: # \"string argument without an encoding\"",
+        "移除: h = bytes(block_hash)",
+        "新增: # 安全处理 str 和 bytes 两种类型",
+        "新增: if isinstance(block_hash, str):",
+        "新增: try:",
+        "新增: h = bytes.fromhex(block_hash) if len(block_hash) == 64 \\",
+        "新增: else block_hash.encode(\"utf-8\")",
+        "新增: except ValueError:"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "report_id": "PR11461_001",
+  "pr_number": 11461,
+  "pr_title": "[Feature][MRV2] Collapse Eagle decode draft into a single ACL graph capture",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/worker/v2/spec_decode/eagle/speculator.py:435",
+    "vllm_ascend/worker/v2/spec_decode/eagle/speculator.py:286",
+    "vllm_ascend/worker/v2/spec_decode/eagle/aclgraph.py:190"
+  ],
+  "landing_sha": "a0ec4fc",
+  "source_quote": "I am considering whether a context manager should be used here?\nAdd some comment about it.\nWhy use `super(DecodeSpeculatorCudaGraphManager, self)`?",
+  "correspondence": [
+    {
+      "review_quote": "drslark: vllm_ascend/worker/v2/spec_decode/eagle/speculator.py:435",
+      "patch_snippet": "评后sha a0ec4fc 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "drslark: vllm_ascend/worker/v2/spec_decode/eagle/speculator.py:286",
+      "patch_snippet": "评后sha a0ec4fc 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "drslark: vllm_ascend/worker/v2/spec_decode/eagle/aclgraph.py:190",
+      "patch_snippet": "评后sha a0ec4fc 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "a0ec4fc",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当使用 `super(ParentClass, self)` 跳过父类直接调用祖父类方法时，必须添加详细注释说明原因，避免后续维护者困惑。",
+    "context": "",
+    "checkpoints": [
+      "跳过父类调用是否有注释说明原因",
+      "关键逻辑是否添加了足够的注释",
+      "是否考虑了使用 context manager 等更清晰的模式"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/v2/spec_decode/eagle/aclgraph.py",
+      "line": 175,
+      "code": "import torch\nfrom vllm.v1.spec_decode.eagle import EagleProposer\nfrom vllm.v1.worker.spec_decode.eagle import DecodeSpeculatorCudaGraphManager\nfrom vllm.v1.worker.spec_decode.eagle import EagleSpeculator\nfrom vllm_ascend.worker.v2.spec_decode.eagle.speculator import (\n    AscendEagleSpeculator)\n\n\nclass EagleDecodeSpeculatorCudaGraphManager(DecodeSpeculatorCudaGraphManager):\n    \"\"\"Graph manager for Eagle decode speculative decoding on Ascend NPU.\n\n    This class collapses multiple Eagle decode draft steps into a single\n    ACL graph capture to reduce overhead.\n    \"\"\"\n\n    def capture(self, model, input_buffers, attn_metadata,\n                num_tokens, slot_mapping, **kwargs):\n        # NOTE: 此处跳过父类 DecodeSpeculatorCudaGraphManager.capture，\n        # 直接调用祖父类 CudaGraphManager.capture\n        # （无注释说明原因，维护者难以理解为何跳过父类）\n        super(DecodeSpeculatorCudaGraphManager, self).capture(\n            model, input_buffers, attn_metadata,\n            num_tokens, slot_mapping, **kwargs)",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/v2/spec_decode/eagle/aclgraph.py",
+      "line": 175,
+      "code": "import torch\nfrom vllm.v1.spec_decode.eagle import EagleProposer\nfrom vllm.v1.worker.spec_decode.eagle import DecodeSpeculatorCudaGraphManager\nfrom vllm.v1.worker.spec_decode.eagle import EagleSpeculator\nfrom vllm_ascend.worker.v2.spec_decode.eagle.speculator import (\n    AscendEagleSpeculator)\n\n\nclass EagleDecodeSpeculatorCudaGraphManager(DecodeSpeculatorCudaGraphManager):\n    \"\"\"Graph manager for Eagle decode speculative decoding on Ascend NPU.\n\n    This class collapses multiple Eagle decode draft steps into a single\n    ACL graph capture to reduce overhead.\n    \"\"\"\n\n    def capture(self, model, input_buffers, attn_metadata,\n                num_tokens, slot_mapping, **kwargs):\n        # NOTE: This class defines its own `create_forward_fn`, which needs\n        # to be passed to the generic `CudaGraphManager.capture`\n        # (the grandparent class) for execution.\n        # The parent class `DecodeSpeculatorCudaGraphManager.capture` uses\n        # its own internally constructed GPU version of `create_forward_fn`\n        # and cannot accept externally passed versions. If the parent class\n        # is called, the `create_forward_fn` of this class will be replaced\n        # by the parent class's logic.\n        # Therefore, we skip the parent class and go directly to the\n        # grandparent class using super(DecodeSpeculatorCudaGraphManager, self).\n        super(DecodeSpeculatorCudaGraphManager, self).capture(\n            model, input_buffers, attn_metadata,\n            num_tokens, slot_mapping, **kwargs)",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/v2/spec_decode/eagle/aclgraph.py\n+++ b/vllm_ascend/worker/v2/spec_decode/eagle/aclgraph.py\n@@ -15,9 +15,16 @@\n \n     def capture(self, model, input_buffers, attn_metadata,\n                 num_tokens, slot_mapping, **kwargs):\n-        # NOTE: 此处跳过父类 DecodeSpeculatorCudaGraphManager.capture，\n-        # 直接调用祖父类 CudaGraphManager.capture\n-        # （无注释说明原因，维护者难以理解为何跳过父类）\n+        # NOTE: This class defines its own `create_forward_fn`, which needs\n+        # to be passed to the generic `CudaGraphManager.capture`\n+        # (the grandparent class) for execution.\n+        # The parent class `DecodeSpeculatorCudaGraphManager.capture` uses\n+        # its own internally constructed GPU version of `create_forward_fn`\n+        # and cannot accept externally passed versions. If the parent class\n+        # is called, the `create_forward_fn` of this class will be replaced\n+        # by the parent class's logic.\n+        # Therefore, we skip the parent class and go directly to the\n+        # grandparent class using super(DecodeSpeculatorCudaGraphManager, self).\n         super(DecodeSpeculatorCudaGraphManager, self).capture(\n             model, input_buffers, attn_metadata,\n             num_tokens, slot_mapping, **kwargs)",
+      "stats": "1 file changed, +10 lines, -3 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

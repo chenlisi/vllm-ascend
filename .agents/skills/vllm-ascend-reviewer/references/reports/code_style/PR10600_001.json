@@ -1,0 +1,63 @@
+{
+  "report_id": "PR10600_001",
+  "pr_number": 10600,
+  "pr_title": "[Doc][Misc] Prepare v0.22.1rc1 release notes",
+  "pr_status": "merged",
+  "merged_at": "2026-06-30T13:40:17Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/user_guide/release_notes.md:15",
+    "docs/source/community/versioning_policy.md:77",
+    "docs/source/user_guide/release_notes.md:18"
+  ],
+  "landing_sha": "43aa97c",
+  "source_quote": "In the category of parallel speculation methods, two additional methods, P-eagle and PARD, can be added. The code for these two methods has already been integrated, and the methods have been fully implemented after passing Q2 testing.\n```suggestion\n| 2026.06.29 | Release candidates, v0.22.1rc1            |\n```\nminimax m2 series model does not supported C8 in PD disaggregated now，shall we highlight this？",
+  "correspondence": [
+    {
+      "review_quote": "lilinsiman 建议在并行推测方法分类中补充 P-eagle 和 PARD 两种已集成的方法。Yikun 建议在版本策略文档中添加 v0.22.1rc1 的发布记录。jyoung6652 指出 minimax m2 系列模型在 PD 分离场景下不支持 C8，建议在 release notes 中突出说明该限制。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "43aa97c",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "Release notes 应完整列出该版本中所有已集成并通过测试的功能，不应遗漏已合入的代码。对于并行推测等分类下的多种方法，应逐一列出。",
+    "context": "",
+    "checkpoints": [
+      "检查 release notes 是否遗漏了已集成的功能",
+      "确认所有通过 Q2 测试的功能是否都已记录",
+      "对于已知限制（如 PD 场景不支持 C8），应在文档中明确标注"
+    ],
+    "antipattern": {
+      "file": "docs/source/user_guide/release_notes.md",
+      "line": 15,
+      "code": "<!-- 文件: docs/source/user_guide/release_notes.md -->\n<!-- 行号: 10-25 -->\n## v0.22.1rc1 - 2026.06.30\n\n### New Features\n\n- [Feature] Added support for EPLB (Expert-level Load Balancing) for MoE models.\n- [Feature] Added multi-token prediction (MTP) support for DeepSeek V3.\n- [Feature] Added support for parallel speculation methods.\n- [Feature] Added SSD support for multiple DP ranks on the same machine.\n- [Experimental] Added SSD support for multiple DP ranks on the same machine\n  to avoid local-rank path collisions in Mooncake offload directories.\n  [#10477](https://github.com/vllm-project/vllm-ascend/pull/10477)\n\n### Bug Fixes\n\n- [Bugfix] Fixed KV cache pool memory leak issue.\n- [Bugfix] Fixed precision issue with Qwen3.x PD + MTP.",
+      "context": "In the category of parallel speculation methods, two additional methods, P-eagle and PARD, can be added. The code for these two methods has already been integrated, and the methods have been fully implemented after passing Q2 testing."
+    },
+    "pattern": {
+      "file": "docs/source/user_guide/release_notes.md",
+      "line": 15,
+      "code": "<!-- 文件: docs/source/user_guide/release_notes.md -->\n<!-- 行号: 10-25 -->\n## v0.22.1rc1 - 2026.06.30\n\n### New Features\n\n- [Feature] Added support for EPLB (Expert-level Load Balancing) for MoE models.\n- [Feature] Added multi-token prediction (MTP) support for DeepSeek V3.\n- [Feature] Added support for parallel speculation methods: P-eagle and PARD.\n  The code for these two methods has already been integrated, and the methods\n  have been fully implemented after passing Q2 testing.\n- [Feature] Added SSD support for multiple DP ranks on the same machine.\n- [Experimental] Added SSD support for multiple DP ranks on the same machine\n  to avoid local-rank path collisions in Mooncake offload directories.\n  [#10477](https://github.com/vllm-project/vllm-ascend/pull/10477)\n\n### Bug Fixes\n\n- [Bugfix] Fixed KV cache pool memory leak issue.\n- [Bugfix] Fixed precision issue with Qwen3.x PD + MTP.",
+      "context": "In the category of parallel speculation methods, two additional methods, P-eagle and PARD, can be added. The code for these two methods has already been integrated, and the methods have been fully implemented after passing Q2 testing."
+    },
+    "diff": {
+      "unified": "--- a/docs/source/user_guide/release_notes.md\n+++ b/docs/source/user_guide/release_notes.md\n@@ -6,7 +6,9 @@\n \n - [Feature] Added support for EPLB (Expert-level Load Balancing) for MoE models.\n - [Feature] Added multi-token prediction (MTP) support for DeepSeek V3.\n-- [Feature] Added support for parallel speculation methods.\n+- [Feature] Added support for parallel speculation methods: P-eagle and PARD.\n+  The code for these two methods has already been integrated, and the methods\n+  have been fully implemented after passing Q2 testing.\n - [Feature] Added SSD support for multiple DP ranks on the same machine.\n - [Experimental] Added SSD support for multiple DP ranks on the same machine\n   to avoid local-rank path collisions in Mooncake offload directories.",
+      "stats": "1 file changed, +3 lines, -1 lines",
+      "key_changes": [
+        "移除: - [Feature] Added support for parallel speculation methods.",
+        "新增: - [Feature] Added support for parallel speculation methods: P-eagle and PARD.",
+        "新增: The code for these two methods has already been integrated, and the methods",
+        "新增: have been fully implemented after passing Q2 testing."
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

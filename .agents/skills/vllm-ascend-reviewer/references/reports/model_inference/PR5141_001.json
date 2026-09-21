@@ -1,0 +1,62 @@
+{
+  "report_id": "PR5141_001",
+  "pr_number": 5141,
+  "pr_title": "[e2e] add pcp e2e",
+  "pr_status": "merged",
+  "merged_at": "2025-12-20T08:56:47Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/e2e/multicard/long_sequence/test_accuracy.py:96",
+    "tests/e2e/multicard/long_sequence/test_accuracy.py:93",
+    "tests/e2e/multicard/long_sequence/test_accuracy.py:20"
+  ],
+  "landing_sha": "22ad80c",
+  "source_quote": "@weiguihua2 I think the comment form gemini is reasonable, let's avoid redundant code",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 指出应避免冗余代码、使用 `runner.generate_greedy` 简化逻辑，并修正了错误的 import 路径。作者通过 commit `22ad80c` 等修改，3/3 建议全部落地。",
+      "patch_snippet": "commit `22ad80c`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "22ad80c",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "端到端测试中应使用 VllmRunner 提供的便捷方法（如 `generate_greedy`），避免手动创建 sampling_params 和 output_list 等冗余代码。",
+    "context": "",
+    "checkpoints": [
+      "测试代码是否使用了 runner 提供的便捷方法",
+      "是否存在可简化的冗余代码",
+      "import 路径是否正确"
+    ],
+    "antipattern": {
+      "file": "tests/e2e/multicard/long_sequence/test_accuracy.py",
+      "line": 0,
+      "code": "def test_pcp_accuracy(model):\n    prompts = [\"Hello, world!\"] * 4\n    sampling_params = SamplingParams(\n        temperature=0.0,\n        max_tokens=128,\n    )\n\n    common_kwargs = {\n        \"max_model_len\": 1024,\n        \"enforce_eager\": True,\n    }\n\n    with VllmRunner(model, **common_kwargs, **cp_kwargs) as runner:\n        outputs = runner.model.generate(prompts, sampling_params)\n        output_list = [(o.outputs[0].index, o.outputs[0].text) for o in outputs]\n\n    with VllmRunner(model, **common_kwargs, **tp_kwargs) as runner:\n        outputs = runner.model.generate(prompts, sampling_params)\n        output_list = [(o.outputs[0].index, o.outputs[0].text) for o in outputs]",
+      "context": "@weiguihua2 I think the comment form gemini is reasonable, let's avoid redundant code"
+    },
+    "pattern": {
+      "file": "tests/e2e/multicard/long_sequence/test_accuracy.py",
+      "line": 0,
+      "code": "def test_pcp_accuracy(model):\n    prompts = [\"Hello, world!\"] * 4\n\n    common_kwargs = {\n        \"max_model_len\": 1024,\n        \"enforce_eager\": True,\n    }\n\n    with VllmRunner(model, **common_kwargs, **cp_kwargs) as runner:\n        vllm_context_parallel_outputs = runner.generate_greedy(prompts)\n\n    with VllmRunner(model, **common_kwargs, **tp_kwargs) as runner:\n        vllm_eager_outputs = runner.generate_greedy(prompts)",
+      "context": "@weiguihua2 I think the comment form gemini is reasonable, let's avoid redundant code"
+    },
+    "diff": {
+      "unified": "--- a/tests/e2e/multicard/long_sequence/test_accuracy.py\n+++ b/tests/e2e/multicard/long_sequence/test_accuracy.py\n@@ -1,19 +1,13 @@\n def test_pcp_accuracy(model):\n     prompts = [\"Hello, world!\"] * 4\n-    sampling_params = SamplingParams(\n-        temperature=0.0,\n-        max_tokens=128,\n-    )\n \n     common_kwargs = {\n         \"max_model_len\": 1024,\n@@ -1,19 +1,13 @@\n     }\n \n     with VllmRunner(model, **common_kwargs, **cp_kwargs) as runner:\n-        outputs = runner.model.generate(prompts, sampling_params)\n-        output_list = [(o.outputs[0].index, o.outputs[0].text) for o in outputs]\n+        vllm_context_parallel_outputs = runner.generate_greedy(prompts)\n \n     with VllmRunner(model, **common_kwargs, **tp_kwargs) as runner:\n-        outputs = runner.model.generate(prompts, sampling_params)\n-        output_list = [(o.outputs[0].index, o.outputs[0].text) for o in outputs]\n+        vllm_eager_outputs = runner.generate_greedy(prompts)",
+      "stats": "1 file changed, +2 lines, -8 lines",
+      "key_changes": [
+        "删除了第 3-6 行的代码",
+        "修改了第 14-15 行的代码",
+        "修改了第 18-19 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

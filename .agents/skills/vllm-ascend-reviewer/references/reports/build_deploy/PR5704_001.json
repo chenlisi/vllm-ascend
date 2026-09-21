@@ -1,0 +1,60 @@
+{
+  "report_id": "PR5704_001",
+  "pr_number": 5704,
+  "pr_title": "[Refactor] Replace npu_ring_mla with FIA in MLA prefill",
+  "pr_status": "merged",
+  "merged_at": "2026-03-13T07:41:12Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/mla_v1.py:987"
+  ],
+  "landing_sha": "ccbb86c",
+  "source_quote": "Why add this? This parameter can be added in AscendMlaMetadataBuilder like decode_metdata.",
+  "correspondence": [
+    {
+      "review_quote": "weijinqian0 指出某个参数不应该直接添加在 prefill 路径中，而应像 decode_metadata 一样在 AscendMlaMetadataBuilder 中统一添加。作者通过 commit `ccbb86c` 重构了 MLA prefill 注意力路径，用 FIA 替换了 npu_ring_mla，1/1 建议全部落地。",
+      "patch_snippet": "commit `ccbb86c`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "ccbb86c",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "prefill 和 decode 的 metadata 构建应遵循相同的模式和位置。如果某个参数在 decode 路径中通过 Builder 类添加，prefill 路径也应采用相同方式。",
+    "context": "",
+    "checkpoints": [
+      "prefill 和 decode 的 metadata 构建逻辑应保持一致",
+      "新增参数应放在统一的 Builder 类中处理",
+      "避免在不同路径中使用不同的参数添加方式"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/mla_v1.py",
+      "line": 980,
+      "code": "class AscendMlaMetadataBuilder:\n    \"\"\"Build metadata for MLA attention.\"\"\"\n\n    def __init__(self, ...):\n        self.some_param = ...\n\n    def build_prefill_metadata(self, prefill_meta):\n        \"\"\"Build prefill metadata - 参数直接在此处添加，\n        与 decode_metadata 构建方式不一致\"\"\"\n        extra_param = some_value  # 直接在方法中添加参数\n        attn_output = torch_npu.npu_ring_mla(\n            query, key, value, attn_mask, ...)\n        return metadata\n\n    def build_decode_metadata(self, decode_meta):\n        \"\"\"Build decode metadata - 参数在 builder 中统一处理\"\"\"\n        ...",
+      "context": "Why add this? This parameter can be added in AscendMlaMetadataBuilder like decode_metdata."
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/mla_v1.py",
+      "line": 980,
+      "code": "class AscendMlaMetadataBuilder:\n    \"\"\"Build metadata for MLA attention.\"\"\"\n\n    def __init__(self, ...):\n        self.some_param = ...\n        self.extra_param = some_value  # 统一在此处添加\n\n    def build_prefill_metadata(self, prefill_meta):\n        \"\"\"Build prefill metadata - 使用 FIA 替换 npu_ring_mla，\n        参数已在 __init__ 中统一处理\"\"\"\n        attn_output = torch_npu.npu_fused_infer_attention_score(\n            query, key, value, ...)\n        return metadata\n\n    def build_decode_metadata(self, decode_meta):\n        \"\"\"Build decode metadata - 与 prefill 路径保持一致\"\"\"\n        ...",
+      "context": "Why add this? This parameter can be added in AscendMlaMetadataBuilder like decode_metdata."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/mla_v1.py\n+++ b/vllm_ascend/attention/mla_v1.py\n@@ -980,17 +980,17 @@\n \n     def __init__(self, ...):\n         self.some_param = ...\n+        self.extra_param = some_value  # 统一在此处添加\n \n     def build_prefill_metadata(self, prefill_meta):\n-        \"\"\"Build prefill metadata - 参数直接在此处添加，\n-        与 decode_metadata 构建方式不一致\"\"\"\n-        extra_param = some_value  # 直接在方法中添加参数\n-        attn_output = torch_npu.npu_ring_mla(\n-            query, key, value, attn_mask, ...)\n+        \"\"\"Build prefill metadata - 使用 FIA 替换 npu_ring_mla，\n+        参数已在 __init__ 中统一处理\"\"\"\n+        attn_output = torch_npu.npu_fused_infer_attention_score(\n+            query, key, value, ...)\n         return metadata\n \n     def build_decode_metadata(self, decode_meta):\n-        \"\"\"Build decode metadata - 参数在 builder 中统一处理\"\"\"\n+        \"\"\"Build decode metadata - 与 prefill 路径保持一致\"\"\"\n         ...",
+      "stats": "1 file changed, +6 lines, -6 lines",
+      "key_changes": [
+        "在第 6-6 行新增了代码",
+        "修改了第 8-12 行的代码",
+        "修改了第 16-16 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

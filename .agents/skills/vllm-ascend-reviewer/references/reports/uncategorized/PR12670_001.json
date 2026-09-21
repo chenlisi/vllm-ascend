@@ -1,0 +1,45 @@
+{
+  "report_id": "PR12670_001",
+  "pr_number": 0,
+  "pr_title": "",
+  "pr_status": "unknown",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "",
+  "source_quote": "",
+  "correspondence": [],
+  "verification": {
+    "merged": false,
+    "modified_commit": "",
+    "approvals": 0
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "docs/source/user_guide/feature_guide/kv_pool.md",
+      "line": 0,
+      "code": "### Enable Memcache SSD Cache\n\n* Requires Memcache installed with the UBS IO runtime.\n\n#### Configuration\n\nStarting from the `mmc-local.conf` configured in [Configuring the memcache Config File](#configuring-the-memcache-config-file), add the following SSD cache fields:",
+      "context": "修改前代码 (markdown)"
+    },
+    "pattern": {
+      "file": "docs/source/user_guide/feature_guide/kv_pool.md",
+      "line": 0,
+      "code": "### Enable Memcache SSD Cache\n\n* Requires `memcache_hybrid >= 1.2.0`.\n* Requires UBS IO. Starting from `memcache_hybrid 1.2.0`, UBS IO is built into Memcache and does not need to be installed separately.\n\n#### Configuration\n\nStarting from the `mmc-local.conf` configured in [Configuring the memcache Config File](#configuring-the-memcache-config-file), add the following SSD cache fields:",
+      "context": "修改后代码 (markdown)"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/user_guide/feature_guide/kv_pool.md\n+++ b/docs/source/user_guide/feature_guide/kv_pool.md\n@@ -1,6 +1,7 @@\n ### Enable Memcache SSD Cache\n \n-* Requires Memcache installed with the UBS IO runtime.\n+* Requires `memcache_hybrid >= 1.2.0`.\n+* Requires UBS IO. Starting from `memcache_hybrid 1.2.0`, UBS IO is built into Memcache and does not need to be installed separately.\n \n #### Configuration\n ",
+      "stats": "1 file changed, +2 lines, -1 lines",
+      "key_changes": [
+        "修改代码逻辑"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

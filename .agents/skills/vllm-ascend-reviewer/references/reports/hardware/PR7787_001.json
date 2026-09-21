@@ -1,0 +1,61 @@
+{
+  "report_id": "PR7787_001",
+  "pr_number": 7787,
+  "pr_title": "[CI] Main2main upgrade to 0324",
+  "pr_status": "merged",
+  "merged_at": "2026-04-03T09:10:55Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/model_runner_v1.py:852"
+  ],
+  "landing_sha": "e56fd9c",
+  "source_quote": "plz use optimistic_seq_lens_cpu instead",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao: vllm_ascend/worker/model_runner_v1.py:852",
+      "patch_snippet": "评后sha e56fd9c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "e56fd9c",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当需要 CPU 端的序列长度等数据时，应使用预计算的 `optimistic_seq_lens_cpu` 等字段，而不是在运行时进行 device to host 的同步拷贝操作。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 835,
+      "code": "import torch\nfrom vllm.v1.worker.gpu_model_runner import GPUModelRunner\n\nclass NPUModelRunner(GPUModelRunner):\n    \"\"\"NPU 平台的 ModelRunner 实现\"\"\"\n\n    def __init__(self, vllm_config, device):\n        super().__init__(vllm_config, device)\n        # ... 初始化逻辑 ...\n\n    def _prepare_inputs(self, scheduler_output):\n        \"\"\"准备输入数据，包含序列长度计算\"\"\"\n        num_reqs = self.input_batch.num_reqs\n        num_scheduled_tokens = self.input_batch.num_scheduled_tokens\n\n        # 计算序列长度\n        seq_lens = self.seq_lens[:num_reqs]\n        num_computed_tokens = self.input_batch.num_computed_tokens_cpu[:num_reqs]\n        num_computed_tokens_tensor = torch.tensor(\n            num_computed_tokens, dtype=torch.int32, device=self.device)\n\n        # ❌ 运行时的 device to host 同步操作，性能开销大\n        seqs_len = seq_lens.to(device=\"cpu\")\n\n        # 使用 seqs_len 进行后续处理\n        cumsum = torch.cumsum(seqs_len, dim=0)\n        # ... 后续输入准备逻辑 ...\n        return model_input\n\n    def _pool(self, scheduler_output):\n        \"\"\"池化处理，需要 optimistic_seq_lens_cpu\"\"\"\n        # 上游 PR #32951 新增 optimistic_seq_lens_cpu 属性\n        # 用于判断请求是否完成，但 NPUModelRunner 覆写后未计算该值\n        ...",
+      "context": "plz use optimistic_seq_lens_cpu instead"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 835,
+      "code": "import torch\nfrom vllm.v1.worker.gpu_model_runner import GPUModelRunner\n\nclass NPUModelRunner(GPUModelRunner):\n    \"\"\"NPU 平台的 ModelRunner 实现\"\"\"\n\n    def __init__(self, vllm_config, device):\n        super().__init__(vllm_config, device)\n        # ... 初始化逻辑 ...\n\n    def _prepare_inputs(self, scheduler_output):\n        \"\"\"准备输入数据，包含序列长度计算\"\"\"\n        num_reqs = self.input_batch.num_reqs\n        num_scheduled_tokens = self.input_batch.num_scheduled_tokens\n\n        # 计算序列长度\n        seq_lens = self.seq_lens[:num_reqs]\n        num_computed_tokens = self.input_batch.num_computed_tokens_cpu[:num_reqs]\n        num_computed_tokens_tensor = torch.tensor(\n            num_computed_tokens, dtype=torch.int32, device=self.device)\n\n        # ✅ 使用预计算的 optimistic_seq_lens_cpu 避免 device to host 同步\n        # optimistic_seq_lens_cpu = num_computed_tokens + num_scheduled_tokens\n        # 已在父类中计算，直接使用即可\n        seqs_len = self.optimistic_seq_lens_cpu\n\n        # 使用 seqs_len 进行后续处理\n        cumsum = torch.cumsum(seqs_len, dim=0)\n        # ... 后续输入准备逻辑 ...\n        return model_input\n\n    def _pool(self, scheduler_output):\n        \"\"\"池化处理，需要 optimistic_seq_lens_cpu\"\"\"\n        # 上游 PR #32951 新增 optimistic_seq_lens_cpu 属性\n        # 现在 _prepare_inputs 中正确计算了该值\n        ...",
+      "context": "plz use optimistic_seq_lens_cpu instead"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/model_runner_v1.py\n+++ b/vllm_ascend/worker/model_runner_v1.py\n@@ -19,8 +19,10 @@\n         num_computed_tokens_tensor = torch.tensor(\n             num_computed_tokens, dtype=torch.int32, device=self.device)\n \n-        # ❌ 运行时的 device to host 同步操作，性能开销大\n-        seqs_len = seq_lens.to(device=\"cpu\")\n+        # ✅ 使用预计算的 optimistic_seq_lens_cpu 避免 device to host 同步\n+        # optimistic_seq_lens_cpu = num_computed_tokens + num_scheduled_tokens\n+        # 已在父类中计算，直接使用即可\n+        seqs_len = self.optimistic_seq_lens_cpu\n \n         # 使用 seqs_len 进行后续处理\n         cumsum = torch.cumsum(seqs_len, dim=0)\n@@ -30,5 +32,5 @@\n     def _pool(self, scheduler_output):\n         \"\"\"池化处理，需要 optimistic_seq_lens_cpu\"\"\"\n         # 上游 PR #32951 新增 optimistic_seq_lens_cpu 属性\n-        # 用于判断请求是否完成，但 NPUModelRunner 覆写后未计算该值\n+        # 现在 _prepare_inputs 中正确计算了该值\n         ...\n",
+      "stats": "1 file changed, +5 lines, -3 lines",
+      "key_changes": [
+        "-        # ❌ 运行时的 device to host 同步操作，性能开销大",
+        "-        seqs_len = seq_lens.to(device=\"cpu\")",
+        "+        # ✅ 使用预计算的 optimistic_seq_lens_cpu 避免 device to host 同步",
+        "+        # optimistic_seq_lens_cpu = num_computed_tokens + num_scheduled_tokens",
+        "+        # 已在父类中计算，直接使用即可",
+        "+        seqs_len = self.optimistic_seq_lens_cpu",
+        "-        # 用于判断请求是否完成，但 NPUModelRunner 覆写后未计算该值",
+        "+        # 现在 _prepare_inputs 中正确计算了该值"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

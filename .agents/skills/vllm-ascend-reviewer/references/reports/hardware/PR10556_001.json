@@ -1,0 +1,67 @@
+{
+  "report_id": "PR10556_001",
+  "pr_number": 10556,
+  "pr_title": "[Feature] Support Step3.5/3.7 Flash for Ascend950",
+  "pr_status": "merged",
+  "merged_at": "2026-07-13T06:48:18Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/device/device_op.py:213"
+  ],
+  "landing_sha": "a617637",
+  "source_quote": "plz move this to moe_mlp.",
+  "correspondence": [
+    {
+      "review_quote": "weijinqian0 指出 `device_op.py` 中的 MoE 相关代码应移至 `moe_mlp.py`，以保持代码组织的一致性——MoE 相关逻辑应统一放在 `moe_mlp` 模块中。作者已确认并完成迁移。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "a617637",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "MoE（Mixture of Experts）相关的操作逻辑（如 grouped matmul、swiglu 激活等）应统一放在 `vllm_ascend/ops/fused_moe/moe_mlp.py` 中，而非散落在 `device_op.py` 等其他文件中，以保持代码组织的模块化和可维护性。",
+    "context": "",
+    "checkpoints": [
+      "检查 `device_op.py` 中是否包含 MoE 相关的操作逻辑",
+      "确认 MoE 代码是否已统一放在 `moe_mlp.py` 中",
+      "新增 MoE 功能时应直接添加到 `moe_mlp.py` 而非 `device_op.py`"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/device/device_op.py",
+      "line": 213,
+      "code": "# （根据评审意见推断）\n# MoE 相关的操作逻辑（如 grouped matmul 或 swiglu 相关代码）放在 device_op.py 中\nclass AscendDeviceOp:\n    ...\n    def moe_gating_top_k(self, hidden_states, top_k, routed_scaling_factor, ...):\n        # MoE routing 逻辑，包含硬编码的 scaling factor\n        if norm_type == 0 and renorm == 1:\n            topk_weights = topk_weights / topk_weights.sum(dim=-1, keepdim=True)\n            topk_weights = topk_weights * 3.0  # 硬编码 scaling factor，应使用 routed_scaling_factor\n        ...\n\n    def moe_grouped_matmul(self, hidden_states, w1, w1_scale, group_list, ...):\n        # MoE grouped matmul 逻辑直接实现在 device_op.py\n        # 无条件将 w1/w1_scale 包装为列表\n        hidden_states = torch_npu.npu_grouped_matmul(\n            x=[hidden_states],\n            weight=[w1],           # 如果 w1 已经是 list 会导致嵌套\n            scale=[w1_scale],      # 如果 w1_scale 已经是 list 会导致嵌套\n            ...\n        )[0]\n\n    def moe_dequant_swiglu(self, hidden_states, w1_scale, pertoken_scale, ...):\n        # w1_scale[0] 在 w1_scale 为单 tensor 时会切片 tensor 而非取列表首元素\n        dequant_weight_scale = w1_scale[0]  # 对单 tensor 做 [0] 会丢弃其他 expert 的 scale\n        hidden_states, swiglu_out_scale = torch.ops._C_ascend.npu_dequant_swiglu_quant(\n            x=hidden_states,\n            weight_scale=dequant_weight_scale,\n            ...\n        )",
+      "context": "plz move this to moe_mlp."
+    },
+    "pattern": {
+      "file": "vllm_ascend/device/device_op.py",
+      "line": 213,
+      "code": "# MoE 相关逻辑已移除，保持 device_op.py 职责单一\n\n# MoE 相关逻辑统一在 moe_mlp 模块中实现\n\ndef moe_gating_top_k(self, hidden_states, top_k, routed_scaling_factor, ...):\n    # MoE routing 逻辑，使用 routed_scaling_factor 替代硬编码值\n    if norm_type == 0 and renorm == 1:\n        topk_weights = topk_weights / topk_weights.sum(dim=-1, keepdim=True)\n        topk_weights = topk_weights * routed_scaling_factor  # 使用参数而非硬编码 3.0\n\ndef moe_grouped_matmul(self, hidden_states, w1, w1_scale, group_list, ...):\n    # 条件化处理 w1/w1_scale 的类型（tensor 或 list），避免嵌套包装\n    gmm_weight = w1 if isinstance(w1, list) else [w1]\n    gmm_scale = w1_scale if isinstance(w1_scale, list) else [w1_scale]\n    hidden_states = torch_npu.npu_grouped_matmul(\n        x=[hidden_states],\n        weight=gmm_weight,\n        scale=gmm_scale,\n        bias=None,\n        per_token_scale=[pertoken_scale],\n        split_item=2,\n        group_list_type=group_list_type,\n        group_type=0,\n        group_list=group_list,\n        output_dtype=torch.bfloat16,\n        scale_dtype=FLOAT8_E8M0FNU_DTYPE,\n        per_token_scale_dtype=FLOAT8_E8M0FNU_DTYPE\n    )[0]\n\ndef moe_dequant_swiglu(self, hidden_states, w1_scale, pertoken_scale, ...):\n    # 条件化提取 w1_scale 首元素，避免对单 tensor 做切片\n    dequant_weight_scale = w1_scale[0] if isinstance(w1_scale, list) else w1_scale\n    hidden_states, swiglu_out_scale = torch.ops._C_ascend.npu_dequant_swiglu_quant(\n        x=hidden_states,\n        weight_scale=dequant_weight_scale,\n        activation_scale=pertoken_scale,\n        ...\n    )",
+      "context": "plz move this to moe_mlp."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/device/device_op.py\n+++ b/vllm_ascend/device/device_op.py\n@@ -1,29 +1,38 @@\n-# （根据评审意见推断）\n-# MoE 相关的操作逻辑（如 grouped matmul 或 swiglu 相关代码）放在 device_op.py 中\n-class AscendDeviceOp:\n-    ...\n-    def moe_gating_top_k(self, hidden_states, top_k, routed_scaling_factor, ...):\n-        # MoE routing 逻辑，包含硬编码的 scaling factor\n-        if norm_type == 0 and renorm == 1:\n-            topk_weights = topk_weights / topk_weights.sum(dim=-1, keepdim=True)\n-            topk_weights = topk_weights * 3.0  # 硬编码 scaling factor，应使用 routed_scaling_factor\n+# MoE 相关逻辑已移除，保持 device_op.py 职责单一\n+\n+# MoE 相关逻辑统一在 moe_mlp 模块中实现\n+\n+def moe_gating_top_k(self, hidden_states, top_k, routed_scaling_factor, ...):\n+    # MoE routing 逻辑，使用 routed_scaling_factor 替代硬编码值\n+    if norm_type == 0 and renorm == 1:\n+        topk_weights = topk_weights / topk_weights.sum(dim=-1, keepdim=True)\n+        topk_weights = topk_weights * routed_scaling_factor  # 使用参数而非硬编码 3.0\n+\n+def moe_grouped_matmul(self, hidden_states, w1, w1_scale, group_list, ...):\n+    # 条件化处理 w1/w1_scale 的类型（tensor 或 list），避免嵌套包装\n+    gmm_weight = w1 if isinstance(w1, list) else [w1]\n+    gmm_scale = w1_scale if isinstance(w1_scale, list) else [w1_scale]\n+    hidden_states = torch_npu.npu_grouped_matmul(\n+        x=[hidden_states],\n+        weight=gmm_weight,\n+        scale=gmm_scale,\n+        bias=None,\n+        per_token_scale=[pertoken_scale],\n+        split_item=2,\n+        group_list_type=group_list_type,\n+        group_type=0,\n+        group_list=group_list,\n+        output_dtype=torch.bfloat16,\n+        scale_dtype=FLOAT8_E8M0FNU_DTYPE,\n+        per_token_scale_dtype=FLOAT8_E8M0FNU_DTYPE\n+    )[0]\n+\n+def moe_dequant_swiglu(self, hidden_states, w1_scale, pertoken_scale, ...):\n+    # 条件化提取 w1_scale 首元素，避免对单 tensor 做切片\n+    dequant_weight_scale = w1_scale[0] if isinstance(w1_scale, list) else w1_scale\n+    hidden_states, swiglu_out_scale = torch.ops._C_ascend.npu_dequant_swiglu_quant(\n+        x=hidden_states,\n+        weight_scale=dequant_weight_scale,\n+        activation_scale=pertoken_scale,\n         ...\n-\n-    def moe_grouped_matmul(self, hidden_states, w1, w1_scale, group_list, ...):\n-        # MoE grouped matmul 逻辑直接实现在 device_op.py\n-        # 无条件将 w1/w1_scale 包装为列表\n-        hidden_states = torch_npu.npu_grouped_matmul(\n-            x=[hidden_states],\n-            weight=[w1],           # 如果 w1 已经是 list 会导致嵌套\n-            scale=[w1_scale],      # 如果 w1_scale 已经是 list 会导致嵌套\n-            ...\n-        )[0]\n-\n-    def moe_dequant_swiglu(self, hidden_states, w1_scale, pertoken_scale, ...):\n-        # w1_scale[0] 在 w1_scale 为单 tensor 时会切片 tensor 而非取列表首元素\n-        dequant_weight_scale = w1_scale[0]  # 对单 tensor 做 [0] 会丢弃其他 expert 的 scale\n-        hidden_states, swiglu_out_scale = torch.ops._C_ascend.npu_dequant_swiglu_quant(\n-            x=hidden_states,\n-            weight_scale=dequant_weight_scale,\n-            ...\n-        )\n+    )",
+      "stats": "1 file changed, +37 lines, -28 lines",
+      "key_changes": [
+        "移除: # （根据评审意见推断）",
+        "移除: # MoE 相关的操作逻辑（如 grouped matmul 或 swiglu 相关代码）放在 device_op.py 中",
+        "移除: class AscendDeviceOp:",
+        "移除: ...",
+        "移除: def moe_gating_top_k(self, hidden_states, top_k, routed_scaling_factor, ...):",
+        "移除: # MoE routing 逻辑，包含硬编码的 scaling factor",
+        "移除: if norm_type == 0 and renorm == 1:",
+        "移除: topk_weights = topk_weights / topk_weights.sum(dim=-1, keepdim=True)",
+        "移除: topk_weights = topk_weights * 3.0  # 硬编码 scaling factor，应使用 routed_scaling_facto",
+        "新增: # MoE 相关逻辑已移除，保持 device_op.py 职责单一"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

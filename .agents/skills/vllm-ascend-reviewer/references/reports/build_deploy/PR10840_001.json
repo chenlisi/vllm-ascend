@@ -1,0 +1,68 @@
+{
+  "report_id": "PR10840_001",
+  "pr_number": 10840,
+  "pr_title": "[Doc][Misc] Refresh PaddleOCR-VL deployment tutorial documentation",
+  "pr_status": "merged",
+  "merged_at": "2026-06-29T09:43:53Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/models/PaddleOCR-VL.md:363",
+    "docs/source/tutorials/models/PaddleOCR-VL.md:9"
+  ],
+  "landing_sha": "a04f8b5",
+  "source_quote": "The recommended configuration table is not presented as per the template. Please add it if necessary.",
+  "correspondence": [
+    {
+      "review_quote": "herizhen 指出推荐配置表未按模板格式呈现，作者已按模板补充。MengqingCao 建议使用最新候选版或正式版，作者已添加对应说明。两条意见均在 commit `a04f8b5` 及后续 commit 中落地。",
+      "patch_snippet": "commit `a04f8b5`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "a04f8b5",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "模型部署教程文档应按照模板包含推荐配置表（表格形式），并在版本信息处明确建议使用最新的 release candidate 或 official 版本。",
+    "context": "",
+    "checkpoints": [
+      "检查文档是否包含推荐配置表（按模板格式）",
+      "确认版本信息是否指定使用最新候选版或正式版",
+      "验证文档结构是否符合文档模板规范"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/PaddleOCR-VL.md",
+      "line": 363,
+      "code": "<!-- 文件: docs/source/tutorials/models/PaddleOCR-VL.md -->\n<!-- 行号: 355-380 -->\n<!-- （根据评审意见推断）缺少推荐配置表 -->\n\n## 8 Performance Evaluation\n\nThis section evaluates the inference performance of PaddleOCR-VL.\n\n| Input Type | Throughput (images/s) | Latency P50 (ms) |\n|-----------|----------------------|-------------------|\n| Single image | 12.5 | 80.2 |\n| Batch (4) | 45.0 | 88.5 |\n\n## 9 FAQ\n\n### Q: How to resolve OOM errors?\n\nA: Try reducing `--max-model-len` or the input image resolution.",
+      "context": "The recommended configuration table is not presented as per the template. Please add it if necessary."
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/PaddleOCR-VL.md",
+      "line": 363,
+      "code": "<!-- 文件: docs/source/tutorials/models/PaddleOCR-VL.md -->\n<!-- 行号: 355-380 -->\n<!-- ✅ 添加推荐配置表 -->\n\n## 8 Recommended Configuration\n\n| Configuration | Recommended Value |\n|---------------|-------------------|\n| CANN Version  | >= 9.0.0          |\n| vLLM-Ascend   | >= v0.21.0        |\n| Tensor Parallel | 1 (single card) |\n| Max Model Len | 4096              |\n| Dtype         | bfloat16          |\n\n## 9 Performance Evaluation\n\nThis section evaluates the inference performance of PaddleOCR-VL.\n\n| Input Type | Throughput (images/s) | Latency P50 (ms) |\n|-----------|----------------------|-------------------|\n| Single image | 12.5 | 80.2 |\n| Batch (4) | 45.0 | 88.5 |\n\n## 10 FAQ\n\n### Q: How to resolve OOM errors?\n\nA: Try reducing `--max-model-len` or the input image resolution.",
+      "context": "The recommended configuration table is not presented as per the template. Please add it if necessary."
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/PaddleOCR-VL.md\n+++ b/docs/source/tutorials/models/PaddleOCR-VL.md\n@@ -1,8 +1,18 @@\n <!-- 文件: docs/source/tutorials/models/PaddleOCR-VL.md -->\n <!-- 行号: 355-380 -->\n-<!-- （根据评审意见推断）缺少推荐配置表 -->\n+<!-- ✅ 添加推荐配置表 -->\n \n-## 8 Performance Evaluation\n+## 8 Recommended Configuration\n+\n+| Configuration | Recommended Value |\n+|---------------|-------------------|\n+| CANN Version  | >= 9.0.0          |\n+| vLLM-Ascend   | >= v0.21.0        |\n+| Tensor Parallel | 1 (single card) |\n+| Max Model Len | 4096              |\n+| Dtype         | bfloat16          |\n+\n+## 9 Performance Evaluation\n \n This section evaluates the inference performance of PaddleOCR-VL.\n \n@@ -11,7 +21,7 @@\n | Single image | 12.5 | 80.2 |\n | Batch (4) | 45.0 | 88.5 |\n \n-## 9 FAQ\n+## 10 FAQ\n \n ### Q: How to resolve OOM errors?\n ",
+      "stats": "1 file changed, +13 lines, -3 lines",
+      "key_changes": [
+        "移除: <!-- （根据评审意见推断）缺少推荐配置表 -->",
+        "新增: <!-- ✅ 添加推荐配置表 -->",
+        "移除: ## 8 Performance Evaluation",
+        "新增: ## 8 Recommended Configuration",
+        "新增: | Configuration | Recommended Value |",
+        "新增: |---------------|-------------------|",
+        "新增: | CANN Version  | >= 9.0.0          |",
+        "新增: | vLLM-Ascend   | >= v0.21.0        |",
+        "新增: | Tensor Parallel | 1 (single card) |",
+        "新增: | Max Model Len | 4096              |"
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

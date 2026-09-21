@@ -1,0 +1,59 @@
+{
+  "report_id": "PR14250_001",
+  "pr_number": 14250,
+  "pr_title": "[BugFix] allocate MTP hidden buffer only for speculative decoding",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/models/deepseek_v4.py:1104"
+  ],
+  "landing_sha": "d77311b",
+  "source_quote": "Please check whether both mtp and dspark use this buffer?",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/models/deepseek_v4.py:1104",
+      "patch_snippet": "评后sha d77311b 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "d77311b",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当资源仅适用于某个特定子场景时，条件判断应精确匹配该子场景，而非仅检查外层条件。",
+    "context": "",
+    "checkpoints": [
+      "识别条件判断中是否只检查了外层条件",
+      "确认资源是否只在特定子场景下使用",
+      "如果是，应添加更精确的子条件"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/models/deepseek_v4.py",
+      "line": 1104,
+      "code": "# vllm_ascend/models/deepseek_v4/model.py\nself._mtp_hidden_buffer = (\n    torch.empty(\n        vllm_config.scheduler_config.max_num_batched_tokens,\n        hc_dim,\n        dtype=vllm_config.model_config.dtype,\n        device=self.device,\n    )\n    if vllm_config.speculative_config is not None\n    else None\n)",
+      "context": "vllm_ascend/models/deepseek_v4/model.py"
+    },
+    "pattern": {
+      "file": "vllm_ascend/models/deepseek_v4.py",
+      "line": 1104,
+      "code": "# vllm_ascend/models/deepseek_v4/model.py\nspec_config = vllm_config.speculative_config\nself._mtp_hidden_buffer = (\n    torch.empty(\n        vllm_config.scheduler_config.max_num_batched_tokens,\n        hc_dim,\n        dtype=vllm_config.model_config.dtype,\n        device=self.device,\n    )\n    if spec_config is not None and spec_config.method == \"mtp\"\n    else None\n)",
+      "context": "vllm_ascend/models/deepseek_v4/model.py"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/models/deepseek_v4.py\n+++ b/vllm_ascend/models/deepseek_v4.py\n@@ -1,4 +1,5 @@\n # vllm_ascend/models/deepseek_v4/model.py\n+spec_config = vllm_config.speculative_config\n self._mtp_hidden_buffer = (\n     torch.empty(\n         vllm_config.scheduler_config.max_num_batched_tokens,\n@@ -6,6 +7,6 @@\n         dtype=vllm_config.model_config.dtype,\n         device=self.device,\n     )\n-    if vllm_config.speculative_config is not None\n+    if spec_config is not None and spec_config.method == \"mtp\"\n     else None\n )\n",
+      "stats": "1 file changed, +2 lines, -1 lines",
+      "key_changes": [
+        "移除: if vllm_config.speculative_config is not None",
+        "新增: spec_config = vllm_config.speculative_config",
+        "新增: if spec_config is not None and spec_config.method == \"mtp\""
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

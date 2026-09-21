@@ -1,0 +1,47 @@
+{
+  "report_id": "PR10257_001",
+  "pr_number": 10257,
+  "pr_title": "",
+  "pr_status": "unknown",
+  "merged_at": "",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [],
+  "landing_sha": "",
+  "source_quote": "",
+  "correspondence": [],
+  "verification": {
+    "merged": true,
+    "modified_commit": "",
+    "approvals": 0
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/Qwen3-ASR-1.7B.md",
+      "line": 12,
+      "code": "`Qwen3-ASR-1.7B`(BF16 version): requires 1 Ascend 910B (with 1 x 64G NPUs).\n\n`Qwen3-ASR-1.7B`(FP16 version): requires 1 Ascend 310P (with 1 x 48G NPUs).\n\n```bash\nvllm serve \"Qwen/Qwen3-ASR-1.7B\" \\\n  --tensor-parallel-size 1 \\\n  --max-model-len 4096 \\\n  --gpu-memory-utilization 0.9 \\\n  --enforce-eager \\\n  --port 8000\n```",
+      "context": "这里我还是不理解为什么要放FP16的权重，现在默认都是BF16的，我顺着你的链接查看了，并非FP16，而是BF16，只是310P使用的时候需要转成FP16"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/Qwen3-ASR-1.7B.md",
+      "line": 12,
+      "code": "`Qwen3-ASR-1.7B`(BF16 version): requires 1 Ascend 910B (with 1 x 64G NPUs).\n\n`Qwen3-ASR-1.7B`(BF16 version): requires 1 Ascend 310P (with 1 x 48G NPUs).\n\n```bash\nvllm serve \"Qwen/Qwen3-ASR-1.7B\" \\\n  --tensor-parallel-size 1 \\\n  --max-model-len 4096 \\\n  --gpu-memory-utilization 0.9 \\\n  --enforce-eager \\\n  --port 8000 \\\n  --dtype float16\n```",
+      "context": "这里我还是不理解为什么要放FP16的权重，现在默认都是BF16的，我顺着你的链接查看了，并非FP16，而是BF16，只是310P使用的时候需要转成FP16"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/Qwen3-ASR-1.7B.md\n+++ b/docs/source/tutorials/models/Qwen3-ASR-1.7B.md\n@@ -1,6 +1,6 @@\n `Qwen3-ASR-1.7B`(BF16 version): requires 1 Ascend 910B (with 1 x 64G NPUs).\n \n-`Qwen3-ASR-1.7B`(FP16 version): requires 1 Ascend 310P (with 1 x 48G NPUs).\n+`Qwen3-ASR-1.7B`(BF16 version): requires 1 Ascend 310P (with 1 x 48G NPUs).\n \n ```bash\n vllm serve \"Qwen/Qwen3-ASR-1.7B\" \\\n@@ -8,5 +8,6 @@\n   --max-model-len 4096 \\\n   --gpu-memory-utilization 0.9 \\\n   --enforce-eager \\\n-  --port 8000\n+  --port 8000 \\\n+  --dtype float16\n ```",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "修改: FP16 version → BF16 version (310P 权重说明对齐)",
+        "新增: --dtype float16 (仅 310P DUO 场景写)"
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

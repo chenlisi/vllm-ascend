@@ -1,0 +1,62 @@
+{
+  "report_id": "PR10564_001",
+  "pr_number": 10564,
+  "pr_title": "[CI][Feature] Add nightly auto-bisect tool for E2E test failures",
+  "pr_status": "merged",
+  "merged_at": "2026-07-08T06:15:21Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tools/bisect/__init__.py:1"
+  ],
+  "landing_sha": "91e7a9e",
+  "source_quote": "let's move this tool to `tools/bisect` folder.",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan 建议将 auto-bisect 工具移至 `tools/bisect` 文件夹中，使 CI 工具的组织结构更加规范。作者已确认并完成迁移。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "91e7a9e",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "新增的 CI 工具或开发者工具应放在 `tools/` 目录下的对应子文件夹中（如 `tools/bisect/`），而非散落在 `tests/` 或其他非标准位置，以保持仓库结构的清晰和一致性。",
+    "context": "",
+    "checkpoints": [
+      "检查新增工具是否放在 `tools/` 目录下",
+      "确认工具是否有独立的子文件夹（如 `tools/bisect/`）",
+      "避免将工具代码放在 `tests/` 目录中"
+    ],
+    "antipattern": {
+      "file": "tools/bisect/__init__.py",
+      "line": 1,
+      "code": "# （根据评审意见推断）\n# auto-bisect 工具文件散落在非标准位置（如 tests/e2e/nightly/bisect/ 等）\ntests/e2e/nightly/bisect/\n    __init__.py\n    git_ops.py\n    coordinator.py\n    ...",
+      "context": "let's move this tool to `tools/bisect` folder."
+    },
+    "pattern": {
+      "file": "tools/bisect/__init__.py",
+      "line": 1,
+      "code": "# （根据评审意见推断）\n# auto-bisect 工具统一移至 tools/bisect/ 目录\ntools/bisect/\n    __init__.py\n    git_ops.py\n    coordinator.py\n    README.md\n    ...",
+      "context": "let's move this tool to `tools/bisect` folder."
+    },
+    "diff": {
+      "unified": "--- a/tools/bisect/__init__.py\n+++ b/tools/bisect/__init__.py\n@@ -1,7 +1,8 @@\n # （根据评审意见推断）\n-# auto-bisect 工具文件散落在非标准位置（如 tests/e2e/nightly/bisect/ 等）\n-tests/e2e/nightly/bisect/\n+# auto-bisect 工具统一移至 tools/bisect/ 目录\n+tools/bisect/\n     __init__.py\n     git_ops.py\n     coordinator.py\n+    README.md\n     ...",
+      "stats": "1 file changed, +3 lines, -2 lines",
+      "key_changes": [
+        "移除: # auto-bisect 工具文件散落在非标准位置（如 tests/e2e/nightly/bisect/ 等）",
+        "移除: tests/e2e/nightly/bisect/",
+        "新增: # auto-bisect 工具统一移至 tools/bisect/ 目录",
+        "新增: tools/bisect/",
+        "新增: README.md"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

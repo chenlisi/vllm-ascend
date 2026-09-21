@@ -1,0 +1,68 @@
+{
+  "report_id": "PR10034_001",
+  "pr_number": 10034,
+  "pr_title": "[Ops][Feature] add setup of batch_invariant_ops",
+  "pr_status": "merged",
+  "merged_at": "2026-06-11T01:01:02Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "csrc/build_batch_invariant_ops.sh:56",
+    "csrc/build_batch_invariant_ops.sh:61"
+  ],
+  "landing_sha": "fe84e0a",
+  "source_quote": "it's better to upload the package to vllm-ascend.obs.cn-north-4.myhuaweicloud.com such as triton-ascend.",
+  "correspondence": [
+    {
+      "review_quote": "Ronald1995 提出两个问题：(1) 建议将 batch_invariant_ops 的安装包上传到 vllm-ascend 自己的 OBS 仓库（如 triton-ascend 的做法），而不是依赖外部链接；(2) `curl -k` 跳过 SSL/TLS 证书验证是不安全操作，需要找到方式去除 `-k` 标志。MengqingCao 补充说在 CANN 正式提供这些 kernel 之前，暂不确定是否继续维护这些 run 和 zip 文件。作者在后续 commit 中修改了下载链接和脚本配置。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "fe84e0a",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "自定义算子的安装包（run/whl）应上传到项目自有的 OBS 仓库（如 `vllm-ascend.obs.cn-north-4.myhuaweicloud.com`），避免依赖外部不稳定链接。",
+    "context": "",
+    "checkpoints": [
+      "检查下载链接是否指向项目自有 OBS 仓库",
+      "确认外部链接的可用性和稳定性",
+      "验证是否与其他类似包（如 triton-ascend）保持一致的托管方式"
+    ],
+    "antipattern": {
+      "file": "csrc/build_batch_invariant_ops.sh",
+      "line": 55,
+      "code": "#!/bin/bash\n# Build and install batch_invariant_ops for Ascend NPU\n\nBATCH_INVARIANT_RUN_URL=\"${BATCH_INVARIANT_RUN_URL:-https://ascend-cann-open.obs.cn-north-4.myhuaweicloud.com/...}\"\nBATCH_INVARIANT_RUN_FILE=$(basename \"${BATCH_INVARIANT_RUN_URL}\")\n\nlog() { echo \"[batch_invariant] $*\"; }\n\n# Download run package (insecure: -k skips SSL, 3s timeout too short)\n# Ronald1995: \"it's better to upload the package to vllm-ascend.obs...\"\ncurl -k --max-time 3 -sS -O \"${BATCH_INVARIANT_RUN_URL}\"\nchmod +x \"${BATCH_INVARIANT_RUN_FILE}\"\nlog \"Running installer: ${BATCH_INVARIANT_RUN_FILE}\"\nunset ASCEND_CUSTOM_OPP_PATH\n\"./${BATCH_INVARIANT_RUN_FILE}\"\nlog \"batch_invariant run package installed\"",
+      "context": "it's better to upload the package to vllm-ascend.obs.cn-north-4.myhuaweicloud.com such as triton-ascend."
+    },
+    "pattern": {
+      "file": "csrc/build_batch_invariant_ops.sh",
+      "line": 55,
+      "code": "#!/bin/bash\n# Build and install batch_invariant_ops for Ascend NPU\n\nBATCH_INVARIANT_RUN_URL=\"${BATCH_INVARIANT_RUN_URL:-https://ascend-cann-open.obs.cn-north-4.myhuaweicloud.com/...}\"\nBATCH_INVARIANT_RUN_FILE=$(basename \"${BATCH_INVARIANT_RUN_URL}\")\n\nlog() { echo \"[batch_invariant] $*\"; }\n\n# gemini suggestion: remove -k flag, increase timeout, add error handling.\n# Use subshell to avoid global ASCEND_CUSTOM_OPP_PATH side-effects.\nif curl --max-time 60 -sS -O \"${BATCH_INVARIANT_RUN_URL}\"; then\n    chmod +x \"${BATCH_INVARIANT_RUN_FILE}\"\n    log \"Running installer: ${BATCH_INVARIANT_RUN_FILE}\"\n    if ( unset ASCEND_CUSTOM_OPP_PATH; \"./${BATCH_INVARIANT_RUN_FILE}\" ); then\n        log \"batch_invariant run package installed successfully\"\n    else\n        log \"ERROR: Failed to install batch_invariant run package\"\n        exit 1\n    fi\nelse\n    log \"ERROR: Failed to download batch_invariant run package: ${BATCH_INVARIANT_RUN_URL}\"\n    exit 1\nfi",
+      "context": "it's better to upload the package to vllm-ascend.obs.cn-north-4.myhuaweicloud.com such as triton-ascend."
+    },
+    "diff": {
+      "unified": "--- a/csrc/build_batch_invariant_ops.sh\n+++ b/csrc/build_batch_invariant_ops.sh\n@@ -6,11 +6,18 @@\n \n log() { echo \"[batch_invariant] $*\"; }\n \n-# Download run package (insecure: -k skips SSL, 3s timeout too short)\n-# Ronald1995: \"it's better to upload the package to vllm-ascend.obs...\"\n-curl -k --max-time 3 -sS -O \"${BATCH_INVARIANT_RUN_URL}\"\n-chmod +x \"${BATCH_INVARIANT_RUN_FILE}\"\n-log \"Running installer: ${BATCH_INVARIANT_RUN_FILE}\"\n-unset ASCEND_CUSTOM_OPP_PATH\n-\"./${BATCH_INVARIANT_RUN_FILE}\"\n-log \"batch_invariant run package installed\"\n+# gemini suggestion: remove -k flag, increase timeout, add error handling.\n+# Use subshell to avoid global ASCEND_CUSTOM_OPP_PATH side-effects.\n+if curl --max-time 60 -sS -O \"${BATCH_INVARIANT_RUN_URL}\"; then\n+    chmod +x \"${BATCH_INVARIANT_RUN_FILE}\"\n+    log \"Running installer: ${BATCH_INVARIANT_RUN_FILE}\"\n+    if ( unset ASCEND_CUSTOM_OPP_PATH; \"./${BATCH_INVARIANT_RUN_FILE}\" ); then\n+        log \"batch_invariant run package installed successfully\"\n+    else\n+        log \"ERROR: Failed to install batch_invariant run package\"\n+        exit 1\n+    fi\n+else\n+    log \"ERROR: Failed to download batch_invariant run package: ${BATCH_INVARIANT_RUN_URL}\"\n+    exit 1\n+fi",
+      "stats": "1 file changed, +15 lines, -8 lines",
+      "key_changes": [
+        "移除: # Download run package (insecure: -k skips SSL, 3s timeout too short)",
+        "移除: # Ronald1995: \"it's better to upload the package to vllm-ascend.obs...\"",
+        "移除: curl -k --max-time 3 -sS -O \"${BATCH_INVARIANT_RUN_URL}\"",
+        "移除: chmod +x \"${BATCH_INVARIANT_RUN_FILE}\"",
+        "移除: log \"Running installer: ${BATCH_INVARIANT_RUN_FILE}\"",
+        "移除: unset ASCEND_CUSTOM_OPP_PATH",
+        "移除: \"./${BATCH_INVARIANT_RUN_FILE}\"",
+        "移除: log \"batch_invariant run package installed\"",
+        "新增: # gemini suggestion: remove -k flag, increase timeout, add error handling.",
+        "新增: # Use subshell to avoid global ASCEND_CUSTOM_OPP_PATH side-effects."
+      ]
+    },
+    "language": "bash",
+    "_status": "extracted"
+  }
+}

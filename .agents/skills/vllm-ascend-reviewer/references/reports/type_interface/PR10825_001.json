@@ -1,0 +1,67 @@
+{
+  "report_id": "PR10825_001",
+  "pr_number": 10825,
+  "pr_title": "[BugFix][SpecDecode] Fix low MTP acceptance rate for SFA+DSA_CP (MTP>1)",
+  "pr_status": "merged",
+  "merged_at": "2026-06-23T15:53:55Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/sfa_v1.py:262"
+  ],
+  "landing_sha": "8efbb92",
+  "source_quote": "Vllm has the same interface in the base class `AttentionMetadataBuilder`, but its signature is (`self`, `common_attn_metadata`, `draft_index`). I feel ok about the current implementation just like what dsa_v1 does, but if we can align to vllm it would be better, just a suggestion.",
+  "correspondence": [
+    {
+      "review_quote": "slippersss 建议将 `build_for_drafting` 的参数名与 vLLM 基类 `AttentionMetadataBuilder` 中的签名对齐（使用 `draft_index` 而非 `draft_step`）。作者回复已与 MTP 维护者讨论，接口名称将在未来统一重构。commit `8efbb92` 主要修复了 MTP>1 时 seq_lengths buffer 跨 step 别名覆盖导致的低接受率问题。",
+      "patch_snippet": "commit `8efbb92`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "8efbb92",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在投机解码的 SFA（dsa_cp）模式中，`build_for_drafting` 应为每个 draft step 使用独立的 seq_lengths buffer，避免跨 step 共享和覆盖导致 metadata 错误。同时，接口签名应与 vLLM 基类保持一致。",
+    "context": "",
+    "checkpoints": [
+      "检查 `build_for_drafting` 是否使用了 per-step 的 buffer",
+      "确认 draft step 之间是否存在 buffer 别名覆盖风险",
+      "验证接口签名是否与 vLLM 基类 `AttentionMetadataBuilder` 对齐"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/sfa_v1.py",
+      "line": 250,
+      "code": "# （根据评审意见推断）所有 draft step 共享并覆盖相同的基础 buffer，\n# 导致 MTP>1 时低接受率\n\n    def build_for_drafting(\n        self,\n        draft_step: int,\n        common_attn_metadata: AscendCommonAttentionMetadata,\n        **kwargs,\n    ) -> AscendSFAMetadata:\n        \"\"\"Build attention metadata for draft step.\n\n        Used during speculative decoding to build metadata\n        for each draft step independently.\n        \"\"\"\n        # ❌ 所有 draft step 共享并覆盖相同的基础 buffer\n        # 当 MTP>1 时，step 2 会覆盖 step 1 的 seq_lengths，\n        # 导致 step 1 的 metadata 错误，接受率降低\n        return self._build(common_attn_metadata, draft_step=draft_step)",
+      "context": "Vllm has the same interface in the base class `AttentionMetadataBuilder`, but its signature is (`self`, `common_attn_metadata`, `draft_index`). I feel ok about the current implementation just like what dsa_v1 does, but if we can align to vllm it would be better, just a suggestion."
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/sfa_v1.py",
+      "line": 250,
+      "code": "# 使用 per-draft-step 的 seq_lengths buffer，避免跨 step 别名覆盖\n\n    def build_for_drafting(\n        self,\n        draft_step: int,\n        common_attn_metadata: AscendCommonAttentionMetadata,\n        **kwargs,\n    ) -> AscendSFAMetadata:\n        \"\"\"Build attention metadata for draft step.\n\n        Used during speculative decoding to build metadata\n        for each draft step independently.\n        \"\"\"\n        # ✅ 临时交换为 per-step buffer，完成后恢复\n        orig_query = self.actual_seq_lengths_query\n        orig_key = self.actual_seq_lengths_key\n        if self.spec_actual_seq_lengths_query is not None:\n            self.actual_seq_lengths_query = (\n                self.spec_actual_seq_lengths_query[draft_step - 1])\n            self.actual_seq_lengths_key = (\n                self.spec_actual_seq_lengths_key[draft_step - 1])\n        try:\n            return self._build(common_attn_metadata, draft_step=draft_step)\n        finally:\n            self.actual_seq_lengths_query = orig_query\n            self.actual_seq_lengths_key = orig_key",
+      "context": "Vllm has the same interface in the base class `AttentionMetadataBuilder`, but its signature is (`self`, `common_attn_metadata`, `draft_index`). I feel ok about the current implementation just like what dsa_v1 does, but if we can align to vllm it would be better, just a suggestion."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/sfa_v1.py\n+++ b/vllm_ascend/attention/sfa_v1.py\n@@ -1,5 +1,4 @@\n-# （根据评审意见推断）所有 draft step 共享并覆盖相同的基础 buffer，\n-# 导致 MTP>1 时低接受率\n+# 使用 per-draft-step 的 seq_lengths buffer，避免跨 step 别名覆盖\n \n     def build_for_drafting(\n         self,\n@@ -12,7 +11,16 @@\n         Used during speculative decoding to build metadata\n         for each draft step independently.\n         \"\"\"\n-        # ❌ 所有 draft step 共享并覆盖相同的基础 buffer\n-        # 当 MTP>1 时，step 2 会覆盖 step 1 的 seq_lengths，\n-        # 导致 step 1 的 metadata 错误，接受率降低\n-        return self._build(common_attn_metadata, draft_step=draft_step)\n+        # ✅ 临时交换为 per-step buffer，完成后恢复\n+        orig_query = self.actual_seq_lengths_query\n+        orig_key = self.actual_seq_lengths_key\n+        if self.spec_actual_seq_lengths_query is not None:\n+            self.actual_seq_lengths_query = (\n+                self.spec_actual_seq_lengths_query[draft_step - 1])\n+            self.actual_seq_lengths_key = (\n+                self.spec_actual_seq_lengths_key[draft_step - 1])\n+        try:\n+            return self._build(common_attn_metadata, draft_step=draft_step)\n+        finally:\n+            self.actual_seq_lengths_query = orig_query\n+            self.actual_seq_lengths_key = orig_key",
+      "stats": "1 file changed, +14 lines, -6 lines",
+      "key_changes": [
+        "移除: # （根据评审意见推断）所有 draft step 共享并覆盖相同的基础 buffer，",
+        "移除: # 导致 MTP>1 时低接受率",
+        "新增: # 使用 per-draft-step 的 seq_lengths buffer，避免跨 step 别名覆盖",
+        "移除: # ❌ 所有 draft step 共享并覆盖相同的基础 buffer",
+        "移除: # 当 MTP>1 时，step 2 会覆盖 step 1 的 seq_lengths，",
+        "移除: # 导致 step 1 的 metadata 错误，接受率降低",
+        "移除: return self._build(common_attn_metadata, draft_step=draft_step)",
+        "新增: # ✅ 临时交换为 per-step buffer，完成后恢复",
+        "新增: orig_query = self.actual_seq_lengths_query",
+        "新增: orig_key = self.actual_seq_lengths_key"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

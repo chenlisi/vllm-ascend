@@ -1,0 +1,59 @@
+{
+  "report_id": "PR4119_001",
+  "pr_number": 4119,
+  "pr_title": "[OPS] support triton causal_conv1d_fn ops",
+  "pr_status": "merged",
+  "merged_at": "2025-12-11T07:52:39Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/triton/mamba/causal_conv1d.py:398",
+    "vllm_ascend/ops/triton/mamba/causal_conv1d.py:1285",
+    "vllm_ascend/ops/triton/mamba/causal_conv1d.py:273"
+  ],
+  "landing_sha": "19f5b8d",
+  "source_quote": "This parameter may need to be tuned to achieve better performance.",
+  "correspondence": [
+    {
+      "review_quote": "三位评审人分别关注不同方面：(1) weijinqian0 指出 L398 处的性能参数需要调优以达到更好性能；(2) OsirisDuan 指出 L1285 处的 grid 逻辑需要优化；(3) jingshenghang 指出 L273 处函数签名应添加可选的 `metadata` 参数。作者通过 commit `19f5b8d` 修复了 typo 和参数问题，通过 commit `e1fc116` 修复了 metadata 问题，所有意见均已落地。",
+      "patch_snippet": "commit `19f5b8d`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "19f5b8d",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 Triton 内核实现中，BLOCK_SIZE 等性能相关参数不应使用随意值，应通过性能基准测试调优，并在代码注释中说明选择依据。",
+    "context": "",
+    "checkpoints": [
+      "检查 BLOCK_SIZE、num_warps 等参数是否有调优说明",
+      "确认是否有性能基准测试对比数据"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/triton/mamba/causal_conv1d.py",
+      "line": 180,
+      "code": "@triton.jit\ndef _causal_conv1d_state_update_kernel(\n    x_ptr, weight_ptr, bias_ptr,\n    conv_state_ptr,\n    BLOCK_SIZE: tl.constexpr,\n):\n    pid = tl.program_id(0)\n    x_ptrs = x_ptr + pid * BLOCK_SIZE\n    mask_x = tl.arange(0, BLOCK_SIZE) < BLOCK_SIZE\n\n    loaded_x = tl.load(x_ptrs, mask_x, 0.0)\n\n    w_ptrs = weight_ptr + tl.arange(0, BLOCK_SIZE)\n    weight_vals = tl.load(w_ptrs, mask_x, 0.0)\n\n    new_conv_state = tl.load(x_ptrs, mask_x, 0.0)\n    tl.store(conv_state_ptr + pid * BLOCK_SIZE, new_conv_state, mask_x)",
+      "context": "This parameter may need to be tuned to achieve better performance."
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/triton/mamba/causal_conv1d.py",
+      "line": 180,
+      "code": "@triton.jit\ndef _causal_conv1d_state_update_kernel(\n    x_ptr, weight_ptr, bias_ptr,\n    conv_state_ptr,\n    BLOCK_SIZE: tl.constexpr,\n):\n    pid = tl.program_id(0)\n    x_ptrs = x_ptr + pid * BLOCK_SIZE\n    mask_x = tl.arange(0, BLOCK_SIZE) < BLOCK_SIZE\n\n    w_ptrs = weight_ptr + tl.arange(0, BLOCK_SIZE)\n    weight_vals = tl.load(w_ptrs, mask_x, 0.0)\n\n    new_conv_state = tl.load(x_ptrs, mask_x, 0.0)\n    tl.store(conv_state_ptr + pid * BLOCK_SIZE, new_conv_state, mask_x)",
+      "context": "This parameter may need to be tuned to achieve better performance."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/triton/mamba/causal_conv1d.py\n+++ b/vllm_ascend/ops/triton/mamba/causal_conv1d.py\n@@ -180,17 +180,15 @@\n     x_ptrs = x_ptr + pid * BLOCK_SIZE\n     mask_x = tl.arange(0, BLOCK_SIZE) < BLOCK_SIZE\n \n-    loaded_x = tl.load(x_ptrs, mask_x, 0.0)\n-\n     w_ptrs = weight_ptr + tl.arange(0, BLOCK_SIZE)\n     weight_vals = tl.load(w_ptrs, mask_x, 0.0)\n ",
+      "stats": "1 file changed, +0 lines, -2 lines",
+      "key_changes": [
+        "删除了第 11-12 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

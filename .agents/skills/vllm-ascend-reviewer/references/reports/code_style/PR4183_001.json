@@ -1,0 +1,59 @@
+{
+  "report_id": "PR4183_001",
+  "pr_number": 4183,
+  "pr_title": "[feature] Mooncake_connector support pcp/dcp",
+  "pr_status": "merged",
+  "merged_at": "2025-11-18T02:17:48Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/distributed/mooncake_connector.py:30",
+    "vllm_ascend/distributed/mooncake_connector.py:1129"
+  ],
+  "landing_sha": "993a067",
+  "source_quote": "Missing comma",
+  "correspondence": [
+    {
+      "review_quote": "LCAIZJ 提出两条意见：(1) 指出 L30 处缺少逗号，这是语法问题；(2) 指出端口计算逻辑复杂，建议添加单元测试。作者通过 commit `993a067` 修复了逗号问题，通过 commit `4679b3f` 修复了单元测试。",
+      "patch_snippet": "commit `993a067`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "993a067",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在 dataclass 或类似的数据结构定义中，每个字段之间必须正确使用逗号分隔，避免因语法错误导致运行时异常。",
+    "context": "",
+    "checkpoints": [
+      "检查数据类字段之间是否有缺失的逗号",
+      "确认字段定义语法是否正确",
+      "验证 pre-commit 检查是否覆盖语法错误"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/distributed/mooncake_connector.py",
+      "line": 65,
+      "code": "from dataclasses import dataclass\n\n@dataclass\nclass ReqMeta:\n    \"\"\"Request metadata for KV cache transfer.\"\"\"\n    local_block_ids: list[int]\n    remote_block_ids: list[int]\n    remote_pcp_size: str   # 类型错误：应为 int\n    remote_dcp_size: str   # 类型错误：应为 int，且缺少逗号\n    num_blocks: int\n    request_id: str\n\n    def get_remote_key(self) -> str:\n        return f\"{self.remote_pcp_size}_{self.remote_dcp_size}\"",
+      "context": "Missing comma"
+    },
+    "pattern": {
+      "file": "vllm_ascend/distributed/mooncake_connector.py",
+      "line": 65,
+      "code": "from dataclasses import dataclass\n\n@dataclass\nclass ReqMeta:\n    \"\"\"Request metadata for KV cache transfer.\"\"\"\n    local_block_ids: list[int]\n    remote_block_ids: list[int]\n    remote_pcp_size: int,   # 修正类型为 int，添加逗号\n    remote_dcp_size: int,   # 修正类型为 int，添加逗号\n    num_blocks: int\n    request_id: str\n\n    def get_remote_key(self) -> str:\n        return f\"{self.remote_pcp_size}_{self.remote_dcp_size}\"",
+      "context": "Missing comma"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/distributed/mooncake_connector.py\n+++ b/vllm_ascend/distributed/mooncake_connector.py\n@@ -65,14 +65,14 @@\n     \"\"\"Request metadata for KV cache transfer.\"\"\"\n     local_block_ids: list[int]\n     remote_block_ids: list[int]\n-    remote_pcp_size: str   # 类型错误：应为 int\n-    remote_dcp_size: str   # 类型错误：应为 int，且缺少逗号\n+    remote_pcp_size: int,   # 修正类型为 int，添加逗号\n+    remote_dcp_size: int,   # 修正类型为 int，添加逗号\n     num_blocks: int\n     request_id: str\n ",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "修改了第 8-9 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

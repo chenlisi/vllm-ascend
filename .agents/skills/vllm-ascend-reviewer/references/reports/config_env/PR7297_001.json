@@ -1,0 +1,59 @@
+{
+  "report_id": "PR7297_001",
+  "pr_number": 7297,
+  "pr_title": "[Bugfix][eager][oom] fix rank0 load imbalance by no padding when multi dp",
+  "pr_status": "merged",
+  "merged_at": "2026-03-19T08:59:47Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/model_runner_v1.py:1975"
+  ],
+  "landing_sha": "7a19986",
+  "source_quote": "yiz-liu 指出 `allow_dp_padding` 参数应基于运行时的 `cudagraph_mode` 而非静态的 `self.compilation_config.cudagraph_mode`，否则在 eager 模式下 padding 会被错误启用。",
+  "correspondence": [
+    {
+      "review_quote": "yiz-liu 指出 `allow_dp_padding` 应使用运行时 `cudagraph_mode` 而非静态配置值，避免 eager 模式下错误启用 padding。作者通过 commit `7a19986` 修改为使用运行时变量，1/1 建议全部落地。",
+      "patch_snippet": "commit `7a19986`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "7a19986",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在判断是否允许 DP padding 等运行时行为时，应使用运行时确定的变量（如函数参数 `cudagraph_mode`），而非静态配置（如 `self.compilation_config.cudagraph_mode`），因为静态配置可能无法反映实际运行状态（例如 `enforce_eager=True` 时运行时 mode 为 NONE）。",
+    "context": "",
+    "checkpoints": [
+      "运行时行为判断是否使用了运行时变量而非静态配置",
+      "`enforce_eager` 模式下 `cudagraph_mode` 是否正确反映为 `NONE`",
+      "`allow_dp_padding` 在不同 cudagraph 模式下的值是否符合预期"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 0,
+      "code": "    def _sync_metadata_across_dp(\n        self,\n        num_tokens: int,\n        is_draft_model: bool = False,\n        cudagraph_mode: CUDAGraphMode = CUDAGraphMode.NONE,\n        allow_dp_padding: bool = False,\n    ) -> tuple[int, torch.Tensor | None, CUDAGraphMode]:\n        if allow_dp_padding or is_draft_model:\n            num_tokens_after_padding = torch.tensor(\n                [max_tokens_across_dp] * self.dp_size, device=\"cpu\", dtype=torch.int32\n            )\n        else:\n            num_tokens_after_padding = num_tokens_across_dp.cpu()\n\n    should_ubatch, num_tokens_across_dp = False, None\n    if self.vllm_config.parallel_config.data_parallel_size > 1:\n        _, num_tokens_across_dp, synced_cudagraph_mode = self._sync_metadata_across_dp(\n            num_tokens=num_tokens_padded,\n            cudagraph_mode=cudagraph_mode,\n            allow_dp_padding=self.compilation_config.cudagraph_mode != CUDAGraphMode.NONE,\n        )",
+      "context": "yiz-liu 指出 `allow_dp_padding` 参数应基于运行时的 `cudagraph_mode` 而非静态的 `self.compilation_config.cudagraph_mo..."
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 0,
+      "code": "    def _sync_metadata_across_dp(\n        self,\n        num_tokens: int,\n        is_draft_model: bool = False,\n        cudagraph_mode: CUDAGraphMode = CUDAGraphMode.NONE,\n        allow_dp_padding: bool = False,\n    ) -> tuple[int, torch.Tensor | None, CUDAGraphMode]:\n        if allow_dp_padding or is_draft_model:\n            num_tokens_after_padding = torch.tensor(\n                [max_tokens_across_dp] * self.dp_size, device=\"cpu\", dtype=torch.int32\n            )\n        else:\n            num_tokens_after_padding = num_tokens_across_dp.cpu()\n\n    should_ubatch, num_tokens_across_dp = False, None\n    if self.vllm_config.parallel_config.data_parallel_size > 1:\n        _, num_tokens_across_dp, synced_cudagraph_mode = self._sync_metadata_across_dp(\n            num_tokens=num_tokens_padded,\n            cudagraph_mode=cudagraph_mode,\n            allow_dp_padding=cudagraph_mode != CUDAGraphMode.NONE,\n        )",
+      "context": "yiz-liu 指出 `allow_dp_padding` 参数应基于运行时的 `cudagraph_mode` 而非静态的 `self.compilation_config.cudagraph_mo..."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/model_runner_v1.py\n+++ b/vllm_ascend/worker/model_runner_v1.py\n@@ -1,21 +1,21 @@\n         _, num_tokens_across_dp, synced_cudagraph_mode = self._sync_metadata_across_dp(\n             num_tokens=num_tokens_padded,\n             cudagraph_mode=cudagraph_mode,\n-            allow_dp_padding=self.compilation_config.cudagraph_mode != CUDAGraphMode.NONE,\n+            allow_dp_padding=cudagraph_mode != CUDAGraphMode.NONE,\n         )",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "- allow_dp_padding=self.compilation_config.cudagraph_mode != CUDAGraphMode.NONE,",
+        "+ allow_dp_padding=cudagraph_mode != CUDAGraphMode.NONE,"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

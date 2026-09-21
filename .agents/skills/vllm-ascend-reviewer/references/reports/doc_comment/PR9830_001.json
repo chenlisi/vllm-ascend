@@ -1,0 +1,67 @@
+{
+  "report_id": "PR9830_001",
+  "pr_number": 9830,
+  "pr_title": "[Performance] Optimize split_qkv_tp_rmsnorm_rope with grid stride andh loading",
+  "pr_status": "merged",
+  "merged_at": "2026-06-17T02:46:49Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/triton/linearnorm/split_qkv_tp_rmsnorm_rope.py:27"
+  ],
+  "landing_sha": "a214dfd",
+  "source_quote": "Please add a comment TODO here around UB difference between different chips and whether we can dynamically tune this parameter with formula",
+  "correspondence": [
+    {
+      "review_quote": "linfeng-yuan: vllm_ascend/ops/triton/linearnorm/split_qkv_tp_rmsnorm_rope.py:27(2026-06-15 08:12:04)",
+      "patch_snippet": "评后sha a214dfd 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "a214dfd",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当 Triton kernel 的 autotune 参数（如 BLOCK_SIZE）受到限制以防止不同芯片上的 UB（未定义行为）时，应添加 TODO 注释说明芯片间差异，并探索是否可以通过公式动态调参。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/ops/triton/linearnorm/split_qkv_tp_rmsnorm_rope.py:27",
+      "line": 27,
+      "code": "# （根据评审意见推断）BLOCK_SIZE autotune 配置无注释说明\n# linfeng-yuan 评论: \"Please add a comment TODO here around UB difference\n# between different chips and whether we can dynamically tune this parameter with formula\"\nimport torch\nimport triton\nimport triton.language as tl\nfrom typing import Tuple\n\n# ... 其他辅助函数 ...\n\n\n@triton.autotune(\n    configs=[\n        triton.Config({\"BLOCK_SIZE\": bs}, num_stages=1, num_warps=1)\n        # BLOCK_SIZE 限制为 1-4 防止 UB 溢出，但未说明原因\n        # 无注释说明不同芯片间的 UB 差异及是否可动态调参\n        for bs in [1, 2, 3, 4]\n    ],\n    key=[\"num_tokens\"],\n)\n@triton.jit\ndef _split_qkv_and_compute_local_qk_var_kernel(\n    input_ptr,\n    q_out_ptr,\n    k_out_ptr,\n    v_out_ptr,\n    qk_var_ptr,\n    q_cols: tl.constexpr,\n    k_cols: tl.constexpr,\n    num_tokens: tl.constexpr,\n    qkv_stride: tl.constexpr,\n    q_inv_size: tl.constexpr,\n    k_inv_size: tl.constexpr,\n    BLOCK_SIZE: tl.constexpr,\n):\n    \"\"\"Grid Stride Loop + batch loading + precomputed reciprocal.\"\"\"\n    pid = tl.program_id(0)\n    num_pids = tl.num_programs(0)\n    block_range = tl.arange(0, BLOCK_SIZE)\n    # ... kernel body ...",
+      "context": "Please add a comment TODO here around UB difference between different chips and whether we can dynamically tune this parameter with formula"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/triton/linearnorm/split_qkv_tp_rmsnorm_rope.py:27",
+      "line": 27,
+      "code": "# 添加 TODO 注释说明芯片间 UB 差异和动态调参可能性\n# commit message: \"Add comment for dynamic BLOCK_SIZE computation in split QKV autotune\"\nimport torch\nimport triton\nimport triton.language as tl\nfrom typing import Tuple\n\n# ... 其他辅助函数 ...\n\n\n@triton.autotune(\n    configs=[\n        triton.Config({\"BLOCK_SIZE\": bs}, num_stages=1, num_warps=1)\n        # TODO: UB (undefined behavior) differs between different chips.\n        # Investigate whether we can dynamically tune BLOCK_SIZE with a formula\n        # based on chip capabilities instead of using a fixed range.\n        for bs in [1, 2, 3, 4]\n    ],\n    key=[\"num_tokens\"],\n)\n@triton.jit\ndef _split_qkv_and_compute_local_qk_var_kernel(\n    input_ptr,\n    q_out_ptr,\n    k_out_ptr,\n    v_out_ptr,\n    qk_var_ptr,\n    q_cols: tl.constexpr,\n    k_cols: tl.constexpr,\n    num_tokens: tl.constexpr,\n    qkv_stride: tl.constexpr,\n    q_inv_size: tl.constexpr,\n    k_inv_size: tl.constexpr,\n    BLOCK_SIZE: tl.constexpr,\n):\n    \"\"\"Grid Stride Loop + batch loading + precomputed reciprocal.\n    (BLOCK_SIZE is limited to 1-4 to prevent UB overflow for large hidden_size)\n    \"\"\"\n    pid = tl.program_id(0)\n    num_pids = tl.num_programs(0)\n    block_range = tl.arange(0, BLOCK_SIZE)\n    # ... kernel body ...",
+      "context": "Please add a comment TODO here around UB difference between different chips and whether we can dynamically tune this parameter with formula"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/triton/linearnorm/split_qkv_tp_rmsnorm_rope.py:27\n+++ b/vllm_ascend/ops/triton/linearnorm/split_qkv_tp_rmsnorm_rope.py:27\n@@ -1,6 +1,5 @@\n-# （根据评审意见推断）BLOCK_SIZE autotune 配置无注释说明\n-# linfeng-yuan 评论: \"Please add a comment TODO here around UB difference\n-# between different chips and whether we can dynamically tune this parameter with formula\"\n+# 添加 TODO 注释说明芯片间 UB 差异和动态调参可能性\n+# commit message: \"Add comment for dynamic BLOCK_SIZE computation in split QKV autotune\"\n import torch\n import triton\n import triton.language as tl\n@@ -12,8 +11,9 @@\n @triton.autotune(\n     configs=[\n         triton.Config({\"BLOCK_SIZE\": bs}, num_stages=1, num_warps=1)\n-        # BLOCK_SIZE 限制为 1-4 防止 UB 溢出，但未说明原因\n-        # 无注释说明不同芯片间的 UB 差异及是否可动态调参\n+        # TODO: UB (undefined behavior) differs between different chips.\n+        # Investigate whether we can dynamically tune BLOCK_SIZE with a formula\n+        # based on chip capabilities instead of using a fixed range.\n         for bs in [1, 2, 3, 4]\n     ],\n     key=[\"num_tokens\"],\n@@ -33,7 +33,9 @@\n     k_inv_size: tl.constexpr,\n     BLOCK_SIZE: tl.constexpr,\n ):\n-    \"\"\"Grid Stride Loop + batch loading + precomputed reciprocal.\"\"\"\n+    \"\"\"Grid Stride Loop + batch loading + precomputed reciprocal.\n+    (BLOCK_SIZE is limited to 1-4 to prevent UB overflow for large hidden_size)\n+    \"\"\"\n     pid = tl.program_id(0)\n     num_pids = tl.num_programs(0)\n     block_range = tl.arange(0, BLOCK_SIZE)\n",
+      "stats": "1 file changed, +8 lines, -6 lines",
+      "key_changes": [
+        "-# （根据评审意见推断）BLOCK_SIZE autotune 配置无注释说明",
+        "-# linfeng-yuan 评论: \"Please add a comment TODO here around UB difference",
+        "-# between different chips and whether we can dynamically tune this parameter with formula\"",
+        "+# 添加 TODO 注释说明芯片间 UB 差异和动态调参可能性",
+        "+# commit message: \"Add comment for dynamic BLOCK_SIZE computation in split QKV autotune\"",
+        "-        # BLOCK_SIZE 限制为 1-4 防止 UB 溢出，但未说明原因",
+        "-        # 无注释说明不同芯片间的 UB 差异及是否可动态调参",
+        "+        # TODO: UB (undefined behavior) differs between different chips.",
+        "+        # Investigate whether we can dynamically tune BLOCK_SIZE with a formula",
+        "+        # based on chip capabilities instead of using a fixed range.",
+        "-    \"\"\"Grid Stride Loop + batch loading + precomputed reciprocal.\"\"\"",
+        "+    \"\"\"Grid Stride Loop + batch loading + precomputed reciprocal.",
+        "+    (BLOCK_SIZE is limited to 1-4 to prevent UB overflow for large hidden_size)",
+        "+    \"\"\""
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "report_id": "PR13779_001",
+  "pr_number": 13779,
+  "pr_title": "[BugFix][SFA] Guard DSA-CP graph padding sequence lengths",
+  "pr_status": "merged",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/sfa_v1.py:441"
+  ],
+  "landing_sha": "cd73c53",
+  "source_quote": "![high](https://www.gstatic.com/codereviewagent/high-priority.svg)\n> ### Efficiency Optimization\n> Using `torch.zeros_like(seq_lens)` allocates a new tensor of zeros on the NPU device. Since `torch.where` supports a scalar `0` as the fallback value, we can pass `0` directly to avoid this allocation.\n> Additionally, the condition `(num_local_tokens > 0) & (seq_lens > 0)` performs an extra element-wise logical AND operation on the NPU. Since `torch.clamp_min(seq_lens - offset, 0)` naturally clamps any negative values (including when `seq_lens` is `0` and `offset >= 0`) to `0`, the `seq_lens > 0` check is redundant.\n> We can simplify this to a single `torch.where` call with `num_local_tokens > 0` and a scalar `0` fallback, which is mathematically identical, more readable, and more efficient for the hot-path execution.\n> ```python\nlocal_key_lens = torch.where(\nnum_local_tokens > 0,\ntorch.clamp_min(seq_lens - offset, 0),\n0,\n)",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/attention/sfa_v1.py:441",
+      "patch_snippet": "评后sha cd73c53 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "cd73c53",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在每步推理都会执行的热路径（如 attention metadata builder）中，`torch.where(cond, x, fallback)` 的 `fallback` 应优先使用标量 `0` 而非 `torch.zeros_like(...)`，避免在 NPU/GPU 上分配临时 tensor 和启动 zero-fill kernel。同时，若 `x` 已通过 `torch.clamp_min(..., 0)` 将非正值 clamp 到 0，则条件中无需再叠加 `seq_lens > 0` 这类被 clamp 覆盖的子条件，避免额外的逐元素 AND 运算。",
+    "context": "",
+    "checkpoints": [
+      "检查热路径（metadata builder、forward、scheduler 等每步执行函数）中的 `torch.where(..., torch.zeros_like(t))` 模式，是否可改为标量 `0`",
+      "检查 `torch.where` 的条件是否为 `(A > 0) & (B > 0)` 形式，且其中 `B > 0` 是否已被第二参数的 `torch.clamp_min(B - offset, 0)` 覆盖",
+      "确认标量 `0` 的类型转换安全：`torch.where` 会按第二参数 dtype 自动 cast 标量",
+      "检查是否在不必要的位置创建中间变量（如 `valid_local_req = ...`）增加一次 kernel launch"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/sfa_v1.py",
+      "line": 430,
+      "code": "class SFAV1DSA-CPMetadataBuilder:\n    \"\"\"DSA-CP metadata builder — 每步推理都执行的热路径\"\"\"\n\n    def build(self, seq_lens, num_local_tokens, ...):\n        # ... 前置计算 ...\n        global_end = self._compute_global_end(seq_lens)\n        req_local_end = self._compute_req_local_end(num_local_tokens)\n\n        local_query_lens = torch.cumsum(num_local_tokens.clamp(min=0), dim=0)\n        offset = global_end - req_local_end  # request tokens on later ranks\n\n        # 额外的逐元素 AND 运算\n        valid_local_req = (num_local_tokens > 0) & (seq_lens > 0)\n        local_key_lens = torch.where(\n            valid_local_req,\n            torch.clamp_min(seq_lens - offset, 0),\n            torch.zeros_like(seq_lens),   # 在 NPU 上分配新 tensor + 启动 zero-fill kernel\n        )\n\n        # ... 后续 metadata 构建 ...",
+      "context": "... 前置计算 ... 额外的逐元素 AND 运算 ... 后续 metadata 构建 ..."
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/sfa_v1.py",
+      "line": 430,
+      "code": "class SFAV1DSA-CPMetadataBuilder:\n    \"\"\"DSA-CP metadata builder — 每步推理都执行的热路径\"\"\"\n\n    def build(self, seq_lens, num_local_tokens, ...):\n        # ... 前置计算 ...\n        global_end = self._compute_global_end(seq_lens)\n        req_local_end = self._compute_req_local_end(num_local_tokens)\n\n        local_query_lens = torch.cumsum(num_local_tokens.clamp(min=0), dim=0)\n        offset = global_end - req_local_end  # request tokens on later ranks\n\n        # 删除冗余的 valid_local_req 行：clamp_min 已处理 seq_lens<=0 的情形\n        local_key_lens = torch.where(\n            num_local_tokens > 0,\n            torch.clamp_min(seq_lens - offset, 0),\n            0,   # 标量 0，torch.where 会自动按第二参数 dtype 做类型转换\n        )\n\n        # ... 后续 metadata 构建 ...",
+      "context": "... 前置计算 ... 删除冗余的 valid_local_req 行：clamp_min 已处理 seq_lens<=0 的情形 ... 后续 metadata 构建 ..."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/sfa_v1.py\n+++ b/vllm_ascend/attention/sfa_v1.py\n@@ -9,12 +9,11 @@\n         local_query_lens = torch.cumsum(num_local_tokens.clamp(min=0), dim=0)\n         offset = global_end - req_local_end  # request tokens on later ranks\n \n-        # 额外的逐元素 AND 运算\n-        valid_local_req = (num_local_tokens > 0) & (seq_lens > 0)\n+        # 删除冗余的 valid_local_req 行：clamp_min 已处理 seq_lens<=0 的情形\n         local_key_lens = torch.where(\n-            valid_local_req,\n+            num_local_tokens > 0,\n             torch.clamp_min(seq_lens - offset, 0),\n-            torch.zeros_like(seq_lens),   # 在 NPU 上分配新 tensor + 启动 zero-fill kernel\n+            0,   # 标量 0，torch.where 会自动按第二参数 dtype 做类型转换\n         )\n \n         # ... 后续 metadata 构建 ...\n",
+      "stats": "1 file changed, +3 lines, -4 lines",
+      "key_changes": [
+        "移除: torch.zeros_like(seq_lens),   # 在 NPU 上分配新 tensor + 启动 zero-fill kernel",
+        "移除: valid_local_req,",
+        "移除: valid_local_req = (num_local_tokens > 0) & (seq_lens > 0)",
+        "新增: num_local_tokens > 0,",
+        "新增: 0,   # 标量 0，torch.where 会自动按第二参数 dtype 做类型转换"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

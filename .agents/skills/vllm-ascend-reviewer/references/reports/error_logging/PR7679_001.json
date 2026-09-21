@@ -1,0 +1,83 @@
+{
+  "report_id": "PR7679_001",
+  "pr_number": 7679,
+  "pr_title": "[BUG][CI]Fix qwen3next nightly ci && add tp size constraint in faq for Qwen3Next",
+  "pr_status": "merged",
+  "merged_at": "2026-03-27T06:54:32Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/platform.py:523",
+    "vllm_ascend/platform.py:521"
+  ],
+  "landing_sha": "7916243",
+  "source_quote": "raise ValueError(\"Models with head dim out of [64, 128, 192] do not support tp >= 16 now. There is a known issue on torch_npu.npu_fused_infer_attention_score on this scenario.\")\nif model_config.get_num_attention_heads(vllm_config.parallel_config) == model_config.get_num_kv_heads(vllm_config.parallel_config) and model_config.get_head_size() not in [64, 128, 192]:\nif model_config is not None and model_config.model_type == \"qwen\":",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao: vllm_ascend/platform.py:523",
+      "patch_snippet": "评后sha 7916243 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/platform.py:521",
+      "patch_snippet": "评后sha 7916243 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/platform.py:521",
+      "patch_snippet": "评后sha 7916243 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "7916243",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当添加硬件或模型相关的约束检查时，错误消息应明确说明不支持的具体场景、原因以及已知的底层问题，便于用户定位和解决问题。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/platform.py",
+      "line": 505,
+      "code": "from vllm.config import ModelConfig, ParallelConfig, VllmConfig\n\nclass NPUPlatform(Platform):\n    # ... 其他方法 ...\n\n    @classmethod\n    def check_and_update_config(cls, vllm_config: VllmConfig) -> None:\n        \"\"\"检查并更新 vLLM 配置，包含 NPU 平台特定的约束检查\"\"\"\n        model_config = vllm_config.model_config\n        parallel_config = vllm_config.parallel_config\n        # ... 其他配置检查逻辑 ...\n\n        # 检查 head size 与 TP 的兼容性\n        # ❌ 未限定模型类型，对所有模型都生效；且缺少 model_config 空值保护\n        if model_config.get_num_attention_heads(parallel_config) == \\\n                model_config.get_num_kv_heads(parallel_config):\n            if model_config.get_head_size() not in [64, 128, 192]:\n                raise ValueError(\"Not supported\")",
+      "context": "raise ValueError(\"Models with head dim out of [64, 128, 192] do not support tp >= 16 now. There is a known issue on torch_npu.npu_fused_infer_attention_score on this scenario.\")\nif model_config.get_nu"
+    },
+    "pattern": {
+      "file": "vllm_ascend/platform.py",
+      "line": 505,
+      "code": "from vllm.config import ModelConfig, ParallelConfig, VllmConfig\n\nclass NPUPlatform(Platform):\n    # ... 其他方法 ...\n\n    @classmethod\n    def check_and_update_config(cls, vllm_config: VllmConfig) -> None:\n        \"\"\"检查并更新 vLLM 配置，包含 NPU 平台特定的约束检查\"\"\"\n        model_config = vllm_config.model_config\n        parallel_config = vllm_config.parallel_config\n        # ... 其他配置检查逻辑 ...\n\n        # ✅ 添加 model_config 空值保护和 model_type 判断，仅对 qwen 模型生效\n        if model_config is not None and model_config.model_type == \"qwen\":\n            if model_config.get_num_attention_heads(\n                    vllm_config.parallel_config) == \\\n                    model_config.get_num_kv_heads(\n                        vllm_config.parallel_config) \\\n                    and model_config.get_head_size() not in [64, 128, 192]:\n                raise ValueError(\n                    \"Models with head dim out of [64, 128, 192] \"\n                    \"do not support tp >= 16 now. \"\n                    \"There is a known issue on \"\n                    \"torch_npu.npu_fused_infer_attention_score \"\n                    \"on this scenario.\")",
+      "context": "raise ValueError(\"Models with head dim out of [64, 128, 192] do not support tp >= 16 now. There is a known issue on torch_npu.npu_fused_infer_attention_score on this scenario.\")\nif model_config.get_nu"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/platform.py\n+++ b/vllm_ascend/platform.py\n@@ -10,9 +10,16 @@\n         parallel_config = vllm_config.parallel_config\n         # ... 其他配置检查逻辑 ...\n \n-        # 检查 head size 与 TP 的兼容性\n-        # ❌ 未限定模型类型，对所有模型都生效；且缺少 model_config 空值保护\n-        if model_config.get_num_attention_heads(parallel_config) == \\\n-                model_config.get_num_kv_heads(parallel_config):\n-            if model_config.get_head_size() not in [64, 128, 192]:\n-                raise ValueError(\"Not supported\")\n+        # ✅ 添加 model_config 空值保护和 model_type 判断，仅对 qwen 模型生效\n+        if model_config is not None and model_config.model_type == \"qwen\":\n+            if model_config.get_num_attention_heads(\n+                    vllm_config.parallel_config) == \\\n+                    model_config.get_num_kv_heads(\n+                        vllm_config.parallel_config) \\\n+                    and model_config.get_head_size() not in [64, 128, 192]:\n+                raise ValueError(\n+                    \"Models with head dim out of [64, 128, 192] \"\n+                    \"do not support tp >= 16 now. \"\n+                    \"There is a known issue on \"\n+                    \"torch_npu.npu_fused_infer_attention_score \"\n+                    \"on this scenario.\")\n",
+      "stats": "1 file changed, +13 lines, -6 lines",
+      "key_changes": [
+        "-        # 检查 head size 与 TP 的兼容性",
+        "-        # ❌ 未限定模型类型，对所有模型都生效；且缺少 model_config 空值保护",
+        "-        if model_config.get_num_attention_heads(parallel_config) == \\",
+        "-                model_config.get_num_kv_heads(parallel_config):",
+        "-            if model_config.get_head_size() not in [64, 128, 192]:",
+        "-                raise ValueError(\"Not supported\")",
+        "+        # ✅ 添加 model_config 空值保护和 model_type 判断，仅对 qwen 模型生效",
+        "+        if model_config is not None and model_config.model_type == \"qwen\":",
+        "+            if model_config.get_num_attention_heads(",
+        "+                    vllm_config.parallel_config) == \\",
+        "+                    model_config.get_num_kv_heads(",
+        "+                        vllm_config.parallel_config) \\",
+        "+                    and model_config.get_head_size() not in [64, 128, 192]:",
+        "+                raise ValueError(",
+        "+                    \"Models with head dim out of [64, 128, 192] \"",
+        "+                    \"do not support tp >= 16 now. \"",
+        "+                    \"There is a known issue on \"",
+        "+                    \"torch_npu.npu_fused_infer_attention_score \"",
+        "+                    \"on this scenario.\")"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

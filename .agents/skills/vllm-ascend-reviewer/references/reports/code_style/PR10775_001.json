@@ -1,0 +1,67 @@
+{
+  "report_id": "PR10775_001",
+  "pr_number": 10775,
+  "pr_title": "[BugFix] isolate KV cache from sleep cleanup with dedicated memory tag for hadamard matrix",
+  "pr_status": "merged",
+  "merged_at": "2026-06-24T07:53:52Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/dsa_v1.py:424"
+  ],
+  "landing_sha": "59d02ec",
+  "source_quote": "`dsa_v1.py` 和 `dsa_cp.py` 中对 Hadamard matrix 的 sleep mode 标记处理代码几乎完全相同（约 11 行），只是类名不同。建议提取为公共 helper 函数（如 `allocate_hadamard_with_sleep_tag`），避免两个文件中的重复代码。当前方式的维护成本较高——如果 sleep mode 的 tag 逻辑需要修改，需要同时修改两处。",
+  "correspondence": [
+    {
+      "review_quote": "winson-00178005 指出 dsa_v1.py 和 dsa_cp.py 中 Hadamard matrix 的 sleep mode 标记处理代码重复，建议提取为公共 helper 函数以降低维护成本。作者通过 commit `59d02ec` 限制了 CaMemAllocator 仅在 sleep mode 使用，1/1 建议全部落地。",
+      "patch_snippet": "commit `59d02ec`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "59d02ec",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当多个文件中存在几乎相同的内存管理逻辑（如 sleep mode 标记处理）时，应提取为公共 helper 函数，避免维护成本增加和逻辑不一致。",
+    "context": "",
+    "checkpoints": [
+      "多个文件中是否存在重复的内存管理代码",
+      "是否应提取为公共 helper 函数",
+      "CaMemAllocator 的使用是否考虑了 expandable_segments 兼容性"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/dsa_v1.py",
+      "line": 420,
+      "code": "# CaMemAllocator.get_instance() 无条件调用，\n# 在 expandable_segments:True 环境下会崩溃\n\n    def _init_hadamard(self, dim_padded: int):\n        \"\"\"Initialize Hadamard matrix for DSA attention.\n\n        The Hadamard matrix is used for random projection in the\n        DSA attention mechanism. It should persist across sleep/wake\n        cycles to avoid recomputation.\n        \"\"\"\n        if AscendDSAMetadataBuilder.hadamard is not None:\n            return\n\n        # ❌ 无条件调用 CaMemAllocator.get_instance()\n        # 在 expandable_segments:True 环境下会触发 assert 崩溃\n        allocator = CaMemAllocator.get_instance()\n        ctx = allocator.use_allocation_tag(\n            CaMemAllocator.sleep_persistent_tag)\n        with ctx:\n            AscendDSAMetadataBuilder.hadamard = torch.tensor(\n                hadamard(dim_padded, dtype=float),\n                dtype=torch.float, device=self.device\n            ).to(torch.bfloat16)",
+      "context": "`dsa_v1.py` 和 `dsa_cp.py` 中对 Hadamard matrix 的 sleep mode 标记处理代码几乎完全相同（约 11 行），只是类名不同。建议提取为公共 helper 函数（如 `allocate_hadamard_with_sleep_tag`），避免两个文件中的重复代码。当前方式的维护成本较高——如果 sleep mode 的 tag 逻辑需要修改，需要同时修改两处。"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/dsa_v1.py",
+      "line": 420,
+      "code": "# 添加 camem_available 检查和 expandable_segments 环境检查\n\n    def _init_hadamard(self, dim_padded: int):\n        \"\"\"Initialize Hadamard matrix for DSA attention.\"\"\"\n        if AscendDSAMetadataBuilder.hadamard is not None:\n            return\n\n        # ✅ 检查 camem_available 和 expandable_segments 配置\n        import os\n        if camem_available and \"expandable_segments:True\" not in os.environ.get(\n            \"PYTORCH_NPU_ALLOC_CONF\", \"\"\n        ):\n            allocator = CaMemAllocator.get_instance()\n            ctx = allocator.use_allocation_tag(\n                CaMemAllocator.sleep_persistent_tag)\n        else:\n            from contextlib import nullcontext\n            ctx = nullcontext()\n        with ctx:\n            AscendDSAMetadataBuilder.hadamard = torch.tensor(\n                hadamard(dim_padded, dtype=float),\n                dtype=torch.float, device=self.device\n            ).to(torch.bfloat16)",
+      "context": "`dsa_v1.py` 和 `dsa_cp.py` 中对 Hadamard matrix 的 sleep mode 标记处理代码几乎完全相同（约 11 行），只是类名不同。建议提取为公共 helper 函数（如 `allocate_hadamard_with_sleep_tag`），避免两个文件中的重复代码。当前方式的维护成本较高——如果 sleep mode 的 tag 逻辑需要修改，需要同时修改两处。"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/dsa_v1.py\n+++ b/vllm_ascend/attention/dsa_v1.py\n@@ -1,21 +1,21 @@\n-# CaMemAllocator.get_instance() 无条件调用，\n-# 在 expandable_segments:True 环境下会崩溃\n+# 添加 camem_available 检查和 expandable_segments 环境检查\n \n     def _init_hadamard(self, dim_padded: int):\n-        \"\"\"Initialize Hadamard matrix for DSA attention.\n-\n-        The Hadamard matrix is used for random projection in the\n-        DSA attention mechanism. It should persist across sleep/wake\n-        cycles to avoid recomputation.\n-        \"\"\"\n+        \"\"\"Initialize Hadamard matrix for DSA attention.\"\"\"\n         if AscendDSAMetadataBuilder.hadamard is not None:\n             return\n \n-        # ❌ 无条件调用 CaMemAllocator.get_instance()\n-        # 在 expandable_segments:True 环境下会触发 assert 崩溃\n-        allocator = CaMemAllocator.get_instance()\n-        ctx = allocator.use_allocation_tag(\n-            CaMemAllocator.sleep_persistent_tag)\n+        # ✅ 检查 camem_available 和 expandable_segments 配置\n+        import os\n+        if camem_available and \"expandable_segments:True\" not in os.environ.get(\n+            \"PYTORCH_NPU_ALLOC_CONF\", \"\"\n+        ):\n+            allocator = CaMemAllocator.get_instance()\n+            ctx = allocator.use_allocation_tag(\n+                CaMemAllocator.sleep_persistent_tag)\n+        else:\n+            from contextlib import nullcontext\n+            ctx = nullcontext()\n         with ctx:\n             AscendDSAMetadataBuilder.hadamard = torch.tensor(\n                 hadamard(dim_padded, dtype=float),",
+      "stats": "1 file changed, +13 lines, -13 lines",
+      "key_changes": [
+        "移除: # CaMemAllocator.get_instance() 无条件调用，",
+        "移除: # 在 expandable_segments:True 环境下会崩溃",
+        "新增: # 添加 camem_available 检查和 expandable_segments 环境检查",
+        "移除: \"\"\"Initialize Hadamard matrix for DSA attention.",
+        "移除: The Hadamard matrix is used for random projection in the",
+        "移除: DSA attention mechanism. It should persist across sleep/wake",
+        "移除: cycles to avoid recomputation.",
+        "移除: \"\"\"",
+        "新增: \"\"\"Initialize Hadamard matrix for DSA attention.\"\"\"",
+        "移除: # ❌ 无条件调用 CaMemAllocator.get_instance()"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "report_id": "PR13477_002",
+  "pr_number": 13477,
+  "pr_title": "[CI]Main2Main 0807",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/ops/triton/mamba/postprocess.py:94"
+  ],
+  "landing_sha": "78a10d9",
+  "source_quote": "**[P1] Restore the MRv2 running-state formula.**\n> Under `PRECOMPUTED_NEW_COMPUTED`, this assigns `num_tokens_running_state` to the same aligned value as `aligned_new_computed`. Consequently, `needs_copy` is always true and `accept_token_bias` is always zero. For example, with `block_size=16`, `new_num_computed=32`, and `num_accepted=3`, the correct values are `num_tokens_running_state=30` and `accept_token_bias=2`, while this code produces `32` and `0`. The upstream contract is:\n> ```python\nnew_num_computed = tl.load(num_computed_tokens_ptr + req_idx)\nnum_tokens_running_state = new_num_computed - num_accepted + 1",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/ops/triton/mamba/postprocess.py:94",
+      "patch_snippet": "评后sha 78a10d9 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "78a10d9",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "从 vLLM 上游移植的内核中，`num_tokens_running_state` 等运行态量有明确的计算公式（如 `new_num_computed - num_accepted + 1`），不得在 `PRECOMPUTED` 等分支用对齐值 `(x // block_size) * block_size` 替换；否则会令 `needs_copy` 恒为真、`accept_token_bias` 恒为 0，导致跳过必需的状态迁移或在错误边界拷贝。",
+    "context": "",
+    "checkpoints": [
+      "检查 `num_tokens_running_state` 是否在各分支使用了上游规定的公式（而非对齐值）",
+      "检查是否存在\"运行态量 = 对齐值\"的赋值（会导致 `needs_copy = aligned >= running_state` 恒真）",
+      "用具体数值验证：`block_size=16, new_num_computed=32, num_accepted=3` 应得 `running_state=30, bias=2`，而非 `32, 0`",
+      "检查是否对同一量在分支外二次赋值覆盖了正确值"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/triton/mamba/postprocess.py",
+      "line": 80,
+      "code": "    num_accepted = tl.load(num_accepted_tokens_ptr + req_idx)\n    src_block_idx = tl.load(mamba_state_idx_ptr + req_idx)\n    num_scheduled = tl.load(num_scheduled_tokens_ptr + req_idx)\n\n    if PRECOMPUTED_NEW_COMPUTED:\n        new_num_computed = tl.load(num_computed_tokens_ptr + req_idx)\n    else:\n        num_computed = tl.load(num_computed_tokens_ptr + req_idx)\n        num_draft = tl.load(num_draft_tokens_ptr + req_idx)\n        num_tokens_running_state = num_computed + num_scheduled - num_draft\n        new_num_computed = num_tokens_running_state + num_accepted - 1\n\n    aligned_new_computed = (new_num_computed // block_size) * block_size\n\n    if not PRECOMPUTED_NEW_COMPUTED:\n        num_tokens_running_state = num_computed + num_scheduled - num_draft\n    else:\n        # 错：num_tokens_running_state 等于 aligned_new_computed\n        num_tokens_running_state = (new_num_computed // block_size) * block_size\n\n    needs_copy = aligned_new_computed >= num_tokens_running_state   # 恒为 True\n    accept_token_bias = tl.where(needs_copy,\n        new_num_computed - num_tokens_running_state, 0)  # 恒为 0",
+      "context": "错：num_tokens_running_state 等于 aligned_new_computed"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/triton/mamba/postprocess.py",
+      "line": 80,
+      "code": "    num_accepted = tl.load(num_accepted_tokens_ptr + req_idx)\n    src_block_idx = tl.load(mamba_state_idx_ptr + req_idx)\n\n    if PRECOMPUTED_NEW_COMPUTED:\n        # 恢复上游公式：num_tokens_running_state = new_num_computed - num_accepted + 1\n        new_num_computed = tl.load(num_computed_tokens_ptr + req_idx)\n        num_tokens_running_state = new_num_computed - num_accepted + 1\n    else:\n        num_scheduled = tl.load(num_scheduled_tokens_ptr + req_idx)\n        num_computed = tl.load(num_computed_tokens_ptr + req_idx)\n        num_draft = tl.load(num_draft_tokens_ptr + req_idx)\n        num_tokens_running_state = num_computed + num_scheduled - num_draft\n        new_num_computed = num_tokens_running_state + num_accepted - 1\n\n    aligned_new_computed = (new_num_computed // block_size) * block_size\n    needs_copy = aligned_new_computed >= num_tokens_running_state\n    accept_token_bias = tl.where(needs_copy,\n        new_num_computed - num_tokens_running_state, 0)\n    # 示例：block_size=16, new_num_computed=32, num_accepted=3\n    # → running_state=30, aligned=32, needs_copy=True, bias=2 ✅",
+      "context": "恢复上游公式：num_tokens_running_state = new_num_computed - num_accepted + 1 示例：block_size=16, new_num_computed=32, num_accepted=3 → running_state=30, aligned=32, needs_copy=True, bias=2 ✅"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/triton/mamba/postprocess.py\n+++ b/vllm_ascend/ops/triton/mamba/postprocess.py\n@@ -1,23 +1,20 @@\n     num_accepted = tl.load(num_accepted_tokens_ptr + req_idx)\n     src_block_idx = tl.load(mamba_state_idx_ptr + req_idx)\n-    num_scheduled = tl.load(num_scheduled_tokens_ptr + req_idx)\n \n     if PRECOMPUTED_NEW_COMPUTED:\n+        # 恢复上游公式：num_tokens_running_state = new_num_computed - num_accepted + 1\n         new_num_computed = tl.load(num_computed_tokens_ptr + req_idx)\n+        num_tokens_running_state = new_num_computed - num_accepted + 1\n     else:\n+        num_scheduled = tl.load(num_scheduled_tokens_ptr + req_idx)\n         num_computed = tl.load(num_computed_tokens_ptr + req_idx)\n         num_draft = tl.load(num_draft_tokens_ptr + req_idx)\n         num_tokens_running_state = num_computed + num_scheduled - num_draft\n         new_num_computed = num_tokens_running_state + num_accepted - 1\n \n     aligned_new_computed = (new_num_computed // block_size) * block_size\n-\n-    if not PRECOMPUTED_NEW_COMPUTED:\n-        num_tokens_running_state = num_computed + num_scheduled - num_draft\n-    else:\n-        # 错：num_tokens_running_state 等于 aligned_new_computed\n-        num_tokens_running_state = (new_num_computed // block_size) * block_size\n-\n-    needs_copy = aligned_new_computed >= num_tokens_running_state   # 恒为 True\n+    needs_copy = aligned_new_computed >= num_tokens_running_state\n     accept_token_bias = tl.where(needs_copy,\n-        new_num_computed - num_tokens_running_state, 0)  # 恒为 0\n+        new_num_computed - num_tokens_running_state, 0)\n+    # 示例：block_size=16, new_num_computed=32, num_accepted=3\n+    # → running_state=30, aligned=32, needs_copy=True, bias=2 ✅\n",
+      "stats": "1 file changed, +7 lines, -10 lines",
+      "key_changes": [
+        "移除: num_tokens_running_state = (new_num_computed // block_size) * block_size",
+        "移除: num_scheduled = tl.load(num_scheduled_tokens_ptr + req_idx)",
+        "新增: num_tokens_running_state = new_num_computed - num_accepted + 1"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

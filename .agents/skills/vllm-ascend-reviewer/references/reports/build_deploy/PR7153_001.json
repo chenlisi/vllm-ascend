@@ -1,0 +1,68 @@
+{
+  "report_id": "PR7153_001",
+  "pr_number": 7153,
+  "pr_title": "[Version] Drop 0.16.0 support",
+  "pr_status": "merged",
+  "merged_at": "2026-03-13T08:14:15Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/conf.py:78",
+    "docs/source/installation.md:96",
+    "docs/source/installation.md:107",
+    "docs/source/conf.py:76"
+  ],
+  "landing_sha": "9424d27",
+  "source_quote": "8.5.1",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan 指出 CANN 版本应为 8.5.1，并质疑 installation.md 中的路径修改。wxsIcey 确认了两个 set_env.sh 文件内容一致。realliujiaxu 提醒 pip_vllm_ascend_version 和 pip_vllm_version 也应更新到 0.17。作者修正了 CANN 版本号，revert 了 installation.md 的路径修改，并说明 pip 版本号将在 0.17.0rc0 发布时更新。2/5 建议直接落地。",
+      "patch_snippet": "",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "9424d27",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在移除旧版本支持时，需同步更新所有版本相关的配置项，包括 CANN 版本号、pip 包版本号、Dockerfile 中的 VLLM_TAG 等。文档中的路径引用需使用通用路径（如 `/usr/local/Ascend/cann/set_env.sh`），避免误写本地路径。",
+    "context": "",
+    "checkpoints": [
+      "检查 conf.py 中的 CANN 版本号是否已更新",
+      "确认 pip_vllm_ascend_version 和 pip_vllm_version 是否需要同步更新",
+      "验证 installation.md 中的路径是否正确",
+      "确认所有 Dockerfile 中的 VLLM_TAG 是否已更新",
+      "检查版本条件代码（如 vllm_version_is）是否已清理"
+    ],
+    "antipattern": {
+      "file": "docs/source/conf.py",
+      "line": 70,
+      "code": "project = \"vllm-ascend\"\ncopyright = \"2025, vLLM Team\"\nauthor = \"vLLM Team\"\n\nci_vllm_version = \"v0.17.0\"\npip_vllm_ascend_version = \"0.16.0\"  # 待更新到 0.17\npip_vllm_version = \"0.16.0\"  # 待更新到 0.17\n\ncann_version = \"8.5.0\"  # 旧版本号，需更新为 8.5.1\ncann_download_url = (\n    f\"https://vllm-ascend.obs.cn-north-4.myhuaweicloud.com/\"\n    f\"vllm-ascend/cann-{cann_version}/\"\n)",
+      "context": "8.5.1"
+    },
+    "pattern": {
+      "file": "docs/source/conf.py",
+      "line": 70,
+      "code": "project = \"vllm-ascend\"\ncopyright = \"2025, vLLM Team\"\nauthor = \"vLLM Team\"\n\nci_vllm_version = \"v0.17.0\"\npip_vllm_ascend_version = \"0.16.0\"  # 将在 0.17.0rc0 发布时更新\npip_vllm_version = \"0.16.0\"  # 将在 0.17.0rc0 发布时更新\n\ncann_version = \"8.5.1\"  # 更新为新版本号\ncann_download_url = (\n    f\"https://vllm-ascend.obs.cn-north-4.myhuaweicloud.com/\"\n    f\"vllm-ascend/cann-{cann_version}/\"\n)",
+      "context": "8.5.1"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/conf.py\n+++ b/docs/source/conf.py\n@@ -70,13 +70,13 @@\n author = \"vLLM Team\"\n \n ci_vllm_version = \"v0.17.0\"\n-pip_vllm_ascend_version = \"0.16.0\"  # 待更新到 0.17\n-pip_vllm_version = \"0.16.0\"  # 待更新到 0.17\n+pip_vllm_ascend_version = \"0.16.0\"  # 将在 0.17.0rc0 发布时更新\n+pip_vllm_version = \"0.16.0\"  # 将在 0.17.0rc0 发布时更新\n \n-cann_version = \"8.5.0\"  # 旧版本号，需更新为 8.5.1\n+cann_version = \"8.5.1\"  # 更新为新版本号\n cann_download_url = (\n     f\"https://vllm-ascend.obs.cn-north-4.myhuaweicloud.com/\"\n     f\"vllm-ascend/cann-{cann_version}/\"",
+      "stats": "1 file changed, +3 lines, -3 lines",
+      "key_changes": [
+        "- pip_vllm_ascend_version = \"0.16.0\"  # 待更新到 0.17",
+        "- pip_vllm_version = \"0.16.0\"  # 待更新到 0.17",
+        "+ pip_vllm_ascend_version = \"0.16.0\"  # 将在 0.17.0rc0 发布时更新",
+        "+ pip_vllm_version = \"0.16.0\"  # 将在 0.17.0rc0 发布时更新",
+        "- cann_version = \"8.5.0\"  # 旧版本号，需更新为 8.5.1",
+        "+ cann_version = \"8.5.1\"  # 更新为新版本号"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

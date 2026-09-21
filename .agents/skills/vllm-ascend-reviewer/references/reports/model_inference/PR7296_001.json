@@ -1,0 +1,58 @@
+{
+  "report_id": "PR7296_001",
+  "pr_number": 7296,
+  "pr_title": "[DOC] MiniMax-M2.5 model intro",
+  "pr_status": "merged",
+  "merged_at": "2026-03-18T01:31:46Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/models/MiniMax-M2.5.md:177"
+  ],
+  "landing_sha": "cd14b32",
+  "source_quote": "MengqingCao 建议设置 `OMP_NUM_THREADS=1`，以优化模型推理时的线程配置。",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 指出文档中缺少 `OMP_NUM_THREADS=1` 的环境变量设置。作者通过 commit `cd14b32` 添加 minimax 到 nightly workflow 时一并采纳了该建议，1/1 建议全部落地。",
+      "patch_snippet": "commit `cd14b32`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "cd14b32",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在模型部署文档中，启动推理服务前应设置 `export OMP_NUM_THREADS=1`，避免 OpenMP 线程与推理框架线程冲突导致性能下降。",
+    "context": "",
+    "checkpoints": [
+      "模型部署文档中是否包含 `export OMP_NUM_THREADS=1` 环境变量设置",
+      "环境变量设置是否在启动推理服务命令之前"
+    ],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "<!-- 文件: docs/source/tutorials/models/MiniMax-M2.5.md -->\n<!-- （根据评审意见推断补全上下文）启动推理服务章节，缺少 OMP_NUM_THREADS 环境变量设置 -->",
+      "context": "MengqingCao 建议设置 `OMP_NUM_THREADS=1`，以优化模型推理时的线程配置。"
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "<!-- 文件: docs/source/tutorials/models/MiniMax-M2.5.md -->\n<!-- （来自评审 suggestion）在启动推理服务命令前添加 OMP_NUM_THREADS=1 -->",
+      "context": "MengqingCao 建议设置 `OMP_NUM_THREADS=1`，以优化模型推理时的线程配置。"
+    },
+    "diff": {
+      "unified": "--- a/file\n+++ b/file\n@@ -1,2 +1,2 @@\n <!-- 文件: docs/source/tutorials/models/MiniMax-M2.5.md -->\n-<!-- （根据评审意见推断补全上下文）启动推理服务章节，缺少 OMP_NUM_THREADS 环境变量设置 -->\n+<!-- （来自评审 suggestion）在启动推理服务命令前添加 OMP_NUM_THREADS=1 -->",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "- <!-- （根据评审意见推断补全上下文）启动推理服务章节，缺少 OMP_NUM_THREADS 环境变量设置 -->",
+        "+ <!-- （来自评审 suggestion）在启动推理服务命令前添加 OMP_NUM_THREADS=1 -->"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

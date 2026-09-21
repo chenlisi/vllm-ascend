@@ -1,0 +1,67 @@
+{
+  "report_id": "PR4188_001",
+  "pr_number": 4188,
+  "pr_title": "[Feat] Flashcomm2 use o_shared linear",
+  "pr_status": "merged",
+  "merged_at": "2025-12-11T04:43:04Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/distributed/parallel_state.py:52",
+    "vllm_ascend/distributed/parallel_state.py:281",
+    "vllm_ascend/attention/mla_v1.py:1",
+    "vllm_ascend/attention/mla_v1.py:1541",
+    "tests/ut/attention/test_mla_v1.py:844",
+    "vllm_ascend/distributed/parallel_state.py:273",
+    "vllm_ascend/envs.py:142",
+    "vllm_ascend/ops/shared_weight_layer.py:5",
+    "vllm_ascend/envs.py:103",
+    "vllm_ascend/distributed/parallel_state.py:192"
+  ],
+  "landing_sha": "8da4e8b",
+  "source_quote": "Reuse the WORLD comm group here.",
+  "correspondence": [
+    {
+      "review_quote": "六位评审人从不同角度提出了 14 条意见：whx-sjtu 建议复用 WORLD 通信组；Levi-JQ 指出不必要的分支和 broadcast 逻辑问题，以及 `flashcomm2_o_shared_enabled()` 的作用域限制；clrs97 指出 MTP block 应跳过 shared feature，并解释了 multi DP 场景下 broadcast 的必要性；MengqingCao 指出测试中引用了已移除的 torchair；wangxiyuan 要求环境变量改为 bool 类型、将 shared_weight_layer 移至更合适的目录、添加环境变量使用说明；dsxs",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "8da4e8b",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在分布式场景中，应优先复用已有的通信组（如 WORLD），而非创建新的通信组，特别是在涉及 PP 的场景中，新建通信组可能导致通信域不一致。",
+    "context": "",
+    "checkpoints": [
+      "检查是否有新建通信组而非复用已有通信组",
+      "确认 PP 场景下通信域是否正确",
+      "验证通信组的生命周期管理"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/distributed/parallel_state.py",
+      "line": 40,
+      "code": "import torch.distributed as dist\nfrom vllm.distributed.parallel_state import get_world_group\n\ndef init_flashcomm2_groups(\n    flashcomm2_otp_size: int,\n    backend: str = \"hccl\",\n):\n    \"\"\"初始化 flashcomm2 通信组\"\"\"\n    world_size = dist.get_world_size()\n    flashcomm2_ranks = _compute_flashcomm2_ranks(flashcomm2_otp_size)\n\n    comm_group = new_process_group(\n        backend=backend,\n        ranks=flashcomm2_ranks,\n    )\n    return comm_group",
+      "context": "Reuse the WORLD comm group here."
+    },
+    "pattern": {
+      "file": "vllm_ascend/distributed/parallel_state.py",
+      "line": 40,
+      "code": "import torch.distributed as dist\nfrom vllm.distributed.parallel_state import get_world_group\n\ndef init_flashcomm2_groups(\n    flashcomm2_otp_size: int,\n    backend: str = \"hccl\",\n):\n    \"\"\"初始化 flashcomm2 通信组\"\"\"\n    world_size = dist.get_world_size()\n    flashcomm2_ranks = _compute_flashcomm2_ranks(flashcomm2_otp_size)\n\n    comm_group = get_world_group().create_group(\n        backend=backend,\n        ranks=flashcomm2_ranks,\n    )\n    return comm_group",
+      "context": "Reuse the WORLD comm group here."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/distributed/parallel_state.py\n+++ b/vllm_ascend/distributed/parallel_state.py\n@@ -40,16 +40,16 @@\n     world_size = dist.get_world_size()\n     flashcomm2_ranks = _compute_flashcomm2_ranks(flashcomm2_otp_size)\n \n-    comm_group = new_process_group(\n+    comm_group = get_world_group().create_group(\n         backend=backend,\n         ranks=flashcomm2_ranks,\n     )",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "修改了第 12-12 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

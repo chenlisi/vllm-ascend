@@ -1,0 +1,99 @@
+{
+  "report_id": "PR2907_001",
+  "pr_number": 2907,
+  "pr_title": "[CI] Upgrade vLLM to 20250919 (6d8246aa) and fix some broken issue",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    ".github/workflows/vllm_ascend_test.yaml:85",
+    ".github/workflows/vllm_ascend_test.yaml:141",
+    ".github/workflows/vllm_ascend_test.yaml:206",
+    ".github/workflows/vllm_ascend_test.yaml:82",
+    ".github/workflows/format_pr_body.yaml:39",
+    "vllm_ascend/platform.py:131"
+  ],
+  "landing_sha": "8daa21c",
+  "source_quote": "(Yikun 建议使用最新的 vLLM commit hash，并每天跟进上游变更)\nsame\nsame\n(cc 相关评审人员关注 hash 更新)\nplease update `vllm_ascend_test_full.yaml` as well.\n(建议使用完整 commit hash)\ndoes this work with v0.10.2?\nI missed the version compatibility issues, now fixed, thanks!",
+  "correspondence": [
+    {
+      "review_quote": ".github/workflows/vllm_ascend_test.yaml:85",
+      "patch_snippet": "评后sha 8daa21c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": ".github/workflows/vllm_ascend_test.yaml:141",
+      "patch_snippet": "评后sha 8daa21c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": ".github/workflows/vllm_ascend_test.yaml:206",
+      "patch_snippet": "评后sha 8daa21c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": ".github/workflows/vllm_ascend_test.yaml:85",
+      "patch_snippet": "评后sha 8daa21c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": ".github/workflows/vllm_ascend_test.yaml:82",
+      "patch_snippet": "评后sha 8daa21c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": ".github/workflows/format_pr_body.yaml:39",
+      "patch_snippet": "评后sha 8daa21c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/platform.py:131",
+      "patch_snippet": "评后sha 8daa21c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/platform.py:131",
+      "patch_snippet": "评后sha 8daa21c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "8daa21c",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在 CI 配置文件中引用上游仓库的 commit 时，应使用完整的 commit hash 而非短 hash，避免因 hash 冲突或 checkout 工具限制导致的构建失败。",
+    "context": "",
+    "checkpoints": [
+      "CI 配置中是否使用完整 commit hash",
+      "所有引用同一版本的配置是否同步更新",
+      "版本兼容性是否经过验证"
+    ],
+    "antipattern": {
+      "file": ".github/workflows/vllm_ascend_test.yaml",
+      "line": 80,
+      "code": "# 评审人: Yikun\n# 使用旧的 vLLM commit hash\n\njobs:\n  test:\n    strategy:\n      matrix:\n        vllm_version: [旧hash, v0.10.2]\n    steps:\n      - name: Checkout vLLM\n        uses: actions/checkout@v4\n        with:\n          repository: vllm-project/vllm\n          ref: ${{ matrix.vllm_version }}",
+      "context": "评审人: Yikun 使用旧的 vLLM commit hash"
+    },
+    "pattern": {
+      "file": ".github/workflows/vllm_ascend_test.yaml",
+      "line": 80,
+      "code": "# 更新为最新 vLLM commit hash，每天跟进上游变更\n\njobs:\n  test:\n    strategy:\n      matrix:\n        # 使用最新 vLLM commit hash\n        vllm_version: [68dbde5, v0.10.2]\n    steps:\n      - name: Checkout vLLM\n        uses: actions/checkout@v4\n        with:\n          repository: vllm-project/vllm\n          # 必须使用完整 commit hash，否则 checkout@v4 会失败\n          ref: 68dbde5dbb11b9250454d0c9f21a8b3da960b341",
+      "context": "更新为最新 vLLM commit hash，每天跟进上游变更 使用最新 vLLM commit hash 必须使用完整 commit hash，否则 checkout@v4 会失败"
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/vllm_ascend_test.yaml\n+++ b/.github/workflows/vllm_ascend_test.yaml\n@@ -1,14 +1,15 @@\n-# 评审人: Yikun\n-# 使用旧的 vLLM commit hash\n+# 更新为最新 vLLM commit hash，每天跟进上游变更\n \n jobs:\n   test:\n     strategy:\n       matrix:\n-        vllm_version: [旧hash, v0.10.2]\n+        # 使用最新 vLLM commit hash\n+        vllm_version: [68dbde5, v0.10.2]\n     steps:\n       - name: Checkout vLLM\n         uses: actions/checkout@v4\n         with:\n           repository: vllm-project/vllm\n-          ref: ${{ matrix.vllm_version }}\n+          # 必须使用完整 commit hash，否则 checkout@v4 会失败\n+          ref: 68dbde5dbb11b9250454d0c9f21a8b3da960b341\n",
+      "stats": "1 file changed, +5 lines, -4 lines",
+      "key_changes": [
+        "移除: vllm_version: [旧hash, v0.10.2]",
+        "移除: ref: ${{ matrix.vllm_version }}",
+        "新增: vllm_version: [68dbde5, v0.10.2]"
+      ]
+    },
+    "language": "yaml",
+    "_status": "processed"
+  }
+}

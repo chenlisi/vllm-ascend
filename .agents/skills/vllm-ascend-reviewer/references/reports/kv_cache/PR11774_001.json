@@ -1,0 +1,57 @@
+{
+  "report_id": "PR11774_001",
+  "pr_number": 11774,
+  "pr_title": "[BugFix][Worker] Reset slot_mapping to pad id for dummy graph capture",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/worker/model_runner_v1.py:3660"
+  ],
+  "landing_sha": "134ddb0",
+  "source_quote": "if not is_capturing:\nfor kv_cache_gid in range(len(self.kv_cache_config.kv_cache_groups)):\nblk_table = self.input_batch.block_table[kv_cache_gid]\nblk_table.slot_mapping.gpu.fill_(-1)",
+  "correspondence": [
+    {
+      "review_quote": "yiz-liu: vllm_ascend/worker/model_runner_v1.py:3660",
+      "patch_snippet": "评后sha 134ddb0 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "134ddb0",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在 `_dummy_run` 中重置 block table 的 slot_mapping 时，应仅在非 graph capture 场景下执行。在 graph capture 期间，slot_mapping 的值需要保持稳定，不应被重置为 -1。",
+    "context": "",
+    "checkpoints": [
+      "检查 `_dummy_run` 中是否有 `is_graph_capturing` 条件判断",
+      "确认 slot_mapping 重置是否在正确的场景下执行",
+      "注意变量名的准确性（`is_graph_capturing` 而非 `is_capturing`）"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 3645,
+      "code": "    def _dummy_run(self, num_tokens: int) -> ModelRunnerOutput:\n        \"\"\"Run a dummy forward pass to capture the CUDA graph.\"\"\"\n        ...\n        # Reset the slot mapping to -1 for all KV cache groups.\n        # This ensures that stale slot_mapping values from previous runs\n        # do not cause undefined behavior during graph capture.\n        for kv_cache_gid in range(len(self.kv_cache_config.kv_cache_groups)):\n            blk_table = self.input_batch.block_table[kv_cache_gid]\n            blk_table.slot_mapping.gpu.fill_(-1)\n\n        # Run the model\n        with self.maybe_setup_kv_cache(num_tokens):\n            ...\n            model_output = self.execute_model(\n                execute_model_req,\n                self.kv_cache_config,\n            )\n        ...\n        return ModelRunnerOutput(\n            req_ids=self.input_batch.req_ids,\n            req_id_to_index=self.input_batch.req_id_to_index,\n            sampled_token_ids=model_output.sampled_token_ids,\n            logprobs=model_output.logprobs,\n            prompt_logprobs_dict=model_output.prompt_logprobs_dict,\n            pooler_output=model_output.pooler_output,\n        )",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 3645,
+      "code": "    def _dummy_run(self, num_tokens: int) -> ModelRunnerOutput:\n        \"\"\"Run a dummy forward pass to capture the CUDA graph.\"\"\"\n        ...\n        # Reset the slot mapping to -1 for all KV cache groups.\n        # Only do this when NOT capturing a graph, because during graph\n        # capture the slot_mapping values must remain stable.\n        if not is_graph_capturing:\n            for kv_cache_gid in range(len(self.kv_cache_config.kv_cache_groups)):\n                blk_table = self.input_batch.block_table[kv_cache_gid]\n                blk_table.slot_mapping.gpu.fill_(-1)\n\n        # Run the model\n        with self.maybe_setup_kv_cache(num_tokens):\n            ...\n            model_output = self.execute_model(\n                execute_model_req,\n                self.kv_cache_config,\n            )\n        ...\n        return ModelRunnerOutput(\n            req_ids=self.input_batch.req_ids,\n            req_id_to_index=self.input_batch.req_id_to_index,\n            sampled_token_ids=model_output.sampled_token_ids,\n            logprobs=model_output.logprobs,\n            prompt_logprobs_dict=model_output.prompt_logprobs_dict,\n            pooler_output=model_output.pooler_output,\n        )",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/model_runner_v1.py\n+++ b/vllm_ascend/worker/model_runner_v1.py\n@@ -2,11 +2,12 @@\n         \"\"\"Run a dummy forward pass to capture the CUDA graph.\"\"\"\n         ...\n         # Reset the slot mapping to -1 for all KV cache groups.\n-        # This ensures that stale slot_mapping values from previous runs\n-        # do not cause undefined behavior during graph capture.\n-        for kv_cache_gid in range(len(self.kv_cache_config.kv_cache_groups)):\n-            blk_table = self.input_batch.block_table[kv_cache_gid]\n-            blk_table.slot_mapping.gpu.fill_(-1)\n+        # Only do this when NOT capturing a graph, because during graph\n+        # capture the slot_mapping values must remain stable.\n+        if not is_graph_capturing:\n+            for kv_cache_gid in range(len(self.kv_cache_config.kv_cache_groups)):\n+                blk_table = self.input_batch.block_table[kv_cache_gid]\n+                blk_table.slot_mapping.gpu.fill_(-1)\n \n         # Run the model\n         with self.maybe_setup_kv_cache(num_tokens):",
+      "stats": "1 file changed, +6 lines, -5 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

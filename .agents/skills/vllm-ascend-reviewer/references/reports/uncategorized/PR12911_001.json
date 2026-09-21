@@ -1,0 +1,45 @@
+{
+  "report_id": "PR12911_001",
+  "pr_number": 12911,
+  "pr_title": "[Refactor][Misc] Remove unused shared expert DP flags",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "ec9a9b5",
+  "source_quote": "Since `get_ascend_config` has been **completely removed from** `vllm_ascend/ops/mla.py`, attempting to patch it via `@patch(\"vllm_ascend.ops.mla.get_ascend_config\")` in **`test_initialization`** and **`test_forward`** will raise an **`AttributeError`** during test execution. Please remove the `@patch(\"vllm_ascend.ops.mla.get_ascend_config\")` **decorators** and the corresponding **`mock_ascend_config` parameters** from both `test_initialization` and `test_forward` to prevent test failures.",
+  "correspondence": [],
+  "verification": {
+    "merged": true,
+    "modified_commit": "ec9a9b5",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "tests/ut/ops/test_mla.py",
+      "line": 74,
+      "code": "class MLATestCase(unittest.TestCase):\n    def setUp(self):\n        self.mock_quant_config = MagicMock()\n\n    @patch(\"vllm_ascend.ops.mla.get_current_vllm_config\")\n    @patch(\"vllm_ascend.ops.mla.get_ascend_config\")          # ← 删①：符号已在 mla.py 整条删除\n    @patch(\"vllm_ascend.ops.mla.get_tensor_model_parallel_world_size\")\n    def test_initialization(self, mock_tp_size, mock_ascend_config, mock_get_vllm_config):  # ← 删②\n        mock_mla_attn = MagicMock()\n        mock_mla_attn.process_weights_after_loading = MagicMock()\n        ...\n\n    @patch(\"vllm_ascend.ops.mla.torch.ops.vllm.mla_forward\")\n    @patch(\"vllm_ascend.ops.mla.get_current_vllm_config\")\n    @patch(\"vllm_ascend.ops.mla.get_ascend_config\")      # ← 删③：同上，forward 也残留\n    @patch(\"vllm_ascend.ops.mla.get_tensor_model_parallel_world_size\")\n    @patch(\"vllm_ascend.ops.mla.get_forward_context\")\n    @patch(\"vllm_ascend.ascend_forward_context.get_forward_context\")\n    def test_forward(\n        self,\n        mock_get_forward_context_2,\n        mock_get_forward_context,\n        mock_tp_size,\n        mock_ascend_config,                               # ← 删④：forward 也残留 mock 形参\n        mock_get_vllm_config,\n        mock_mla_forward,\n    ):\n        mock_tp_size.return_value = 1\n        mock_ascend_config.return_value.enable_shared_expert_dp = False  # ← 删⑤：deprecated flag\n        mock_vllm_config = MagicMock(spec=VllmConfig)\n        ...",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "tests/ut/ops/test_mla.py",
+      "line": 74,
+      "code": "class MLATestCase(unittest.TestCase):\n    def setUp(self):\n        self.mock_quant_config = MagicMock()\n\n    @patch(\"vllm_ascend.ops.mla.get_current_vllm_config\")\n    # 删 @patch(\"vllm_ascend.ops.mla.get_ascend_config\")         # ← 删①\n    @patch(\"vllm_ascend.ops.mla.get_tensor_model_parallel_world_size\")\n    def test_initialization(self, mock_tp_size, mock_get_vllm_config):  # ← 删② mock_ascend_config 形参\n        mock_mla_attn = MagicMock()\n        mock_mla_attn.process_weights_after_loading = MagicMock()\n        ...\n\n    @patch(\"vllm_ascend.ops.mla.torch.ops.vllm.mla_forward\")\n    @patch(\"vllm_ascend.ops.mla.get_current_vllm_config\")\n    # 删 @patch(\"vllm_ascend.ops.mla.get_ascend_config\")         # ← 删③\n    @patch(\"vllm_ascend.ops.mla.get_tensor_model_parallel_world_size\")\n    @patch(\"vllm_ascend.ops.mla.get_forward_context\")\n    @patch(\"vllm_ascend.ascend_forward_context.get_forward_context\")\n    def test_forward(\n        self,\n        mock_get_forward_context_2,\n        mock_get_forward_context,\n        mock_tp_size,\n        # 删 mock_ascend_config,                                  # ← 删④\n        mock_get_vllm_config,\n        mock_mla_forward,\n    ):\n        mock_tp_size.return_value = 1\n        # 删 mock_ascend_config.return_value.enable_shared_expert_dp = False  # ← 删⑤\n        mock_vllm_config = MagicMock(spec=VllmConfig)\n        ...",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/tests/ut/ops/test_mla.py\n+++ b/tests/ut/ops/test_mla.py\n@@ -3,16 +3,16 @@\n         self.mock_quant_config = MagicMock()\n \n     @patch(\"vllm_ascend.ops.mla.get_current_vllm_config\")\n-    @patch(\"vllm_ascend.ops.mla.get_ascend_config\")          # ← 删①：符号已在 mla.py 整条删除\n+    # 删 @patch(\"vllm_ascend.ops.mla.get_ascend_config\")         # ← 删①\n     @patch(\"vllm_ascend.ops.mla.get_tensor_model_parallel_world_size\")\n-    def test_initialization(self, mock_tp_size, mock_ascend_config, mock_get_vllm_config):  # ← 删②\n+    def test_initialization(self, mock_tp_size, mock_get_vllm_config):  # ← 删② mock_ascend_config 形参\n         mock_mla_attn = MagicMock()\n         mock_mla_attn.process_weights_after_loading = MagicMock()\n         ...\n \n     @patch(\"vllm_ascend.ops.mla.torch.ops.vllm.mla_forward\")\n     @patch(\"vllm_ascend.ops.mla.get_current_vllm_config\")\n-    @patch(\"vllm_ascend.ops.mla.get_ascend_config\")      # ← 删③：同上，forward 也残留\n+    # 删 @patch(\"vllm_ascend.ops.mla.get_ascend_config\")         # ← 删③\n     @patch(\"vllm_ascend.ops.mla.get_tensor_model_parallel_world_size\")\n     @patch(\"vllm_ascend.ops.mla.get_forward_context\")\n     @patch(\"vllm_ascend.ascend_forward_context.get_forward_context\")\n@@ -21,11 +21,11 @@\n         mock_get_forward_context_2,\n         mock_get_forward_context,\n         mock_tp_size,\n-        mock_ascend_config,                               # ← 删④：forward 也残留 mock 形参\n+        # 删 mock_ascend_config,                                  # ← 删④\n         mock_get_vllm_config,\n         mock_mla_forward,\n     ):\n         mock_tp_size.return_value = 1\n-        mock_ascend_config.return_value.enable_shared_expert_dp = False  # ← 删⑤：deprecated flag\n+        # 删 mock_ascend_config.return_value.enable_shared_expert_dp = False  # ← 删⑤\n         mock_vllm_config = MagicMock(spec=VllmConfig)\n         ...",
+      "stats": "1 file changed, +5 lines, -5 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

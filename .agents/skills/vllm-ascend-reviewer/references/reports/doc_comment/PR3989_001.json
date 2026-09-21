@@ -1,0 +1,68 @@
+{
+  "report_id": "PR3989_001",
+  "pr_number": 3989,
+  "pr_title": "[CI] Add daily images build for nightly ci",
+  "pr_status": "merged",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "important",
+  "affected_files": [
+    ".github/Dockerfile.nightly.a2:1",
+    ".github/Dockerfile.nightly.a3:1",
+    ".github/workflows/vllm_ascend_test_nightly_a2.yaml:45"
+  ],
+  "landing_sha": "c81acc0",
+  "source_quote": "rename file to a better one\nditto\nwhat will happen if this job runs failed?",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan: .github/Dockerfile.nightly.a2:1(2025-11-13 10:49:27)",
+      "patch_snippet": "评后sha c81acc0 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wangxiyuan: .github/Dockerfile.nightly.a3:1(2025-11-13 10:49:34)",
+      "patch_snippet": "评后sha c81acc0 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wangxiyuan: .github/workflows/vllm_ascend_test_nightly_a2.yaml:45(2025-11-13 10:50:00)",
+      "patch_snippet": "评后sha c81acc0 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "c81acc0",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [
+      "Dockerfile 和 CI 配置文件名应清晰反映其用途，避免过于简略的命名。",
+      "文件命名应遵循项目已有的命名约定。"
+    ],
+    "antipattern": {
+      "file": ".github/Dockerfile.a2",
+      "line": 1,
+      "code": "# wangxiyuan 评审: \"rename file to a better one\"\n# 文件名不够描述性，需要重命名为更具描述性的名称\n\nFROM quay.io/ascend/cann:8.3.rc1-ubuntu22.04-py3.11\n\n# Nightly CI pre-built image for A2\nARG VLLM_COMMIT=\"main\"\nENV VLLM_WORKSPACE=/workspace\n\nWORKDIR $VLLM_WORKSPACE\n\nRUN git clone https://github.com/vllm-project/vllm.git \\\n    $VLLM_WORKSPACE/vllm && \\\n    cd $VLLM_WORKSPACE/vllm && \\\n    git checkout $VLLM_COMMIT && \\\n    VLLM_TARGET_DEVICE=\"empty\" pip3 install -v -e . && \\\n    pip3 uninstall -y triton\n\n# ... install vllm-ascend dependencies ...",
+      "context": "wangxiyuan 评审: \"rename file to a better one\" 文件名不够描述性，需要重命名为更具描述性的名称 Nightly CI pre-built image for A2"
+    },
+    "pattern": {
+      "file": ".github/Dockerfile.nightly.a2",
+      "line": 1,
+      "code": "# 重命名: Dockerfile.a2 → Dockerfile.nightly.a2\n# 文件名清晰反映其用于 nightly CI 构建的用途\n\nFROM quay.io/ascend/cann:8.3.rc1-ubuntu22.04-py3.11\n\n# Nightly CI pre-built image for A2\nARG VLLM_COMMIT=\"main\"\nENV VLLM_WORKSPACE=/workspace\n\nWORKDIR $VLLM_WORKSPACE\n\nRUN git clone https://github.com/vllm-project/vllm.git \\\n    $VLLM_WORKSPACE/vllm && \\\n    cd $VLLM_WORKSPACE/vllm && \\\n    git checkout $VLLM_COMMIT && \\\n    VLLM_TARGET_DEVICE=\"empty\" pip3 install -v -e . && \\\n    pip3 uninstall -y triton\n\n# ... install vllm-ascend dependencies ...",
+      "context": "重命名: Dockerfile.a2 → Dockerfile.nightly.a2 文件名清晰反映其用于 nightly CI 构建的用途 Nightly CI pre-built image for A2"
+    },
+    "diff": {
+      "unified": "--- a/.github/Dockerfile.a2\n+++ b/.github/Dockerfile.a2\n@@ -1,5 +1,5 @@\n-# wangxiyuan 评审: \"rename file to a better one\"\n-# 文件名不够描述性，需要重命名为更具描述性的名称\n+# 重命名: Dockerfile.a2 → Dockerfile.nightly.a2\n+# 文件名清晰反映其用于 nightly CI 构建的用途\n \n FROM quay.io/ascend/cann:8.3.rc1-ubuntu22.04-py3.11\n \n",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "代码结构或逻辑调整"
+      ]
+    },
+    "language": "dockerfile",
+    "_status": "processed"
+  }
+}

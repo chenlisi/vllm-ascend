@@ -1,0 +1,127 @@
+{
+  "report_id": "PR3950_001",
+  "pr_number": 3950,
+  "pr_title": "[docs] [P/D] add feature guide for disaggregated-prefill",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/developer_guide/feature_guide/disaggregated_prefill.md:32",
+    "docs/source/developer_guide/feature_guide/disaggregated_prefill.md:17",
+    "docs/source/developer_guide/feature_guide/disaggregated_prefill.md:3",
+    "docs/source/developer_guide/feature_guide/disaggregated_prefill.md:5",
+    "docs/source/developer_guide/feature_guide/disaggregated_prefill.md:11",
+    "docs/source/developer_guide/feature_guide/disaggregated_prefill.md:103",
+    "docs/source/developer_guide/feature_guide/disaggregated_prefill.md:80",
+    "docs/source/developer_guide/feature_guide/disaggregated_prefill.md:44"
+  ],
+  "landing_sha": "b625801",
+  "source_quote": "Need framework picture here.\nOK, we add framework picture for mooncake connector and mooncake layerwise connector\nI think management sounds more like a feature similar to KV Pool, should we use a more percise word such as KV Transfer?\nThanks for the suggestion. Good point — \"KV Transfer\" is indeed more precise than \"management.\" We'll update the description accordingly.\nFor consistency and readability, recommend standardizing to either Disaggregated Prefill (title case, space) or disaggregated_prefill (snake_case) throughout the document. The current section heading \"Why disaggregated-prefill?\" also mixes cases.\nThe phrase \"The motivation is two-fold:\" is redundant with the following bullet points. Consider removing it and directly starting with the two points for a cleaner structure.\nThe logical jump from \"allows for better control over the system's TPOT\" to \"avoids the challenge of determining the optimal chunk size\" is unclear.\nMathematical expressions can be changed into more understandable textual descriptions, such as \"only supports scenarios where the TP degree of P nodes is an integer multiple of and greater than the TP degree of D nodes.\"\nMaybe we should add planning support for DSA and Mamba.\nPerhaps it could be expressed by adding an example TP table.\nAnd Mooncake_connector now supports PCP/DCP, we should also add it to the chart.\nIntuitively speaking, PD separation can enhance the overall system throughput.\nMooncake connector requires delay_free, but mooncake layerwise connector does not, it may also need to add.",
+  "correspondence": [
+    {
+      "review_quote": "whx-sjtu: docs/source/developer_guide/feature_guide/disaggregated_prefill.md:32(2025-11-03 08:26:44)",
+      "patch_snippet": "评后sha b625801 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "liziyu179: docs/source/developer_guide/feature_guide/disaggregated_prefill.md:32(2025-11-04 11:40:04)",
+      "patch_snippet": "评后sha b625801 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Pz1116: docs/source/developer_guide/feature_guide/disaggregated_prefill.md:17(2025-12-11 00:49:45)",
+      "patch_snippet": "评后sha b625801 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "liziyu179: docs/source/developer_guide/feature_guide/disaggregated_prefill.md:17(2025-12-12 02:20:41)",
+      "patch_snippet": "评后sha b625801 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "liziyu179: docs/source/developer_guide/feature_guide/disaggregated_prefill.md:3(2025-12-12 02:32:27)",
+      "patch_snippet": "评后sha b625801 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "liziyu179: docs/source/developer_guide/feature_guide/disaggregated_prefill.md:5(2025-12-12 02:37:14)",
+      "patch_snippet": "评后sha b625801 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "liziyu179: docs/source/developer_guide/feature_guide/disaggregated_prefill.md:11(2025-12-12 02:40:05)",
+      "patch_snippet": "评后sha b625801 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "liziyu179: docs/source/developer_guide/feature_guide/disaggregated_prefill.md:103(2025-12-12 03:22:22)",
+      "patch_snippet": "评后sha b625801 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "nwpu-zxr: docs/source/developer_guide/feature_guide/disaggregated_prefill.md:80(2025-12-12 03:54:12)",
+      "patch_snippet": "评后sha b625801 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "nwpu-zxr: docs/source/developer_guide/feature_guide/disaggregated_prefill.md:103(2025-12-12 04:03:46)",
+      "patch_snippet": "评后sha b625801 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "nwpu-zxr: docs/source/developer_guide/feature_guide/disaggregated_prefill.md:80(2025-12-12 04:14:14)",
+      "patch_snippet": "评后sha b625801 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "nwpu-zxr: docs/source/developer_guide/feature_guide/disaggregated_prefill.md:11(2025-12-12 04:15:10)",
+      "patch_snippet": "评后sha b625801 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "nwpu-zxr: docs/source/developer_guide/feature_guide/disaggregated_prefill.md:44(2025-12-12 04:16:37)",
+      "patch_snippet": "评后sha b625801 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "b625801",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [
+      "功能描述中使用的术语应准确反映其含义（如 \"KV Transfer\" 比 \"management\" 更精确）。",
+      "同一文档中同一概念的命名应保持一致，避免混用不同格式（如 title case、snake_case、kebab-case）。"
+    ],
+    "antipattern": {
+      "file": "docs/source/developer_guide/feature_guide/disaggregated_prefill.md",
+      "line": 32,
+      "code": "<!-- 文件: docs/source/developer_guide/feature_guide/disaggregated_prefill.md -->\n<!-- 行号: 10-25 -->\n<!-- Pz1116 评审: \"management\" 听起来更像 KV Pool 类似功能，-->\n<!-- 建议使用更精确的术语如 \"KV Transfer\" -->\n\n## Why disaggregated-prefill?\n\nThe disaggregated-prefill feature enables efficient management of KV cache\nacross distributed nodes. This management allows for better control over\nthe system's TPOT (Time Per Output Token).\n\n### Architecture Overview\n<!-- 此处待添加架构图 -->",
+      "context": "Why disaggregated-prefill? Architecture Overview"
+    },
+    "pattern": {
+      "file": "docs/source/developer_guide/feature_guide/disaggregated_prefill.md",
+      "line": 32,
+      "code": "<!-- 文件: docs/source/developer_guide/feature_guide/disaggregated_prefill.md -->\n<!-- 行号: 10-25 -->\n<!-- 术语从 \"management\" 改为更精确的 \"KV Transfer\" -->\n\n## Why Disaggregated Prefill?\n\nThe disaggregated-prefill feature enables efficient KV transfer of cache\nacross distributed nodes. This KV transfer allows for better control over\nthe system's TPOT (Time Per Output Token) and avoids the challenge of\ndetermining the optimal chunk size.\n\n### Architecture Overview\n<!-- 添加 mooncake connector 和 mooncake layerwise connector 架构图 -->",
+      "context": "Why Disaggregated Prefill? Architecture Overview"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/developer_guide/feature_guide/disaggregated_prefill.md\n+++ b/docs/source/developer_guide/feature_guide/disaggregated_prefill.md\n@@ -1,13 +1,13 @@\n <!-- 文件: docs/source/developer_guide/feature_guide/disaggregated_prefill.md -->\n <!-- 行号: 10-25 -->\n-<!-- Pz1116 评审: \"management\" 听起来更像 KV Pool 类似功能，-->\n-<!-- 建议使用更精确的术语如 \"KV Transfer\" -->\n+<!-- 术语从 \"management\" 改为更精确的 \"KV Transfer\" -->\n \n-## Why disaggregated-prefill?\n+## Why Disaggregated Prefill?\n \n-The disaggregated-prefill feature enables efficient management of KV cache\n-across distributed nodes. This management allows for better control over\n-the system's TPOT (Time Per Output Token).\n+The disaggregated-prefill feature enables efficient KV transfer of cache\n+across distributed nodes. This KV transfer allows for better control over\n+the system's TPOT (Time Per Output Token) and avoids the challenge of\n+determining the optimal chunk size.\n \n ### Architecture Overview\n-<!-- 此处待添加架构图 -->\n+<!-- 添加 mooncake connector 和 mooncake layerwise connector 架构图 -->\n",
+      "stats": "1 file changed, +7 lines, -7 lines",
+      "key_changes": [
+        "移除: The disaggregated-prefill feature enables efficient management of KV cache",
+        "移除: <!-- 建议使用更精确的术语如 \"KV Transfer\" -->",
+        "移除: <!-- Pz1116 评审: \"management\" 听起来更像 KV Pool 类似功能，-->",
+        "新增: across distributed nodes. This KV transfer allows for better control over",
+        "新增: The disaggregated-prefill feature enables efficient KV transfer of cache"
+      ]
+    },
+    "language": "markdown",
+    "_status": "processed"
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "report_id": "PR12292_004",
+  "pr_number": 12292,
+  "pr_title": "[Feature] DyntraLB: Dynamic Intra-decoder Data-parallel Load Balancing",
+  "pr_status": "merged",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/patch/platform/__init__.py:40"
+  ],
+  "landing_sha": "2a98206",
+  "source_quote": "Please add patch descriptions and sunset plans to `https://github.com/vllm-project/vllm-ascend/blob/main/vllm_ascend/patch/__init__.py`",
+  "correspondence": [
+    {
+      "review_quote": "wxsIcey: vllm_ascend/patch/platform/__init__.py:40",
+      "patch_snippet": "评后sha 2a98206 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "2a98206",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "所有新增的 monkey-patch 必须在 `vllm_ascend/patch/__init__.py` 中登记，包含 Why（为什么需要 patch）、How（如何 patch）、Related PR 和 Future Plan（何时移除 patch 的 sunset 计划）。",
+    "context": "",
+    "checkpoints": [
+      "新增 monkey-patch 时，检查是否在 `patch/__init__.py` 中添加了对应描述",
+      "描述是否包含 Why / How / Related PR / Future Plan 四个要素",
+      "后续 patch 编号是否顺延",
+      "Future Plan 是否明确说明 patch 何时可以移除"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/patch/__init__.py",
+      "line": 30,
+      "code": "# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n#   1. `vllm.model_executor.models.xxx`\n#    Why: ...\n#    How: ...\n#    Related PR: ...\n#    Future Plan: ...\n#\n# ** 4. File: platform/patch_xxx.py**\n# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n#   ...\n#\n# ** 5. File: platform/patch_eplb.py**\n# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n#   1. `vllm.xxx.yyy`\n#    Why: ...\n#    How: ...\n#    Related PR: ...\n#    Future Plan: ...",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/patch/__init__.py",
+      "line": 30,
+      "code": "# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n#   1. `vllm.model_executor.models.xxx`\n#    Why: ...\n#    How: ...\n#    Related PR: ...\n#    Future Plan: ...\n#\n# ** 4. File: platform/patch_xxx.py**\n# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n#   ...\n#\n# ** 5. File: platform/patch_dyntra_lb_core.py**\n# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n#   1. `vllm.v1.engine.core.EngineCoreProc.run_engine_core`\n#      `vllm.v1.engine.core.DPEngineCoreProc`\n#    Why:\n#       PD-disaggregated decoder serving can develop uneven attention KV-cache\n#       workloads across data-parallel ranks. Upstream vLLM does not currently\n#       expose an extension point for selecting an Ascend-specific DP engine\n#       core that coordinates dynamic cross-rank scheduling decisions.\n#    How:\n#       When DyntraLB is enabled, replace the DP engine-core process with the\n#       DyntraLB implementation at engine startup. The patched class intercepts\n#       the scheduling loop to perform cross-rank load exchange via Gloo\n#       collectives before each scheduling step.\n#    Related PR (if no, explain why):\n#       https://github.com/vllm-project/vllm-ascend/pull/12292\n#    Future Plan:\n#       Remove this patch after upstream vLLM provides stable scheduler and DP\n#       engine-core plugin interfaces, or equivalent dynamic intra-decoder DP\n#       load balancing that vllm-ascend can use without monkey-patching.\n#\n# ** 6. File: platform/patch_eplb.py**  # 编号顺延\n# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n#   1. `vllm.xxx.yyy`\n#    Why: ...\n#    How: ...\n#    Related PR: ...\n#    Future Plan: ...",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/patch/__init__.py\n+++ b/vllm_ascend/patch/__init__.py\n@@ -9,7 +9,28 @@\n # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n #   ...\n #\n-# ** 5. File: platform/patch_eplb.py**\n+# ** 5. File: platform/patch_dyntra_lb_core.py**\n+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n+#   1. `vllm.v1.engine.core.EngineCoreProc.run_engine_core`\n+#      `vllm.v1.engine.core.DPEngineCoreProc`\n+#    Why:\n+#       PD-disaggregated decoder serving can develop uneven attention KV-cache\n+#       workloads across data-parallel ranks. Upstream vLLM does not currently\n+#       expose an extension point for selecting an Ascend-specific DP engine\n+#       core that coordinates dynamic cross-rank scheduling decisions.\n+#    How:\n+#       When DyntraLB is enabled, replace the DP engine-core process with the\n+#       DyntraLB implementation at engine startup. The patched class intercepts\n+#       the scheduling loop to perform cross-rank load exchange via Gloo\n+#       collectives before each scheduling step.\n+#    Related PR (if no, explain why):\n+#       https://github.com/vllm-project/vllm-ascend/pull/12292\n+#    Future Plan:\n+#       Remove this patch after upstream vLLM provides stable scheduler and DP\n+#       engine-core plugin interfaces, or equivalent dynamic intra-decoder DP\n+#       load balancing that vllm-ascend can use without monkey-patching.\n+#\n+# ** 6. File: platform/patch_eplb.py**  # 编号顺延\n # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n #   1. `vllm.xxx.yyy`\n #    Why: ...",
+      "stats": "1 file changed, +22 lines, -1 lines",
+      "key_changes": [
+        "添加注释说明"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

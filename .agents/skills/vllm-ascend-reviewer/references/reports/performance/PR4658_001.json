@@ -1,0 +1,62 @@
+{
+  "report_id": "PR4658_001",
+  "pr_number": 4658,
+  "pr_title": "[Bugfix] fix qwen3-vl-moe shape ERROR during the _prepare_inputs phase under high concurrency.",
+  "pr_status": "merged",
+  "merged_at": "2025-12-08T11:30:16Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/models/qwen2_5_vl_without_padding.py:751",
+    "vllm_ascend/models/qwen2_5_vl_without_padding.py:759",
+    "vllm_ascend/models/qwen2_5_vl_without_padding.py:782"
+  ],
+  "landing_sha": "ca5e1cc",
+  "source_quote": "External dependencies, if not necessary, are recommended to be moved to the top of the file.",
+  "correspondence": [
+    {
+      "review_quote": "Sparkheart 指出外部依赖应移到文件顶部、使用更高效的直接索引、permute 后应添加 contiguous() 调用。作者通过 commit `ca5e1cc` 修改，3/3 建议全部落地。",
+      "patch_snippet": "commit `ca5e1cc`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "ca5e1cc",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在使用 permute 等可能产生非连续内存的操作后，如果后续需要高效访问，应添加 contiguous() 调用。",
+    "context": "",
+    "checkpoints": [
+      "permute 操作后是否有高效内存访问需求",
+      "是否需要添加 contiguous() 确保内存连续",
+      "外部依赖是否放在合适的位置（文件顶部）",
+      "是否使用了最高效的索引方式"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/models/qwen2_5_vl_without_padding.py",
+      "line": 740,
+      "code": "class AscendQwen3VLMoeForConditionalGeneration_Without_Padding(\n    AscendQwen2_5_VLForConditionalGeneration_Without_Padding\n):\n    \"\"\"Ascend Qwen3-VL-Moe model without padding.\"\"\"\n\n    def get_input_embeddings(\n        self,\n        input_ids: torch.Tensor,\n        positions: torch.Tensor,\n    ) -> torch.Tensor:\n        from vllm.model_executor.models.qwen2_5_vl import (\n            Qwen2_5_VisionBlock,\n        )\n        text_embeddings = self._get_text_embeddings(input_ids)\n        return text_embeddings",
+      "context": "Sparkheart: External dependencies, if not necessary, are recommended to be moved to the top of the file."
+    },
+    "pattern": {
+      "file": "vllm_ascend/models/qwen2_5_vl_without_padding.py",
+      "line": 740,
+      "code": "from vllm.model_executor.models.qwen2_5_vl import (\n    Qwen2_5_VisionBlock,\n)\n\n\nclass AscendQwen3VLMoeForConditionalGeneration_Without_Padding(\n    AscendQwen2_5_VLForConditionalGeneration_Without_Padding\n):\n    \"\"\"Ascend Qwen3-VL-Moe model without padding.\"\"\"\n\n    def get_input_embeddings(\n        self,\n        input_ids: torch.Tensor,\n        positions: torch.Tensor,\n    ) -> torch.Tensor:\n        text_embeddings = self._get_text_embeddings(input_ids)\n        return text_embeddings",
+      "context": "Sparkheart: External dependencies, if not necessary, are recommended to be moved to the top of the file."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/models/qwen2_5_vl_without_padding.py\n+++ b/vllm_ascend/models/qwen2_5_vl_without_padding.py\n@@ -740,15 +740,17 @@\n+from vllm.model_executor.models.qwen2_5_vl import (\n+    Qwen2_5_VisionBlock,\n+)\n+\n+\n class AscendQwen3VLMoeForConditionalGeneration_Without_Padding(\n     AscendQwen2_5_VLForConditionalGeneration_Without_Padding\n ):\n@@ -740,15 +740,17 @@\n         input_ids: torch.Tensor,\n         positions: torch.Tensor,\n     ) -> torch.Tensor:\n-        from vllm.model_executor.models.qwen2_5_vl import (\n-            Qwen2_5_VisionBlock,\n-        )\n         text_embeddings = self._get_text_embeddings(input_ids)\n         return text_embeddings",
+      "stats": "1 file changed, +5 lines, -3 lines",
+      "key_changes": [
+        "在第 1-5 行新增了代码",
+        "删除了第 11-13 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

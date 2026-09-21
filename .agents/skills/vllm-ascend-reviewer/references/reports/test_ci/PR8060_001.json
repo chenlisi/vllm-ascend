@@ -1,0 +1,57 @@
+{
+  "report_id": "PR8060_001",
+  "pr_number": 8060,
+  "pr_title": "[Misc] Upgrade vllm version to 0408",
+  "pr_status": "merged",
+  "merged_at": "2026-04-10T09:41:27Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    ".github/workflows/_e2e_test.yaml:39"
+  ],
+  "landing_sha": "7a50a64",
+  "source_quote": "recover to false",
+  "correspondence": [
+    {
+      "review_quote": "leo-pony: .github/workflows/_e2e_test.yaml:39",
+      "patch_snippet": "评后sha 7a50a64 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "7a50a64",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 CI 工作流中，E2E 测试步骤的 `continue-on-error` 必须设置为 `false`，确保测试失败时 CI 流水线能够正确报错并阻止合入。临时调试期间可能设置为 `true`，但合入前必须恢复。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": ".github/workflows/_e2e_test.yaml",
+      "line": 30,
+      "code": "name: E2E Test\n\non:\n  workflow_call:\n    inputs:\n      vllm_version:\n        type: string\n        required: true\n\njobs:\n  e2e-test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - name: Run E2E tests\n        continue-on-error: true  # ← 不应忽略 E2E 测试错误\n        run: |\n          pytest tests/e2e/ -v --timeout=600",
+      "context": "recover to false"
+    },
+    "pattern": {
+      "file": ".github/workflows/_e2e_test.yaml",
+      "line": 30,
+      "code": "# commit 7a50a64 \"revert continue on error\" (+1/-1)\n\nname: E2E Test\n\non:\n  workflow_call:\n    inputs:\n      vllm_version:\n        type: string\n        required: true\n\njobs:\n  e2e-test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - name: Run E2E tests\n        continue-on-error: false  # ← 恢复为 false，确保测试失败时 CI 报错\n        run: |\n          pytest tests/e2e/ -v --timeout=600",
+      "context": "recover to false"
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/_e2e_test.yaml\n+++ b/.github/workflows/_e2e_test.yaml\n@@ -1,3 +1,5 @@\n+# commit 7a50a64 \"revert continue on error\" (+1/-1)\n+\n name: E2E Test\n \n on:\n@@ -13,6 +15,6 @@\n     steps:\n       - uses: actions/checkout@v4\n       - name: Run E2E tests\n-        continue-on-error: true  # ← 不应忽略 E2E 测试错误\n+        continue-on-error: false  # ← 恢复为 false，确保测试失败时 CI 报错\n         run: |\n           pytest tests/e2e/ -v --timeout=600\n",
+      "stats": "1 file changed, +3 lines, -1 lines",
+      "key_changes": [
+        "+# commit 7a50a64 \"revert continue on error\" (+1/-1)",
+        "+",
+        "-        continue-on-error: true  # ← 不应忽略 E2E 测试错误",
+        "+        continue-on-error: false  # ← 恢复为 false，确保测试失败时 CI 报错"
+      ]
+    },
+    "language": "yaml",
+    "_status": "pending_llm_extract"
+  }
+}

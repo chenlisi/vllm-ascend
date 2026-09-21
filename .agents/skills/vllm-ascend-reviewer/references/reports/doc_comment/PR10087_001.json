@@ -1,0 +1,68 @@
+{
+  "report_id": "PR10087_001",
+  "pr_number": 10087,
+  "pr_title": "[BugFix] Add AscendKVBlockZeroer to clean used mamba block for full attn",
+  "pr_status": "merged",
+  "merged_at": "2026-06-09T07:16:07Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/utils.py:130",
+    "vllm_ascend/worker/utils.py:53"
+  ],
+  "landing_sha": "b4fc26d",
+  "source_quote": "what's this magic number 8192 refers to?",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 对代码中的魔法数字 8192 提出疑问。作者解释说 vLLM 上游使用 1024，但 Ascend 设备推荐使用 8192（8192×8B=64KB）以匹配 UB（Unified Buffer）大小。MengqingCao 接受解释后建议添加注释说明。此外，MengqingCao 确认了 Ascend 实现与上游 vLLM `KVBlockZeroer` 的两个差异：(1) 处理 kvcache tensor 的 tuple 而非单个 tensor；(2) 修改 blk_size 以满足 UB 大小要求。MengqingCao 最终批准了该 PR，但表示更倾向于通过传递",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "b4fc26d",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "代码中使用的非显而易见的数值常量（如 blk_size=8192）必须添加注释说明其含义、来源和选择原因，特别是当该值与上游项目不同时。",
+    "context": "",
+    "checkpoints": [
+      "检查代码中是否存在未注释的魔法数字",
+      "确认与上游项目不同的参数值是否有注释说明差异原因",
+      "验证注释是否包含数值选择的硬件/算法依据"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/utils.py",
+      "line": 130,
+      "code": "# vllm_ascend/worker/utils.py\n\n# Triton kernel: _zero_kv_blocks_kernel\n@triton.jit\ndef _zero_kv_blocks_kernel(seg_addr_ptr, blk_size, n_segs, BLOCK_SIZE: tl.constexpr):\n    seg_id = tl.program_id(0)\n    if seg_id >= n_segs:\n        return\n    seg_addr = tl.load(seg_addr_ptr + seg_id)\n    # gemini-code-assist[bot] critical: tl.cast 不存在于 triton 语言中\n    ptr = tl.cast(seg_addr, tl.pointer_type(tl.int32))  # 运行时会 AttributeError\n    # ... 使用 ptr 和 blk_size 进行零初始化 ...\n    for offset in range(0, blk_size, BLOCK_SIZE):\n        tl.store(ptr + offset, 0.0, mask=mask)\n\n\nclass AscendKVBlockZeroer:\n    \"\"\"Ascend 特定的 KV block 零初始化器\"\"\"\n\n    def __init__(self, ...):\n        # ... 初始化逻辑 ...\n        # MengqingCao 评审：\"what's this magic number 8192 refers to?\"\n        blk_size = 8192  # 魔法数字，无注释说明\n        # 作者解释：\"Vllm sets it as 1024. We set it as 8192, due to the\n        # recommendation that 8192*8B=64B is more preferred to meet the UB size\"",
+      "context": "what's this magic number 8192 refers to?"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/utils.py",
+      "line": 130,
+      "code": "# vllm_ascend/worker/utils.py\n\n# Triton kernel: _zero_kv_blocks_kernel\n@triton.jit\ndef _zero_kv_blocks_kernel(seg_addr_ptr, blk_size, n_segs, BLOCK_SIZE: tl.constexpr):\n    seg_id = tl.program_id(0)\n    if seg_id >= n_segs:\n        return\n    seg_addr = tl.load(seg_addr_ptr + seg_id)\n    # gemini-code-assist[bot] suggestion: 使用 .to() 替代不存在的 tl.cast\n    ptr = seg_addr.to(tl.pointer_type(tl.int32))  # 修复：.to() 是 Triton 标准方法\n    # ... 使用 ptr 和 blk_size 进行零初始化 ...\n    for offset in range(0, blk_size, BLOCK_SIZE):\n        tl.store(ptr + offset, 0.0, mask=mask)\n\n\nclass AscendKVBlockZeroer:\n    \"\"\"Ascend 特定的 KV block 零初始化器\n\n    Differences from vLLM's KVBlockZeroer:\n    1. Process tuple of kvcache tensors instead of single tensor (Ascend-specific)\n    2. blk_size=8192 to meet UB size requirement (upstream uses 1024)\n    TODO: Remove temporary solution when ops are ready\n    \"\"\"\n\n    def __init__(self, ...):\n        # ... 初始化逻辑 ...\n        # MengqingCao 评审：\"okay, maybe a comment is needed here.\"\n        # 作者回复：\"Done.\"\n        # blk_size=8192: 8192*8B=64KB matches the UB size preference on Ascend.\n        # (8B is about int64 in the above triton kernel).\n        # vLLM upstream uses 1024, but Ascend requires larger blk_size for UB alignment.\n        blk_size = 8192",
+      "context": "what's this magic number 8192 refers to?"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/utils.py\n+++ b/vllm_ascend/worker/utils.py\n@@ -7,19 +7,27 @@\n     if seg_id >= n_segs:\n         return\n     seg_addr = tl.load(seg_addr_ptr + seg_id)\n-    # gemini-code-assist[bot] critical: tl.cast 不存在于 triton 语言中\n-    ptr = tl.cast(seg_addr, tl.pointer_type(tl.int32))  # 运行时会 AttributeError\n+    # gemini-code-assist[bot] suggestion: 使用 .to() 替代不存在的 tl.cast\n+    ptr = seg_addr.to(tl.pointer_type(tl.int32))  # 修复：.to() 是 Triton 标准方法\n     # ... 使用 ptr 和 blk_size 进行零初始化 ...\n     for offset in range(0, blk_size, BLOCK_SIZE):\n         tl.store(ptr + offset, 0.0, mask=mask)\n \n \n class AscendKVBlockZeroer:\n-    \"\"\"Ascend 特定的 KV block 零初始化器\"\"\"\n+    \"\"\"Ascend 特定的 KV block 零初始化器\n+\n+    Differences from vLLM's KVBlockZeroer:\n+    1. Process tuple of kvcache tensors instead of single tensor (Ascend-specific)\n+    2. blk_size=8192 to meet UB size requirement (upstream uses 1024)\n+    TODO: Remove temporary solution when ops are ready\n+    \"\"\"\n \n     def __init__(self, ...):\n         # ... 初始化逻辑 ...\n-        # MengqingCao 评审：\"what's this magic number 8192 refers to?\"\n-        blk_size = 8192  # 魔法数字，无注释说明\n-        # 作者解释：\"Vllm sets it as 1024. We set it as 8192, due to the\n-        # recommendation that 8192*8B=64B is more preferred to meet the UB size\"\n+        # MengqingCao 评审：\"okay, maybe a comment is needed here.\"\n+        # 作者回复：\"Done.\"\n+        # blk_size=8192: 8192*8B=64KB matches the UB size preference on Ascend.\n+        # (8B is about int64 in the above triton kernel).\n+        # vLLM upstream uses 1024, but Ascend requires larger blk_size for UB alignment.\n+        blk_size = 8192",
+      "stats": "1 file changed, +15 lines, -7 lines",
+      "key_changes": [
+        "移除: # gemini-code-assist[bot] critical: tl.cast 不存在于 triton 语言中",
+        "移除: ptr = tl.cast(seg_addr, tl.pointer_type(tl.int32))  # 运行时会 AttributeError",
+        "新增: # gemini-code-assist[bot] suggestion: 使用 .to() 替代不存在的 tl.cast",
+        "新增: ptr = seg_addr.to(tl.pointer_type(tl.int32))  # 修复：.to() 是 Triton 标准方法",
+        "移除: \"\"\"Ascend 特定的 KV block 零初始化器\"\"\"",
+        "新增: \"\"\"Ascend 特定的 KV block 零初始化器",
+        "新增: Differences from vLLM's KVBlockZeroer:",
+        "新增: 1. Process tuple of kvcache tensors instead of single tensor (Ascend-specific)",
+        "新增: 2. blk_size=8192 to meet UB size requirement (upstream uses 1024)",
+        "新增: TODO: Remove temporary solution when ops are ready"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

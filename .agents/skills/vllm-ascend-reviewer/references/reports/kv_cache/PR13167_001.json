@@ -1,0 +1,62 @@
+{
+  "report_id": "PR13167_001",
+  "pr_number": 13167,
+  "pr_title": "[CI] Extend bisect parameters through AOP workflows",
+  "pr_status": "merged",
+  "dimension": [
+    "design"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/e2e/nightly/scripts/aop_process.sh:108"
+  ],
+  "landing_sha": "7db132b",
+  "source_quote": "This block of code for constructing bisect command arguments is nearly identical to the `build_bisect_extra_args` function in `tests/e2e/nightly/multi_node/scripts/run.sh`. This code duplication increases the maintenance burden, as future changes to bisect parameters will need to be updated in two places.\n> To improve maintainability, I recommend refactoring this logic into a shared shell script or function that can be sourced by both `aop_process.sh` and `run.sh`. This will create a single source of truth for building the bisect arguments.",
+  "correspondence": [
+    {
+      "review_quote": "tests/e2e/nightly/scripts/aop_process.sh:108",
+      "patch_snippet": "评后sha 7db132b 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "7db132b",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当多个 shell 脚本包含几乎相同的代码块时，应提取为独立的共享脚本文件（通过 `source` 引入），创建单一数据源，避免维护时需要多处修改。",
+    "context": "",
+    "checkpoints": [
+      "检查多个脚本之间是否存在几乎相同的代码块（如参数构造、路径处理）",
+      "确认重复代码是否已提取为共享函数文件",
+      "确认各脚本通过 `source` 引入共享函数而非复制粘贴",
+      "使用 `shellcheck` 的 `# shellcheck source=` 注解标注 source 路径"
+    ],
+    "antipattern": {
+      "file": "tests/e2e/nightly/scripts/aop_process.sh",
+      "line": 100,
+      "code": "# 以下代码与 run.sh 中的 build_bisect_extra_args 函数几乎完全相同\n# ... 前置代码 ...\nBISECT_CMD=()\nBISECT_CMD+=(--model-name \"$MODEL_NAME\")\nBISECT_CMD+=(--config-root \"$CONFIG_ROOT\")\n\n# ❌ 10 行重复的 bisect 参数构造逻辑\n[ -n \"$BISECT_GOOD_COMMIT\" ] && BISECT_CMD+=(--good-commit \"$BISECT_GOOD_COMMIT\")\n[ -n \"$BISECT_FAIL_CONFIRM_RETRIES\" ] && BISECT_CMD+=(--fail-confirm-retries \"$BISECT_FAIL_CONFIRM_RETRIES\")\n[ -n \"$BISECT_TRIAL_TIMEOUT\" ] && BISECT_CMD+=(--trial-timeout-s \"$BISECT_TRIAL_TIMEOUT\")\n[ -n \"$BISECT_BARRIER_TIMEOUT\" ] && BISECT_CMD+=(--barrier-timeout-s \"$BISECT_BARRIER_TIMEOUT\")\n[ \"$BISECT_NO_VERIFY_GOOD\" = \"true\" ] && BISECT_CMD+=(--no-verify-good)\n[ \"$BISECT_NO_VERIFY_BAD\" = \"true\" ] && BISECT_CMD+=(--no-verify-bad)\n[ \"$BISECT_FORCE_INITIAL_BUILD\" = \"true\" ] && BISECT_CMD+=(--force-initial-build)\n# AOP owns the conservative rebuild policy; users cannot override it.\nBISECT_CMD+=(--native-check since-build)\n[ -n \"$BISECT_CONFIG_BASE_PATH\" ] && BISECT_CMD+=(--config-base-path \"$BISECT_CONFIG_BASE_PATH\")",
+      "context": "以下代码与 run.sh 中的 build_bisect_extra_args 函数几乎完全相同 ... 前置代码 ... ❌ 10 行重复的 bisect 参数构造逻辑"
+    },
+    "pattern": {
+      "file": "tests/e2e/nightly/scripts/bisect_args.sh (新文件，26 行)",
+      "line": 100,
+      "code": "# ✅ source 共享脚本，调用共享函数\nSCRIPT_DIR=\"$(cd -- \"$(dirname -- \"${BASH_SOURCE[0]}\")\" && pwd)\"\n# shellcheck source=bisect_args.sh\nsource \"${SCRIPT_DIR}/bisect_args.sh\"\n\n# ... 前置代码 ...\nBISECT_CMD=()\nBISECT_CMD+=(--model-name \"$MODEL_NAME\")\nBISECT_CMD+=(--config-root \"$CONFIG_ROOT\")\n\n# ✅ 原来 10 行重复逻辑替换为一行函数调用\nbuild_bisect_extra_args\nBISECT_CMD+=(\"${BISECT_EXTRA_ARGS[@]}\")\n\n# ✅ 共享函数，作为单一数据源\nbuild_bisect_extra_args() {\n    BISECT_EXTRA_ARGS=()\n    [ -n \"$BISECT_GOOD_COMMIT\" ] && BISECT_EXTRA_ARGS+=(--good-commit \"$BISECT_GOOD_COMMIT\")\n    [ -n \"$BISECT_FAIL_CONFIRM_RETRIES\" ] && BISECT_EXTRA_ARGS+=(--fail-confirm-retries \"$BISECT_FAIL_CONFIRM_RETRIES\")\n    [ -n \"$BISECT_TRIAL_TIMEOUT\" ] && BISECT_EXTRA_ARGS+=(--trial-timeout-s \"$BISECT_TRIAL_TIMEOUT\")\n    [ -n \"$BISECT_BARRIER_TIMEOUT\" ] && BISECT_EXTRA_ARGS+=(--barrier-timeout-s \"$BISECT_BARRIER_TIMEOUT\")\n    [ \"$BISECT_NO_VERIFY_GOOD\" = \"true\" ] && BISECT_EXTRA_ARGS+=(--no-verify-good)\n    [ \"$BISECT_NO_VERIFY_BAD\" = \"true\" ] && BISECT_EXTRA_ARGS+=(--no-verify-bad)\n    [ \"$BISECT_FORCE_INITIAL_BUILD\" = \"true\" ] && BISECT_EXTRA_ARGS+=(--force-initial-build)\n    BISECT_EXTRA_ARGS+=(--native-check since-build)\n    [ -n \"$BISECT_CONFIG_BASE_PATH\" ] && BISECT_EXTRA_ARGS+=(--config-base-path \"$BISECT_CONFIG_BASE_PATH\")\n}",
+      "context": "✅ source 共享脚本，调用共享函数 shellcheck source=bisect_args.sh ... 前置代码 ..."
+    },
+    "diff": {
+      "unified": "--- a/tests/e2e/nightly/scripts/aop_process.sh\n+++ b/tests/e2e/nightly/scripts/aop_process.sh\n@@ -1,17 +1,27 @@\n-# 以下代码与 run.sh 中的 build_bisect_extra_args 函数几乎完全相同\n+# ✅ source 共享脚本，调用共享函数\n+SCRIPT_DIR=\"$(cd -- \"$(dirname -- \"${BASH_SOURCE[0]}\")\" && pwd)\"\n+# shellcheck source=bisect_args.sh\n+source \"${SCRIPT_DIR}/bisect_args.sh\"\n+\n # ... 前置代码 ...\n BISECT_CMD=()\n BISECT_CMD+=(--model-name \"$MODEL_NAME\")\n BISECT_CMD+=(--config-root \"$CONFIG_ROOT\")\n \n-# ❌ 10 行重复的 bisect 参数构造逻辑\n-[ -n \"$BISECT_GOOD_COMMIT\" ] && BISECT_CMD+=(--good-commit \"$BISECT_GOOD_COMMIT\")\n-[ -n \"$BISECT_FAIL_CONFIRM_RETRIES\" ] && BISECT_CMD+=(--fail-confirm-retries \"$BISECT_FAIL_CONFIRM_RETRIES\")\n-[ -n \"$BISECT_TRIAL_TIMEOUT\" ] && BISECT_CMD+=(--trial-timeout-s \"$BISECT_TRIAL_TIMEOUT\")\n-[ -n \"$BISECT_BARRIER_TIMEOUT\" ] && BISECT_CMD+=(--barrier-timeout-s \"$BISECT_BARRIER_TIMEOUT\")\n-[ \"$BISECT_NO_VERIFY_GOOD\" = \"true\" ] && BISECT_CMD+=(--no-verify-good)\n-[ \"$BISECT_NO_VERIFY_BAD\" = \"true\" ] && BISECT_CMD+=(--no-verify-bad)\n-[ \"$BISECT_FORCE_INITIAL_BUILD\" = \"true\" ] && BISECT_CMD+=(--force-initial-build)\n-# AOP owns the conservative rebuild policy; users cannot override it.\n-BISECT_CMD+=(--native-check since-build)\n-[ -n \"$BISECT_CONFIG_BASE_PATH\" ] && BISECT_CMD+=(--config-base-path \"$BISECT_CONFIG_BASE_PATH\")\n+# ✅ 原来 10 行重复逻辑替换为一行函数调用\n+build_bisect_extra_args\n+BISECT_CMD+=(\"${BISECT_EXTRA_ARGS[@]}\")\n+\n+# ✅ 共享函数，作为单一数据源\n+build_bisect_extra_args() {\n+    BISECT_EXTRA_ARGS=()\n+    [ -n \"$BISECT_GOOD_COMMIT\" ] && BISECT_EXTRA_ARGS+=(--good-commit \"$BISECT_GOOD_COMMIT\")\n+    [ -n \"$BISECT_FAIL_CONFIRM_RETRIES\" ] && BISECT_EXTRA_ARGS+=(--fail-confirm-retries \"$BISECT_FAIL_CONFIRM_RETRIES\")\n+    [ -n \"$BISECT_TRIAL_TIMEOUT\" ] && BISECT_EXTRA_ARGS+=(--trial-timeout-s \"$BISECT_TRIAL_TIMEOUT\")\n+    [ -n \"$BISECT_BARRIER_TIMEOUT\" ] && BISECT_EXTRA_ARGS+=(--barrier-timeout-s \"$BISECT_BARRIER_TIMEOUT\")\n+    [ \"$BISECT_NO_VERIFY_GOOD\" = \"true\" ] && BISECT_EXTRA_ARGS+=(--no-verify-good)\n+    [ \"$BISECT_NO_VERIFY_BAD\" = \"true\" ] && BISECT_EXTRA_ARGS+=(--no-verify-bad)\n+    [ \"$BISECT_FORCE_INITIAL_BUILD\" = \"true\" ] && BISECT_EXTRA_ARGS+=(--force-initial-build)\n+    BISECT_EXTRA_ARGS+=(--native-check since-build)\n+    [ -n \"$BISECT_CONFIG_BASE_PATH\" ] && BISECT_EXTRA_ARGS+=(--config-base-path \"$BISECT_CONFIG_BASE_PATH\")\n+}\n",
+      "stats": "1 file changed, +22 lines, -12 lines",
+      "key_changes": [
+        "移除: [ -n \"$BISECT_TRIAL_TIMEOUT\" ] && BISECT_CMD+=(--trial-timeout-s \"$BISECT_TRIAL_",
+        "移除: [ -n \"$BISECT_BARRIER_TIMEOUT\" ] && BISECT_CMD+=(--barrier-timeout-s \"$BISECT_BA",
+        "移除: [ -n \"$BISECT_CONFIG_BASE_PATH\" ] && BISECT_CMD+=(--config-base-path \"$BISECT_CO",
+        "新增: [ -n \"$BISECT_FAIL_CONFIRM_RETRIES\" ] && BISECT_EXTRA_ARGS+=(--fail-confirm-retr",
+        "新增: SCRIPT_DIR=\"$(cd -- \"$(dirname -- \"${BASH_SOURCE[0]}\")\" && pwd)\""
+      ]
+    },
+    "language": "sh",
+    "_status": "processed"
+  }
+}

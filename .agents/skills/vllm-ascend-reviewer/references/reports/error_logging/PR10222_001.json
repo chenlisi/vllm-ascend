@@ -1,0 +1,64 @@
+{
+  "report_id": "PR10222_001",
+  "pr_number": 10222,
+  "pr_title": "[Misc] improve error messages for quantization mismatches and netloader config validation",
+  "pr_status": "merged",
+  "merged_at": "2026-06-24T01:27:28Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/quantization/modelslim_config.py:400",
+    "vllm_ascend/quantization/compressed_tensors_config.py:69"
+  ],
+  "landing_sha": "b8cd3d3",
+  "source_quote": "we should % string instead of using f-string in logger.",
+  "correspondence": [
+    {
+      "review_quote": "Ronald1995 指出 logger 中应使用 `%` 格式化而非 f-string，因为 f-string 会立即求值，即使日志级别不满足也会执行字符串格式化，影响性能。MengqingCao 认为不应给参数设置默认值然后在默认值时抛出错误，应保持参数原样。作者先修改了 logger 格式化为 %-style（commit `bae9de1`），后在 compressed_tensors_config 的验证逻辑上经过多次迭代最终 revert 了该部分修改（commit `ccff5f4`），保持与上游一致的行为。",
+      "patch_snippet": "commit `bae9de1`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "b8cd3d3",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "Python logging 中应使用 `%` 格式化（如 `logger.error(\"msg: %s\", value)`）而非 f-string（如 `logger.error(f\"msg: {value}\")`），因为 %-style 支持 lazy evaluation，只有在日志级别满足时才会执行字符串格式化。",
+    "context": "",
+    "checkpoints": [
+      "检查所有 logger 调用是否使用了 f-string",
+      "确认是否改为 %-style 格式化",
+      "验证日志消息中的变量是否支持 lazy evaluation"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/quantization/modelslim_config.py",
+      "line": 400,
+      "code": "import logging\nfrom typing import Optional\n\nlogger = logging.getLogger(__name__)\n\n# ... 其他代码 ...\n\nclass AscendModelSlimConfig:\n    # ... 其他方法 ...\n\n    def get_quant_method(\n        self,\n        layer: torch.nn.Module,\n        prefix: str,\n    ) -> Optional[\"QuantizeMethodBase\"]:\n        # ... 其他逻辑 ...\n        scheme = self.get_scheme(layer, prefix)\n        if scheme is None:\n            # 使用 f-string 格式化 logger 消息，会立即求值\n            # 即使日志级别不满足也会执行字符串格式化，影响性能\n            logger.error(f\"Unsupported quantization scheme: {scheme}\")\n            raise NotImplementedError(\n                f\"Unsupported quantization scheme: {scheme}\"\n            )\n        return AscendModelSlimLinearMethod(scheme)\n\n    # ... 其他方法 ...",
+      "context": "we should % string instead of using f-string in logger."
+    },
+    "pattern": {
+      "file": "vllm_ascend/quantization/modelslim_config.py",
+      "line": 400,
+      "code": "import logging\nfrom typing import Optional\n\nlogger = logging.getLogger(__name__)\n\n# ... 其他代码 ...\n\nclass AscendModelSlimConfig:\n    # ... 其他方法 ...\n\n    def get_quant_method(\n        self,\n        layer: torch.nn.Module,\n        prefix: str,\n    ) -> Optional[\"QuantizeMethodBase\"]:\n        # ... 其他逻辑 ...\n        scheme = self.get_scheme(layer, prefix)\n        if scheme is None:\n            # 使用 %-style 格式化，支持 lazy evaluation\n            # 只有在日志级别满足时才执行字符串格式化\n            logger.error(\"Unsupported quantization scheme: %s\", scheme)\n            raise NotImplementedError(\n                f\"Unsupported quantization scheme: {scheme}\"\n            )\n        return AscendModelSlimLinearMethod(scheme)\n\n    # ... 其他方法 ...",
+      "context": "we should % string instead of using f-string in logger."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/quantization/modelslim_config.py\n+++ b/vllm_ascend/quantization/modelslim_config.py\n@@ -16,9 +16,9 @@\n         # ... 其他逻辑 ...\n         scheme = self.get_scheme(layer, prefix)\n         if scheme is None:\n-            # 使用 f-string 格式化 logger 消息，会立即求值\n-            # 即使日志级别不满足也会执行字符串格式化，影响性能\n-            logger.error(f\"Unsupported quantization scheme: {scheme}\")\n+            # 使用 %-style 格式化，支持 lazy evaluation\n+            # 只有在日志级别满足时才执行字符串格式化\n+            logger.error(\"Unsupported quantization scheme: %s\", scheme)\n             raise NotImplementedError(\n                 f\"Unsupported quantization scheme: {scheme}\"\n             )",
+      "stats": "1 file changed, +3 lines, -3 lines",
+      "key_changes": [
+        "移除: # 使用 f-string 格式化 logger 消息，会立即求值",
+        "移除: # 即使日志级别不满足也会执行字符串格式化，影响性能",
+        "移除: logger.error(f\"Unsupported quantization scheme: {scheme}\")",
+        "新增: # 使用 %-style 格式化，支持 lazy evaluation",
+        "新增: # 只有在日志级别满足时才执行字符串格式化",
+        "新增: logger.error(\"Unsupported quantization scheme: %s\", scheme)"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

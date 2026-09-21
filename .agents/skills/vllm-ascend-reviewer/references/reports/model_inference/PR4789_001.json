@@ -1,0 +1,62 @@
+{
+  "report_id": "PR4789_001",
+  "pr_number": 4789,
+  "pr_title": "[E2E] Refactor the e2e testcases.",
+  "pr_status": "merged",
+  "merged_at": "2025-12-11T02:15:01Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/e2e/singlecard/test_bge_model.py:56"
+  ],
+  "landing_sha": "42713b8",
+  "source_quote": "merge this test into test_bge_model_correctness to compare eager, aclgraph, hf together",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan 建议将 BGE 模型测试合并到 `test_bge_model_correctness` 中以同时对比 eager、aclgraph、hf 三种模式。作者确认完成（Done），1/1 建议已处理。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "42713b8",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "E2E 测试重构时，应将同一模型的测试用例合并到统一的正确性测试中，以便同时对比 eager、aclgraph、hf 等多种推理模式的输出结果。",
+    "context": "",
+    "checkpoints": [
+      "同一模型的测试是否合并到统一的正确性测试函数中",
+      "测试是否覆盖 eager、aclgraph、hf 等多种推理模式的对比",
+      "测试参数命名是否准确反映输出来源（如 `vllm_eager`、`vllm_aclgraph`）"
+    ],
+    "antipattern": {
+      "file": "tests/e2e/singlecard/test_bge_model.py",
+      "line": 40,
+      "code": "import pytest\nfrom vllm import LLM\n\ndef test_bge_model():\n    \"\"\"Test BGE embedding model with single mode.\"\"\"\n    model_name = \"BAAI/bge-large-en-v1.5\"\n    llm = LLM(model=model_name, task=\"embed\")\n    outputs = llm.encode([\"Hello, world!\"])\n    assert len(outputs) > 0\n\ndef test_bge_model_aclgraph():\n    \"\"\"Test BGE embedding model with aclgraph mode.\"\"\"\n    model_name = \"BAAI/bge-large-en-v1.5\"\n    llm = LLM(model=model_name, task=\"embed\",\n              enforce_eager=False)\n    outputs = llm.embed([\"Hello, world!\"])\n    assert len(outputs) > 0\n    check_embeddings_close(\n        name_0=\"hf\",      # 实际对应 vllm_outputs (eager)\n        name_1=\"vllm\",    # 实际对应 vllm_aclgraph_outputs\n        vllm_outputs=vllm_outputs,\n        vllm_aclgraph_outputs=vllm_aclgraph_outputs,\n        ...\n    )",
+      "context": "wangxiyuan: merge this test into test_bge_model_correctness to compare eager, aclgraph, hf together"
+    },
+    "pattern": {
+      "file": "tests/e2e/singlecard/test_bge_model.py",
+      "line": 40,
+      "code": "import pytest\nfrom vllm import LLM\n\ndef test_bge_model_correctness(hf_runner, vllm_runner):\n    \"\"\"Test BGE embedding model correctness across eager, aclgraph, hf.\"\"\"\n    model_name = \"BAAI/bge-large-en-v1.5\"\n    example_prompts = [\"Hello, world!\", \"This is a test.\"]\n\n    with hf_runner(model_name, dtype=\"float32\") as hf_model:\n        hf_outputs = hf_model.encode(example_prompts)\n\n    with vllm_runner(model_name, task=\"embed\",\n                     dtype=\"float32\", enforce_eager=True) as vllm_model:\n        vllm_outputs = vllm_model.encode(example_prompts)\n\n    with vllm_runner(model_name, task=\"embed\",\n                     dtype=\"float32\", enforce_eager=False) as vllm_model:\n        vllm_aclgraph_outputs = vllm_model.encode(example_prompts)\n\n    check_embeddings_close(\n        name_0=\"vllm_eager\",\n        name_1=\"vllm_aclgraph\",\n        vllm_outputs=vllm_outputs,\n        vllm_aclgraph_outputs=vllm_aclgraph_outputs,\n        hf_outputs=hf_outputs,\n        ...\n    )",
+      "context": "wangxiyuan: merge this test into test_bge_model_correctness to compare eager, aclgraph, hf together"
+    },
+    "diff": {
+      "unified": "--- a/tests/e2e/singlecard/test_bge_model.py\n+++ b/tests/e2e/singlecard/test_bge_model.py\n@@ -40,24 +40,27 @@\n import pytest\n from vllm import LLM\n \n-def test_bge_model():\n-    \"\"\"Test BGE embedding model with single mode.\"\"\"\n+def test_bge_model_correctness(hf_runner, vllm_runner):\n+    \"\"\"Test BGE embedding model correctness across eager, aclgraph, hf.\"\"\"\n     model_name = \"BAAI/bge-large-en-v1.5\"\n-    llm = LLM(model=model_name, task=\"embed\")\n-    outputs = llm.encode([\"Hello, world!\"])\n-    assert len(outputs) > 0\n+    example_prompts = [\"Hello, world!\", \"This is a test.\"]\n \n-def test_bge_model_aclgraph():\n-    \"\"\"Test BGE embedding model with aclgraph mode.\"\"\"\n-    model_name = \"BAAI/bge-large-en-v1.5\"\n-    llm = LLM(model=model_name, task=\"embed\",\n-              enforce_eager=False)\n-    outputs = llm.embed([\"Hello, world!\"])\n-    assert len(outputs) > 0\n+    with hf_runner(model_name, dtype=\"float32\") as hf_model:\n+        hf_outputs = hf_model.encode(example_prompts)\n+\n+    with vllm_runner(model_name, task=\"embed\",\n+                     dtype=\"float32\", enforce_eager=True) as vllm_model:\n+        vllm_outputs = vllm_model.encode(example_prompts)\n+\n+    with vllm_runner(model_name, task=\"embed\",\n+                     dtype=\"float32\", enforce_eager=False) as vllm_model:\n+        vllm_aclgraph_outputs = vllm_model.encode(example_prompts)\n+\n     check_embeddings_close(\n-        name_0=\"hf\",      # 实际对应 vllm_outputs (eager)\n-        name_1=\"vllm\",    # 实际对应 vllm_aclgraph_outputs\n+        name_0=\"vllm_eager\",\n+        name_1=\"vllm_aclgraph\",\n         vllm_outputs=vllm_outputs,\n         vllm_aclgraph_outputs=vllm_aclgraph_outputs,\n+        hf_outputs=hf_outputs,\n         ...\n     )",
+      "stats": "1 file changed, +17 lines, -14 lines",
+      "key_changes": [
+        "修改了第 4-5 行的代码",
+        "修改了第 7-9 行的代码",
+        "修改了第 11-17 行的代码",
+        "修改了第 19-20 行的代码",
+        "在第 25-25 行新增了代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "report_id": "PR14241_001",
+  "pr_number": 14241,
+  "pr_title": "[BugFix][Proxy] Preserve multimodal content on recompute",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "examples/disaggregated_prefill_v1/load_balance_proxy_server_example.py:1087"
+  ],
+  "landing_sha": "9f32e29",
+  "source_quote": "建议只在 `generated_token` 非空时追加 text part。recompute 可能发生在尚未产出可见 token 时，此时无条件追加 `{\"type\": \"text\", \"text\": \"\"}` 会改变原始 multimodal content 结构，部分 chat template 还可能引入额外 separator。layerwise proxy 的相同逻辑也建议一起调整。",
+  "correspondence": [
+    {
+      "review_quote": "examples/disaggregated_prefill_v1/load_balance_proxy_server_example.py:1087",
+      "patch_snippet": "评后sha 9f32e29 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "9f32e29",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在 recompute/重试路径中向 multimodal content（list 形式，含 image/text 等多类型 part）追加生成的 token 时，必须先判断 `generated_token` 是否非空，仅在非空时追加 `{\"type\": \"text\", \"text\": generated_token}`。无条件追加空 text part 会改变原始 multimodal 结构，部分 chat template 会因多出的空 part 引入额外 separator，导致推理结果错误。",
+    "context": "",
+    "checkpoints": [
+      "识别 recompute/重试路径中向 `messages[0][\"content\"]`（list 形式）追加 text part 的代码",
+      "确认追加前是否有 `if generated_token:` 或 `if generated_token else []` 守卫",
+      "空字符串、None 都不应触发追加——空 token 时保持原始 content 不变",
+      "若同一逻辑在多处重复（如普通 proxy 和 layerwise proxy），所有副本必须同步修改，不能只改一处",
+      "注意部分 chat template 对 content list 中 part 数量和顺序敏感，多出的空 part 会引入额外 separator"
+    ],
+    "antipattern": {
+      "file": "examples/disaggregated_prefill_v1/load_balance_proxy_server_example.py",
+      "line": 1087,
+      "code": "# examples/disaggregated_prefill_v1/load_balance_proxy_server_example.py\n# recompute 重试路径，约第 1080-1095 行\n                        stop_reason = choice.get(\"stop_reason\")\n                        usage = chunk_json.get(\"usage\", {})\n                        completion_tokens = (\n                            (completion_tokens + 1)\n                            if stream_flag\n                            else (completion_tokens + usage.get(\"completion_tokens\", 0))\n                        )\n                        if stop_reason == \"recomputed\":\n                            retry = True\n                            retry_count += 1\n                            if chat_flag:\n                                # ❌ generated_token=\"\" 时仍追加 {\"type\":\"text\",\"text\":\"\"}\n                                # ❌ 破坏原始 multimodal 结构，部分 chat template 引入额外 separator\n                                messages[0][\"content\"] = (\n                                    origin_prompt + [{\"type\": \"text\", \"text\": generated_token}]\n                                    if isinstance(origin_prompt, list)\n                                    else origin_prompt + generated_token\n                                )\n                            else:\n                                req_data[\"prompt\"] = origin_prompt + generated_token\n                            req_data[\"max_tokens\"] = origin_max_tokens - completion_tokens + retry_count\n                            tmp_request_length = len(json.dumps(req_data).encode(\"utf-8\"))\n                            instance_info = await reassign_instances(api, req_data, tmp_request_length, instance_info)\n                            released_kv = False\n                            break",
+      "context": "examples/disaggregated_prefill_v1/load_balance_proxy_server_example.py recompute 重试路径，约第 1080-1095 行 ❌ generated_token=\"\" 时仍追加 {\"type\":\"text\",\"text\":\"\"}"
+    },
+    "pattern": {
+      "file": "examples/disaggregated_prefill_v1/load_balance_proxy_server_example.py",
+      "line": 1087,
+      "code": "# examples/disaggregated_prefill_v1/load_balance_proxy_server_example.py\n# 两个 example 文件同步修改（+3/-2 each）\n                        stop_reason = choice.get(\"stop_reason\")\n                        usage = chunk_json.get(\"usage\", {})\n                        completion_tokens = (\n                            (completion_tokens + 1)\n                            if stream_flag\n                            else (completion_tokens + usage.get(\"completion_tokens\", 0))\n                        )\n                        if stop_reason == \"recomputed\":\n                            retry = True\n                            retry_count += 1\n                            if chat_flag:\n                                messages[0][\"content\"] = (\n                                    origin_prompt\n                                    + ([{\"type\": \"text\", \"text\": generated_token}] if generated_token else [])\n                                    # ✅ 仅 generated_token 非空时追加 text part\n                                    if isinstance(origin_prompt, list)\n                                    else (origin_prompt or \"\") + generated_token\n                                    # ✅ 顺带处理 origin_prompt 为 None 的情况（gemini 建议）\n                                )\n                            else:\n                                req_data[\"prompt\"] = (origin_prompt or \"\") + generated_token\n                            req_data[\"max_tokens\"] = origin_max_tokens - completion_tokens + retry_count\n                            tmp_request_length = len(json.dumps(req_data).encode(\"utf-8\"))\n                            instance_info = await reassign_instances(api, req_data, tmp_request_length, instance_info)\n                            released_kv = False\n                            break",
+      "context": "examples/disaggregated_prefill_v1/load_balance_proxy_server_example.py 两个 example 文件同步修改（+3/-2 each） ✅ 仅 generated_token 非空时追加 text part"
+    },
+    "diff": {
+      "unified": "--- a/examples/disaggregated_prefill_v1/load_balance_proxy_server_example.py\n+++ b/examples/disaggregated_prefill_v1/load_balance_proxy_server_example.py\n@@ -1,5 +1,5 @@\n # examples/disaggregated_prefill_v1/load_balance_proxy_server_example.py\n-# recompute 重试路径，约第 1080-1095 行\n+# 两个 example 文件同步修改（+3/-2 each）\n                         stop_reason = choice.get(\"stop_reason\")\n                         usage = chunk_json.get(\"usage\", {})\n                         completion_tokens = (\n@@ -11,15 +11,16 @@\n                             retry = True\n                             retry_count += 1\n                             if chat_flag:\n-                                # ❌ generated_token=\"\" 时仍追加 {\"type\":\"text\",\"text\":\"\"}\n-                                # ❌ 破坏原始 multimodal 结构，部分 chat template 引入额外 separator\n                                 messages[0][\"content\"] = (\n-                                    origin_prompt + [{\"type\": \"text\", \"text\": generated_token}]\n+                                    origin_prompt\n+                                    + ([{\"type\": \"text\", \"text\": generated_token}] if generated_token else [])\n+                                    # ✅ 仅 generated_token 非空时追加 text part\n                                     if isinstance(origin_prompt, list)\n-                                    else origin_prompt + generated_token\n+                                    else (origin_prompt or \"\") + generated_token\n+                                    # ✅ 顺带处理 origin_prompt 为 None 的情况（gemini 建议）\n                                 )\n                             else:\n-                                req_data[\"prompt\"] = origin_prompt + generated_token\n+                                req_data[\"prompt\"] = (origin_prompt or \"\") + generated_token\n                             req_data[\"max_tokens\"] = origin_max_tokens - completion_tokens + retry_count\n                             tmp_request_length = len(json.dumps(req_data).encode(\"utf-8\"))\n                             instance_info = await reassign_instances(api, req_data, tmp_request_length, instance_info)\n",
+      "stats": "1 file changed, +7 lines, -6 lines",
+      "key_changes": [
+        "移除: req_data[\"prompt\"] = origin_prompt + generated_token",
+        "新增: origin_prompt",
+        "新增: req_data[\"prompt\"] = (origin_prompt or \"\") + generated_token"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

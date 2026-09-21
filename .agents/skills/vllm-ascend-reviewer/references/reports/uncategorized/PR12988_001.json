@@ -1,0 +1,58 @@
+{
+  "report_id": "PR12988_001",
+  "pr_number": 12988,
+  "pr_title": "[CI] Fix Main2Main fresh-mode upstream reference",
+  "pr_status": "merged",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "important",
+  "affected_files": [
+    ".github/workflows/schedule_main2main.yaml:333"
+  ],
+  "landing_sha": "e289034",
+  "source_quote": "//github.com/vllm-project/vllm-ascend/pull/12279/changes delete some comments, please add it back, now I don't know about the `fresh-mode` in the PR title.\nWhat is the differences between FIXED_BASE_REF and FIXED_BASE_SHA, the naming don't show the real meaning.\nGood point. `FIXED_BASE_REF` was the ref used to fetch the upstream commit, while `FIXED_BASE_SHA` was the immutable commit actually used as the rebase base. I renamed them to `UPSTREAM_FETCH_REF` and `UPSTREAM_REBASE_SHA` and added a comment to make the distinction explicit. In fresh mode, both are empty because the workflow checks out the resolved upstream SHA directly.",
+  "correspondence": [
+    {
+      "review_quote": "menogrey: .github/workflows/schedule_main2main.yaml:333",
+      "patch_snippet": "评后sha e289034 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "menogrey: .github/workflows/schedule_main2main.yaml:333",
+      "patch_snippet": "评后sha e289034 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "e289034",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": ".github/workflows/schedule_main2main.yaml",
+      "line": 333,
+      "code": "        # --- resolve upstream SHA ---\n        run: |\n          set -eu\n          UPSTREAM_REPO=\"vllm-project/vllm\"\n          HEAD_FORK=\"${{ github.repository_owner }}\"\n\n          # Resolve the fixed upstream SHA for this run.\n          if [ \"$INPUT_MODE\" = \"fixed\" ]; then\n            UPSTREAM_SHA=\"$INPUT_FIXED_SHA\"\n          else\n            UPSTREAM_SHA=$(git ls-remote \"https://github.com/${UPSTREAM_REPO}.git\" \\\n              HEAD | awk '{print $1}')\n          fi\n\n          BASELINE_SHA=\"\"\n          USE_BASELINE=false\n\n          if git fetch \"https://github.com/${HEAD_FORK}.git\" \\\n            \"refs/heads/main2main_baseline:refs/remotes/main2main/main2main_baseline\" 2>/dev/null; then\n            BASELINE_SHA=$(git rev-parse refs/remotes/main2main/main2main_baseline)\n            if git merge-base --is-ancestor \"$BASELINE_SHA\" \"$UPSTREAM_SHA\"; then\n              USE_BASELINE=true\n            else\n              USE_BASELINE=false\n            fi\n          fi\n\n          if [ \"$USE_BASELINE\" = true ]; then\n            {\n              echo \"source_repository=$HEAD_FORK\"\n              echo \"source_ref=main2main_baseline\"\n            } >> \"$GITHUB_OUTPUT\"\n          else\n            {\n              echo \"source_repository=${UPSTREAM_REPO}\"\n              echo \"source_ref=main\"\n            } >> \"$GITHUB_OUTPUT\"\n          fi",
+      "context": "修改前代码 (yaml)"
+    },
+    "pattern": {
+      "file": ".github/workflows/schedule_main2main.yaml",
+      "line": 333,
+      "code": "        # --- resolve upstream SHA ---\n        run: |\n          set -eu\n          UPSTREAM_REPO=\"vllm-project/vllm\"\n          HEAD_FORK=\"${{ github.repository_owner }}\"\n\n          # Resolve the fixed upstream SHA for this run.\n          if [ \"$INPUT_MODE\" = \"fixed\" ]; then\n            UPSTREAM_SHA=\"$INPUT_FIXED_SHA\"\n          else\n            UPSTREAM_SHA=$(git ls-remote \"https://github.com/${UPSTREAM_REPO}.git\" \\\n              HEAD | awk '{print $1}')\n          fi\n\n          BASELINE_SHA=\"\"\n          USE_BASELINE=false\n\n          # Attempt incremental mode: carry forward previous adaptation commits\n          # by rebasing main2main_baseline onto this run's fixed upstream SHA.\n          if git fetch \"https://github.com/${HEAD_FORK}.git\" \\\n            \"refs/heads/main2main_baseline:refs/remotes/main2main/main2main_baseline\" 2>/dev/null; then\n            BASELINE_SHA=$(git rev-parse refs/remotes/main2main/main2main_baseline)\n            if git merge-base --is-ancestor \"$BASELINE_SHA\" \"$UPSTREAM_SHA\"; then\n              USE_BASELINE=true\n            else\n              USE_BASELINE=false\n            fi\n          fi\n\n          # Fresh mode starts directly from the fixed upstream SHA when no\n          # baseline exists, the target vLLM commit predates the baseline's\n          # verified vLLM commit, or the rebase conflicts.\n          if [ \"$USE_BASELINE\" = true ]; then\n            {\n              echo \"source_repository=$HEAD_FORK\"\n              echo \"source_ref=main2main_baseline\"\n            } >> \"$GITHUB_OUTPUT\"\n          else\n            {\n              echo \"source_repository=${UPSTREAM_REPO}\"\n              echo \"source_ref=main\"\n            } >> \"$GITHUB_OUTPUT\"\n          fi",
+      "context": "修改后代码 (yaml)"
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/schedule_main2main.yaml\n+++ b/.github/workflows/schedule_main2main.yaml\n@@ -15,6 +15,8 @@\n           BASELINE_SHA=\"\"\n           USE_BASELINE=false\n \n+          # Attempt incremental mode: carry forward previous adaptation commits\n+          # by rebasing main2main_baseline onto this run's fixed upstream SHA.\n           if git fetch \"https://github.com/${HEAD_FORK}.git\" \\\n             \"refs/heads/main2main_baseline:refs/remotes/main2main/main2main_baseline\" 2>/dev/null; then\n             BASELINE_SHA=$(git rev-parse refs/remotes/main2main/main2main_baseline)\n@@ -25,6 +27,9 @@\n             fi\n           fi\n \n+          # Fresh mode starts directly from the fixed upstream SHA when no\n+          # baseline exists, the target vLLM commit predates the baseline's\n+          # verified vLLM commit, or the rebase conflicts.\n           if [ \"$USE_BASELINE\" = true ]; then\n             {\n               echo \"source_repository=$HEAD_FORK\"",
+      "stats": "1 file changed, +5 lines, -0 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "yaml",
+    "_status": "pending_llm_extract"
+  }
+}

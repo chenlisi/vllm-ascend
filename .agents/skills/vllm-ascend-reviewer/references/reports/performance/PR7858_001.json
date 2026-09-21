@@ -1,0 +1,70 @@
+{
+  "report_id": "PR7858_001",
+  "pr_number": 7858,
+  "pr_title": "[BugFix] Fix dimension mismatch error when SP padding causes num_tokens_padded != num_tokens_unpadded",
+  "pr_status": "merged",
+  "merged_at": "2026-04-13T09:26:10Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/model_runner_v1.py:1423"
+  ],
+  "landing_sha": "8f16af1",
+  "source_quote": "why don't use `self.query_start_loc.copy_to_gpu()` method?\nThanks for the question! I initially used self.query_start_loc.copy_to_gpu() in the early version of this fix. However, during the code review, one of committers raised concerns that copy_to_gpu() may introduce potential synchronization issues or unnecessary overhead in this context. Since we only need to update a single element at index num_reqs_padded, directly assigning to the GPU tensor via self.query_start_loc.gpu[num_reqs_padded] = num_tokens_padded is safer and more efficient. It avoids triggering a full host-to-device copy and eliminates any risk of implicit synchronization or race conditions that copy_to_gpu() might introduce. Therefore, following the committer's suggestion, I switched to direct GPU tensor assignment to ensure correctness and performance.",
+  "correspondence": [
+    {
+      "review_quote": "Zz-Dai: vllm_ascend/worker/model_runner_v1.py:1423",
+      "patch_snippet": "评后sha 8f16af1 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Zz-Dai: vllm_ascend/worker/model_runner_v1.py:1423",
+      "patch_snippet": "评后sha 8f16af1 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "8f16af1",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当只需要更新 tensor 中的单个元素时，应直接通过索引赋值（如 `tensor.gpu[idx] = value`），而不是使用 `copy_to_gpu()` 等全量拷贝方法，以避免不必要的同步开销和潜在的性能问题。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 1400,
+      "code": "# 作者解释：早期版本使用了 copy_to_gpu()，但 committer 指出该方法可能引入\n# 同步问题和不必要的开销。由于只需更新单个元素，直接赋值更安全高效。\n\n    def _pad_query_start_loc_for_fia(self, num_reqs_padded, num_tokens_padded):\n        \"\"\"Pad query_start_loc for FIA when SP padding causes\n        num_tokens_padded != num_tokens_unpadded.\"\"\"\n        # When SP is enabled, padding may cause num_tokens_padded to differ\n        # from num_tokens_unpadded. We need to add a dummy request to handle\n        # this case.\n        num_reqs = len(self.query_start_loc) - 1\n        if num_reqs_padded > num_reqs:\n            # Add dummy request padding for SP alignment\n            self.query_start_loc.gpu[num_reqs_padded] = num_tokens_padded\n            # 早期版本曾使用以下全量拷贝方式：\n            # self.query_start_loc.copy_to_gpu()  # 触发完整的 h2d 拷贝",
+      "context": "why don't use `self.query_start_loc.copy_to_gpu()` method?\nThanks for the question! I initially used self.query_start_loc.copy_to_gpu() in the early version of this fix. However, during the code revie"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 1400,
+      "code": "# commit c47afe7 \"Optimize GPU assignment for query start location\"\n# 直接赋值 GPU tensor 的单个元素，避免全量拷贝\n# 避免了触发完整的 h2d 拷贝和隐式同步风险\n\n    def _pad_query_start_loc_for_fia(self, num_reqs_padded, num_tokens_padded):\n        \"\"\"Pad query_start_loc for FIA when SP padding causes\n        num_tokens_padded != num_tokens_unpadded.\"\"\"\n        # When SP is enabled, padding may cause num_tokens_padded to differ\n        # from num_tokens_unpadded. We need to add a dummy request to handle\n        # this case.\n        num_reqs = len(self.query_start_loc) - 1\n        if num_reqs_padded > num_reqs:\n            # Direct GPU tensor assignment for single element update.\n            # This is safer and more efficient than copy_to_gpu() because:\n            # 1. It avoids triggering a full host-to-device copy\n            # 2. It eliminates risk of implicit synchronization or race conditions\n            self.query_start_loc.gpu[num_reqs_padded] = num_tokens_padded",
+      "context": "why don't use `self.query_start_loc.copy_to_gpu()` method?\nThanks for the question! I initially used self.query_start_loc.copy_to_gpu() in the early version of this fix. However, during the code revie"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/model_runner_v1.py\n+++ b/vllm_ascend/worker/model_runner_v1.py\n@@ -1,5 +1,6 @@\n-# 作者解释：早期版本使用了 copy_to_gpu()，但 committer 指出该方法可能引入\n-# 同步问题和不必要的开销。由于只需更新单个元素，直接赋值更安全高效。\n+# commit c47afe7 \"Optimize GPU assignment for query start location\"\n+# 直接赋值 GPU tensor 的单个元素，避免全量拷贝\n+# 避免了触发完整的 h2d 拷贝和隐式同步风险\n \n     def _pad_query_start_loc_for_fia(self, num_reqs_padded, num_tokens_padded):\n         \"\"\"Pad query_start_loc for FIA when SP padding causes\n@@ -9,7 +10,8 @@\n         # this case.\n         num_reqs = len(self.query_start_loc) - 1\n         if num_reqs_padded > num_reqs:\n-            # Add dummy request padding for SP alignment\n+            # Direct GPU tensor assignment for single element update.\n+            # This is safer and more efficient than copy_to_gpu() because:\n+            # 1. It avoids triggering a full host-to-device copy\n+            # 2. It eliminates risk of implicit synchronization or race conditions\n             self.query_start_loc.gpu[num_reqs_padded] = num_tokens_padded\n-            # 早期版本曾使用以下全量拷贝方式：\n-            # self.query_start_loc.copy_to_gpu()  # 触发完整的 h2d 拷贝\n",
+      "stats": "1 file changed, +7 lines, -5 lines",
+      "key_changes": [
+        "-# 作者解释：早期版本使用了 copy_to_gpu()，但 committer 指出该方法可能引入",
+        "-# 同步问题和不必要的开销。由于只需更新单个元素，直接赋值更安全高效。",
+        "+# commit c47afe7 \"Optimize GPU assignment for query start location\"",
+        "+# 直接赋值 GPU tensor 的单个元素，避免全量拷贝",
+        "+# 避免了触发完整的 h2d 拷贝和隐式同步风险",
+        "-            # Add dummy request padding for SP alignment",
+        "+            # Direct GPU tensor assignment for single element update.",
+        "+            # This is safer and more efficient than copy_to_gpu() because:",
+        "+            # 1. It avoids triggering a full host-to-device copy",
+        "+            # 2. It eliminates risk of implicit synchronization or race conditions",
+        "-            # 早期版本曾使用以下全量拷贝方式：",
+        "-            # self.query_start_loc.copy_to_gpu()  # 触发完整的 h2d 拷贝"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

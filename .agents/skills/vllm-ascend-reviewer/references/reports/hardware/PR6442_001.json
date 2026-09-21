@@ -1,0 +1,56 @@
+{
+  "report_id": "PR6442_001",
+  "pr_number": 6442,
+  "pr_title": "[Refactor] MLP weight prefetch to consistency with MoE Model's prefetching",
+  "pr_status": "merged",
+  "merged_at": "2026-02-04T01:08:18Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/_310p/ops/activation.py:27",
+    "docs/source/tutorials/Qwen3-Dense.md:348"
+  ],
+  "landing_sha": "3e0bdad",
+  "source_quote": "maybe we shoult drop support for 310p first.",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan 指出 maybe we shoult drop support for 310p first.。作者通过 commit `3e0bdad` 进行了修改，2/15 条建议落地。",
+      "patch_snippet": "commit `3e0bdad`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "3e0bdad",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "maybe we shoult drop support for 310p first.",
+    "context": "",
+    "checkpoints": [
+      "检查 `vllm_ascend/_310p/ops/activation.py:27` 相关代码是否符合评审意见",
+      "确认修改已覆盖评审人提出的所有问题"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/_310p/ops/activation.py",
+      "line": 27,
+      "code": "",
+      "context": "maybe we shoult drop support for 310p first."
+    },
+    "pattern": {
+      "file": "vllm_ascend/_310p/ops/activation.py",
+      "line": 27,
+      "code": "",
+      "context": "maybe we shoult drop support for 310p first."
+    },
+    "diff": {
+      "unified": "",
+      "stats": "1 file changed, +0 lines, -0 lines",
+      "key_changes": []
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

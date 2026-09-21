@@ -1,0 +1,71 @@
+{
+  "report_id": "PR4168_001",
+  "pr_number": 4168,
+  "pr_title": "[Fusion] Adopt inductor fusion and define quantization fusion pass",
+  "pr_status": "merged",
+  "merged_at": "2025-12-04T02:29:48Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/compilation/compiler_interface.py:51",
+    "vllm_ascend/compilation/quant_fusion_pass.py:47",
+    "vllm_ascend/compilation/quant_fusion_pass.py:82",
+    "vllm_ascend/compilation/quant_fusion_pass.py:104",
+    "vllm_ascend/ascend_config.py:138",
+    "vllm_ascend/ascend_config.py:148",
+    "vllm_ascend/ascend_config.py:312",
+    "vllm_ascend/ops/layernorm.py:44",
+    "vllm_ascend/compilation/compiler_interface.py:52",
+    "vllm_ascend/compilation/passes/quant_fusion_pass.py:27",
+    "vllm_ascend/platform.py:79",
+    "vllm_ascend/platform.py:87",
+    "vllm_ascend/platform.py:75",
+    "tests/e2e/singlecard/test_quant_fusion.py:1"
+  ],
+  "landing_sha": "444d8b1",
+  "source_quote": "The name `AscendAdaptor` is too vague; I suggest a more specific one like `AscendCompiler`.",
+  "correspondence": [
+    {
+      "review_quote": "四位评审人从不同角度提出了 17 条意见：whx-sjtu 关注命名规范（`AscendAdaptor` → `AscendCompiler`）、硬编码问题（`eps` 应定义为静态变量）、变量命名清晰度（`self.patterns`）和数据格式对模式匹配的影响；jgong5 关注文档质量（注释应提供有效信息、字段需添加文档）、语法正确性和逻辑可理解性（layernorm 中的检查逻辑）；ApsarasX 建议目录结构优化（将 pass 文件移至 `passes/` 目录）和版本兼容性说明；wangxiyuan 回答了版本要求问题（vllm 0.12.0+），建议使用字符串替代数字提高可读性",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "444d8b1",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "类名应清晰表达其职责，避免使用过于模糊的名称如 `Adaptor`，应使用更具体的名称如 `AscendCompiler`。",
+    "context": "",
+    "checkpoints": [
+      "检查类名是否能准确反映其功能",
+      "避免使用 `Adaptor`、`Handler`、`Manager` 等过于宽泛的名称"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/compilation/compiler_interface.py",
+      "line": 40,
+      "code": "import torch\nfrom typing import Optional, List\n\nclass AscendAdaptor:\n    \"\"\"AscendAdaptor\"\"\"  # 注释仅重复类名，无额外信息\n\n    def compile(\n        self,\n        graph: torch.fx.Graph,\n        example_inputs: List[torch.Tensor],\n        mode: Optional[str] = None,\n    ) -> callable:\n        \"\"\"Compile the FX graph for Ascend NPU.\"\"\"\n        return compiled_fn",
+      "context": "The name `AscendAdaptor` is too vague; I suggest a more specific one like `AscendCompiler`."
+    },
+    "pattern": {
+      "file": "vllm_ascend/compilation/compiler_interface.py",
+      "line": 40,
+      "code": "class AscendCompiler:\n    \"\"\"Ascend 编译器后端，负责将 FX graph 编译到 Ascend NPU。\n\n    使用 inductor pattern_matcher 进行量化融合，\n    支持自定义 fusion pass 和 aot-autograd 编译流程。\n    \"\"\"\n\n    def compile(\n        self,\n        graph: torch.fx.Graph,\n        example_inputs: List[torch.Tensor],\n        mode: Optional[str] = None,\n    ) -> callable:\n        \"\"\"Compile the FX graph for Ascend NPU.\"\"\"\n        return compiled_fn",
+      "context": "The name `AscendAdaptor` is too vague; I suggest a more specific one like `AscendCompiler`."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/compilation/compiler_interface.py\n+++ b/vllm_ascend/compilation/compiler_interface.py\n@@ -40,14 +40,15 @@\n-import torch\n-from typing import Optional, List\n+class AscendCompiler:\n+    \"\"\"Ascend 编译器后端，负责将 FX graph 编译到 Ascend NPU。\n \n-class AscendAdaptor:\n-    \"\"\"AscendAdaptor\"\"\"  # 注释仅重复类名，无额外信息\n+    使用 inductor pattern_matcher 进行量化融合，\n+    支持自定义 fusion pass 和 aot-autograd 编译流程。\n+    \"\"\"\n \n     def compile(\n         self,",
+      "stats": "1 file changed, +5 lines, -4 lines",
+      "key_changes": [
+        "修改了第 1-2 行的代码",
+        "修改了第 4-5 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "report_id": "PR9726_001",
+  "pr_number": 9726,
+  "pr_title": "[Misc] main2main 0529",
+  "pr_status": "merged",
+  "merged_at": "2026-06-01T12:34:13Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/ut/spec_decode/test_extract_hidden_states_proposer.py:44",
+    "vllm_ascend/ops/triton/mamba/causal_conv1d.py:583"
+  ],
+  "landing_sha": "7cf91ef",
+  "source_quote": "MengqingCao 行级评论（2026-06-01 03:23:52），评后 sha `7cf91ef` 体现修改。\nMengqingCao 行级评论（2026-06-01 03:27:41），评后 sha `7cf91ef` 体现修改。",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao: tests/ut/spec_decode/test_extract_hidden_states_proposer.py:44",
+      "patch_snippet": "评后sha 7cf91ef 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/ops/triton/mamba/causal_conv1d.py:583",
+      "patch_snippet": "评后sha 7cf91ef 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "7cf91ef",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 main2main 上游同步过程中，需确保 Triton kernel 在不可用平台（如 310P）上有正确的 fallback 实现，版本条件 guard 使用 lazy import 避免导入错误。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "tests/ut/spec_decode/test_extract_hidden_states_proposer.py",
+      "line": 35,
+      "code": "# （根据评审意见推断）测试代码未检查 vLLM 版本\n# MengqingCao 评论: \"then we should add a check of vllm version for enabling this?\"\n# 测试直接启用 extract_hidden_states proposer，未考虑版本兼容性\n\nimport pytest\nfrom unittest.mock import MagicMock, patch\n\nfrom vllm_ascend.spec_decode.extract_hidden_states_proposer import (\n    AscendExtractHiddenStatesProposer,\n)\n\n\nclass TestAscendExtractHiddenStatesProposer:\n\n    def test_extract_hidden_states_proposer(self):\n        # 直接测试，未添加 vLLM 版本条件检查\n        mock_runner = MagicMock()\n        mock_runner._pad_for_sequence_parallelism.return_value = 32\n        proposer = AscendExtractHiddenStatesProposer(\n            runner=mock_runner,\n            vllm_config=MagicMock(),\n        )",
+      "context": "MengqingCao 行级评论（2026-06-01 03:23:52），评后 sha `7cf91ef` 体现修改。\nMengqingCao 行级评论（2026-06-01 03:27:41），评后 sha `7cf91ef` 体现修改。"
+    },
+    "pattern": {
+      "file": "tests/ut/spec_decode/test_extract_hidden_states_proposer.py",
+      "line": 35,
+      "code": "# 添加 vLLM 版本检查，条件性启用测试\n# zhangxinyuehfad 回复: \"done\"\n\nimport pytest\nfrom unittest.mock import MagicMock, patch\n\nfrom vllm_ascend.spec_decode.extract_hidden_states_proposer import (\n    AscendExtractHiddenStatesProposer,\n)\nfrom vllm_ascend.utils import vllm_version_is\n\n\nclass TestAscendExtractHiddenStatesProposer:\n\n    @pytest.mark.skipif(\n        not vllm_version_is(\"0.20.2\"),\n        reason=\"extract_hidden_states proposer requires vLLM >= 0.20.2\",\n    )\n    def test_extract_hidden_states_proposer(self):\n        mock_runner = MagicMock()\n        mock_runner._pad_for_sequence_parallelism.return_value = 32\n        proposer = AscendExtractHiddenStatesProposer(\n            runner=mock_runner,\n            vllm_config=MagicMock(),\n        )",
+      "context": "MengqingCao 行级评论（2026-06-01 03:23:52），评后 sha `7cf91ef` 体现修改。\nMengqingCao 行级评论（2026-06-01 03:27:41），评后 sha `7cf91ef` 体现修改。"
+    },
+    "diff": {
+      "unified": "--- a/tests/ut/spec_decode/test_extract_hidden_states_proposer.py\n+++ b/tests/ut/spec_decode/test_extract_hidden_states_proposer.py\n@@ -1,6 +1,5 @@\n-# （根据评审意见推断）测试代码未检查 vLLM 版本\n-# MengqingCao 评论: \"then we should add a check of vllm version for enabling this?\"\n-# 测试直接启用 extract_hidden_states proposer，未考虑版本兼容性\n+# 添加 vLLM 版本检查，条件性启用测试\n+# zhangxinyuehfad 回复: \"done\"\n \n import pytest\n from unittest.mock import MagicMock, patch\n@@ -8,12 +7,16 @@\n from vllm_ascend.spec_decode.extract_hidden_states_proposer import (\n     AscendExtractHiddenStatesProposer,\n )\n+from vllm_ascend.utils import vllm_version_is\n \n \n class TestAscendExtractHiddenStatesProposer:\n \n+    @pytest.mark.skipif(\n+        not vllm_version_is(\"0.20.2\"),\n+        reason=\"extract_hidden_states proposer requires vLLM >= 0.20.2\",\n+    )\n     def test_extract_hidden_states_proposer(self):\n-        # 直接测试，未添加 vLLM 版本条件检查\n         mock_runner = MagicMock()\n         mock_runner._pad_for_sequence_parallelism.return_value = 32\n         proposer = AscendExtractHiddenStatesProposer(\n",
+      "stats": "1 file changed, +7 lines, -4 lines",
+      "key_changes": [
+        "-# （根据评审意见推断）测试代码未检查 vLLM 版本",
+        "-# MengqingCao 评论: \"then we should add a check of vllm version for enabling this?\"",
+        "-# 测试直接启用 extract_hidden_states proposer，未考虑版本兼容性",
+        "+# 添加 vLLM 版本检查，条件性启用测试",
+        "+# zhangxinyuehfad 回复: \"done\"",
+        "+from vllm_ascend.utils import vllm_version_is",
+        "+    @pytest.mark.skipif(",
+        "+        not vllm_version_is(\"0.20.2\"),",
+        "+        reason=\"extract_hidden_states proposer requires vLLM >= 0.20.2\",",
+        "+    )",
+        "-        # 直接测试，未添加 vLLM 版本条件检查"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

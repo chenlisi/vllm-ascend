@@ -1,0 +1,64 @@
+{
+  "report_id": "PR10941_001",
+  "pr_number": 10941,
+  "pr_title": "[BugFix] Skip FlashComm1/2 For ViT",
+  "pr_status": "merged",
+  "merged_at": "2026-07-10T07:20:55Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/ut/ops/test_linear.py:173",
+    "vllm_ascend/ops/linear_op.py:698"
+  ],
+  "landing_sha": "9627ff0",
+  "source_quote": "What functionality does this UT cover? Don't add this kind of code. I think it is unnecessary",
+  "correspondence": [
+    {
+      "review_quote": "zhenwenqi2024 质疑了 UT 的必要性，并询问 `vision_model` 前缀是否在所有 ViT 模型中通用。作者回复 `vision_model` 并非通用，约覆盖 20+ 模型。commit `9627ff0` 修复了 VL 模型在 Ascend NPU 上开启 FC1/FC2 时 VIT 层被错误路由导致的崩溃问题。",
+      "patch_snippet": "commit `9627ff0`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "9627ff0",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 VL 模型中开启 FlashComm1/2 时，算子分发逻辑应通过前缀检查排除 `vision_model` 层，确保 VIT 层退回标准 TP 模式，避免在 forward context 之外错误调用 Ascend 专用算子导致崩溃。",
+    "context": "",
+    "checkpoints": [
+      "检查算子分发函数是否排除了 `vision_model` 前缀",
+      "确认 VIT 层是否使用标准 TP 模式",
+      "验证 VL 模型在 PD 分离和混布模式下的稳定性"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/linear_op.py",
+      "line": 685,
+      "code": "def _get_linear_op(self, module_name: str, *args, **kwargs):\n    \"\"\"Dispatch linear op based on module name and config.\"\"\"\n    if not self._use_flash_comm:\n        return self._standard_linear_op(*args, **kwargs)\n\n    # FlashComm1/2 路径：所有层（包括 VIT）都会走到这里\n    # VIT 层不依赖 forward context，调用 Ascend 专用算子会崩溃\n    if self._use_flash_comm_v2:\n        return self._flash_comm_v2_op(module_name, *args, **kwargs)\n    else:\n        return self._flash_comm_v1_op(module_name, *args, **kwargs)",
+      "context": "What functionality does this UT cover? Don't add this kind of code. I think it is unnecessary"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/linear_op.py",
+      "line": 685,
+      "code": "def _get_linear_op(self, module_name: str, *args, **kwargs):\n    \"\"\"Dispatch linear op based on module name and config.\"\"\"\n    # 排除 vision_model 前缀的 VIT 层，退回标准 TP 模式\n    # vision_model 覆盖约 20+ VL 模型，并非所有 ViT 模型通用\n    if module_name.startswith(\"vision_model\"):\n        return self._standard_linear_op(*args, **kwargs)\n\n    if not self._use_flash_comm:\n        return self._standard_linear_op(*args, **kwargs)\n\n    if self._use_flash_comm_v2:\n        return self._flash_comm_v2_op(module_name, *args, **kwargs)\n    else:\n        return self._flash_comm_v1_op(module_name, *args, **kwargs)",
+      "context": "What functionality does this UT cover? Don't add this kind of code. I think it is unnecessary"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/linear_op.py\n+++ b/vllm_ascend/ops/linear_op.py\n@@ -1,10 +1,13 @@\n def _get_linear_op(self, module_name: str, *args, **kwargs):\n     \"\"\"Dispatch linear op based on module name and config.\"\"\"\n+    # 排除 vision_model 前缀的 VIT 层，退回标准 TP 模式\n+    # vision_model 覆盖约 20+ VL 模型，并非所有 ViT 模型通用\n+    if module_name.startswith(\"vision_model\"):\n+        return self._standard_linear_op(*args, **kwargs)\n+\n     if not self._use_flash_comm:\n         return self._standard_linear_op(*args, **kwargs)\n \n-    # FlashComm1/2 路径：所有层（包括 VIT）都会走到这里\n-    # VIT 层不依赖 forward context，调用 Ascend 专用算子会崩溃\n     if self._use_flash_comm_v2:\n         return self._flash_comm_v2_op(module_name, *args, **kwargs)\n     else:",
+      "stats": "1 file changed, +5 lines, -2 lines",
+      "key_changes": [
+        "新增: # 排除 vision_model 前缀的 VIT 层，退回标准 TP 模式",
+        "新增: # vision_model 覆盖约 20+ VL 模型，并非所有 ViT 模型通用",
+        "新增: if module_name.startswith(\"vision_model\"):",
+        "新增: return self._standard_linear_op(*args, **kwargs)",
+        "移除: # FlashComm1/2 路径：所有层（包括 VIT）都会走到这里",
+        "移除: # VIT 层不依赖 forward context，调用 Ascend 专用算子会崩溃"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

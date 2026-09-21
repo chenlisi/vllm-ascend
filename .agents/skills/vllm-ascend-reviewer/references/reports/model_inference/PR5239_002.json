@@ -1,0 +1,44 @@
+{
+  "report_id": "PR5239_002",
+  "pr_number": 5239,
+  "pr_title": "",
+  "pr_status": "unknown",
+  "merged_at": "",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [],
+  "landing_sha": "",
+  "source_quote": "",
+  "correspondence": [],
+  "verification": {
+    "merged": false,
+    "modified_commit": "",
+    "approvals": 0
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "",
+      "context": ""
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "",
+      "context": ""
+    },
+    "diff": {
+      "unified": "",
+      "stats": "1 file changed, +0 lines, -0 lines",
+      "key_changes": []
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

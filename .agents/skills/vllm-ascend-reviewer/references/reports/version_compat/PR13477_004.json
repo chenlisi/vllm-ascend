@@ -1,0 +1,59 @@
+{
+  "report_id": "PR13477_004",
+  "pr_number": 13477,
+  "pr_title": "[CI]Main2Main 0807",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/ops/triton/mamba/postprocess.py:86"
+  ],
+  "landing_sha": "78a10d9",
+  "source_quote": "**[P1] Do not load `num_scheduled_tokens_ptr` on the precomputed path.**\n> `run_fused_postprocess_align()` passes `None` for both `num_scheduled_tokens_ptr` and `num_draft_tokens_ptr` when `PRECOMPUTED_NEW_COMPUTED=True`, but line 80 performs `tl.load(num_scheduled_tokens_ptr + req_idx)` unconditionally before this branch. This can fail during Triton specialization/compilation by doing pointer arithmetic and a load through `None`; relying on dead-code elimination is unsafe. Move the `num_scheduled`, `num_computed`, and `num_draft` loads entirely into the `else` branch, matching upstream.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/ops/triton/mamba/postprocess.py:86",
+      "patch_snippet": "评后sha 78a10d9 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "78a10d9",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "当某个分支路径会以 `None` 传入某些指针参数（如 `num_scheduled_tokens_ptr`）时，对这些指针的 `tl.load`/指针运算必须放在该参数确实有效的分支内，不得在分支前无条件执行并依赖编译器死代码消除；否则会在 Triton 特化/编译阶段触发指针算术错误。",
+    "context": "",
+    "checkpoints": [
+      "检查是否存在\"某分支传入 None 指针\"的约定（如 `PRECOMPUTED_NEW_COMPUTED=True` 时 `num_scheduled_tokens_ptr=None`）",
+      "检查对这些指针的 `tl.load(ptr + offset)` 是否在分支之前无条件执行",
+      "不得依赖\"分支条件恒假 → 死代码消除\"来掩盖 None 指针加载",
+      "将仅在特定分支使用的指针加载完整移入该分支"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/triton/mamba/postprocess.py",
+      "line": 80,
+      "code": "    num_accepted = tl.load(num_accepted_tokens_ptr + req_idx)\n    src_block_idx = tl.load(mamba_state_idx_ptr + req_idx)\n    # 无条件加载 — PRECOMPUTED 路径传入 None，此处 tl.load(None + req_idx) 会在\n    # Triton 特化/编译阶段失败，不能依赖死代码消除\n    num_scheduled = tl.load(num_scheduled_tokens_ptr + req_idx)\n\n    if PRECOMPUTED_NEW_COMPUTED:\n        new_num_computed = tl.load(num_computed_tokens_ptr + req_idx)\n    else:\n        num_computed = tl.load(num_computed_tokens_ptr + req_idx)\n        num_draft = tl.load(num_draft_tokens_ptr + req_idx)\n        num_tokens_running_state = num_computed + num_scheduled - num_draft\n        new_num_computed = num_tokens_running_state + num_accepted - 1\n\n    aligned_new_computed = (new_num_computed // block_size) * block_size\n    needs_copy = aligned_new_computed >= num_tokens_running_state",
+      "context": "无条件加载 — PRECOMPUTED 路径传入 None，此处 tl.load(None + req_idx) 会在 Triton 特化/编译阶段失败，不能依赖死代码消除"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/triton/mamba/postprocess.py",
+      "line": 80,
+      "code": "    num_accepted = tl.load(num_accepted_tokens_ptr + req_idx)\n    src_block_idx = tl.load(mamba_state_idx_ptr + req_idx)\n    # num_scheduled/num_draft 的加载已移入 else 分支，\n    # PRECOMPUTED 路径不再触碰 None 指针\n\n    if PRECOMPUTED_NEW_COMPUTED:\n        # num_scheduled/num_draft are unused on this path and are passed as\n        # None, so they must not be loaded here.\n        new_num_computed = tl.load(num_computed_tokens_ptr + req_idx)\n        num_tokens_running_state = new_num_computed - num_accepted + 1\n    else:\n        num_scheduled = tl.load(num_scheduled_tokens_ptr + req_idx)\n        num_computed = tl.load(num_computed_tokens_ptr + req_idx)\n        num_draft = tl.load(num_draft_tokens_ptr + req_idx)\n        num_tokens_running_state = num_computed + num_scheduled - num_draft\n        new_num_computed = num_tokens_running_state + num_accepted - 1\n\n    aligned_new_computed = (new_num_computed // block_size) * block_size\n    needs_copy = aligned_new_computed >= num_tokens_running_state",
+      "context": "num_scheduled/num_draft 的加载已移入 else 分支， PRECOMPUTED 路径不再触碰 None 指针 num_scheduled/num_draft are unused on this path and are passed as"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/triton/mamba/postprocess.py\n+++ b/vllm_ascend/ops/triton/mamba/postprocess.py\n@@ -1,12 +1,15 @@\n     num_accepted = tl.load(num_accepted_tokens_ptr + req_idx)\n     src_block_idx = tl.load(mamba_state_idx_ptr + req_idx)\n-    # 无条件加载 — PRECOMPUTED 路径传入 None，此处 tl.load(None + req_idx) 会在\n-    # Triton 特化/编译阶段失败，不能依赖死代码消除\n-    num_scheduled = tl.load(num_scheduled_tokens_ptr + req_idx)\n+    # num_scheduled/num_draft 的加载已移入 else 分支，\n+    # PRECOMPUTED 路径不再触碰 None 指针\n \n     if PRECOMPUTED_NEW_COMPUTED:\n+        # num_scheduled/num_draft are unused on this path and are passed as\n+        # None, so they must not be loaded here.\n         new_num_computed = tl.load(num_computed_tokens_ptr + req_idx)\n+        num_tokens_running_state = new_num_computed - num_accepted + 1\n     else:\n+        num_scheduled = tl.load(num_scheduled_tokens_ptr + req_idx)\n         num_computed = tl.load(num_computed_tokens_ptr + req_idx)\n         num_draft = tl.load(num_draft_tokens_ptr + req_idx)\n         num_tokens_running_state = num_computed + num_scheduled - num_draft\n",
+      "stats": "1 file changed, +6 lines, -3 lines",
+      "key_changes": [
+        "移除: num_scheduled = tl.load(num_scheduled_tokens_ptr + req_idx)",
+        "新增: num_tokens_running_state = new_num_computed - num_accepted + 1"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

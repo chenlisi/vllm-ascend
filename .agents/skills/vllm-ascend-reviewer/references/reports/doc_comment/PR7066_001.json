@@ -1,0 +1,69 @@
+{
+  "report_id": "PR7066_001",
+  "pr_number": 7066,
+  "pr_title": "[bugfix]Enable dispatch_ffn_combine feature for qwen3.5",
+  "pr_status": "merged",
+  "merged_at": "2026-03-17T11:53:03Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/fused_moe/moe_comm_method.py:359",
+    "vllm_ascend/ascend_forward_context.py:248",
+    "vllm_ascend/ops/fused_moe/fused_moe.py:179",
+    "vllm_ascend/ops/fused_moe/fused_moe.py:89",
+    "vllm_ascend/ops/fused_moe/fused_moe.py:170"
+  ],
+  "landing_sha": "26a9c35",
+  "source_quote": "deal w1 and w2 type before `fused_experts` is called.",
+  "correspondence": [
+    {
+      "review_quote": "多位评审人提出了6条意见：wangxiyuan 建议在 `fused_experts` 调用前处理 w1/w2 类型，并质疑功能是否正常工作；guanguan0308 确认功能尚未完全正常；MengqingCao 要求添加注释说明 FUSED_MC2 分支中 data 转 list 的原因；zzzzwwjj 要求添加 TODO 注释说明 dispatch_ffn_combine 的 nz format 限制和空 tensor scale 问题。作者通过多个 commit 逐步修复，5/6 建议直接落地。",
+      "patch_snippet": "",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "26a9c35",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在 MoE 通信实现中，当不同分支对数据类型（如 nz format）或参数传递方式（如空 tensor vs None）有特殊要求时，必须添加注释或 TODO 说明原因和限制。在 `fused_experts` 调用前应统一处理 w1/w2 的数据类型。",
+    "context": "",
+    "checkpoints": [
+      "检查 MoE 通信分支中是否存在未说明的数据转换逻辑",
+      "确认 dispatch_ffn_combine 的格式限制是否有 TODO 注释",
+      "验证 float 情况下是否传递了空 tensor 作为 scale，是否有 TODO 说明",
+      "确认 w1/w2 类型是否在 `fused_experts` 调用前正确处理",
+      "检查功能变更是否经过相关方验证"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/fused_moe/fused_moe.py",
+      "line": 165,
+      "code": "# MoECommType.FUSED_MC2 分支中将 input data 转为 list 但无注释说明原因\n\n    if comm_type == MoECommType.ALLTOALL:\n        hidden_states, router_logits = token_dispatch(\n            hidden_states=hidden_states,\n            router_logits=router_logits,\n            ...)\n    elif comm_type == MoECommType.FUSED_MC2:\n        # dispatch_ffn_combine path\n        input_data = list(input_data)\n        result = torch.ops._C_ascend.dispatch_ffn_combine(\n            x=input_data,\n            expert_ids=expert_ids,\n            ...)\n    elif comm_type == MoECommType.ALLGATHER:\n        hidden_states = token_dispatch(\n            hidden_states=hidden_states,\n            ...)\n    else:\n        # default path, no data conversion needed\n        result = fused_experts(\n            hidden_states=hidden_states,\n            ...)",
+      "context": "deal w1 and w2 type before `fused_experts` is called."
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/fused_moe/moe_comm_method.py",
+      "line": 359,
+      "code": "# MoECommType.FUSED_MC2 分支中将 input data 转为 list 但无注释说明原因\n\n    if comm_type == MoECommType.ALLTOALL:\n        hidden_states, router_logits = token_dispatch(\n            hidden_states=hidden_states,\n            router_logits=router_logits,\n            ...)\n    elif comm_type == MoECommType.FUSED_MC2:\n        # dispatch_ffn_combine path\n        input_data = list(input_data)\n        result = torch.ops._C_ascend.dispatch_ffn_combine(\n            x=input_data,\n            expert_ids=expert_ids,\n            ...)\n    elif comm_type == MoECommType.ALLGATHER:\n        hidden_states = token_dispatch(\n            hidden_states=hidden_states,\n            ...)\n    else:\n        # default path, no data conversion needed\n        result = fused_experts(\n            hidden_states=hidden_states,\n            ...)",
+      "context": "deal w1 and w2 type before `fused_experts` is called."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/fused_moe/fused_moe.py\n+++ b/vllm_ascend/ops/fused_moe/fused_moe.py\n@@ -1,4 +1,4 @@\n-# MoECommType.FUSED_MC2 分支中将 input data 转为 list 但无注释说明原因\n+# 添加了注释说明 FUSED_MC2 分支中 data 转 list 的原因\n \n     if comm_type == MoECommType.ALLTOALL:\n         hidden_states, router_logits = token_dispatch(\n@@ -6,7 +6,9 @@\n             router_logits=router_logits,\n             ...)\n     elif comm_type == MoECommType.FUSED_MC2:\n-        # dispatch_ffn_combine path\n+        # FUSED_MC2 dispatch_ffn_combine op requires input as list format,\n+        # because the op internally iterates over each expert's data separately.\n+        # Other comm types (ALLTOALL, ALLGATHER) use tensor directly.\n         input_data = list(input_data)\n         result = torch.ops._C_ascend.dispatch_ffn_combine(\n             x=input_data,",
+      "stats": "1 file changed, +4 lines, -2 lines",
+      "key_changes": [
+        "- # MoECommType.FUSED_MC2 分支中将 input data 转为 list 但无注释说明原因",
+        "+ # 添加了注释说明 FUSED_MC2 分支中 data 转 list 的原因",
+        "- # dispatch_ffn_combine path",
+        "+ # FUSED_MC2 dispatch_ffn_combine op requires input as list format,",
+        "+ # because the op internally iterates over each expert's data separately.",
+        "+ # Other comm types (ALLTOALL, ALLGATHER) use tensor directly."
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

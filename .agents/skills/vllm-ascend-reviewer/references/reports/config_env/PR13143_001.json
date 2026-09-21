@@ -1,0 +1,62 @@
+{
+  "report_id": "PR13143_001",
+  "pr_number": 13143,
+  "pr_title": "[Doc][Misc] Update Kimi-K3 deployment configurations",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/models/Kimi-K3.md:311"
+  ],
+  "landing_sha": "8786964",
+  "source_quote": "Change this value to 131072 both in text and serving command.",
+  "correspondence": [
+    {
+      "review_quote": "docs/source/tutorials/models/Kimi-K3.md:311",
+      "patch_snippet": "评后sha 8786964 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "8786964",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当部署文档多次重复展示同一个参数（如 `--max-model-len`）时，所有出现位置（CLI 命令、参数说明表、不同场景的对比表）必须使用完全相同的数值；尤其是疑似笔误或近似值时，需全文搜索并批量修正。",
+    "context": "",
+    "checkpoints": [
+      "参数名相同但数值在不同章节/表格中是否相同",
+      "命令行中的 flag-value 与正文中参数表的 value 是否一致",
+      "数值是否采用标准形式（如 2 的幂 131072，而非接近但奇怪的 131027）",
+      "修改时全文 grep，不要只改评审指出的一行"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/Kimi-K3.md",
+      "line": 311,
+      "code": "# 命令行①: L198\nvllm serve Eco-Tech/Kimi-K3-w4a8 \\\n    --tensor-parallel-size 16 \\\n    --data-parallel-size 4 \\\n    --max-model-len 131027 \\\n    --max-num-batched-tokens 24576 \\\n    ...\n\n# 命令行②: L253\nvllm serve Eco-Tech/Kimi-K3-w4a8 \\\n    --tensor-parallel-size 16 \\\n    --data-parallel-size 4 \\\n    --max-model-len 131027 \\\n    --limit-mm-per-prompt '{\"vision_chunk\": 2}' \\\n    ...\n\n# 关键参数表: L290\n| Parameter | Value | Description |\n| --- | --- | --- |\n| `--max-model-len 131027` | Sets the maximum combined input and output length. |\n\n# 1M-context 对比表 default 列: L302\n| Parameter | Four-node default | 1M context |\n| --- | --- | --- |\n| `--max-model-len` | `131027` | `1048576` |\n\n# ToolCall validation 表: L876\n| Parameter | default | optimized |\n| `--max-model-len` | 131027 | 286720 |\n\n# 性能测试表: L931\n| Parameter | default | optimized |\n| `--max-model-len` | 131027 | 250000 |",
+      "context": "命令行①: L198 命令行②: L253 关键参数表: L290"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/Kimi-K3.md",
+      "line": 311,
+      "code": "# 命令行①: L198\nvllm serve Eco-Tech/Kimi-K3-w4a8 \\\n    --tensor-parallel-size 16 \\\n    --data-parallel-size 4 \\\n    --max-model-len 131072 \\\n    --max-num-batched-tokens 24576 \\\n    ...\n\n# 命令行②: L253\nvllm serve Eco-Tech/Kimi-K3-w4a8 \\\n    --tensor-parallel-size 16 \\\n    --data-parallel-size 4 \\\n    --max-model-len 131072 \\\n    --limit-mm-per-prompt '{\"vision_chunk\": 2}' \\\n    ...\n\n# 关键参数表: L290\n| Parameter | Value | Description |\n| --- | --- | --- |\n| `--max-model-len 131072` | Sets the maximum combined input and output length. |\n\n# 1M-context 对比表 default 列: L302\n| Parameter | Four-node default | 1M context |\n| --- | --- | --- |\n| `--max-model-len` | `131072` | `1048576` |\n\n# ToolCall validation 表: L876\n| Parameter | default | optimized |\n| `--max-model-len` | 131072 | 286720 |\n\n# 性能测试表: L931\n| Parameter | default | optimized |\n| `--max-model-len` | 131072 | 250000 |",
+      "context": "命令行①: L198 命令行②: L253 关键参数表: L290"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/Kimi-K3.md\n+++ b/docs/source/tutorials/models/Kimi-K3.md\n@@ -2,7 +2,7 @@\n vllm serve Eco-Tech/Kimi-K3-w4a8 \\\n     --tensor-parallel-size 16 \\\n     --data-parallel-size 4 \\\n-    --max-model-len 131027 \\\n+    --max-model-len 131072 \\\n     --max-num-batched-tokens 24576 \\\n     ...\n \n@@ -10,24 +10,24 @@\n vllm serve Eco-Tech/Kimi-K3-w4a8 \\\n     --tensor-parallel-size 16 \\\n     --data-parallel-size 4 \\\n-    --max-model-len 131027 \\\n+    --max-model-len 131072 \\\n     --limit-mm-per-prompt '{\"vision_chunk\": 2}' \\\n     ...\n \n # 关键参数表: L290\n | Parameter | Value | Description |\n | --- | --- | --- |\n-| `--max-model-len 131027` | Sets the maximum combined input and output length. |\n+| `--max-model-len 131072` | Sets the maximum combined input and output length. |\n \n # 1M-context 对比表 default 列: L302\n | Parameter | Four-node default | 1M context |\n | --- | --- | --- |\n-| `--max-model-len` | `131027` | `1048576` |\n+| `--max-model-len` | `131072` | `1048576` |\n \n # ToolCall validation 表: L876\n | Parameter | default | optimized |\n-| `--max-model-len` | 131027 | 286720 |\n+| `--max-model-len` | 131072 | 286720 |\n \n # 性能测试表: L931\n | Parameter | default | optimized |\n-| `--max-model-len` | 131027 | 250000 |\n+| `--max-model-len` | 131072 | 250000 |\n",
+      "stats": "1 file changed, +6 lines, -6 lines",
+      "key_changes": [
+        "移除: | `--max-model-len` | 131027 | 250000 |",
+        "移除: | `--max-model-len` | 131027 | 286720 |",
+        "移除: | `--max-model-len` | `131027` | `1048576` |",
+        "新增: | `--max-model-len 131072` | Sets the maximum combined input and output length. ",
+        "新增: | `--max-model-len` | `131072` | `1048576` |"
+      ]
+    },
+    "language": "markdown",
+    "_status": "processed"
+  }
+}

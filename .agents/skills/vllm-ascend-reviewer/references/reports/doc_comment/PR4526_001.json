@@ -1,0 +1,57 @@
+{
+  "report_id": "PR4526_001",
+  "pr_number": 4526,
+  "pr_title": "[Feat] Add Euler xlite graph wrapper support",
+  "pr_status": "merged",
+  "merged_at": "2025-12-08T00:27:46Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/user_guide/feature_guide/graph_mode.md:63",
+    "vllm_ascend/xlite/xlite.py:60"
+  ],
+  "landing_sha": "b3ac128",
+  "source_quote": "I think it's better to describe installation of xlite first.",
+  "correspondence": [
+    {
+      "review_quote": "1. whx-sjtu 建议先描述 xlite 安装方式 → 调整文档结构，安装说明前置\n2. Sparkheart 建议将分散的配置赋值封装为独立方法 → 提高代码内聚性",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "b3ac128",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "**检查点**: 功能指南文档中，安装步骤应在使用说明之前",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "def _setup_xlite_model(self, layers, config, xlite_model):\n    mha_qkv_bias = [\n        layer.self_attn.qkv_proj.bias for layer in layers\n        if hasattr(layer.self_attn.qkv_proj, \"bias\")\n        and layer.self_attn.qkv_proj.bias is not None\n    ]\n    config.qkv_bias = len(mha_qkv_bias) > 0\n    xlite_model.mha_qkv_bias = mha_qkv_bias\n\n    q_norm = [layer.self_attn.q_norm.weight for layer in layers\n              if hasattr(layer.self_attn, \"q_norm\")]\n    k_norm = [layer.self_attn.k_norm.weight for layer in layers\n              if hasattr(layer.self_attn, \"k_norm\")]\n    config.qk_norm = len(q_norm) > 0\n\ntorch.npu.synchronize()  # Sparkheart: 建议封装分散的配置赋值",
+      "context": "I think it's better to describe installation of xlite first."
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "def _setup_xlite_model(self, layers, config, xlite_model):\n    num_layers = len(layers)\n    mha_qkv_bias = [\n        layer.self_attn.qkv_proj.bias for layer in layers\n        if hasattr(layer.self_attn.qkv_proj, \"bias\")\n        and layer.self_attn.qkv_proj.bias is not None\n    ]\n    if len(mha_qkv_bias) == 0:\n        config.qkv_bias = False\n    elif len(mha_qkv_bias) == num_layers:\n        config.qkv_bias = True\n        xlite_model.mha_qkv_bias = mha_qkv_bias\n    else:\n        raise ValueError(\n            \"Inconsistent qkv_bias settings across layers. \"\n            f\"Found bias on {len(mha_qkv_bias)}/{num_layers} layers.\")\n\n    q_norm = [layer.self_attn.q_norm.weight for layer in layers\n              if hasattr(layer.self_attn, \"q_norm\")]\n    k_norm = [layer.self_attn.k_norm.weight for layer in layers\n              if hasattr(layer.self_attn, \"k_norm\")]\n    if len(q_norm) == 0 and len(k_norm) == 0:\n        config.qk_norm = False\n    elif len(q_norm) == num_layers and len(k_norm) == num_layers:\n        config.qk_norm = True\n        xlite_model.mha_q_norm = q_norm\n        xlite_model.mha_k_norm = k_norm\n    else:\n        raise ValueError(\n            \"Inconsistent qk_norm settings across layers. \"\n            f\"Found q_norm on {len(q_norm)}/{num_layers} layers and \"\n            f\"k_norm on {len(k_norm)}/{num_layers} layers.\")",
+      "context": "I think it's better to describe installation of xlite first."
+    },
+    "diff": {
+      "unified": "--- a/a/file\n+++ b/b/file\n@@ -1,16 +1,32 @@\n def _setup_xlite_model(self, layers, config, xlite_model):\n+    num_layers = len(layers)\n     mha_qkv_bias = [\n         layer.self_attn.qkv_proj.bias for layer in layers\n         if hasattr(layer.self_attn.qkv_proj, \"bias\")\n         and layer.self_attn.qkv_proj.bias is not None\n     ]\n-    config.qkv_bias = len(mha_qkv_bias) > 0\n-    xlite_model.mha_qkv_bias = mha_qkv_bias\n+    if len(mha_qkv_bias) == 0:\n+        config.qkv_bias = False\n+    elif len(mha_qkv_bias) == num_layers:\n+        config.qkv_bias = True\n+        xlite_model.mha_qkv_bias = mha_qkv_bias\n+    else:\n+        raise ValueError(\n+            \"Inconsistent qkv_bias settings across layers. \"\n+            f\"Found bias on {len(mha_qkv_bias)}/{num_layers} layers.\")\n \n     q_norm = [layer.self_attn.q_norm.weight for layer in layers\n               if hasattr(layer.self_attn, \"q_norm\")]\n     k_norm = [layer.self_attn.k_norm.weight for layer in layers\n               if hasattr(layer.self_attn, \"k_norm\")]\n-    config.qk_norm = len(q_norm) > 0\n-\n-torch.npu.synchronize()  # Sparkheart: 建议封装分散的配置赋值\n+    if len(q_norm) == 0 and len(k_norm) == 0:\n+        config.qk_norm = False\n+    elif len(q_norm) == num_layers and len(k_norm) == num_layers:\n+        config.qk_norm = True\n+        xlite_model.mha_q_norm = q_norm\n+        xlite_model.mha_k_norm = k_norm\n+    else:\n+        raise ValueError(\n+            \"Inconsistent qk_norm settings across layers. \"\n+            f\"Found q_norm on {len(q_norm)}/{num_layers} layers and \"\n+            f\"k_norm on {len(k_norm)}/{num_layers} layers.\")",
+      "stats": "1 file changed, +21 lines, -5 lines",
+      "key_changes": [
+        "在第 2-2 行新增了代码",
+        "修改了第 7-8 行的代码",
+        "修改了第 14-16 行的代码"
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

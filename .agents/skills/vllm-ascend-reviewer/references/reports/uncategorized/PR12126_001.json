@@ -1,0 +1,53 @@
+{
+  "report_id": "PR12126_001",
+  "pr_number": 12126,
+  "pr_title": "[Bugfix] Bind Mooncake receiver threads to KV cache device",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_hybrid_connector.py:412"
+  ],
+  "landing_sha": "9947bff",
+  "source_quote": "`first_kv_cache` is None is an abnormal case, and it should be verified through assert that `first_kv_cache` is not empty.\nThanks, agreed. I removed the `None` fallback and now use `next(iter(self.kv_caches.values()))` directly. Since a non-empty KV cache is a constructor precondition here, invalid empty input now fails immediately instead of creating an executor without NPU device binding. Updated in 9947bff1c.",
+  "correspondence": [
+    {
+      "review_quote": "zzzzwwjj（❌CHANGES_REQUESTED→✅APPROVED）: vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_hybrid_connector.py:412",
+      "patch_snippet": "评后sha 9947bff 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "9947bff",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "mooncake_connector.py",
+      "line": 465,
+      "code": "first_kv_cache = next(iter(self.kv_caches.values()), None)\nif first_kv_cache is None:\n    self.executor = ThreadPoolExecutor(max_workers=32)   # ← None 时 silent fallback：executor 不绑定 NPU device\nelse:\n    # NPU device selection is thread-local...\n    kv_cache_device = first_kv_cache[0].device\n    self.executor = ThreadPoolExecutor(\n        max_workers=32,\n        initializer=torch.npu.set_device,\n        initargs=(kv_cache_device,),\n    )",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "mooncake_connector.py",
+      "line": 0,
+      "code": "@@ -465,19 +465,16 @@ def __init__(\n         self.remote_metadata_lock = threading.Lock()\n\n         self.request_queue: queue.Queue[Any] = queue.Queue()\n-        first_kv_cache = next(iter(self.kv_caches.values()), None)\n-        if first_kv_cache is None:\n-            self.executor = ThreadPoolExecutor(max_workers=32)\n-        else:\n-            # NPU device selection is thread-local. Executor workers do not\n-            # inherit the device selected by the model worker thread and would\n-            # otherwise use device 0 on their first NPU operation.\n-            kv_cache_device = first_kv_cache[0].device\n-            self.executor = ThreadPoolExecutor(\n-                max_workers=32,\n-                initializer=torch.npu.set_device,\n-                initargs=(kv_cache_device,),\n-            )\n+        first_kv_cache = next(iter(self.kv_caches.values()))\n+        # NPU device selection is thread-local. Executor workers do not inherit\n+        # the device selected by the model worker thread and would otherwise\n+        # use device 0 on their first NPU operation.\n+        kv_cache_device = first_kv_cache[0].device\n+        self.executor = ThreadPoolExecutor(\n+            max_workers=32,\n+            initializer=torch.npu.set_device,\n+            initargs=(kv_cache_device,),\n+        )\n         self.peer_request_queues: defaultdict[tuple[str, int], deque[dict[str, Any]]] = defaultdict(deque)\n         self.active_peer_request_handlers: set[tuple[str, int]] = set()\n         self.peer_request_queues_lock = threading.Lock()",
+      "context": "修改后代码 (diff)"
+    },
+    "diff": {
+      "unified": "--- a/mooncake_connector.py\n+++ b/mooncake_connector.py\n@@ -1,11 +1,30 @@\n-first_kv_cache = next(iter(self.kv_caches.values()), None)\n-if first_kv_cache is None:\n-    self.executor = ThreadPoolExecutor(max_workers=32)   # ← None 时 silent fallback：executor 不绑定 NPU device\n-else:\n-    # NPU device selection is thread-local...\n-    kv_cache_device = first_kv_cache[0].device\n-    self.executor = ThreadPoolExecutor(\n-        max_workers=32,\n-        initializer=torch.npu.set_device,\n-        initargs=(kv_cache_device,),\n-    )\n+@@ -465,19 +465,16 @@ def __init__(\n+         self.remote_metadata_lock = threading.Lock()\n+\n+         self.request_queue: queue.Queue[Any] = queue.Queue()\n+-        first_kv_cache = next(iter(self.kv_caches.values()), None)\n+-        if first_kv_cache is None:\n+-            self.executor = ThreadPoolExecutor(max_workers=32)\n+-        else:\n+-            # NPU device selection is thread-local. Executor workers do not\n+-            # inherit the device selected by the model worker thread and would\n+-            # otherwise use device 0 on their first NPU operation.\n+-            kv_cache_device = first_kv_cache[0].device\n+-            self.executor = ThreadPoolExecutor(\n+-                max_workers=32,\n+-                initializer=torch.npu.set_device,\n+-                initargs=(kv_cache_device,),\n+-            )\n++        first_kv_cache = next(iter(self.kv_caches.values()))\n++        # NPU device selection is thread-local. Executor workers do not inherit\n++        # the device selected by the model worker thread and would otherwise\n++        # use device 0 on their first NPU operation.\n++        kv_cache_device = first_kv_cache[0].device\n++        self.executor = ThreadPoolExecutor(\n++            max_workers=32,\n++            initializer=torch.npu.set_device,\n++            initargs=(kv_cache_device,),\n++        )\n+         self.peer_request_queues: defaultdict[tuple[str, int], deque[dict[str, Any]]] = defaultdict(deque)\n+         self.active_peer_request_handlers: set[tuple[str, int]] = set()\n+         self.peer_request_queues_lock = threading.Lock()",
+      "stats": "1 file changed, +30 lines, -11 lines",
+      "key_changes": [
+        "修改代码逻辑"
+      ]
+    },
+    "language": "diff",
+    "_status": "pending_llm_extract"
+  }
+}

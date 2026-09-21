@@ -1,0 +1,65 @@
+{
+  "report_id": "PR2373_001",
+  "pr_number": 2373,
+  "pr_title": "[Qwen-moe] Remove the minor operation arange",
+  "pr_status": "merged",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/e2e/singlecard/ops/test_fused_moe.py:151",
+    "vllm_ascend/ops/layers/experts_selector.py:99"
+  ],
+  "landing_sha": "6088f52",
+  "source_quote": "Could add a test case to cover the `fused_experts` function with the `row_idx` parameter passed in.\nSeems all layers use the same `row_idx`, can we just construct it once?",
+  "correspondence": [
+    {
+      "review_quote": "tests/e2e/singlecard/ops/test_fused_moe.py:151",
+      "patch_snippet": "评后sha 6088f52 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/ops/layers/experts_selector.py:99",
+      "patch_snippet": "评后sha 6088f52 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "6088f52",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "如果多个层或多次调用使用相同的张量（如 `torch.arange`），应只构造一次并传递，而非在每次调用中重复创建，以减少不必要的计算开销。",
+    "context": "",
+    "checkpoints": [
+      "是否存在重复创建相同张量的情况",
+      "是否添加了覆盖新参数的测试用例",
+      "冗余操作移除后是否保持了功能正确性"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/layers/experts_selector.py",
+      "line": 85,
+      "code": "# 评审人 ApsarasX: \"Seems all layers use the same `row_idx`,\n#   can we just construct it once?\"\n\nfrom typing import Optional, Tuple\nimport torch\nimport torch.nn.functional as F\n\nfrom vllm_ascend.ops.common_fused_moe import fused_experts\n\ndef select_experts(hidden_states, router_logits, top_k, ...):\n    \"\"\"Select top-k experts based on router logits.\"\"\"\n    topk_weights, topk_ids = torch.topk(router_logits, top_k, dim=-1)\n    topk_weights = F.softmax(topk_weights, dim=-1)\n    # select_experts 不返回 row_idx\n    return topk_weights, topk_ids\n\ndef fused_experts_unquant(hidden_states, w1, w2, topk_weights, topk_ids, ...):\n    \"\"\"Unquantized fused experts - each layer creates its own row_idx.\"\"\"\n    num_tokens = hidden_states.shape[0]\n    # 每个函数各自创建 row_idx（重复创建）\n    row_idx = torch.arange(num_tokens, device=hidden_states.device)\n    return fused_experts(hidden_states, w1, w2, topk_weights, topk_ids,\n                         row_idx=row_idx)\n\ndef fused_experts_w8a8(hidden_states, w1, w2, topk_weights, topk_ids, ...):\n    \"\"\"W8A8 quantized fused experts - also creates row_idx.\"\"\"\n    num_tokens = hidden_states.shape[0]\n    # 又一个重复创建 row_idx 的地方\n    row_idx = torch.arange(num_tokens, device=hidden_states.device)\n    return fused_experts(hidden_states, w1, w2, topk_weights, topk_ids,\n                         row_idx=row_idx)",
+      "context": "评审人 ApsarasX: \"Seems all layers use the same `row_idx`, can we just construct it once?\" select_experts 不返回 row_idx"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/layers/experts_selector.py",
+      "line": 85,
+      "code": "# 将 torch.arange 调用集中到 select_experts 函数中，只构造一次 row_idx\n# row_idx 作为参数传递给 fused_experts 函数，避免重复创建\n\nfrom typing import Optional, Tuple\nimport torch\nimport torch.nn.functional as F\n\nfrom vllm_ascend.ops.common_fused_moe import fused_experts\n\ndef select_experts(hidden_states, router_logits, top_k, ...):\n    \"\"\"Select top-k experts based on router logits.\"\"\"\n    topk_weights, topk_ids = torch.topk(router_logits, top_k, dim=-1)\n    topk_weights = F.softmax(topk_weights, dim=-1)\n    # 在 select_experts 中构造 row_idx，只创建一次\n    num_tokens = hidden_states.shape[0]\n    row_idx = torch.arange(num_tokens, device=hidden_states.device)\n    return topk_weights, topk_ids, row_idx\n\ndef fused_experts_unquant(hidden_states, w1, w2, topk_weights, topk_ids,\n                          row_idx, ...):\n    \"\"\"Unquantized fused experts - receives row_idx as parameter.\"\"\"\n    # 不再重复创建 row_idx，直接使用传入的参数\n    return fused_experts(hidden_states, w1, w2, topk_weights, topk_ids,\n                         row_idx=row_idx)\n\ndef fused_experts_w8a8(hidden_states, w1, w2, topk_weights, topk_ids,\n                       row_idx, ...):\n    \"\"\"W8A8 quantized fused experts - receives row_idx as parameter.\"\"\"\n    # 不再重复创建 row_idx\n    return fused_experts(hidden_states, w1, w2, topk_weights, topk_ids,\n                         row_idx=row_idx)",
+      "context": "将 torch.arange 调用集中到 select_experts 函数中，只构造一次 row_idx row_idx 作为参数传递给 fused_experts 函数，避免重复创建 在 select_experts 中构造 row_idx，只创建一次"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/layers/experts_selector.py\n+++ b/vllm_ascend/ops/layers/experts_selector.py\n@@ -1,5 +1,5 @@\n-# 评审人 ApsarasX: \"Seems all layers use the same `row_idx`,\n-#   can we just construct it once?\"\n+# 将 torch.arange 调用集中到 select_experts 函数中，只构造一次 row_idx\n+# row_idx 作为参数传递给 fused_experts 函数，避免重复创建\n \n from typing import Optional, Tuple\n import torch\n@@ -11,21 +11,21 @@\n     \"\"\"Select top-k experts based on router logits.\"\"\"\n     topk_weights, topk_ids = torch.topk(router_logits, top_k, dim=-1)\n     topk_weights = F.softmax(topk_weights, dim=-1)\n-    # select_experts 不返回 row_idx\n-    return topk_weights, topk_ids\n+    # 在 select_experts 中构造 row_idx，只创建一次\n+    num_tokens = hidden_states.shape[0]\n+    row_idx = torch.arange(num_tokens, device=hidden_states.device)\n+    return topk_weights, topk_ids, row_idx\n \n-def fused_experts_unquant(hidden_states, w1, w2, topk_weights, topk_ids, ...):\n-    \"\"\"Unquantized fused experts - each layer creates its own row_idx.\"\"\"\n-    num_tokens = hidden_states.shape[0]\n-    # 每个函数各自创建 row_idx（重复创建）\n-    row_idx = torch.arange(num_tokens, device=hidden_states.device)\n+def fused_experts_unquant(hidden_states, w1, w2, topk_weights, topk_ids,\n+                          row_idx, ...):\n+    \"\"\"Unquantized fused experts - receives row_idx as parameter.\"\"\"\n+    # 不再重复创建 row_idx，直接使用传入的参数\n     return fused_experts(hidden_states, w1, w2, topk_weights, topk_ids,\n                          row_idx=row_idx)\n \n-def fused_experts_w8a8(hidden_states, w1, w2, topk_weights, topk_ids, ...):\n-    \"\"\"W8A8 quantized fused experts - also creates row_idx.\"\"\"\n-    num_tokens = hidden_states.shape[0]\n-    # 又一个重复创建 row_idx 的地方\n-    row_idx = torch.arange(num_tokens, device=hidden_states.device)\n+def fused_experts_w8a8(hidden_states, w1, w2, topk_weights, topk_ids,\n+                       row_idx, ...):\n+    \"\"\"W8A8 quantized fused experts - receives row_idx as parameter.\"\"\"\n+    # 不再重复创建 row_idx\n     return fused_experts(hidden_states, w1, w2, topk_weights, topk_ids,\n                          row_idx=row_idx)\n",
+      "stats": "1 file changed, +14 lines, -14 lines",
+      "key_changes": [
+        "移除: return topk_weights, topk_ids",
+        "新增: return topk_weights, topk_ids, row_idx",
+        "新增: def fused_experts_w8a8(hidden_states, w1, w2, topk_weights, topk_ids,"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

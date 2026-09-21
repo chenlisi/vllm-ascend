@@ -1,0 +1,45 @@
+{
+  "report_id": "PR12835_001",
+  "pr_number": 12835,
+  "pr_title": "[Feature] layer and model runner support MiniMax M3",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "01721c7",
+  "source_quote": "The exact match check `part in prefix_parts` (where `prefix_parts` is **split by `.`**) can **fail** if the prefix contains variations or concatenated names like **`vision_tower_encoder`** or **`vision_model_proj`**. Using a substring check `any(part in prefix for part in _MULTIMODAL_ENCODER_PREFIX_PARTS)` is much more robust, safer, and aligns with the original `\"vision_model\" not in prefix` substring check logic.",
+  "correspondence": [],
+  "verification": {
+    "merged": true,
+    "modified_commit": "01721c7",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/ops/linear_op.py",
+      "line": 0,
+      "code": "_MULTIMODAL_ENCODER_PREFIX_PARTS = [\n    \"vision_model\",    # Clip/ViT family encoder 前缀\n    \"vision_tower\",    # MiniMax M3 vision_tower_encoder 家族\n    \"image_encoder\",\n    \"visual_encoder\",\n]\n\n\ndef _should_skip_sp_for_multimodal_encoder(prefix: str) -> bool:\n    prefix_parts = prefix.split(\".\")\n    return any(part in prefix_parts for part in _MULTIMODAL_ENCODER_PREFIX_PARTS)",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/linear_op.py",
+      "line": 0,
+      "code": "_MULTIMODAL_ENCODER_PREFIX_PARTS = [\n    \"vision_model\",    # Clip/ViT family encoder 前缀\n    \"vision_tower\",    # MiniMax M3 vision_tower_encoder 家族\n    \"image_encoder\",\n    \"visual_encoder\",\n]\n\n\ndef _should_skip_sp_for_multimodal_encoder(prefix: str) -> bool:\n    \"\"\"Check if the given prefix belongs to a multimodal encoder\n    that should skip sequence parallelism.\"\"\"\n    return any(part in prefix for part in _MULTIMODAL_ENCODER_PREFIX_PARTS)",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/linear_op.py\n+++ b/vllm_ascend/ops/linear_op.py\n@@ -7,5 +7,6 @@\n \n \n def _should_skip_sp_for_multimodal_encoder(prefix: str) -> bool:\n-    prefix_parts = prefix.split(\".\")\n-    return any(part in prefix_parts for part in _MULTIMODAL_ENCODER_PREFIX_PARTS)\n+    \"\"\"Check if the given prefix belongs to a multimodal encoder\n+    that should skip sequence parallelism.\"\"\"\n+    return any(part in prefix for part in _MULTIMODAL_ENCODER_PREFIX_PARTS)",
+      "stats": "1 file changed, +3 lines, -2 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "report_id": "PR13908_001",
+  "pr_number": 13908,
+  "pr_title": "[Test][Misc] Restore weekly use case",
+  "pr_status": "merged",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/e2e/weekly/single_node/configs/Kimi-K2.6-w4a8-A3-weekly.yaml:38"
+  ],
+  "landing_sha": "67f507b",
+  "source_quote": "There is a syntax error in the speculative config JSON string due to a missing double quote after `short`. This will cause JSON parsing to fail when loading the configuration.",
+  "correspondence": [
+    {
+      "review_quote": "tests/e2e/weekly/single_node/configs/Kimi-K2.6-w4a8-A3-weekly.yaml:38",
+      "patch_snippet": "评后sha 67f507b 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "67f507b",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 YAML 配置文件中以内嵌字符串形式编写的 JSON（如 `--speculative_config`、`--compilation-config` 参数值），须确保所有 JSON 字符串值的双引号完整闭合，避免解析失败。",
+    "context": "",
+    "checkpoints": [
+      "检查 YAML 中以单引号包裹的 JSON 字符串，逐一核对内部 JSON 键值对的双引号是否成对",
+      "特别关注 URL、文件路径等含特殊字符的 JSON 值，确认引号闭合位置正确",
+      "对修改后的 YAML 配置，验证内嵌 JSON 能否被 `json.loads()` 成功解析"
+    ],
+    "antipattern": {
+      "file": "tests/e2e/weekly/single_node/configs/Kimi-K2.6-w4a8-A3-weekly.yaml",
+      "line": 38,
+      "code": "# tests/e2e/weekly/single_node/configs/Kimi-K2.6-w4a8-A3-weekly.yaml\n# server_cmd 配置段，约第 30-45 行\n    server_cmd:\n      - \"--quantization\"\n      - \"ascend\"\n      - \"--port\"\n      - \"$SERVER_PORT\"\n      - \"--tensor-parallel-size\"\n      - \"8\"\n      - \"--max-model-len\"\n      - \"6144\"\n      - \"--max-num-batched-tokens\"\n      - \"4096\"\n      - \"--speculative_config\"\n      - '{\"method\":\"eagle3\",\"model\":\"Eco-Tech/MiniMax-M2.7-eagle-model-short,\"num_speculative_tokens\":3}'\n      #                                                                          ^^^^ 缺少闭合双引号\n      # JSON 解析时 \"model\" 的值会吞掉后续字段，导致解析失败\n      - \"--enforce-eager\"\n      - \"--additional-config\"\n      - '{\"eplb_config\": {\"dynamic_eplb\": true}}'",
+      "context": "tests/e2e/weekly/single_node/configs/Kimi-K2.6-w4a8-A3-weekly.yaml server_cmd 配置段，约第 30-45 行 ^^^^ 缺少闭合双引号"
+    },
+    "pattern": {
+      "file": "tests/e2e/weekly/single_node/configs/Kimi-K2.6-w4a8-A3-weekly.yaml",
+      "line": 38,
+      "code": "# tests/e2e/weekly/single_node/configs/Kimi-K2.6-w4a8-A3-weekly.yaml\n    server_cmd:\n      - \"--quantization\"\n      - \"ascend\"\n      - \"--port\"\n      - \"$SERVER_PORT\"\n      - \"--tensor-parallel-size\"\n      - \"8\"\n      - \"--max-model-len\"\n      - \"6144\"\n      - \"--max-num-batched-tokens\"\n      - \"4096\"\n      - \"--speculative_config\"\n      - '{\"method\":\"eagle3\",\"model\":\"Eco-Tech/MiniMax-M2.7-eagle-model-short\",\"num_speculative_tokens\":3}'\n      #                                                                          ^^ 补全闭合双引号\n      - \"--enforce-eager\"\n      - \"--additional-config\"\n      - '{\"eplb_config\": {\"dynamic_eplb\": true}}'",
+      "context": "tests/e2e/weekly/single_node/configs/Kimi-K2.6-w4a8-A3-weekly.yaml ^^ 补全闭合双引号"
+    },
+    "diff": {
+      "unified": "--- a/tests/e2e/weekly/single_node/configs/Kimi-K2.6-w4a8-A3-weekly.yaml\n+++ b/tests/e2e/weekly/single_node/configs/Kimi-K2.6-w4a8-A3-weekly.yaml\n@@ -1,5 +1,4 @@\n # tests/e2e/weekly/single_node/configs/Kimi-K2.6-w4a8-A3-weekly.yaml\n-# server_cmd 配置段，约第 30-45 行\n     server_cmd:\n       - \"--quantization\"\n       - \"ascend\"\n@@ -12,9 +11,8 @@\n       - \"--max-num-batched-tokens\"\n       - \"4096\"\n       - \"--speculative_config\"\n-      - '{\"method\":\"eagle3\",\"model\":\"Eco-Tech/MiniMax-M2.7-eagle-model-short,\"num_speculative_tokens\":3}'\n-      #                                                                          ^^^^ 缺少闭合双引号\n-      # JSON 解析时 \"model\" 的值会吞掉后续字段，导致解析失败\n+      - '{\"method\":\"eagle3\",\"model\":\"Eco-Tech/MiniMax-M2.7-eagle-model-short\",\"num_speculative_tokens\":3}'\n+      #                                                                          ^^ 补全闭合双引号\n       - \"--enforce-eager\"\n       - \"--additional-config\"\n       - '{\"eplb_config\": {\"dynamic_eplb\": true}}'\n",
+      "stats": "1 file changed, +2 lines, -4 lines",
+      "key_changes": [
+        "移除: - '{\"method\":\"eagle3\",\"model\":\"Eco-Tech/MiniMax-M2.7-eagle-model-short,\"num_spec",
+        "新增: - '{\"method\":\"eagle3\",\"model\":\"Eco-Tech/MiniMax-M2.7-eagle-model-short\",\"num_spe"
+      ]
+    },
+    "language": "yaml",
+    "_status": "processed"
+  }
+}

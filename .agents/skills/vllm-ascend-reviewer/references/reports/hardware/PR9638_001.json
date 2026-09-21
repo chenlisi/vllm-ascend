@@ -1,0 +1,77 @@
+{
+  "report_id": "PR9638_001",
+  "pr_number": 9638,
+  "pr_title": "[Feature] Enable prefix caching with PCP/DCP",
+  "pr_status": "merged",
+  "merged_at": "2026-06-04T08:55:33Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/patch/platform/__init__.py:47",
+    "vllm_ascend/patch/platform/patch_kv_cache_coordinator.py:281",
+    "vllm_ascend/patch/platform/patch_mamba_manager.py:1"
+  ],
+  "landing_sha": "c022dee",
+  "source_quote": "Do not patch directly; enable the prefix-cache by checking if pcp_size > 1 or dcp_size > 1, and then proceed with the patch.\nWhen enabling VLLM_ASCEND_APPLY_DSV4_PATCH, the following branch logic should be followed. This part will affect the V4 code and needs to be modified.\nPlease mention this patch file in `vllm_ascend/patch/__init__.py` about why we need this patch and how to remove it (refer to other examples).",
+  "correspondence": [
+    {
+      "review_quote": "weiguihua2: vllm_ascend/patch/platform/__init__.py:47",
+      "patch_snippet": "评后sha c022dee 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "weiguihua2: vllm_ascend/patch/platform/patch_kv_cache_coordinator.py:281",
+      "patch_snippet": "评后sha c022dee 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "weiguihua2: vllm_ascend/patch/platform/patch_mamba_manager.py:1",
+      "patch_snippet": "评后sha c022dee 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "c022dee",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "平台 patch 不应直接应用，而应根据运行时配置条件（如 pcp_size/dcp_size）决定是否启用。每个 patch 文件必须在 `vllm_ascend/patch/__init__.py` 中记录其目的和移除条件。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/patch/platform/__init__.py",
+      "line": 40,
+      "code": "# （根据评审意见推断）直接 patch，未检查 pcp_size/dcp_size 条件\n# weiguihua2 评论: \"Do not patch directly; enable the prefix-cache by\n# checking if pcp_size > 1 or dcp_size > 1, and then proceed with the patch.\"\n\nimport vllm_ascend.patch.platform.patch_ascend_config  # noqa\nimport vllm_ascend.patch.platform.patch_distributed  # noqa\nimport vllm_ascend.patch.platform.patch_kv_cache_coordinator  # noqa\nimport vllm_ascend.patch.platform.patch_mamba_manager  # noqa\nimport vllm_ascend.patch.platform.patch_worker  # noqa\n\n# 直接应用 patch，无条件检查\n# 前缀缓存 patch 在所有场景下都会被应用\nfrom vllm_ascend.patch.platform.patch_kv_cache_coordinator import *  # noqa\nfrom vllm_ascend.patch.platform.patch_mamba_manager import *  # noqa",
+      "context": "Do not patch directly; enable the prefix-cache by checking if pcp_size > 1 or dcp_size > 1, and then proceed with the patch.\nWhen enabling VLLM_ASCEND_APPLY_DSV4_PATCH, the following branch logic shou"
+    },
+    "pattern": {
+      "file": "vllm_ascend/patch/platform/__init__.py",
+      "line": 40,
+      "code": "# 通过检查 pcp_size > 1 或 dcp_size > 1 来条件性启用前缀缓存\n# weiguihua2 要求: 仅在 PCP/DCP 启用时才应用 patch\n\nimport vllm_ascend.patch.platform.patch_ascend_config  # noqa\nimport vllm_ascend.patch.platform.patch_distributed  # noqa\nimport vllm_ascend.patch.platform.patch_kv_cache_coordinator  # noqa\nimport vllm_ascend.patch.platform.patch_mamba_manager  # noqa\nimport vllm_ascend.patch.platform.patch_worker  # noqa\n\n# 条件性启用前缀缓存\n# 仅在 PCP/DCP 启用时应用 patch\nfrom vllm_ascend.patch.platform.patch_kv_cache_coordinator import *  # noqa\nif pcp_size > 1 or dcp_size > 1:\n    from vllm_ascend.patch.platform.patch_mamba_manager import *  # noqa",
+      "context": "Do not patch directly; enable the prefix-cache by checking if pcp_size > 1 or dcp_size > 1, and then proceed with the patch.\nWhen enabling VLLM_ASCEND_APPLY_DSV4_PATCH, the following branch logic shou"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/patch/platform/__init__.py\n+++ b/vllm_ascend/patch/platform/__init__.py\n@@ -1,6 +1,5 @@\n-# （根据评审意见推断）直接 patch，未检查 pcp_size/dcp_size 条件\n-# weiguihua2 评论: \"Do not patch directly; enable the prefix-cache by\n-# checking if pcp_size > 1 or dcp_size > 1, and then proceed with the patch.\"\n+# 通过检查 pcp_size > 1 或 dcp_size > 1 来条件性启用前缀缓存\n+# weiguihua2 要求: 仅在 PCP/DCP 启用时才应用 patch\n \n import vllm_ascend.patch.platform.patch_ascend_config  # noqa\n import vllm_ascend.patch.platform.patch_distributed  # noqa\n@@ -8,7 +7,8 @@\n import vllm_ascend.patch.platform.patch_mamba_manager  # noqa\n import vllm_ascend.patch.platform.patch_worker  # noqa\n \n-# 直接应用 patch，无条件检查\n-# 前缀缓存 patch 在所有场景下都会被应用\n+# 条件性启用前缀缓存\n+# 仅在 PCP/DCP 启用时应用 patch\n from vllm_ascend.patch.platform.patch_kv_cache_coordinator import *  # noqa\n-from vllm_ascend.patch.platform.patch_mamba_manager import *  # noqa\n+if pcp_size > 1 or dcp_size > 1:\n+    from vllm_ascend.patch.platform.patch_mamba_manager import *  # noqa\n",
+      "stats": "1 file changed, +6 lines, -6 lines",
+      "key_changes": [
+        "-# （根据评审意见推断）直接 patch，未检查 pcp_size/dcp_size 条件",
+        "-# weiguihua2 评论: \"Do not patch directly; enable the prefix-cache by",
+        "-# checking if pcp_size > 1 or dcp_size > 1, and then proceed with the patch.\"",
+        "+# 通过检查 pcp_size > 1 或 dcp_size > 1 来条件性启用前缀缓存",
+        "+# weiguihua2 要求: 仅在 PCP/DCP 启用时才应用 patch",
+        "-# 直接应用 patch，无条件检查",
+        "-# 前缀缓存 patch 在所有场景下都会被应用",
+        "+# 条件性启用前缀缓存",
+        "+# 仅在 PCP/DCP 启用时应用 patch",
+        "-from vllm_ascend.patch.platform.patch_mamba_manager import *  # noqa",
+        "+if pcp_size > 1 or dcp_size > 1:",
+        "+    from vllm_ascend.patch.platform.patch_mamba_manager import *  # noqa"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

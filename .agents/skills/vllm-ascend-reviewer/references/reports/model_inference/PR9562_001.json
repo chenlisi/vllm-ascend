@@ -1,0 +1,93 @@
+{
+  "report_id": "PR9562_001",
+  "pr_number": 9562,
+  "pr_title": "[Refactor] Remove redundant code between dsa.py and dsa_v1.py holds main inference logic, and dsa.py keeps warm-up logic.",
+  "pr_status": "merged",
+  "merged_at": "2026-05-28T08:37:46Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/dsa_v1.py:2262",
+    "vllm_ascend/attention/dsa_v1.py:2263",
+    "vllm_ascend/attention/dsa_v1.py:1491",
+    "vllm_ascend/attention/dsa_v1.py:1448",
+    "vllm_ascend/ops/dsa.py:198"
+  ],
+  "landing_sha": "b1593d1",
+  "source_quote": "**Crash risk on c128 decode layers when `use_index_cache=True`.**\n> This guard is missing the `compress_ratio == 4` check that the prefill counterpart at line 1971 has:\n# line 2262 (_forward_decode, missing the compress_ratio check)\nif self.use_index_cache:\nself._update_indexcache_topk_indices(compress_topk_idxs, offset=0)\nFor `compress_ratio == 128` layer, `compress_topk_idxs` is `None`, causing `AttributeError`.\n**Fix: align decode guard with prefill (line 1971).**\nif self.compress_ratio == 4 and self.use_index_cache:\nself._update_indexcache_topk_indices(compress_topk_idxs, offset=0)\nwhy do we need to warmup `npu_scatter_nd_update_v2` twice?\nlet's rename this to `hidden_states_dummy`\nLet's just move the warm up here instead of passing by a kvcache=None",
+  "correspondence": [
+    {
+      "review_quote": "Liuchenbing-2026: vllm_ascend/attention/dsa_v1.py:2262",
+      "patch_snippet": "评后sha b1593d1 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Liuchenbing-2026: vllm_ascend/attention/dsa_v1.py:2263",
+      "patch_snippet": "评后sha b1593d1 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Liuchenbing-2026: vllm_ascend/attention/dsa_v1.py:1491",
+      "patch_snippet": "评后sha b1593d1 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Liuchenbing-2026: vllm_ascend/attention/dsa_v1.py:1448",
+      "patch_snippet": "评后sha b1593d1 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Liuchenbing-2026: vllm_ascend/ops/dsa.py:198",
+      "patch_snippet": "评后sha b1593d1 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "b1593d1",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 DSA 实现中，`_forward_prefill` 和 `_forward_decode` 中对同一功能（如 IndexCache 更新）的条件 guard 必须保持一致，避免因缺少条件检查导致特定 compress_ratio 层崩溃。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/attention/dsa_v1.py",
+      "line": 2245,
+      "code": "# _forward_decode 中 use_index_cache guard 缺少 compress_ratio == 4 检查\n# Liuchenbing-2026 评论: \"Crash risk on c128 decode layers when use_index_cache=True\"\n# 对于 compress_ratio == 128 层, compress_topk_idxs 为 None, 导致 AttributeError\n\ndef _forward_decode(\n    self,\n    q_quant: torch.Tensor,\n    q_scale: torch.Tensor,\n    ...\n) -> torch.Tensor:\n    # ... 前置逻辑 ...\n    # line 2147: compress_topk_idxs 初始化为 None\n    compress_topk_idxs = None\n    # line 2148: 仅 compress_ratio == 4 时赋值\n    if self.compress_ratio == 4:\n        compress_topk_idxs, _ = torch.ops._C_ascend.npu_quant_lightning_indexer(\n            query=q_quant, key=indexer_k_cache,\n            weights=weights.to(torch.float16),\n            ...\n        )\n\n    # ... multistream 处理逻辑 (line 2212/2230, 同样由 compress_ratio == 4 守护) ...\n\n    # line 2262: 缺少 compress_ratio 检查, 直接调用\n    # 当 compress_ratio == 128 时, compress_topk_idxs 仍为 None\n    # 导致 _update_indexcache_topk_indices 内部 topk_indices.shape[0] 抛出 AttributeError\n    if self.use_index_cache:\n        self._update_indexcache_topk_indices(compress_topk_idxs, offset=0)\n\n    # ... 后续逻辑 ...\n    return attn_output",
+      "context": "**Crash risk on c128 decode layers when `use_index_cache=True`.**\n> This guard is missing the `compress_ratio == 4` check that the prefill counterpart at line 1971 has:\n# line 2262 (_forward_decode, m"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/dsa_v1.py",
+      "line": 2245,
+      "code": "# 添加 compress_ratio == 4 检查, 与 _forward_prefill line 1971 保持一致\n# 仅当 compress_ratio == 4 且 use_index_cache 为 True 时才调用\n# Liuchenbing-2026 提供 suggestion, 一行修复, 镜像 prefill 路径\n\ndef _forward_decode(\n    self,\n    q_quant: torch.Tensor,\n    q_scale: torch.Tensor,\n    ...\n) -> torch.Tensor:\n    # ... 前置逻辑 ...\n    compress_topk_idxs = None\n    if self.compress_ratio == 4:\n        compress_topk_idxs, _ = torch.ops._C_ascend.npu_quant_lightning_indexer(\n            query=q_quant, key=indexer_k_cache,\n            weights=weights.to(torch.float16),\n            ...\n        )\n\n    # ... multistream 处理逻辑 ...\n\n    # 修复: 添加 compress_ratio == 4 条件, 与 _forward_prefill line 1971 对称\n    if self.compress_ratio == 4 and self.use_index_cache:\n        self._update_indexcache_topk_indices(compress_topk_idxs, offset=0)\n\n    # ... 后续逻辑 ...\n    return attn_output",
+      "context": "**Crash risk on c128 decode layers when `use_index_cache=True`.**\n> This guard is missing the `compress_ratio == 4` check that the prefill counterpart at line 1971 has:\n# line 2262 (_forward_decode, m"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/dsa_v1.py\n+++ b/vllm_ascend/attention/dsa_v1.py\n@@ -1,6 +1,6 @@\n-# _forward_decode 中 use_index_cache guard 缺少 compress_ratio == 4 检查\n-# Liuchenbing-2026 评论: \"Crash risk on c128 decode layers when use_index_cache=True\"\n-# 对于 compress_ratio == 128 层, compress_topk_idxs 为 None, 导致 AttributeError\n+# 添加 compress_ratio == 4 检查, 与 _forward_prefill line 1971 保持一致\n+# 仅当 compress_ratio == 4 且 use_index_cache 为 True 时才调用\n+# Liuchenbing-2026 提供 suggestion, 一行修复, 镜像 prefill 路径\n \n def _forward_decode(\n     self,\n@@ -9,9 +9,7 @@\n     ...\n ) -> torch.Tensor:\n     # ... 前置逻辑 ...\n-    # line 2147: compress_topk_idxs 初始化为 None\n     compress_topk_idxs = None\n-    # line 2148: 仅 compress_ratio == 4 时赋值\n     if self.compress_ratio == 4:\n         compress_topk_idxs, _ = torch.ops._C_ascend.npu_quant_lightning_indexer(\n             query=q_quant, key=indexer_k_cache,\n@@ -19,12 +17,10 @@\n             ...\n         )\n \n-    # ... multistream 处理逻辑 (line 2212/2230, 同样由 compress_ratio == 4 守护) ...\n+    # ... multistream 处理逻辑 ...\n \n-    # line 2262: 缺少 compress_ratio 检查, 直接调用\n-    # 当 compress_ratio == 128 时, compress_topk_idxs 仍为 None\n-    # 导致 _update_indexcache_topk_indices 内部 topk_indices.shape[0] 抛出 AttributeError\n-    if self.use_index_cache:\n+    # 修复: 添加 compress_ratio == 4 条件, 与 _forward_prefill line 1971 对称\n+    if self.compress_ratio == 4 and self.use_index_cache:\n         self._update_indexcache_topk_indices(compress_topk_idxs, offset=0)\n \n     # ... 后续逻辑 ...\n",
+      "stats": "1 file changed, +6 lines, -10 lines",
+      "key_changes": [
+        "-# _forward_decode 中 use_index_cache guard 缺少 compress_ratio == 4 检查",
+        "-# Liuchenbing-2026 评论: \"Crash risk on c128 decode layers when use_index_cache=True\"",
+        "-# 对于 compress_ratio == 128 层, compress_topk_idxs 为 None, 导致 AttributeError",
+        "+# 添加 compress_ratio == 4 检查, 与 _forward_prefill line 1971 保持一致",
+        "+# 仅当 compress_ratio == 4 且 use_index_cache 为 True 时才调用",
+        "+# Liuchenbing-2026 提供 suggestion, 一行修复, 镜像 prefill 路径",
+        "-    # line 2147: compress_topk_idxs 初始化为 None",
+        "-    # line 2148: 仅 compress_ratio == 4 时赋值",
+        "-    # ... multistream 处理逻辑 (line 2212/2230, 同样由 compress_ratio == 4 守护) ...",
+        "+    # ... multistream 处理逻辑 ...",
+        "-    # line 2262: 缺少 compress_ratio 检查, 直接调用",
+        "-    # 当 compress_ratio == 128 时, compress_topk_idxs 仍为 None",
+        "-    # 导致 _update_indexcache_topk_indices 内部 topk_indices.shape[0] 抛出 AttributeError",
+        "-    if self.use_index_cache:",
+        "+    # 修复: 添加 compress_ratio == 4 条件, 与 _forward_prefill line 1971 对称",
+        "+    if self.compress_ratio == 4 and self.use_index_cache:"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

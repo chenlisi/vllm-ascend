@@ -1,0 +1,58 @@
+{
+  "report_id": "PR12426_001",
+  "pr_number": 12426,
+  "pr_title": "[Doc][Feature] Add Qwen3.5/3.6-27B support documentation for Ascend950DT series",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "docs/source/tutorials/models/Qwen3.5-27B-Qwen3.6-27B.md:495"
+  ],
+  "landing_sha": "7fe6704",
+  "source_quote": "![high](https://www.gstatic.com/codereviewagent/high-priority.svg)\n> There is a copy-paste discrepancy in the parameter description. The startup commands above configure `--tensor-parallel-size 1` for the Ascend950DT series, but this description incorrectly references `--tensor-parallel-size 2` (which is used for the Atlas 800 series). Please update it to match the actual command:\n> ```markdown\n- `--data-parallel-size 1` and `--tensor-parallel-size 1` are common settings for data parallelism (DP) and tensor parallelism (TP) sizes.",
+  "correspondence": [
+    {
+      "review_quote": "gemini-code-assist[bot]: docs/source/tutorials/models/Qwen3.5-27B-Qwen3.6-27B.md:495",
+      "patch_snippet": "评后sha 7fe6704 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "7fe6704",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在部署/启动文档中，\"参数说明\"段对每个参数取值的描述必须与同节\"示例启动命令\"中实际使用的取值完全一致。当从其他硬件系列文档复制粘贴时，必须同步修正 TP/DP 等硬件相关参数的取值，避免描述与命令不一致误导用户。",
+    "context": "",
+    "checkpoints": [
+      "检查参数描述段中 `--tensor-parallel-size`、`--data-parallel-size`、`--max-model-len` 等取值是否与上方启动命令中的实际取值一一对应",
+      "检查从其他硬件系列（如 Atlas 800 A2/A3、Ascend950DT、Atlas 300I DUO）复制粘贴的段落是否已修正硬件相关参数（TP/DP/NPU 数量等）",
+      "检查\"启动命令\"与\"参数描述\"是否在同一系列段落内自洽",
+      "检查\"常见问题/调优建议\"表中的 TP/DP 列与示例命令是否一致"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/Qwen3.5-27B-Qwen3.6-27B.md",
+      "line": 495,
+      "code": "<!-- 文件: docs/source/tutorials/models/Qwen3.5-27B-Qwen3.6-27B.md -->\n<!-- 行号: 480-510 -->\n\n### Ascend950DT series\n\nThe following example is for Ascend950DT series. Quantized versions need `--quantization ascend`.\n\n=== \"Qwen3.6-27B-w8a8-mxfp8\"\n\n    Startup Command:\n        vllm serve $MODEL_PATH \\\n            --data-parallel-size 1 \\\n            --tensor-parallel-size 1 \\\n            --max-model-len 32768 \\\n            ...\n\n    Key Parameter Descriptions:\n    - `--data-parallel-size 1` and `--tensor-parallel-size 2` are common settings\n      for data parallelism (DP) and tensor parallelism (TP) sizes.\n      <!-- ↑ 描述误写为 2（复制粘贴自 Atlas 800 系列），启动命令实际用的是 1 -->\n    - `--max-model-len 32768` is the recommended maximum model length for this configuration.\n    - Quantized models (e.g., w8a8-mxfp8) require `--quantization ascend` flag.",
+      "context": "修改前代码 (markdown)"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/Qwen3.5-27B-Qwen3.6-27B.md",
+      "line": 495,
+      "code": "<!-- 文件: docs/source/tutorials/models/Qwen3.5-27B-Qwen3.6-27B.md -->\n<!-- 行号: 480-510 -->\n\n=== \"Ascend950DT series\"\n\n    The following example is for Ascend950DT series. Quantized versions need `--quantization ascend`.\n\n    === \"Qwen3.6-27B-w8a8-mxfp8\"\n\n        Startup Command:\n            vllm serve $MODEL_PATH \\\n                --data-parallel-size 1 \\\n                --tensor-parallel-size 1 \\\n                --max-model-len 32768 \\\n                ...\n\n        Key Parameter Descriptions:\n        - `--data-parallel-size 1` and `--tensor-parallel-size 1` are common settings\n          for data parallelism (DP) and tensor parallelism (TP) sizes.\n          <!-- ↑ 已修正为 1，与启动命令一致 -->\n        - `--max-model-len 32768` is the recommended maximum model length for this configuration.\n        - Quantized models (e.g., w8a8-mxfp8) require `--quantization ascend` flag.",
+      "context": "修改后代码 (markdown)"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/Qwen3.5-27B-Qwen3.6-27B.md\n+++ b/docs/source/tutorials/models/Qwen3.5-27B-Qwen3.6-27B.md\n@@ -1,22 +1,22 @@\n <!-- 文件: docs/source/tutorials/models/Qwen3.5-27B-Qwen3.6-27B.md -->\n <!-- 行号: 480-510 -->\n \n-### Ascend950DT series\n+=== \"Ascend950DT series\"\n \n-The following example is for Ascend950DT series. Quantized versions need `--quantization ascend`.\n+    The following example is for Ascend950DT series. Quantized versions need `--quantization ascend`.\n \n-=== \"Qwen3.6-27B-w8a8-mxfp8\"\n+    === \"Qwen3.6-27B-w8a8-mxfp8\"\n \n-    Startup Command:\n-        vllm serve $MODEL_PATH \\\n-            --data-parallel-size 1 \\\n-            --tensor-parallel-size 1 \\\n-            --max-model-len 32768 \\\n-            ...\n+        Startup Command:\n+            vllm serve $MODEL_PATH \\\n+                --data-parallel-size 1 \\\n+                --tensor-parallel-size 1 \\\n+                --max-model-len 32768 \\\n+                ...\n \n-    Key Parameter Descriptions:\n-    - `--data-parallel-size 1` and `--tensor-parallel-size 2` are common settings\n-      for data parallelism (DP) and tensor parallelism (TP) sizes.\n-      <!-- ↑ 描述误写为 2（复制粘贴自 Atlas 800 系列），启动命令实际用的是 1 -->\n-    - `--max-model-len 32768` is the recommended maximum model length for this configuration.\n-    - Quantized models (e.g., w8a8-mxfp8) require `--quantization ascend` flag.\n+        Key Parameter Descriptions:\n+        - `--data-parallel-size 1` and `--tensor-parallel-size 1` are common settings\n+          for data parallelism (DP) and tensor parallelism (TP) sizes.\n+          <!-- ↑ 已修正为 1，与启动命令一致 -->\n+        - `--max-model-len 32768` is the recommended maximum model length for this configuration.\n+        - Quantized models (e.g., w8a8-mxfp8) require `--quantization ascend` flag.",
+      "stats": "1 file changed, +15 lines, -15 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

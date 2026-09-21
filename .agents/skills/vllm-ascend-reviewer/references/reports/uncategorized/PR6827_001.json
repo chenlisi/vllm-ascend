@@ -1,0 +1,63 @@
+{
+  "report_id": "PR6827_001",
+  "pr_number": 6827,
+  "pr_title": "[Ops][Misc] Optimize split_qkv_rmsnorm_rope op",
+  "pr_status": "merged",
+  "merged_at": "2026-02-26T10:00:03Z",
+  "dimension": [
+    "correctness",
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/triton/linearnorm/split_qkv_rmsnorm_rope.py:630",
+    "vllm_ascend/ops/triton/linearnorm/split_qkv_rmsnorm_rope.py:637",
+    "vllm_ascend/ops/triton/linearnorm/split_qkv_rmsnorm_rope.py:645",
+    "vllm_ascend/ops/triton/linearnorm/split_qkv_rmsnorm_rope.py:250",
+    "vllm_ascend/ops/triton/linearnorm/split_qkv_rmsnorm_rope.py:542",
+    "vllm_ascend/ops/triton/linearnorm/split_qkv_rmsnorm_rope.py:82"
+  ],
+  "landing_sha": "34c8b87",
+  "source_quote": "Don't use chinese.",
+  "correspondence": [
+    {
+      "review_quote": "whx-sjtu 提出 4 条意见：(1) 不要使用中文注释；(2) 不要使用魔术数字，用变量替代；(3) 修改 grid 配置为 `(num_vectorcore, 1)`；(4) 不要硬编码 `tl.bfloat16`。Angazenn 指出 `cos_sin_cache` 的重复计算导致执行时间增加 50%~100%，建议移至 `__init__`。linfeng-yuan 建议 `extract_slice`、`insert_slice`、`select_element` 应从 `triton_utils.py` 导入以保持兼容性。作者全部接受并在后续 commit 中完成修复，6/6",
+      "patch_snippet": "",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "34c8b87",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "所有代码注释必须使用英文，禁止使用中文注释，以确保国际化团队协作的可读性。",
+    "context": "",
+    "checkpoints": [
+      "代码中不应出现中文字符的注释",
+      "PR 提交前应检查所有新增/修改的注释"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/triton/linearnorm/split_qkv_rmsnorm_rope.py",
+      "line": 75,
+      "code": "@triton.jit\ndef split_qkv_rmsnorm_rope_kernel(\n    qkv_gm_ptr, positions_gm_ptr, cos_sin_cache_gm_ptr,\n    output_q_gm_ptr, output_k_gm_ptr,\n    BLOCK_SIZE: tl.constexpr,\n):\n    \"\"\"Triton kernel for split_qkv_rmsnorm_rope fused operation.\"\"\"\n    batch_offset = tl.program_id(0) * BLOCK_SIZE\n    pos_values = tl.load(positions_gm_ptr + batch_offset)\n    sin_cos_indices = (pos_values[:, None] * ele_sin_cos_per_batch\n                       + tl.arange(0, ele_sin_cos_per_batch)).reshape(2, ROPE_DIM)",
+      "context": "Don't use chinese."
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/triton/linearnorm/split_qkv_rmsnorm_rope.py",
+      "line": 75,
+      "code": "@triton.jit\ndef split_qkv_rmsnorm_rope_kernel(\n    qkv_gm_ptr, positions_gm_ptr, cos_sin_cache_gm_ptr,\n    output_q_gm_ptr, output_k_gm_ptr,\n    BLOCK_SIZE: tl.constexpr,\n):\n    \"\"\"Triton kernel for split_qkv_rmsnorm_rope fused operation.\"\"\"\n    batch_offset = tl.program_id(0) * BLOCK_SIZE\n    pos_values = tl.load(positions_gm_ptr + batch_offset)\n    sin_cos_indices = (pos_values * ele_sin_cos_per_batch\n                       + tl.arange(0, ele_sin_cos_per_batch)).reshape(2, ROPE_DIM)",
+      "context": "Don't use chinese."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/triton/linearnorm/split_qkv_rmsnorm_rope.py\n+++ b/vllm_ascend/ops/triton/linearnorm/split_qkv_rmsnorm_rope.py\n@@ -75,11 +75,11 @@\n     \"\"\"Triton kernel for split_qkv_rmsnorm_rope fused operation.\"\"\"\n     batch_offset = tl.program_id(0) * BLOCK_SIZE\n     pos_values = tl.load(positions_gm_ptr + batch_offset)\n-    sin_cos_indices = (pos_values[:, None] * ele_sin_cos_per_batch\n+    sin_cos_indices = (pos_values * ele_sin_cos_per_batch\n                        + tl.arange(0, ele_sin_cos_per_batch)).reshape(2, ROPE_DIM)",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "修改了第 10-10 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

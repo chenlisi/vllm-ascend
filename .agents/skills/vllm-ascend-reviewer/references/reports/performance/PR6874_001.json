@@ -1,0 +1,58 @@
+{
+  "report_id": "PR6874_001",
+  "pr_number": 6874,
+  "pr_title": "[perf][refactor] Refactor and optimize sfa_v1.py for dsv3.2/glm5",
+  "pr_status": "merged",
+  "merged_at": "2026-03-03T06:46:46Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/sfa_v1.py:867"
+  ],
+  "landing_sha": "2049f32",
+  "source_quote": "This should also be executed in MLAPO case.",
+  "correspondence": [
+    {
+      "review_quote": "clrs97 指出某段逻辑在 MLAPO 场景下也应该被执行。作者接受建议，在 commit `2049f32` 中调整了条件判断，使该逻辑在 MLAPO 和非 MLAPO 场景下均能执行，1/1 建议全部落地。",
+      "patch_snippet": "commit `2049f32`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "2049f32",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在重构注意力机制相关代码时，条件分支逻辑应确保覆盖所有适用场景（如 MLAPO 和非 MLAPO），避免因为重构而遗漏某些特殊 case 的执行路径。",
+    "context": "",
+    "checkpoints": [
+      "新增或修改条件分支时，检查是否覆盖了所有推理场景（如 MLAPO、DSA-CP 等）",
+      "重构后应验证各场景下的执行路径是否完整",
+      "对于特定硬件加速路径（如 MLAPO），不应默认跳过通用预处理逻辑"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/sfa_v1.py",
+      "line": 855,
+      "code": "class AscendSFAImpl:\n    \"\"\"Ascend SFA attention implementation for dsv3.2/glm5.\"\"\"\n\n    def pre_post_process(self, positions, hidden_states, ...):\n        \"\"\"Pre/post processing for attention computation.\"\"\"\n        if not self.enable_mlapo:\n            positions = self.rope_forward(positions)\n\n        if self.enable_mlapo:\n            q, k, v = self.mlapo_operator(hidden_states, ...)\n        else:\n            q, k, v = self.standard_preprocess(hidden_states, ...)\n\n        return q, k, v, positions",
+      "context": "This should also be executed in MLAPO case."
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/sfa_v1.py",
+      "line": 855,
+      "code": "class AscendSFAImpl:\n    \"\"\"Ascend SFA attention implementation for dsv3.2/glm5.\"\"\"\n\n    def pre_post_process(self, positions, hidden_states, ...):\n        \"\"\"Pre/post processing for attention computation.\"\"\"\n        positions = self.rope_forward(positions)\n\n        if self.enable_mlapo:\n            q, k, v = self.mlapo_operator(hidden_states, ...)\n        else:\n            q, k, v = self.standard_preprocess(hidden_states, ...)\n\n        return q, k, v, positions",
+      "context": "This should also be executed in MLAPO case."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/sfa_v1.py\n+++ b/vllm_ascend/attention/sfa_v1.py\n@@ -855,14 +855,13 @@\n \n     def pre_post_process(self, positions, hidden_states, ...):\n         \"\"\"Pre/post processing for attention computation.\"\"\"\n-        if not self.enable_mlapo:\n-            positions = self.rope_forward(positions)\n+        positions = self.rope_forward(positions)\n \n         if self.enable_mlapo:\n             q, k, v = self.mlapo_operator(hidden_states, ...)",
+      "stats": "1 file changed, +1 lines, -2 lines",
+      "key_changes": [
+        "修改了第 6-7 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

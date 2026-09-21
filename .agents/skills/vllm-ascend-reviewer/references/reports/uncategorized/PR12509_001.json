@@ -1,0 +1,45 @@
+{
+  "report_id": "PR12509_001",
+  "pr_number": 0,
+  "pr_title": "",
+  "pr_status": "unknown",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "",
+  "source_quote": "",
+  "correspondence": [],
+  "verification": {
+    "merged": false,
+    "modified_commit": "",
+    "approvals": 0
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": ".github/workflows/pr_test.yaml",
+      "line": 80,
+      "code": "jobs:\n  pre-commit:\n    runs-on: linux-amd64-cpu-8-hk\n    container:\n      image: quay.io/ascend-ci/vllm-ascend:lint\n    # 无 outputs 声明 — steps.vllm 读 commit 文件写 GITHUB_OUTPUT 但下游不可访问\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          fetch-depth: 0\n      - name: Read verified vLLM refs\n        id: vllm\n        run: |\n          main_commit=\"$(tr -d '[:space:]' < .github/vllm-main-verified.commit)\"\n          echo \"main_commit=${main_commit}\" >> \"$GITHUB_OUTPUT\"\n      - name: Validate PR title prefix",
+      "context": "修改前代码 (yaml)"
+    },
+    "pattern": {
+      "file": ".github/workflows/pr_test.yaml",
+      "line": 80,
+      "code": "jobs:\n  pre-commit:\n    runs-on: linux-amd64-cpu-8-hk\n    container:\n      image: quay.io/ascend-ci/vllm-ascend:lint\n    outputs:\n      main_commit: ${{ steps.vllm.outputs.main_commit }}\n      release_tag: ${{ steps.vllm.outputs.release_tag }}\n    # ✅ +9行 outputs 块暴露 vllm refs，下游可直接引用\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          fetch-depth: 0\n      - name: Read verified vLLM refs\n        id: vllm\n        run: |\n          main_commit=\"$(tr -d '[:space:]' < .github/vllm-main-verified.commit)\"\n          echo \"main_commit=${main_commit}\" >> \"$GITHUB_OUTPUT\"\n      - name: Validate PR title prefix",
+      "context": "修改后代码 (yaml)"
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/pr_test.yaml\n+++ b/.github/workflows/pr_test.yaml\n@@ -3,7 +3,10 @@\n     runs-on: linux-amd64-cpu-8-hk\n     container:\n       image: quay.io/ascend-ci/vllm-ascend:lint\n-    # 无 outputs 声明 — steps.vllm 读 commit 文件写 GITHUB_OUTPUT 但下游不可访问\n+    outputs:\n+      main_commit: ${{ steps.vllm.outputs.main_commit }}\n+      release_tag: ${{ steps.vllm.outputs.release_tag }}\n+    # ✅ +9行 outputs 块暴露 vllm refs，下游可直接引用\n     steps:\n       - uses: actions/checkout@v7\n         with:",
+      "stats": "1 file changed, +4 lines, -1 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "yaml",
+    "_status": "pending_llm_extract"
+  }
+}

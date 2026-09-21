@@ -1,0 +1,85 @@
+{
+  "report_id": "PR8174_001",
+  "pr_number": 8174,
+  "pr_title": "[Feature] Supports GLM4.7 C8 scenarios",
+  "pr_status": "merged",
+  "merged_at": "2026-04-23T07:16:01Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_layerwise_connector.py:219",
+    "tests/ut/quantization/test_kv_c8.py:508"
+  ],
+  "landing_sha": "4a29fc4",
+  "source_quote": "Perhaps we should determine whether it is kvcache quantization through a variable and further distinguish it based on the type of attn (e.g., MLA, GQA).\nChinese",
+  "correspondence": [
+    {
+      "review_quote": "kunpengW-code: vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_layerwise_connector.py:219",
+      "patch_snippet": "评后sha 4a29fc4 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wangxiyuan: tests/ut/quantization/test_kv_c8.py:508",
+      "patch_snippet": "评后sha 4a29fc4 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "4a29fc4",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在 KV cache 量化和传输逻辑中，应通过变量明确判断是否为 kvcache 量化场景，并根据注意力机制类型（MLA、GQA 等）进一步区分处理逻辑，避免硬编码统一处理导致非 MLA 模型出现 buffer 类型不匹配或传输长度错误。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 580,
+      "code": "# problematic for graph capture and correctness.\"\n# 1. 创建临时 tensor 被 weak_ref_tensors 引用，graph replay 时内存无效\n# 2. value 公式存在 typo（除法而非乘法）\n# 3. 如果算子支持反量化则冗余\n\n    def full_graph_fia(self, query, key, value, layer, attn_params):\n        \"\"\"Full graph FIA attention with optional C8 quantization.\"\"\"\n        dtype = query.dtype\n        extra_args = {}\n\n        if self.enable_c8_quant:\n            # 手动反量化 - 在 graph capture 中会导致问题\n            key = key.to(dtype).float()\n            key = (key - layer._c8_k_aq_offset) * layer._c8_k_aq_scale\n            value = value.to(dtype).float()\n            value = (value - layer._c8_v_aq_offset) / layer._c8_v_aq_scale\n            # typo: 应该是 * 而非 /\n            weak_ref_tensors(key)\n            weak_ref_tensors(value)\n            extra_args = {}\n\n        return self._run_fia(query, key, value, extra_args, attn_params)",
+      "context": "Perhaps we should determine whether it is kvcache quantization through a variable and further distinguish it based on the type of attn (e.g., MLA, GQA).\nChinese"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 580,
+      "code": "# gemini-code-assist suggestion 直接采纳\n# commit 4a29fc4 \"Code optimization\"\n# 仅在输入为 INT8 时填充 extra_args，让算子内部处理反量化\n\n    def full_graph_fia(self, query, key, value, layer, attn_params):\n        \"\"\"Full graph FIA attention with optional C8 quantization.\"\"\"\n        dtype = query.dtype\n        extra_args = {}\n\n        if self.enable_c8_quant and key.dtype == torch.int8:\n            extra_args = {\n                \"key_antiquant_scale\": layer._c8_k_aq_scale,\n                \"key_antiquant_offset\": layer._c8_k_aq_offset,\n                \"value_antiquant_scale\": layer._c8_v_aq_scale,\n                \"value_antiquant_offset\": layer._c8_v_aq_offset,\n                \"key_antiquant_mode\": 0,\n                \"value_antiquant_mode\": 0,\n            }\n\n        return self._run_fia(query, key, value, extra_args, attn_params)",
+      "context": "Perhaps we should determine whether it is kvcache quantization through a variable and further distinguish it based on the type of attn (e.g., MLA, GQA).\nChinese"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/attention_v1.py\n+++ b/vllm_ascend/attention/attention_v1.py\n@@ -1,22 +1,20 @@\n-# problematic for graph capture and correctness.\"\n-# 1. 创建临时 tensor 被 weak_ref_tensors 引用，graph replay 时内存无效\n-# 2. value 公式存在 typo（除法而非乘法）\n-# 3. 如果算子支持反量化则冗余\n+# gemini-code-assist suggestion 直接采纳\n+# commit 4a29fc4 \"Code optimization\"\n+# 仅在输入为 INT8 时填充 extra_args，让算子内部处理反量化\n \n     def full_graph_fia(self, query, key, value, layer, attn_params):\n         \"\"\"Full graph FIA attention with optional C8 quantization.\"\"\"\n         dtype = query.dtype\n         extra_args = {}\n \n-        if self.enable_c8_quant:\n-            # 手动反量化 - 在 graph capture 中会导致问题\n-            key = key.to(dtype).float()\n-            key = (key - layer._c8_k_aq_offset) * layer._c8_k_aq_scale\n-            value = value.to(dtype).float()\n-            value = (value - layer._c8_v_aq_offset) / layer._c8_v_aq_scale\n-            # typo: 应该是 * 而非 /\n-            weak_ref_tensors(key)\n-            weak_ref_tensors(value)\n-            extra_args = {}\n+        if self.enable_c8_quant and key.dtype == torch.int8:\n+            extra_args = {\n+                \"key_antiquant_scale\": layer._c8_k_aq_scale,\n+                \"key_antiquant_offset\": layer._c8_k_aq_offset,\n+                \"value_antiquant_scale\": layer._c8_v_aq_scale,\n+                \"value_antiquant_offset\": layer._c8_v_aq_offset,\n+                \"key_antiquant_mode\": 0,\n+                \"value_antiquant_mode\": 0,\n+            }\n \n         return self._run_fia(query, key, value, extra_args, attn_params)\n",
+      "stats": "1 file changed, +12 lines, -14 lines",
+      "key_changes": [
+        "-# problematic for graph capture and correctness.\"",
+        "-# 1. 创建临时 tensor 被 weak_ref_tensors 引用，graph replay 时内存无效",
+        "-# 2. value 公式存在 typo（除法而非乘法）",
+        "-# 3. 如果算子支持反量化则冗余",
+        "+# gemini-code-assist suggestion 直接采纳",
+        "+# commit 4a29fc4 \"Code optimization\"",
+        "+# 仅在输入为 INT8 时填充 extra_args，让算子内部处理反量化",
+        "-        if self.enable_c8_quant:",
+        "-            # 手动反量化 - 在 graph capture 中会导致问题",
+        "-            key = key.to(dtype).float()",
+        "-            key = (key - layer._c8_k_aq_offset) * layer._c8_k_aq_scale",
+        "-            value = value.to(dtype).float()",
+        "-            value = (value - layer._c8_v_aq_offset) / layer._c8_v_aq_scale",
+        "-            # typo: 应该是 * 而非 /",
+        "-            weak_ref_tensors(key)",
+        "-            weak_ref_tensors(value)",
+        "-            extra_args = {}",
+        "+        if self.enable_c8_quant and key.dtype == torch.int8:",
+        "+            extra_args = {",
+        "+                \"key_antiquant_scale\": layer._c8_k_aq_scale,",
+        "+                \"key_antiquant_offset\": layer._c8_k_aq_offset,",
+        "+                \"value_antiquant_scale\": layer._c8_v_aq_scale,",
+        "+                \"value_antiquant_offset\": layer._c8_v_aq_offset,",
+        "+                \"key_antiquant_mode\": 0,",
+        "+                \"value_antiquant_mode\": 0,",
+        "+            }"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "report_id": "PR11010_001",
+  "pr_number": 11010,
+  "pr_title": "[Doc]add Recommended Configurations to GLM5.md",
+  "pr_status": "merged",
+  "merged_at": "2026-06-29T02:58:38Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/models/GLM5.md:9",
+    "docs/source/tutorials/models/GLM5.md:1367",
+    "docs/source/tutorials/models/GLM5.md:1375",
+    "docs/source/tutorials/models/GLM5.md:1385"
+  ],
+  "landing_sha": "c5e891b",
+  "source_quote": "The title of Chapter 9 is \"Performance Tuning\". Please modify it according to the template.",
+  "correspondence": [
+    {
+      "review_quote": "herizhen 指出 GLM5.md 文档存在多个问题：第9章标题应按模板修改为\"Performance Evaluation\"、9.1节缺少标题、9.2节缺少内容、描述暗示多种方法但实际只介绍了一种、以及\"version.\"和\"The\"之间缺少空格。作者通过 commit `c5e891b` 完成了所有修改。",
+      "patch_snippet": "commit `c5e891b`",
+      "adoption_judgment": "全部采纳"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "c5e891b",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "模型部署文档的章节标题应遵循统一模板（如第9章应为\"Performance Evaluation\"而非\"Performance Tuning\"），确保文档结构一致性。",
+    "context": "herizhen 指出章节标题应按模板修改",
+    "checkpoints": [
+      "章节标题是否与模板一致",
+      "子章节是否有完整标题",
+      "每个子章节是否有实际内容"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/GLM5.md",
+      "line": 1375,
+      "code": "<!-- ❌ 错误示例：自定义章节标题 -->\n## Performance Tuning\n\nThis section covers the performance optimization techniques for GLM-5.\n\n### 9.1\n\nContent for section 9.1.",
+      "context": "herizhen: Please modify it according to the template"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/GLM5.md",
+      "line": 1375,
+      "code": "<!-- ✅ 修复方法：按模板使用标准标题 -->\n## Performance Evaluation\n\nThis section covers the performance evaluation results for GLM-5.\n\n### 9.1 Performance Evaluation\n\nContent for section 9.1 with proper title.\n\n### 9.2 Recommended Configurations\n\nContent for section 9.2 with detailed configuration tables.",
+      "context": "按模板规范修改章节标题"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/GLM5.md\n+++ b/docs/source/tutorials/models/GLM5.md\n@@ -1375 +1375 @@\n-## Performance Tuning\n+## Performance Evaluation",
+      "stats": "1 file changed, chapter title and section titles updated",
+      "key_changes": [
+        "修改: 第9章标题从 Performance Tuning 改为 Performance Evaluation",
+        "修改: 9.1节添加标题",
+        "修改: 9.2节添加标题和内容",
+        "修改: 修复 version.The 缺少空格的问题"
+      ]
+    },
+    "language": "markdown",
+    "_status": "complete"
+  }
+}

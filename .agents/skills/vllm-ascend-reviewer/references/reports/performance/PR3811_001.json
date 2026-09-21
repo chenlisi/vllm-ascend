@@ -1,0 +1,85 @@
+{
+  "report_id": "PR3811_001",
+  "pr_number": 3811,
+  "pr_title": "[Feat] shared expert dp for deepseek_mtp",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/mla_v1.py:1679",
+    "vllm_ascend/utils.py:666",
+    "vllm_ascend/ascend_config.py:77",
+    "vllm_ascend/ops/register_custom_ops.py:29",
+    "vllm_ascend/utils.py:777"
+  ],
+  "landing_sha": "b633b10",
+  "source_quote": "Why we have to all gather hidden_states?\ndelete shared_expert_dp_enabled maybe better, as there is currently no scenario enable_sp is True and enable_shared_expert_dp is False.\ndon't use f string in logger, please use % string， fstring will cause performance problem\n`assert sp_enabled, (\"Currently, this situation only occurs \" \"when sp is enabled\")` will be good\nlogger.warning",
+  "correspondence": [
+    {
+      "review_quote": "whx-sjtu: vllm_ascend/attention/mla_v1.py:1679(2025-10-28 08:43:32)",
+      "patch_snippet": "评后sha b633b10 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "realliujiaxu: vllm_ascend/utils.py:666(2025-10-28 09:05:40)",
+      "patch_snippet": "评后sha b633b10 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Ronald1995: vllm_ascend/ascend_config.py:77(2025-11-06 08:06:03)",
+      "patch_snippet": "评后sha b633b10 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Ronald1995: vllm_ascend/ops/register_custom_ops.py:29(2025-11-06 08:08:30)",
+      "patch_snippet": "评后sha b633b10 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "whx-sjtu: vllm_ascend/utils.py:777(2025-11-29 07:03:36)",
+      "patch_snippet": "评后sha b633b10 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "b633b10",
+    "approvals": 4
+  },
+  "rule": {
+    "description": "在 logger 调用中应使用 `%` 格式化而非 f-string，因为 f-string 会在日志级别未启用时仍然执行字符串格式化，造成不必要的性能开销。",
+    "context": "",
+    "checkpoints": [
+      "logger 调用是否使用 `%` 格式化而非 f-string",
+      "是否删除了冗余的配置变量",
+      "是否添加了必要的 assert 检查",
+      "配置覆盖是否使用 `logger.warning` 而非 `logger.info`"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ascend_config.py",
+      "line": 1679,
+      "code": "# vllm_ascend/ascend_config.py:67-87\nclass AscendConfig:\n    \"\"\"Configuration for Ascend NPU specific settings.\"\"\"\n\n    def __init__(self, ...):\n        # ... 其他配置初始化 ...\n        self.enable_shared_expert_dp = ...\n        self.enable_sp = ...\n\n        # 使用 f-string 格式化 logger（性能问题）\n        logger.info(\n            f\"enable_shared_expert_dp is {self.enable_shared_expert_dp}\"\n        )\n        logger.info(\n            f\"enable_sp is {self.enable_sp}\"\n        )",
+      "context": "vllm_ascend/ascend_config.py:67-87 ... 其他配置初始化 ... 使用 f-string 格式化 logger（性能问题）"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ascend_config.py",
+      "line": 1679,
+      "code": "# vllm_ascend/ascend_config.py:67-87\nclass AscendConfig:\n    \"\"\"Configuration for Ascend NPU specific settings.\"\"\"\n\n    def __init__(self, ...):\n        # ... 其他配置初始化 ...\n        self.enable_shared_expert_dp = ...\n        self.enable_sp = ...\n\n        # 使用 % 格式化 logger（避免性能问题）\n        logger.info(\n            \"enable_shared_expert_dp is %s\",\n            self.enable_shared_expert_dp\n        )\n        logger.info(\n            \"enable_sp is %s\",\n            self.enable_sp\n        )",
+      "context": "vllm_ascend/ascend_config.py:67-87 ... 其他配置初始化 ... 使用 % 格式化 logger（避免性能问题）"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ascend_config.py\n+++ b/vllm_ascend/ascend_config.py\n@@ -7,10 +7,12 @@\n         self.enable_shared_expert_dp = ...\n         self.enable_sp = ...\n \n-        # 使用 f-string 格式化 logger（性能问题）\n+        # 使用 % 格式化 logger（避免性能问题）\n         logger.info(\n-            f\"enable_shared_expert_dp is {self.enable_shared_expert_dp}\"\n+            \"enable_shared_expert_dp is %s\",\n+            self.enable_shared_expert_dp\n         )\n         logger.info(\n-            f\"enable_sp is {self.enable_sp}\"\n+            \"enable_sp is %s\",\n+            self.enable_sp\n         )\n",
+      "stats": "1 file changed, +5 lines, -3 lines",
+      "key_changes": [
+        "移除: f\"enable_shared_expert_dp is {self.enable_shared_expert_dp}\"",
+        "移除: f\"enable_sp is {self.enable_sp}\"",
+        "新增: \"enable_sp is %s\",",
+        "新增: self.enable_sp"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

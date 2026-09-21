@@ -1,0 +1,61 @@
+{
+  "report_id": "PR13836_001",
+  "pr_number": 13836,
+  "pr_title": "[Performance][Ops] Support stride-aware recurrent KDA state updates",
+  "pr_status": "merged",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "csrc/attention/recurrent_kda/recurrent_kda_torch_adpt.h:118"
+  ],
+  "landing_sha": "f91ea5a",
+  "source_quote": "When `output_final_state` is `false` (which is the default for vLLM as it consumes the state through in-place cache updates), allocating a new `final_state` tensor via `at::empty_like(initial_state)` is completely unnecessary and introduces significant allocation overhead on every single decode step. Since `inplace_final_state` is `true`, the kernel directly updates `initial_state` in-place, and `final_state` is never written to or read. To avoid this overhead, we can reuse `initial_state` as a placeholder for `final_state` when `output_final_state` is `false`.\n> ```suggestion\nat::Tensor final_state = output_final_state ? at::empty_like(initial_state) : initial_state;",
+  "correspondence": [
+    {
+      "review_quote": "csrc/attention/recurrent_kda/recurrent_kda_torch_adpt.h:118",
+      "patch_snippet": "评后sha f91ea5a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f91ea5a",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "当 kernel 通过原地更新消费状态张量时，不应在每次调用时分配不会被使用的输出状态张量，应通过标志位控制避免 materializing 多余张量。",
+    "context": "",
+    "checkpoints": [
+      "识别 kernel 中是否存在 `at::empty_like` 分配但结果从未被读取的张量",
+      "检查 `output_final_state` / `inplace_final_state` 等标志位是否正确设置以避免不必要分配",
+      "确认 decode 热路径上没有重复的 tensor allocation 开销"
+    ],
+    "antipattern": {
+      "file": "csrc/attention/recurrent_kda/recurrent_kda_torch_adpt.h",
+      "line": 118,
+      "code": "// csrc/attention/recurrent_kda/recurrent_kda_torch_adpt.h\n// 位于 recurrent KDA state update 函数内，约第 110-125 行\n    // --- prepare state tensors ---\n    at::Tensor initial_state = ...;  // recurrent state from KDA cache\n    const char* layout = is_tnd ? \"TND\" : \"BSND\";\n\n    // ❌ output_final_state=true 导致每次 decode 都分配 final_state 张量\n    // 但 vLLM 只通过 in-place 更新 initial_state 消费结果，final_state 从未被读取\n    bool output_final_state = true;\n    at::Tensor final_state = at::empty_like(initial_state);  // ❌ 每个 decode step 都分配，显著开销\n\n    bool state_v_first = true;\n    EXEC_NPU_CMD(\n        aclnnRecurrentKda,\n        query, key, value,\n        initial_state,\n        final_state,\n        output_final_state,\n        use_qk_l2norm_in_kernel,\n        ...\n        state_v_first,\n        output);\n    // final_state 分配后从未被使用，纯粹浪费内存带宽",
+      "context": "When `output_final_state` is `false` (which is the default for vLLM as it consumes the state through in-place cache updates), allocating a new `final_state` tensor via `at::empty_like(initial_state)` "
+    },
+    "pattern": {
+      "file": "csrc/attention/recurrent_kda/recurrent_kda_torch_adpt.h",
+      "line": 118,
+      "code": "// csrc/attention/recurrent_kda/recurrent_kda_torch_adpt.h\n    // --- prepare state tensors ---\n    at::Tensor initial_state = ...;  // recurrent state from KDA cache\n    const char* layout = is_tnd ? \"TND\" : \"BSND\";\n\n    // ✅ vLLM consumes the cache mutation through initial_state and returns only\n    // ✅ the attention output. Avoid materializing a second full state tensor.\n    bool output_final_state = false;   // ✅ 不输出 final_state，避免分配\n    bool inplace_final_state = true;   // ✅ kernel 直接原地更新 initial_state\n    at::Tensor final_state = initial_state;  // ✅ 复用 initial_state，不分配新内存\n\n    bool state_v_first = true;\n    EXEC_NPU_CMD(\n        aclnnRecurrentKda,\n        query, key, value,\n        initial_state,\n        final_state,\n        output_final_state,\n        inplace_final_state,       // ✅ 新增参数：原地更新标志\n        use_qk_l2norm_in_kernel,\n        ...\n        state_v_first,\n        output,\n        final_state);\n    // ✅ 每个 decode step 节省一次完整 state tensor 的分配开销",
+      "context": "When `output_final_state` is `false` (which is the default for vLLM as it consumes the state through in-place cache updates), allocating a new `final_state` tensor via `at::empty_like(initial_state)` "
+    },
+    "diff": {
+      "unified": "--- a/csrc/attention/recurrent_kda/recurrent_kda_torch_adpt.h\n+++ b/csrc/attention/recurrent_kda/recurrent_kda_torch_adpt.h\n@@ -1,13 +1,13 @@\n // csrc/attention/recurrent_kda/recurrent_kda_torch_adpt.h\n-// 位于 recurrent KDA state update 函数内，约第 110-125 行\n     // --- prepare state tensors ---\n     at::Tensor initial_state = ...;  // recurrent state from KDA cache\n     const char* layout = is_tnd ? \"TND\" : \"BSND\";\n \n-    // ❌ output_final_state=true 导致每次 decode 都分配 final_state 张量\n-    // 但 vLLM 只通过 in-place 更新 initial_state 消费结果，final_state 从未被读取\n-    bool output_final_state = true;\n-    at::Tensor final_state = at::empty_like(initial_state);  // ❌ 每个 decode step 都分配，显著开销\n+    // ✅ vLLM consumes the cache mutation through initial_state and returns only\n+    // ✅ the attention output. Avoid materializing a second full state tensor.\n+    bool output_final_state = false;   // ✅ 不输出 final_state，避免分配\n+    bool inplace_final_state = true;   // ✅ kernel 直接原地更新 initial_state\n+    at::Tensor final_state = initial_state;  // ✅ 复用 initial_state，不分配新内存\n \n     bool state_v_first = true;\n     EXEC_NPU_CMD(\n@@ -16,8 +16,10 @@\n         initial_state,\n         final_state,\n         output_final_state,\n+        inplace_final_state,       // ✅ 新增参数：原地更新标志\n         use_qk_l2norm_in_kernel,\n         ...\n         state_v_first,\n-        output);\n-    // final_state 分配后从未被使用，纯粹浪费内存带宽\n+        output,\n+        final_state);\n+    // ✅ 每个 decode step 节省一次完整 state tensor 的分配开销\n",
+      "stats": "1 file changed, +9 lines, -7 lines",
+      "key_changes": [
+        "移除: bool output_final_state = true;",
+        "移除: // 位于 recurrent KDA state update 函数内，约第 110-125 行",
+        "移除: output);",
+        "新增: // ✅ the attention output. Avoid materializing a second full state tensor.",
+        "新增: output,"
+      ]
+    },
+    "language": "cpp",
+    "_status": "processed"
+  }
+}

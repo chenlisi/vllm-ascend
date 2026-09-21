@@ -1,0 +1,67 @@
+{
+  "report_id": "PR9531_001",
+  "pr_number": 9531,
+  "pr_title": "[Feature](dsa, cp): Add DSA context parallel for deepseekv4.",
+  "pr_status": "merged",
+  "merged_at": "2026-05-29T07:30:35Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "blocker",
+  "affected_files": [
+    "vllm_ascend/attention/context_parallel/dsa_cp.py:737",
+    "vllm_ascend/attention/context_parallel/dsa_cp.py:320",
+    "vllm_ascend/attention/context_parallel/dsa_cp.py:486"
+  ],
+  "landing_sha": "2105fe1",
+  "source_quote": "The `npu_transpose_batchmatmul` operator is called with `perm_x2=(0, 1, 2)`, which requires the second input (`self.wo_a.weight`) to be a 3D tensor. However, `self.wo_a` is a `ColumnParallelLinear` layer whose weight is a 2D tensor. This will result in a runtime error due to dimension mismatch. The weight should be reshaped to `[self.n_local_groups, self.o_lora_rank, -1]` to match the expected batch matmul layout.\nAccessing `.item()` on GPU tensors (`local_seq_lens_q.max()` and `local_seq_lens.max()`) during metadata construction causes host-device synchronization. This can significantly degrade performance as it occurs in every iteration. These values should be computed on the CPU using the CPU-side sequence length metadata available in `common_attn_metadata`.\n`mask.sum()` on a GPU tensor followed by its use as a slice index causes a host-device synchronization. Since `input_positions` and `compress_ratio` are known on the host (or can be derived from CPU metadata), this calculation should be performed on the CPU to avoid blocking the execution pipeline.",
+  "correspondence": [
+    {
+      "review_quote": "gemini-code-assist[bot] 🤖: vllm_ascend/attention/context_parallel/dsa_cp.py:737",
+      "patch_snippet": "评后sha 2105fe1 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "gemini-code-assist[bot] 🤖: vllm_ascend/attention/context_parallel/dsa_cp.py:320",
+      "patch_snippet": "评后sha 2105fe1 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "gemini-code-assist[bot] 🤖: vllm_ascend/attention/context_parallel/dsa_cp.py:486",
+      "patch_snippet": "评后sha 2105fe1 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "2105fe1",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "![critical](https://www.gstatic.com/codereviewagent/critical.svg)  The `npu_transpose_batchmatmul` operator is called with `perm_x2=(0, 1, 2)`, which requires the second input (`self.wo_a.weight`) to",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/attention/context_parallel/dsa_cp.py",
+      "line": 737,
+      "code": "# vllm_ascend/attention/context_parallel/dsa_cp.py:737\no_proj_tmp = torch_npu.npu_transpose_batchmatmul(\n                o_proj_input,\n                self.wo_a.weight,\n                bias=None,\n                scale=None,\n                perm_x1=(1, 0, 2),\n                perm_x2=(0, 1, 2),\n                perm_y=(1, 0, 2),\n                batch_split_factor=1,\n            ).view(num_tokens, -1)",
+      "context": "The `npu_transpose_batchmatmul` operator is called with `perm_x2=(0, 1, 2)`, which requires the second input (`self.wo_a.weight`) to be a 3D tensor. However, `self.wo_a` is a `ColumnParallelLinear` la"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/context_parallel/dsa_cp.py",
+      "line": 737,
+      "code": "# vllm_ascend/attention/context_parallel/dsa_cp.py:737\no_proj_tmp = torch_npu.npu_transpose_batchmatmul(\n                o_proj_input,\n                self.wo_a.weight.view(self.n_local_groups, self.o_lora_rank, -1),\n                bias=None,\n                scale=None,\n                perm_x1=(1, 0, 2),\n                perm_x2=(0, 1, 2),\n                perm_y=(1, 0, 2),\n                batch_split_factor=1,\n            ).view(num_tokens, -1)",
+      "context": "The `npu_transpose_batchmatmul` operator is called with `perm_x2=(0, 1, 2)`, which requires the second input (`self.wo_a.weight`) to be a 3D tensor. However, `self.wo_a` is a `ColumnParallelLinear` la"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/context_parallel/dsa_cp.py\n+++ b/vllm_ascend/attention/context_parallel/dsa_cp.py\n@@ -1,7 +1,7 @@\n # vllm_ascend/attention/context_parallel/dsa_cp.py:737\n o_proj_tmp = torch_npu.npu_transpose_batchmatmul(\n                 o_proj_input,\n-                self.wo_a.weight,\n+                self.wo_a.weight.view(self.n_local_groups, self.o_lora_rank, -1),\n                 bias=None,\n                 scale=None,\n                 perm_x1=(1, 0, 2),\n",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "-                self.wo_a.weight,",
+        "+                self.wo_a.weight.view(self.n_local_groups, self.o_lora_rank, -1),"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

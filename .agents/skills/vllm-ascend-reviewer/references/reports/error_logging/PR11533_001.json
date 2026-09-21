@@ -1,0 +1,57 @@
+{
+  "report_id": "PR11533_001",
+  "pr_number": 11533,
+  "pr_title": "[CI] Add --aop_enabled parameter to comment-triggered nightly/weekly tests",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "docs/source/community/slash-commands.md:45"
+  ],
+  "landing_sha": "152509f",
+  "source_quote": "+++",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan: docs/source/community/slash-commands.md:45",
+      "patch_snippet": "评后sha 152509f 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "152509f",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "Markdown 表格的分隔符列数必须与表头和数据行的列数严格一致。列数不匹配会导致渲染异常或显示空列。",
+    "context": "",
+    "checkpoints": [
+      "检查表格分隔符 `|---|` 的列数是否与表头列数一致",
+      "检查表格数据行的列数是否与表头一致",
+      "新增表格行时，确认不会引入额外的列"
+    ],
+    "antipattern": {
+      "file": "docs/source/community/slash-commands.md",
+      "line": 45,
+      "code": "<!-- 文件: docs/source/community/slash-commands.md -->\n<!-- 行号: 35-55 -->\n\n## Nightly Tests\n\nTrigger nightly test workflows via slash commands.\n\n| 命令 | 说明 |\n|---|---|---|\n| `/nightly <test_cases> --aop_enabled` | 启用 AOP pipeline |\n| `/nightly <test_cases>` | 运行标准 nightly 测试 |\n\n<!-- 分隔符有三列 |---|---|---|，但表头和数据只有两列 -->\n<!-- 这会导致 markdown 渲染异常或显示空列 -->",
+      "context": "修改前代码 (markdown)"
+    },
+    "pattern": {
+      "file": "docs/source/community/slash-commands.md",
+      "line": 45,
+      "code": "<!-- 文件: docs/source/community/slash-commands.md -->\n<!-- 行号: 35-55 -->\n\n## Nightly Tests\n\nTrigger nightly test workflows via slash commands.\n\n| 命令 | 说明 |\n|---|---|\n| `/nightly <test_cases> --aop_enabled` | 启用 AOP pipeline |\n| `/nightly <test_cases>` | 运行标准 nightly 测试 |\n\n<!-- 分隔符已修正为两列 |---|---|，与表头和数据行列数一致 -->",
+      "context": "修改后代码 (markdown)"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/community/slash-commands.md\n+++ b/docs/source/community/slash-commands.md\n@@ -6,9 +6,8 @@\n Trigger nightly test workflows via slash commands.\n \n | 命令 | 说明 |\n-|---|---|---|\n+|---|---|\n | `/nightly <test_cases> --aop_enabled` | 启用 AOP pipeline |\n | `/nightly <test_cases>` | 运行标准 nightly 测试 |\n \n-<!-- 分隔符有三列 |---|---|---|，但表头和数据只有两列 -->\n-<!-- 这会导致 markdown 渲染异常或显示空列 -->\n+<!-- 分隔符已修正为两列 |---|---|，与表头和数据行列数一致 -->",
+      "stats": "1 file changed, +2 lines, -3 lines",
+      "key_changes": [
+        "修改代码逻辑"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

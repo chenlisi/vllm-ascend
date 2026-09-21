@@ -1,0 +1,57 @@
+{
+  "report_id": "PR11492_001",
+  "pr_number": 11492,
+  "pr_title": "[Feature] fix mtp mask for interleave size > 1 with pcp",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/worker/pcp_utils.py:1521"
+  ],
+  "landing_sha": "b92f75b",
+  "source_quote": "补充大于1 的ut",
+  "correspondence": [
+    {
+      "review_quote": "Tflowers-0129: vllm_ascend/worker/pcp_utils.py:1521",
+      "patch_snippet": "评后sha b92f75b 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "b92f75b",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在 Prefill Context Parallelism (PCP) 中，KV cache interleave size 可能大于 1。MTP attention mask 生成逻辑需要针对 interleave size > 1 的场景编写单元测试，确保分布式解码场景下的注意力机制正确性。",
+    "context": "",
+    "checkpoints": [
+      "检查 `generate_mtp_attention_mask_for_decode` 是否有 interleave size > 1 的测试用例",
+      "验证 per-rank KV length (`k_lens`) 在 interleave size > 1 时的计算正确性",
+      "验证 inclusive upper KV index (`k_upper`) 是否正确考虑了 interleave 配置"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/pcp_utils.py",
+      "line": 1495,
+      "code": "    def generate_mtp_attention_mask_for_decode(\n        self,\n        decode_num_scheduled_tokens,\n        num_draft_tokens,\n        interleave_size,\n    ):\n        \"\"\"Generate MTP attention mask for decode requests under PCP.\n\n        This function computes per-rank KV length (k_lens) and the\n        inclusive upper KV index (k_upper) for each decode request.\n        \"\"\"\n        q_lens = torch.tensor(\n            decode_num_scheduled_tokens[:self.num_decode_reqs],\n            dtype=torch.int32,\n        )\n        k_lens = q_lens // self.pcp_size\n        k_upper = k_lens + num_draft_tokens - 1\n        # 原有测试仅覆盖 interleave_size = 1 的场景\n        # 缺少 interleave_size > 1 的测试验证\n        ...\n        return attention_mask\n\n    # 原有单元测试（仅 interleave_size = 1）\n    def test_mtp_mask_pcp_interleave_1(self):\n        \"\"\"Test MTP mask with interleave_size = 1.\"\"\"\n        ...",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/pcp_utils.py",
+      "line": 1495,
+      "code": "    def generate_mtp_attention_mask_for_decode(\n        self,\n        decode_num_scheduled_tokens,\n        num_draft_tokens,\n        interleave_size,\n    ):\n        \"\"\"Generate MTP attention mask for decode requests under PCP.\n\n        This function computes per-rank KV length (k_lens) and the\n        inclusive upper KV index (k_upper) for each decode request,\n        taking interleave_size into account.\n        \"\"\"\n        q_lens = torch.as_tensor(\n            decode_num_scheduled_tokens[:self.num_decode_reqs],\n            dtype=torch.int32,\n        )\n        # interleave-aware KV length calculation\n        k_lens = q_lens // self.pcp_size\n        k_upper = k_lens + num_draft_tokens - 1\n        ...\n        return attention_mask\n\n    # 新增 interleave_size > 1 的单元测试\n    def test_mtp_mask_pcp_interleave_gt_1(self):\n        \"\"\"Test MTP mask with interleave_size > 1 under PCP.\n\n        Verifies that per-rank KV length (k_lens) and inclusive upper\n        KV index (k_upper) are correctly computed when interleave_size\n        is greater than 1, ensuring attention mask correctness in\n        distributed decoding scenarios.\n        \"\"\"\n        interleave_size = 2\n        decode_num_scheduled_tokens = np.array([128, 256])\n        num_draft_tokens = 4\n        mask = self.generate_mtp_attention_mask_for_decode(\n            decode_num_scheduled_tokens,\n            num_draft_tokens,\n            interleave_size=interleave_size,\n        )\n        assert mask is not None\n        # Verify mask shape and correctness for interleave > 1\n        ...\n\n    def test_mtp_mask_pcp_interleave_4(self):\n        \"\"\"Test MTP mask with interleave_size = 4.\"\"\"\n        interleave_size = 4\n        ...",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/pcp_utils.py\n+++ b/vllm_ascend/worker/pcp_utils.py\n@@ -7,20 +7,41 @@\n         \"\"\"Generate MTP attention mask for decode requests under PCP.\n \n         This function computes per-rank KV length (k_lens) and the\n-        inclusive upper KV index (k_upper) for each decode request.\n+        inclusive upper KV index (k_upper) for each decode request,\n+        taking interleave_size into account.\n         \"\"\"\n-        q_lens = torch.tensor(\n+        q_lens = torch.as_tensor(\n             decode_num_scheduled_tokens[:self.num_decode_reqs],\n             dtype=torch.int32,\n         )\n+        # interleave-aware KV length calculation\n         k_lens = q_lens // self.pcp_size\n         k_upper = k_lens + num_draft_tokens - 1\n-        # 原有测试仅覆盖 interleave_size = 1 的场景\n-        # 缺少 interleave_size > 1 的测试验证\n         ...\n         return attention_mask\n \n-    # 原有单元测试（仅 interleave_size = 1）\n-    def test_mtp_mask_pcp_interleave_1(self):\n-        \"\"\"Test MTP mask with interleave_size = 1.\"\"\"\n+    # 新增 interleave_size > 1 的单元测试\n+    def test_mtp_mask_pcp_interleave_gt_1(self):\n+        \"\"\"Test MTP mask with interleave_size > 1 under PCP.\n+\n+        Verifies that per-rank KV length (k_lens) and inclusive upper\n+        KV index (k_upper) are correctly computed when interleave_size\n+        is greater than 1, ensuring attention mask correctness in\n+        distributed decoding scenarios.\n+        \"\"\"\n+        interleave_size = 2\n+        decode_num_scheduled_tokens = np.array([128, 256])\n+        num_draft_tokens = 4\n+        mask = self.generate_mtp_attention_mask_for_decode(\n+            decode_num_scheduled_tokens,\n+            num_draft_tokens,\n+            interleave_size=interleave_size,\n+        )\n+        assert mask is not None\n+        # Verify mask shape and correctness for interleave > 1\n         ...\n+\n+    def test_mtp_mask_pcp_interleave_4(self):\n+        \"\"\"Test MTP mask with interleave_size = 4.\"\"\"\n+        interleave_size = 4\n+        ...",
+      "stats": "1 file changed, +28 lines, -7 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

@@ -1,0 +1,90 @@
+{
+  "report_id": "PR3232_001",
+  "pr_number": 3232,
+  "pr_title": "[Feat] flashcomm_v2 optim solution",
+  "pr_status": "merged",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ascend_forward_context.py:124",
+    "vllm_ascend/ops/linear_op.py:540",
+    "vllm_ascend/ascend_forward_context.py:123",
+    "vllm_ascend/ascend_config.py:134",
+    "vllm_ascend/envs.py:142",
+    "vllm_ascend/ops/linear_op.py:321"
+  ],
+  "landing_sha": "8ccc51e",
+  "source_quote": "It needs to be avoided to enable in the decode scenario.\nConfirm whether to enable the dense model. Need to test Qwen3 Next, Qwen3 Dense Model.\nThere is an error in the judgment here, sp_enabled and flashcomm_v2_enabled should remain the same, otherwise the subsequent if judgment will cause an error (for example, num_tokens is None)\nthis is not related to ascend_config, please move to other place\nremove to VLLM_ASCEND_FLASHCOMM2_PARALLEL_SIZE\nThis func is missing in unquantize/w4a4 case.",
+  "correspondence": [
+    {
+      "review_quote": "weijinqian0: vllm_ascend/ascend_forward_context.py:124(2025-10-20 08:35:45)",
+      "patch_snippet": "评后sha 8ccc51e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "weijinqian0: vllm_ascend/ops/linear_op.py:540(2025-10-20 09:06:15)",
+      "patch_snippet": "评后sha 8ccc51e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "zzhx1: vllm_ascend/ascend_forward_context.py:123(2025-10-22 06:55:19)",
+      "patch_snippet": "评后sha 8ccc51e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wangxiyuan: vllm_ascend/ascend_config.py:134(2025-10-23 08:05:51)",
+      "patch_snippet": "评后sha 8ccc51e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wangxiyuan: vllm_ascend/envs.py:142(2025-10-23 08:08:53)",
+      "patch_snippet": "评后sha 8ccc51e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "zzzzwwjj: vllm_ascend/ops/linear_op.py:321(2025-10-23 08:20:58)",
+      "patch_snippet": "评后sha 8ccc51e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "8ccc51e",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "通信优化特性（如 FlashComm2）应仅在适用的推理阶段（如 prefill）启用，避免在 decode 场景误启用导致错误。配置校验逻辑应放在合理的位置，环境变量命名应规范。",
+    "context": "",
+    "checkpoints": [
+      "通信优化是否区分了 prefill 和 decode 场景",
+      "`sp_enabled` 和 `flashcomm_v2_enabled` 的判断逻辑是否保持一致",
+      "配置校验逻辑是否放在了合理的位置（不应放在 ascend_config 中）",
+      "是否覆盖了 unquantize/w4a4 等不同量化场景",
+      "环境变量命名是否符合规范（如 `VLLM_ASCEND_FLASHCOMM2_PARALLEL_SIZE`）"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ascend_forward_context.py",
+      "line": 115,
+      "code": "# 评审人: weijinqian0 👤 (2025-10-20)\n# Commit: 1eca224 (Add judgment of fc2 usage scenarios)\n# 未区分 prefill 和 decode 场景\n\ndef set_forward_context(\n    attn_metadata: AttentionMetadata,\n    vllm_config: VllmConfig,\n    ...\n):\n    \"\"\"Set forward context for attention computation.\"\"\"\n    # ...\n    flashcomm_v2_enabled = is_flashcomm2_enabled()\n    # 错误：未区分 prefill 和 decode 场景\n    if flashcomm_v2_enabled:\n        enable_flashcomm2()\n    # ...",
+      "context": "评审人: weijinqian0 👤 (2025-10-20) Commit: 1eca224 (Add judgment of fc2 usage scenarios) 未区分 prefill 和 decode 场景"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ascend_forward_context.py",
+      "line": 115,
+      "code": "# 仅在 prefill 场景启用，避免 decode 场景误启用\n\ndef set_forward_context(\n    attn_metadata: AttentionMetadata,\n    vllm_config: VllmConfig,\n    ...\n):\n    \"\"\"Set forward context for attention computation.\"\"\"\n    # ...\n    flashcomm_v2_enabled = is_flashcomm2_enabled()\n    # 正确：仅在 prefill 场景启用\n    if flashcomm_v2_enabled and num_tokens is not None:\n        enable_flashcomm2()\n    # ...",
+      "context": "仅在 prefill 场景启用，避免 decode 场景误启用 正确：仅在 prefill 场景启用"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ascend_forward_context.py\n+++ b/vllm_ascend/ascend_forward_context.py\n@@ -1,6 +1,4 @@\n-# 评审人: weijinqian0 👤 (2025-10-20)\n-# Commit: 1eca224 (Add judgment of fc2 usage scenarios)\n-# 未区分 prefill 和 decode 场景\n+# 仅在 prefill 场景启用，避免 decode 场景误启用\n \n def set_forward_context(\n     attn_metadata: AttentionMetadata,\n@@ -10,7 +8,7 @@\n     \"\"\"Set forward context for attention computation.\"\"\"\n     # ...\n     flashcomm_v2_enabled = is_flashcomm2_enabled()\n-    # 错误：未区分 prefill 和 decode 场景\n-    if flashcomm_v2_enabled:\n+    # 正确：仅在 prefill 场景启用\n+    if flashcomm_v2_enabled and num_tokens is not None:\n         enable_flashcomm2()\n     # ...\n",
+      "stats": "1 file changed, +3 lines, -5 lines",
+      "key_changes": [
+        "移除: if flashcomm_v2_enabled:",
+        "新增: if flashcomm_v2_enabled and num_tokens is not None:"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

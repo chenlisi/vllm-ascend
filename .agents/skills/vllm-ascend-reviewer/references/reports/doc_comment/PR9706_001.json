@@ -1,0 +1,64 @@
+{
+  "report_id": "PR9706_001",
+  "pr_number": 9706,
+  "pr_title": "[BugFix] fix EVS for vllm-ascend",
+  "pr_status": "merged",
+  "merged_at": "2026-06-30T01:28:42Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/vocab_parallel_embedding.py:164"
+  ],
+  "landing_sha": "d49fd0e",
+  "source_quote": "Add a TODO to describe the removal plan.",
+  "correspondence": [
+    {
+      "review_quote": "kunpengW-code: vllm_ascend/ops/vocab_parallel_embedding.py:164",
+      "patch_snippet": "评后sha d49fd0e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "d49fd0e",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "所有临时性 patch 代码必须在代码注释中明确描述移除计划和条件，以便后续维护者了解何时可以安全移除该 patch。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/ops/vocab_parallel_embedding.py",
+      "line": 155,
+      "code": "# （根据评审意见推断）临时 patch 缺少移除计划说明\n# kunpengW-code 评论: \"Add a TODO to describe the removal plan.\"\n# EVS 相关的临时 patch，直接应用修复\n# 没有说明何时可以移除该 patch\n\nfrom vllm_ascend.ops.vocab_parallel_embedding import (\n    VocabParallelEmbedding,\n    ParallelLMHead,\n)\n\n# Temporal patch for EVS (Efficient Video Subsampling)\n# This patch overrides the default embedding behavior\n# to support multimodal pruning on Ascend NPU\ndef _patched_get_embedding_mask(self, input_ids):\n    if self.is_multimodal_pruning_enabled:\n        return self._evs_embedding_mask(input_ids)\n    return self._original_embedding_mask(input_ids)\n\nVocabParallelEmbedding._original_get_embedding_mask = (\n    VocabParallelEmbedding.get_embedding_mask\n)\nVocabParallelEmbedding.get_embedding_mask = _patched_get_embedding_mask",
+      "context": "Add a TODO to describe the removal plan."
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/vocab_parallel_embedding.py",
+      "line": 155,
+      "code": "# 添加 TODO 描述移除计划\n# commit message: \"Added TODO to describe removal plan\"\n\nfrom vllm_ascend.ops.vocab_parallel_embedding import (\n    VocabParallelEmbedding,\n    ParallelLMHead,\n)\n\n# TODO: Remove this patch after v0.23.0 when upstream PR is merged\n# See: https://github.com/vllm-project/vllm/pull/xxxx\n# This patch overrides the default embedding behavior\n# to support multimodal pruning (EVS) on Ascend NPU\ndef _patched_get_embedding_mask(self, input_ids):\n    if self.is_multimodal_pruning_enabled:\n        return self._evs_embedding_mask(input_ids)\n    return self._original_embedding_mask(input_ids)\n\nVocabParallelEmbedding._original_get_embedding_mask = (\n    VocabParallelEmbedding.get_embedding_mask\n)\nVocabParallelEmbedding.get_embedding_mask = _patched_get_embedding_mask",
+      "context": "Add a TODO to describe the removal plan."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/vocab_parallel_embedding.py\n+++ b/vllm_ascend/ops/vocab_parallel_embedding.py\n@@ -1,16 +1,15 @@\n-# （根据评审意见推断）临时 patch 缺少移除计划说明\n-# kunpengW-code 评论: \"Add a TODO to describe the removal plan.\"\n-# EVS 相关的临时 patch，直接应用修复\n-# 没有说明何时可以移除该 patch\n+# 添加 TODO 描述移除计划\n+# commit message: \"Added TODO to describe removal plan\"\n \n from vllm_ascend.ops.vocab_parallel_embedding import (\n     VocabParallelEmbedding,\n     ParallelLMHead,\n )\n \n-# Temporal patch for EVS (Efficient Video Subsampling)\n+# TODO: Remove this patch after v0.23.0 when upstream PR is merged\n+# See: https://github.com/vllm-project/vllm/pull/xxxx\n # This patch overrides the default embedding behavior\n-# to support multimodal pruning on Ascend NPU\n+# to support multimodal pruning (EVS) on Ascend NPU\n def _patched_get_embedding_mask(self, input_ids):\n     if self.is_multimodal_pruning_enabled:\n         return self._evs_embedding_mask(input_ids)\n",
+      "stats": "1 file changed, +5 lines, -6 lines",
+      "key_changes": [
+        "-# （根据评审意见推断）临时 patch 缺少移除计划说明",
+        "-# kunpengW-code 评论: \"Add a TODO to describe the removal plan.\"",
+        "-# EVS 相关的临时 patch，直接应用修复",
+        "-# 没有说明何时可以移除该 patch",
+        "+# 添加 TODO 描述移除计划",
+        "+# commit message: \"Added TODO to describe removal plan\"",
+        "-# Temporal patch for EVS (Efficient Video Subsampling)",
+        "+# TODO: Remove this patch after v0.23.0 when upstream PR is merged",
+        "+# See: https://github.com/vllm-project/vllm/pull/xxxx",
+        "-# to support multimodal pruning on Ascend NPU",
+        "+# to support multimodal pruning (EVS) on Ascend NPU"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

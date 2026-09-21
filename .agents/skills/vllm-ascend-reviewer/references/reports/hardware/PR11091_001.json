@@ -1,0 +1,59 @@
+{
+  "report_id": "PR11091_001",
+  "pr_number": 11091,
+  "pr_title": "[Feature] Support Gemma4 large-head attention on A2",
+  "pr_status": "merged",
+  "merged_at": "2026-07-06T01:24:37Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/utils.py:80"
+  ],
+  "landing_sha": "26f1c81",
+  "source_quote": "",
+  "correspondence": [
+    {
+      "review_quote": "zzzzwwjj 指出 `attention/utils.py` 中的设备特定代码应移至 `DeviceAdaptor`，以保持代码架构的一致性（设备相关逻辑应统一放在 DeviceAdaptor 中）。作者通过 commit `26f1c81` 完成了修改。",
+      "patch_snippet": "commit `26f1c81`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "26f1c81",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "注意力模块中的设备特定逻辑（如 A2/A3/A5 不同的处理方式）应统一放在 `DeviceAdaptor` 中，不应散落在 `utils.py` 等通用模块中，以保持架构一致性。",
+    "context": "",
+    "checkpoints": [
+      "注意力相关代码中是否有设备特定逻辑",
+      "设备特定逻辑是否已移至 DeviceAdaptor"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 1530,
+      "code": "    def _forward_large_head_prefill_attention(\n        self,\n        query: torch.Tensor,\n        key: torch.Tensor,\n        value: torch.Tensor,\n        attn_metadata: AscendAttentionMetadata,\n    ) -> torch.Tensor:\n        \"\"\"Fallback path for large heterogeneous head sizes on A2/A3.\"\"\"\n        # ... gather paged KV to dense, run paged attention ...\n        pass\n\n    def forward_impl(\n        self,\n        query: torch.Tensor,\n        key: torch.Tensor,\n        value: torch.Tensor,\n        attn_metadata: AscendAttentionMetadata,\n    ) -> torch.Tensor:\n        # ...\n        if (\n            self.kv_sharing_target_layer_name is not None\n            and key is not None\n            and value is not None\n            and query.shape[0] == key.shape[0]\n            and attn_metadata.attn_state in (\n                AscendAttentionState.PrefillNoCache,\n                AscendAttentionState.ChunkedPrefill,\n            )\n        ):\n            return self._forward_large_head_prefill_attention(\n                query, key, value, attn_metadata\n            )",
+      "context": "Pls move these codes to DeviceAdaptor."
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 1530,
+      "code": "    def _forward_large_head_prefill_attention(\n        self,\n        query: torch.Tensor,\n        key: torch.Tensor,\n        value: torch.Tensor,\n        attn_metadata: AscendAttentionMetadata,\n    ) -> torch.Tensor:\n        \"\"\"Fallback path for large heterogeneous head sizes on A2/A3.\"\"\"\n        # ... gather paged KV to dense, run paged attention ...\n        pass\n\n    def forward_impl(\n        self,\n        query: torch.Tensor,\n        key: torch.Tensor,\n        value: torch.Tensor,\n        attn_metadata: AscendAttentionMetadata,\n    ) -> torch.Tensor:\n        # ...\n        # 添加 _should_use_large_head_attention_fallback() 检查，\n        # 避免对支持的 head size 也走慢速 fallback 路径\n        if (\n            self.kv_sharing_target_layer_name is not None\n            and self._should_use_large_head_attention_fallback()\n            and key is not None\n            and value is not None\n            and query.shape[0] == key.shape[0]\n            and attn_metadata.attn_state in (\n                AscendAttentionState.PrefillNoCache,\n                AscendAttentionState.ChunkedPrefill,\n            )\n        ):\n            return self._forward_large_head_prefill_attention(\n                query, key, value, attn_metadata\n            )",
+      "context": "Pls move these codes to DeviceAdaptor."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/attention_v1.py\n+++ b/vllm_ascend/attention/attention_v1.py\n@@ -17,8 +17,11 @@\n         attn_metadata: AscendAttentionMetadata,\n     ) -> torch.Tensor:\n         # ...\n+        # 添加 _should_use_large_head_attention_fallback() 检查，\n+        # 避免对支持的 head size 也走慢速 fallback 路径\n         if (\n             self.kv_sharing_target_layer_name is not None\n+            and self._should_use_large_head_attention_fallback()\n             and key is not None\n             and value is not None\n             and query.shape[0] == key.shape[0]",
+      "stats": "1 file changed, +3 lines",
+      "key_changes": [
+        "新增: # 添加 _should_use_large_head_attention_fallback() 检查，",
+        "新增: # 避免对支持的 head size 也走慢速 fallback 路径",
+        "新增: and self._should_use_large_head_attention_fallback()"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

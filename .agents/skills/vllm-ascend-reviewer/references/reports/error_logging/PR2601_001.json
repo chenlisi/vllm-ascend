@@ -1,0 +1,57 @@
+{
+  "report_id": "PR2601_001",
+  "pr_number": 2601,
+  "pr_title": "[Bugfix] Fix long context seq accuracy problem for `GLM4.5`",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/rotary_embedding.py:80"
+  ],
+  "landing_sha": "41958c2",
+  "source_quote": "plz remove this",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/ops/rotary_embedding.py:80",
+      "patch_snippet": "评后sha 41958c2 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "41958c2",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在提交代码之前，必须确保所有调试用的 print 语句已被移除，避免污染生产环境的日志输出。应使用 logger 替代 print 进行日志记录。",
+    "context": "",
+    "checkpoints": [
+      "是否存在遗留的 print 语句",
+      "是否使用 logger 替代 print",
+      "CI 是否有检查 print 语句的规则"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/rotary_embedding.py",
+      "line": 65,
+      "code": "# 评审人 MengqingCao: \"plz remove this\"\n# 评审人 gemini-code-assist: \"This `print` statement appears to be a debugging\n#   artifact. It should be removed from production code to avoid cluttering\n#   the output logs.\"\n\nfrom typing import Optional, Tuple\nimport torch\nimport torch.nn as nn\nimport torch_npu\n\nfrom vllm.model_executor.layers.rotary_embedding import RotaryEmbedding\n\nclass AscendRotaryEmbedding(RotaryEmbedding):\n    \"\"\"Ascend-specific rotary embedding implementation.\"\"\"\n\n    def __init__(self, head_size, rotary_dim, ...):\n        super().__init__(head_size, rotary_dim, ...)\n        self.head_size = head_size\n        self.rotary_dim = rotary_dim\n\n    def forward(self, positions, query, key, ...):\n        \"\"\"Apply rotary embedding to query and key tensors.\"\"\"\n        q_rot = query[..., :self.rotary_dim]\n        k_rot = key[..., :self.rotary_dim]\n        # 遗留的调试 print 语句\n        print(f\"debug: q_rot shape={q_rot.shape}, head_size={self.head_size}\")\n        # 调用 NPU rotary embedding kernel\n        torch_npu._npu_rotary_embedding(q_rot, k_rot,\n                                         positions, self.head_size)",
+      "context": "评审人 MengqingCao: \"plz remove this\" 评审人 gemini-code-assist: \"This `print` statement appears to be a debugging artifact. It should be removed from production code to avoid cluttering"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/rotary_embedding.py",
+      "line": 65,
+      "code": "# 作者 shen-shanshan 回复: \"Done.\"\n# commit 41958c2 \"little fix\" 移除了调试 print 语句\n\nfrom typing import Optional, Tuple\nimport torch\nimport torch.nn as nn\nimport torch_npu\n\nfrom vllm.model_executor.layers.rotary_embedding import RotaryEmbedding\n\nclass AscendRotaryEmbedding(RotaryEmbedding):\n    \"\"\"Ascend-specific rotary embedding implementation.\"\"\"\n\n    def __init__(self, head_size, rotary_dim, ...):\n        super().__init__(head_size, rotary_dim, ...)\n        self.head_size = head_size\n        self.rotary_dim = rotary_dim\n\n    def forward(self, positions, query, key, ...):\n        \"\"\"Apply rotary embedding to query and key tensors.\"\"\"\n        q_rot = query[..., :self.rotary_dim]\n        k_rot = key[..., :self.rotary_dim]\n        # 移除了调试 print 语句\n        # 使用 rotary_dim 而非 head_size（gemini 建议修复）\n        torch_npu._npu_rotary_embedding(q_rot, k_rot,\n                                         positions, self.rotary_dim)",
+      "context": "作者 shen-shanshan 回复: \"Done.\" commit 41958c2 \"little fix\" 移除了调试 print 语句 移除了调试 print 语句"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/rotary_embedding.py\n+++ b/vllm_ascend/ops/rotary_embedding.py\n@@ -1,7 +1,5 @@\n-# 评审人 MengqingCao: \"plz remove this\"\n-# 评审人 gemini-code-assist: \"This `print` statement appears to be a debugging\n-#   artifact. It should be removed from production code to avoid cluttering\n-#   the output logs.\"\n+# 作者 shen-shanshan 回复: \"Done.\"\n+# commit 41958c2 \"little fix\" 移除了调试 print 语句\n \n from typing import Optional, Tuple\n import torch\n@@ -22,8 +20,7 @@\n         \"\"\"Apply rotary embedding to query and key tensors.\"\"\"\n         q_rot = query[..., :self.rotary_dim]\n         k_rot = key[..., :self.rotary_dim]\n-        # 遗留的调试 print 语句\n-        print(f\"debug: q_rot shape={q_rot.shape}, head_size={self.head_size}\")\n-        # 调用 NPU rotary embedding kernel\n+        # 移除了调试 print 语句\n+        # 使用 rotary_dim 而非 head_size（gemini 建议修复）\n         torch_npu._npu_rotary_embedding(q_rot, k_rot,\n-                                         positions, self.head_size)\n+                                         positions, self.rotary_dim)\n",
+      "stats": "1 file changed, +5 lines, -8 lines",
+      "key_changes": [
+        "移除: print(f\"debug: q_rot shape={q_rot.shape}, head_size={self.head_size}\")"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

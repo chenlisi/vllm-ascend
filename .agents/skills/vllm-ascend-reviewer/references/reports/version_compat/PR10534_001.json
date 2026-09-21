@@ -1,0 +1,66 @@
+{
+  "report_id": "PR10534_001",
+  "pr_number": 10534,
+  "pr_title": "[Misc] main2main upgrade vllm to v0.23.0",
+  "pr_status": "merged",
+  "merged_at": "2026-06-24T06:16:23Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/worker.py:563",
+    "vllm_ascend/distributed/utils.py:18"
+  ],
+  "landing_sha": "e93393e",
+  "source_quote": "This line should not be modified.\nseems we should just remove these functions?",
+  "correspondence": [
+    {
+      "review_quote": "realliujiaxu 指出 `worker.py:563` 在升级过程中不应被修改，作者确认并已 revert 该更改。MengqingCao 建议直接移除 `utils.py` 中的冗余函数，作者回复这些函数将在未来版本中移除（当前暂保留兼容性）。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "e93393e",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在进行依赖版本升级（如 vLLM v0.22.1 → v0.23.0）时，应仅修改与版本兼容相关的代码，不应误改不相关的逻辑行。升级 PR 应最小化变更范围，避免引入不必要的行为变化。",
+    "context": "",
+    "checkpoints": [
+      "检查升级 PR 中的每个文件修改是否确实与版本兼容相关",
+      "确认 worker 核心逻辑行是否被误改",
+      "升级 PR 的 diff 应仅包含版本适配相关的变更"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/worker.py",
+      "line": 550,
+      "code": "# realliujiaxu 评审: \"This line should not be modified.\"\n# SOMEONEUNSEEN 回复: \"Thanks for your suggestion, I've already reverted this change.\"\n# 升级 v0.23.0 过程中错误地修改了该行代码\n\n    def initialize_from_config(self, vllm_config: VllmConfig) -> None:\n        \"\"\"Initialize worker from vllm config.\"\"\"\n        # ... 初始化逻辑 ...\n        self.model_runner = NPUModelRunner(\n            vllm_config=vllm_config,\n            # BUG: 升级时误改了此参数\n            kv_cache_dtype=\"auto_v2\",  # 原本应该是 \"auto\"\n            device=self.device,\n        )\n        # ... 后续初始化 ...",
+      "context": "This line should not be modified."
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/worker.py",
+      "line": 550,
+      "code": "# FIX: 恢复该行代码的原始状态（revert 不正确的修改）\n\n    def initialize_from_config(self, vllm_config: VllmConfig) -> None:\n        \"\"\"Initialize worker from vllm config.\"\"\"\n        # ... 初始化逻辑 ...\n        self.model_runner = NPUModelRunner(\n            vllm_config=vllm_config,\n            # FIX: 恢复为原始值\n            kv_cache_dtype=\"auto\",\n            device=self.device,\n        )\n        # ... 后续初始化 ...",
+      "context": "This line should not be modified."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/worker.py\n+++ b/vllm_ascend/worker/worker.py\n@@ -1,14 +1,12 @@\n-# realliujiaxu 评审: \"This line should not be modified.\"\n-# SOMEONEUNSEEN 回复: \"Thanks for your suggestion, I've already reverted this change.\"\n-# 升级 v0.23.0 过程中错误地修改了该行代码\n+# FIX: 恢复该行代码的原始状态（revert 不正确的修改）\n \n     def initialize_from_config(self, vllm_config: VllmConfig) -> None:\n         \"\"\"Initialize worker from vllm config.\"\"\"\n         # ... 初始化逻辑 ...\n         self.model_runner = NPUModelRunner(\n             vllm_config=vllm_config,\n-            # BUG: 升级时误改了此参数\n-            kv_cache_dtype=\"auto_v2\",  # 原本应该是 \"auto\"\n+            # FIX: 恢复为原始值\n+            kv_cache_dtype=\"auto\",\n             device=self.device,\n         )\n         # ... 后续初始化 ...",
+      "stats": "1 file changed, +3 lines, -5 lines",
+      "key_changes": [
+        "移除: # realliujiaxu 评审: \"This line should not be modified.\"",
+        "移除: # SOMEONEUNSEEN 回复: \"Thanks for your suggestion, I've already reverted this chan",
+        "移除: # 升级 v0.23.0 过程中错误地修改了该行代码",
+        "新增: # FIX: 恢复该行代码的原始状态（revert 不正确的修改）",
+        "移除: # BUG: 升级时误改了此参数",
+        "移除: kv_cache_dtype=\"auto_v2\",  # 原本应该是 \"auto\"",
+        "新增: # FIX: 恢复为原始值",
+        "新增: kv_cache_dtype=\"auto\","
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

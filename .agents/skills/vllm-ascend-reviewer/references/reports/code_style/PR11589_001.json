@@ -1,0 +1,57 @@
+{
+  "report_id": "PR11589_001",
+  "pr_number": 11589,
+  "pr_title": "[BugFix] Guard mixed structured output backends",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/patch/platform/patch_structured_output.py:114"
+  ],
+  "landing_sha": "200ff98",
+  "source_quote": "I think the `adapt_patch` will just do once in platform, why we need this const value to early exit the patch? It makes the code more complex.",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao: vllm_ascend/patch/platform/patch_structured_output.py:114",
+      "patch_snippet": "评后sha 200ff98 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "200ff98",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "在 vLLM-Ascend 的 platform patch 机制中，`adapt_patch` 通过 Python 模块缓存只导入一次。因此不需要使用 `_PATCHED_*` 常量属性做提前退出守卫。这种防御性编程会增加代码复杂度而没有实际收益。",
+    "context": "",
+    "checkpoints": [
+      "检查 patch 模块中是否存在 `_PATCHED_*` 提前退出属性",
+      "确认 `adapt_patch` 路径是否已通过模块缓存保证单次执行",
+      "区分 `_PATCHED_*`（不必要）和 `_ORIGINAL_*`（必要，保存原始方法）属性"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/patch/platform/patch_structured_output.py",
+      "line": 100,
+      "code": "def _patch_structured_outputs_config():\n    \"\"\"Patch StructuredOutputsConfig to guard mixed backends.\"\"\"\n    if getattr(StructuredOutputsConfig,\n               \"_PATCHED_BACKEND_GUARD\", False):\n        return\n    setattr(StructuredOutputsConfig,\n            \"_PATCHED_BACKEND_GUARD\", True)\n\n    _original_validate = StructuredOutputsConfig.validate\n\n    @functools.wraps(_original_validate)\n    def _patched_validate(self, *args, **kwargs):\n        backend = _resolve_backend_from_params(self)\n        if backend is not None:\n            _check_backend_consistency(backend, \"validation\")\n        return _original_validate(self, *args, **kwargs)\n\n    StructuredOutputsConfig.validate = _patched_validate\n    setattr(StructuredOutputsConfig,\n            \"_ORIGINAL_VALIDATE\", _original_validate)\n\n\ndef _patch_grammar_init():\n    \"\"\"Patch StructuredOutputManager.grammar_init for mixed backends.\"\"\"\n    if getattr(StructuredOutputManager,\n               \"_PATCHED_GRAMMAR_GUARD\", False):\n        return\n    setattr(StructuredOutputManager,\n            \"_PATCHED_GRAMMAR_GUARD\", True)\n\n    _original_grammar_init = StructuredOutputManager.grammar_init\n\n    @functools.wraps(_original_grammar_init)\n    def _patched_grammar_init(self, *args, **kwargs):\n        backend = _backend_name_from_instance(\n            getattr(self, \"_backend\", None))\n        if backend is not None:\n            _check_grammar_backend_consistency(backend)\n        return _original_grammar_init(self, *args, **kwargs)\n\n    StructuredOutputManager.grammar_init = _patched_grammar_init\n    setattr(StructuredOutputManager, \"_ORIGINAL_GRAMMAR_INIT\",\n            _original_grammar_init)",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/patch/platform/patch_structured_output.py",
+      "line": 114,
+      "code": "def _patch_structured_outputs_config():\n    \"\"\"Patch StructuredOutputsConfig to guard mixed backends.\n\n    adapt_patch in platform ensures this module is imported only\n    once via Python module caching, so no _PATCHED_* early-exit\n    guard is needed. _ORIGINAL_* attributes are preserved for\n    delegation and test inspection.\n    \"\"\"\n    _original_validate = StructuredOutputsConfig.validate\n\n    @functools.wraps(_original_validate)\n    def _patched_validate(self, *args, **kwargs):\n        backend = _resolve_backend_from_params(self)\n        if backend is not None:\n            _check_backend_consistency(backend, \"validation\")\n        return _original_validate(self, *args, **kwargs)\n\n    StructuredOutputsConfig.validate = _patched_validate\n    setattr(StructuredOutputsConfig,\n            \"_ORIGINAL_VALIDATE\", _original_validate)\n\n\ndef _patch_grammar_init():\n    \"\"\"Patch StructuredOutputManager.grammar_init for mixed backends.\"\"\"\n    _original_grammar_init = StructuredOutputManager.grammar_init\n\n    @functools.wraps(_original_grammar_init)\n    def _patched_grammar_init(self, *args, **kwargs):\n        backend = _backend_name_from_instance(\n            getattr(self, \"_backend\", None))\n        if backend is not None:\n            _check_grammar_backend_consistency(backend)\n        return _original_grammar_init(self, *args, **kwargs)\n\n    StructuredOutputManager.grammar_init = _patched_grammar_init\n    setattr(StructuredOutputManager, \"_ORIGINAL_GRAMMAR_INIT\",\n            _original_grammar_init)",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/patch/platform/patch_structured_output.py\n+++ b/vllm_ascend/patch/platform/patch_structured_output.py\n@@ -1,11 +1,11 @@\n def _patch_structured_outputs_config():\n-    \"\"\"Patch StructuredOutputsConfig to guard mixed backends.\"\"\"\n-    if getattr(StructuredOutputsConfig,\n-               \"_PATCHED_BACKEND_GUARD\", False):\n-        return\n-    setattr(StructuredOutputsConfig,\n-            \"_PATCHED_BACKEND_GUARD\", True)\n+    \"\"\"Patch StructuredOutputsConfig to guard mixed backends.\n \n+    adapt_patch in platform ensures this module is imported only\n+    once via Python module caching, so no _PATCHED_* early-exit\n+    guard is needed. _ORIGINAL_* attributes are preserved for\n+    delegation and test inspection.\n+    \"\"\"\n     _original_validate = StructuredOutputsConfig.validate\n \n     @functools.wraps(_original_validate)\n@@ -22,12 +22,6 @@\n \n def _patch_grammar_init():\n     \"\"\"Patch StructuredOutputManager.grammar_init for mixed backends.\"\"\"\n-    if getattr(StructuredOutputManager,\n-               \"_PATCHED_GRAMMAR_GUARD\", False):\n-        return\n-    setattr(StructuredOutputManager,\n-            \"_PATCHED_GRAMMAR_GUARD\", True)\n-\n     _original_grammar_init = StructuredOutputManager.grammar_init\n \n     @functools.wraps(_original_grammar_init)",
+      "stats": "1 file changed, +6 lines, -12 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

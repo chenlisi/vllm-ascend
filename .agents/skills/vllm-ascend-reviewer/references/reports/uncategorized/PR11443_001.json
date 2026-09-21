@@ -1,0 +1,45 @@
+{
+  "report_id": "PR11443_001",
+  "pr_number": 0,
+  "pr_title": "",
+  "pr_status": "unknown",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "",
+  "source_quote": "",
+  "correspondence": [],
+  "verification": {
+    "merged": false,
+    "modified_commit": "",
+    "approvals": 0
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/attention/context_parallel/sfa_cp.py",
+      "line": 695,
+      "code": "    def _build_replicated_block_table(\n        self,\n        dcp_block_table: torch.Tensor,\n        block_table_cols: int,\n        num_reqs: int,\n        num_actual_tokens: int,\n        seq_lens: torch.Tensor,\n        common_attn_metadata,\n    ) -> torch.Tensor:\n        \"\"\"Build replicated block table for DCP indexer path.\"\"\"\n        total_cp_size = self._total_cp_size\n        device = self.device\n\n        # replicated_col_idx: column indices for replicated view\n        replicated_col_idx = torch.arange(\n            block_table_cols,\n            dtype=torch.long,     # ← long对列索引超量（int32足），意见1核心问题\n            device=dcp_block_table.device,\n        )\n\n        # ... intermediate logic ...\n\n        # req_indices & query_lens: repeat_interleave for token-level mapping\n        query_lens = seq_lens[:num_reqs].to(device=self.device)\n        req_indices = torch.repeat_interleave(\n            torch.arange(num_reqs, dtype=torch.long, device=self.device),\n            query_lens.to(device=self.device, dtype=torch.long),\n        )[:num_actual_tokens]\n\n        # positions: token positions for DCP remapping\n        positions = common_attn_metadata.positions[:num_actual_tokens].to(\n            device=self.device,\n            dtype=torch.long,\n        )\n        return replicated_col_idx, req_indices, positions",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/context_parallel/sfa_cp.py",
+      "line": 695,
+      "code": "    def _build_replicated_block_table(\n        self,\n        dcp_block_table: torch.Tensor,\n        block_table_cols: int,\n        num_reqs: int,\n        num_actual_tokens: int,\n        seq_lens: torch.Tensor,\n        common_attn_metadata,\n    ) -> torch.Tensor:\n        \"\"\"Build replicated block table for DCP indexer path.\"\"\"\n        total_cp_size = self._total_cp_size\n        device = self.device\n\n        # replicated_col_idx: column indices for replicated view\n        replicated_col_idx = torch.arange(\n            block_table_cols,\n            dtype=torch.int32,   # ← 意见1落地：long→int32（pisceskkk确认\"int32够\"）\n            device=dcp_block_table.device,\n        )\n\n        # ... intermediate logic ...\n\n        # req_indices & query_lens: repeat_interleave for token-level mapping\n        query_lens = seq_lens[:num_reqs].to(device=self.device)\n        req_indices = torch.repeat_interleave(\n            torch.arange(num_reqs, dtype=torch.int32, device=self.device),  # ← int32\n            query_lens.to(device=self.device, dtype=torch.int32),           # ← int32\n        )[:num_actual_tokens]\n\n        # positions: token positions for DCP remapping\n        positions = common_attn_metadata.positions[:num_actual_tokens].to(\n            device=self.device,\n            dtype=torch.int32,   # ← int32\n        )\n        return replicated_col_idx, req_indices, positions",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/context_parallel/sfa_cp.py\n+++ b/vllm_ascend/attention/context_parallel/sfa_cp.py\n@@ -14,7 +14,7 @@\n         # replicated_col_idx: column indices for replicated view\n         replicated_col_idx = torch.arange(\n             block_table_cols,\n-            dtype=torch.long,     # ← long对列索引超量（int32足），意见1核心问题\n+            dtype=torch.int32,   # ← 意见1落地：long→int32（pisceskkk确认\"int32够\"）\n             device=dcp_block_table.device,\n         )\n \n@@ -23,13 +23,13 @@\n         # req_indices & query_lens: repeat_interleave for token-level mapping\n         query_lens = seq_lens[:num_reqs].to(device=self.device)\n         req_indices = torch.repeat_interleave(\n-            torch.arange(num_reqs, dtype=torch.long, device=self.device),\n-            query_lens.to(device=self.device, dtype=torch.long),\n+            torch.arange(num_reqs, dtype=torch.int32, device=self.device),  # ← int32\n+            query_lens.to(device=self.device, dtype=torch.int32),           # ← int32\n         )[:num_actual_tokens]\n \n         # positions: token positions for DCP remapping\n         positions = common_attn_metadata.positions[:num_actual_tokens].to(\n             device=self.device,\n-            dtype=torch.long,\n+            dtype=torch.int32,   # ← int32\n         )\n         return replicated_col_idx, req_indices, positions",
+      "stats": "1 file changed, +4 lines, -4 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

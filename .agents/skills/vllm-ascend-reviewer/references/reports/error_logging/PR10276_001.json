@@ -1,0 +1,66 @@
+{
+  "report_id": "PR10276_001",
+  "pr_number": 10276,
+  "pr_title": "[Attention][BugFix] Fix NaN issue in Lightning Attention NPU kernel caused by unmasked padding",
+  "pr_status": "merged",
+  "merged_at": "2026-06-23T07:53:19Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/triton/mamba/lightning_attn.py:548"
+  ],
+  "landing_sha": "dd1a5cb",
+  "source_quote": "why remove this logger, it is useful for debug.",
+  "correspondence": [
+    {
+      "review_quote": "momo609 指出 `lightning_attn.py:548` 处不应该删除调试 logger，该 logger 对调试很有用。作者回复确认这是意外删除并已恢复。commit `dd1a5cb` 确保了数值稳定性的同时保留了调试日志，1/1 建议全部落地。",
+      "patch_snippet": "commit `dd1a5cb`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "dd1a5cb",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "调试日志（logger）在问题排查中具有重要价值，不应在修复 bug 的 PR 中随意删除。如果确实需要移除日志，应在评审中说明原因并获得同意。",
+    "context": "",
+    "checkpoints": [
+      "检查 PR 中是否有删除 logger/打印语句的修改",
+      "确认删除日志是否有合理理由"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/triton/mamba/lightning_attn.py",
+      "line": 548,
+      "code": "import triton\nimport triton.language as tl\nimport logging\n\nlogger = logging.getLogger(__name__)\n\n# ... 其他代码 ...\n\n@triton.jit\ndef _lightning_attention_kernel(\n    # ... 参数列表 ...\n    BLOCK_SIZE: tl.constexpr,\n):\n    # ... 前面的代码 ...\n\n    # 加载 q, k 并显式掩码（已在 PR 中修复）\n    q = tl.load(Q_block_ptr, mask=..., other=0.0).to(tl.float32)\n    q = tl.where(block_offset + qk_index[:, None] < n, q, 0.0)\n    k = tl.load(K_block_ptr, mask=..., other=0.0).to(tl.float32)\n    k = tl.where(block_offset + qk_index[:, None] < n, k, 0.0)\n\n    # v tensor 加载后未显式掩码\n    # Ascend 硬件上 tl.load(..., other=0.0) 不可靠地清除越界数据\n    # out-of-bound 的垃圾值（NaN/Inf）会在 qkv += tl.dot(qk, v) 时\n    # 导致 0.0 * NaN = NaN（IEEE 754 标准）\n    v = tl.load(\n        V_block_ptr,\n        mask=block_offset + kv_index[:, None] < n,\n        other=0.0,\n    ).to(tl.float32)\n\n    # ... 后续计算 ...\n    qk = tl.dot(q, k.trans()) * decay\n    qkv += tl.dot(qk, v)  # 如果 v 中有 NaN，即使 qk 为 0 也会产生 NaN",
+      "context": "why remove this logger, it is useful for debug."
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/triton/mamba/lightning_attn.py",
+      "line": 548,
+      "code": "import triton\nimport triton.language as tl\nimport logging\n\nlogger = logging.getLogger(__name__)\n\n# ... 其他代码 ...\n\n@triton.jit\ndef _lightning_attention_kernel(\n    # ... 参数列表 ...\n    BLOCK_SIZE: tl.constexpr,\n):\n    # ... 前面的代码 ...\n\n    # 加载 q, k 并显式掩码\n    q = tl.load(Q_block_ptr, mask=..., other=0.0).to(tl.float32)\n    q = tl.where(block_offset + qk_index[:, None] < n, q, 0.0)\n    k = tl.load(K_block_ptr, mask=..., other=0.0).to(tl.float32)\n    k = tl.where(block_offset + qk_index[:, None] < n, k, 0.0)\n\n    # v tensor 加载后添加 tl.where 显式掩码\n    v = tl.load(\n        V_block_ptr,\n        mask=block_offset + kv_index[:, None] < n,\n        other=0.0,\n    ).to(tl.float32)\n    # Explicitly mask v to prevent NaN propagation\n    # from out-of-bound garbage values on Ascend hardware\n    v = tl.where(block_offset + kv_index[:, None] < n, v, 0.0)\n\n    # ... 后续计算 ...\n    qk = tl.dot(q, k.trans()) * decay\n    qkv += tl.dot(qk, v)  # 现在 v 中的 padding 元素已被显式置零",
+      "context": "why remove this logger, it is useful for debug."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/triton/mamba/lightning_attn.py\n+++ b/vllm_ascend/ops/triton/mamba/lightning_attn.py\n@@ -13,22 +13,22 @@\n ):\n     # ... 前面的代码 ...\n \n-    # 加载 q, k 并显式掩码（已在 PR 中修复）\n+    # 加载 q, k 并显式掩码\n     q = tl.load(Q_block_ptr, mask=..., other=0.0).to(tl.float32)\n     q = tl.where(block_offset + qk_index[:, None] < n, q, 0.0)\n     k = tl.load(K_block_ptr, mask=..., other=0.0).to(tl.float32)\n     k = tl.where(block_offset + qk_index[:, None] < n, k, 0.0)\n \n-    # v tensor 加载后未显式掩码\n-    # Ascend 硬件上 tl.load(..., other=0.0) 不可靠地清除越界数据\n-    # out-of-bound 的垃圾值（NaN/Inf）会在 qkv += tl.dot(qk, v) 时\n-    # 导致 0.0 * NaN = NaN（IEEE 754 标准）\n+    # v tensor 加载后添加 tl.where 显式掩码\n     v = tl.load(\n         V_block_ptr,\n         mask=block_offset + kv_index[:, None] < n,\n         other=0.0,\n     ).to(tl.float32)\n+    # Explicitly mask v to prevent NaN propagation\n+    # from out-of-bound garbage values on Ascend hardware\n+    v = tl.where(block_offset + kv_index[:, None] < n, v, 0.0)\n \n     # ... 后续计算 ...\n     qk = tl.dot(q, k.trans()) * decay\n-    qkv += tl.dot(qk, v)  # 如果 v 中有 NaN，即使 qk 为 0 也会产生 NaN\n+    qkv += tl.dot(qk, v)  # 现在 v 中的 padding 元素已被显式置零",
+      "stats": "1 file changed, +6 lines, -6 lines",
+      "key_changes": [
+        "移除: # 加载 q, k 并显式掩码（已在 PR 中修复）",
+        "新增: # 加载 q, k 并显式掩码",
+        "移除: # v tensor 加载后未显式掩码",
+        "移除: # Ascend 硬件上 tl.load(..., other=0.0) 不可靠地清除越界数据",
+        "移除: # out-of-bound 的垃圾值（NaN/Inf）会在 qkv += tl.dot(qk, v) 时",
+        "移除: # 导致 0.0 * NaN = NaN（IEEE 754 标准）",
+        "新增: # v tensor 加载后添加 tl.where 显式掩码",
+        "新增: # Explicitly mask v to prevent NaN propagation",
+        "新增: # from out-of-bound garbage values on Ascend hardware",
+        "新增: v = tl.where(block_offset + kv_index[:, None] < n, v, 0.0)"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

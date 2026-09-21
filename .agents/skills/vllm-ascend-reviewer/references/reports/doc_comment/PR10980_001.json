@@ -1,0 +1,62 @@
+{
+  "report_id": "PR10980_001",
+  "pr_number": 10980,
+  "pr_title": "[BugFix][Model] Sync HcPre fused path and use v2",
+  "pr_status": "merged",
+  "merged_at": "2026-06-29T01:38:22Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "csrc/moe/hc_pre/op_host/hc_pre_tiling_arch35.h:198"
+  ],
+  "landing_sha": "7c50311",
+  "source_quote": "",
+  "correspondence": [
+    {
+      "review_quote": "linfeng-yuan 指出 `hc_pre_tiling_arch35.h` 第 198 行存在中文字符，应替换为英文。作者通过 commit `7c50311`（\"sync hc_pre fused path and use v2\"）完成了修改，将中文字符替换为英文。",
+      "patch_snippet": "commit `7c50311`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "7c50311",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "C/C++ 头文件中的注释、标识符、字符串等应使用英文，避免中文字符导致编译问题或国际化障碍。",
+    "context": "",
+    "checkpoints": [
+      "检查头文件中是否存在中文字符",
+      "确保所有注释和字符串使用英文"
+    ],
+    "antipattern": {
+      "file": "csrc/moe/hc_pre/op_host/hc_pre_tiling_arch35.h",
+      "line": 185,
+      "code": "struct HcPreTilingData {\n    // ...\n    uint32_t hcMult;\n    uint32_t d;\n    uint32_t mSize;\n    // 中文注释：这里是tiling计算的核心参数\n    // 用于计算每个Vector Core的处理分片大小\n    uint32_t mL1Size;\n    uint32_t mL2Size;\n    uint32_t numVc;\n    // ...\n\n    void CalculateTiling() {\n        // 中文注释：根据mSize和numVc计算分片\n        uint32_t perVcM = CeilDiv(mL1Size, numVc);\n        // ... tiling logic ...\n    }\n};",
+      "context": "Replace chinese characters by English."
+    },
+    "pattern": {
+      "file": "csrc/moe/hc_pre/op_host/hc_pre_tiling_arch35.h",
+      "line": 185,
+      "code": "struct HcPreTilingData {\n    // ...\n    uint32_t hcMult;\n    uint32_t d;\n    uint32_t mSize;\n    // Core parameters for tiling computation\n    // Used to calculate per-Vector-Core shard size\n    uint32_t mL1Size;\n    uint32_t mL2Size;\n    uint32_t numVc;\n    // ...\n\n    void CalculateTiling() {\n        // Calculate per-VC shard based on mSize and numVc\n        uint32_t perVcM = CeilDiv(mL1Size, numVc);\n        // ... tiling logic ...\n    }\n};",
+      "context": "Replace chinese characters by English."
+    },
+    "diff": {
+      "unified": "--- a/csrc/moe/hc_pre/op_host/hc_pre_tiling_arch35.h\n+++ b/csrc/moe/hc_pre/op_host/hc_pre_tiling_arch35.h\n@@ -3,15 +3,15 @@\n     uint32_t hcMult;\n     uint32_t d;\n     uint32_t mSize;\n-    // 中文注释：这里是tiling计算的核心参数\n-    // 用于计算每个Vector Core的处理分片大小\n+    // Core parameters for tiling computation\n+    // Used to calculate per-Vector-Core shard size\n     uint32_t mL1Size;\n     uint32_t mL2Size;\n     uint32_t numVc;\n     // ...\n \n     void CalculateTiling() {\n-        // 中文注释：根据mSize和numVc计算分片\n+        // Calculate per-VC shard based on mSize and numVc\n         uint32_t perVcM = CeilDiv(mL1Size, numVc);\n         // ... tiling logic ...\n     }",
+      "stats": "1 file changed, +3 lines, -3 lines",
+      "key_changes": [
+        "移除: // 中文注释：这里是tiling计算的核心参数",
+        "移除: // 用于计算每个Vector Core的处理分片大小",
+        "新增: // Core parameters for tiling computation",
+        "新增: // Used to calculate per-Vector-Core shard size",
+        "移除: // 中文注释：根据mSize和numVc计算分片",
+        "新增: // Calculate per-VC shard based on mSize and numVc"
+      ]
+    },
+    "language": "c",
+    "_status": "extracted"
+  }
+}

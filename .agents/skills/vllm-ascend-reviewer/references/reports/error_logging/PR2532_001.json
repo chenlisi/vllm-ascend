@@ -1,0 +1,64 @@
+{
+  "report_id": "PR2532_001",
+  "pr_number": 2532,
+  "pr_title": "[bugfix] fix torchair runtime error caused by configuration mismtaches and file missing",
+  "pr_status": "merged",
+  "dimension": [
+    "design"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/torchair/torchair_worker.py:36",
+    "vllm_ascend/platform.py:186"
+  ],
+  "landing_sha": "fb95230",
+  "source_quote": "The logic here is a bit complex. Can we refactor it—maybe use an Enum to represent the torchair cache state, similar to how `FusedMOEState` works?\nAdd a `logger.warning` log?",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/torchair/torchair_worker.py:36",
+      "patch_snippet": "评后sha fb95230 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/platform.py:186",
+      "patch_snippet": "评后sha fb95230 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "fb95230",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当代码中存在复杂的状态判断逻辑时，应考虑使用 Enum 类来表示状态，提高代码可读性。同时在关键分支处添加 `logger.warning` 日志，便于问题排查。",
+    "context": "",
+    "checkpoints": [
+      "是否存在多个 if-else 判断状态",
+      "关键分支是否有日志输出",
+      "状态转换是否有警告提示"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/torchair/torchair_worker.py",
+      "line": 25,
+      "code": "# 评审人 ApsarasX: \"The logic here is a bit complex. Can we refactor it—maybe\n#   use an Enum to represent the torchair cache state, similar to how\n#   `FusedMOEState` works?\"\n\nimport os\nimport logging\nfrom typing import Optional\n\nlogger = logging.getLogger(__name__)\n\nclass TorchairWorker:\n    \"\"\"Worker for torchair graph mode compilation.\"\"\"\n\n    def _check_cache_valid(self, kvcache_bytes, cached_bytes, ...):\n        \"\"\"Check if torchair cache is valid.\"\"\"\n        # 复杂的条件判断逻辑\n        if kvcache_bytes == cached_bytes:\n            # 跳过编译，使用缓存\n            cache_valid = True\n        elif kvcache_bytes != cached_bytes and cached_bytes > 0:\n            # 缓存不匹配，需要重新编译\n            cache_valid = False\n        else:\n            # 无缓存，需要编译\n            cache_valid = False\n        return cache_valid",
+      "context": "评审人 ApsarasX: \"The logic here is a bit complex. Can we refactor it—maybe use an Enum to represent the torchair cache state, similar to how `FusedMOEState` works?\""
+    },
+    "pattern": {
+      "file": "vllm_ascend/torchair/torchair_worker.py",
+      "line": 25,
+      "code": "# 作者 linfeng-yuan 回复: \"It is not necessary to add an enum class for\n#   torchair cache state. And I find it equivalent to only check\n#   kvcache_bytes here.\"\n# 简化了检查逻辑，仅检查 kvcache_bytes 等价\n\nimport os\nimport logging\nfrom typing import Optional\n\nlogger = logging.getLogger(__name__)\n\nclass TorchairWorker:\n    \"\"\"Worker for torchair graph mode compilation.\"\"\"\n\n    def _check_cache_valid(self, kvcache_bytes, cached_bytes, ...):\n        \"\"\"Check if torchair cache is valid - simplified logic.\"\"\"\n        # 简化：仅检查 kvcache_bytes 即可\n        cache_valid = (kvcache_bytes == cached_bytes)\n        return cache_valid",
+      "context": "作者 linfeng-yuan 回复: \"It is not necessary to add an enum class for torchair cache state. And I find it equivalent to only check kvcache_bytes here.\""
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/torchair/torchair_worker.py\n+++ b/vllm_ascend/torchair/torchair_worker.py\n@@ -1,6 +1,7 @@\n-# 评审人 ApsarasX: \"The logic here is a bit complex. Can we refactor it—maybe\n-#   use an Enum to represent the torchair cache state, similar to how\n-#   `FusedMOEState` works?\"\n+# 作者 linfeng-yuan 回复: \"It is not necessary to add an enum class for\n+#   torchair cache state. And I find it equivalent to only check\n+#   kvcache_bytes here.\"\n+# 简化了检查逻辑，仅检查 kvcache_bytes 等价\n \n import os\n import logging\n@@ -12,15 +13,7 @@\n     \"\"\"Worker for torchair graph mode compilation.\"\"\"\n \n     def _check_cache_valid(self, kvcache_bytes, cached_bytes, ...):\n-        \"\"\"Check if torchair cache is valid.\"\"\"\n-        # 复杂的条件判断逻辑\n-        if kvcache_bytes == cached_bytes:\n-            # 跳过编译，使用缓存\n-            cache_valid = True\n-        elif kvcache_bytes != cached_bytes and cached_bytes > 0:\n-            # 缓存不匹配，需要重新编译\n-            cache_valid = False\n-        else:\n-            # 无缓存，需要编译\n-            cache_valid = False\n+        \"\"\"Check if torchair cache is valid - simplified logic.\"\"\"\n+        # 简化：仅检查 kvcache_bytes 即可\n+        cache_valid = (kvcache_bytes == cached_bytes)\n         return cache_valid\n",
+      "stats": "1 file changed, +7 lines, -14 lines",
+      "key_changes": [
+        "移除: \"\"\"Check if torchair cache is valid.\"\"\"",
+        "新增: \"\"\"Check if torchair cache is valid - simplified logic.\"\"\""
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

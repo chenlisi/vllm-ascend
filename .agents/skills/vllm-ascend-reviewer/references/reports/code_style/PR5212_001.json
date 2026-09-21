@@ -1,0 +1,60 @@
+{
+  "report_id": "PR5212_001",
+  "pr_number": 5212,
+  "pr_title": "[Main] [Patch] support balance scheduling patch",
+  "pr_status": "merged",
+  "merged_at": "",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/patch/platform/__init__.py:24",
+    "vllm_ascend/envs.py:143"
+  ],
+  "landing_sha": "65e4d58",
+  "source_quote": "only patch these 2 files if `VLLM_ASCEND_BALANCE_SCHEDULING` is set and vllm version is 0.13.0",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan 指出应仅在 `VLLM_ASCEND_BALANCE_SCHEDULING` 环境变量设置且 vllm 版本为 0.13.0 时才进行补丁，同时指出环境变量应返回 bool 类型。作者通过 commit `65e4d58` 修改，2/2 建议全部落地。",
+      "patch_snippet": "commit `65e4d58`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "65e4d58",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "环境变量应使用正确的类型（bool 而非字符串），补丁导入应在满足特定条件（环境变量设置 + 版本匹配）时才执行，避免不必要的副作用。",
+    "context": "",
+    "checkpoints": [
+      "环境变量是否使用了正确的类型（bool 而非 str）",
+      "补丁导入是否有条件守卫（环境变量 + 版本检查）",
+      "是否避免了不必要的模块级副作用"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/patch/platform/__init__.py",
+      "line": 0,
+      "code": "import importlib\n\nfrom vllm_ascend.patch.platform.patch_balance_schedule import *  # noqa: F401, F403\nfrom vllm_ascend.patch.platform.patch_core import *  # noqa: F401, F403\n\nfrom vllm_ascend.patch.platform.patch_xxx import *  # noqa: F401, F403",
+      "context": "only patch these 2 files if `VLLM_ASCEND_BALANCE_SCHEDULING` is set and vllm version is 0.13.0"
+    },
+    "pattern": {
+      "file": "vllm_ascend/patch/platform/__init__.py",
+      "line": 0,
+      "code": "import importlib\nfrom vllm_ascend import envs\n\nif envs.VLLM_ASCEND_BALANCE_SCHEDULING and vllm_version == \"0.13.0\":\n    from vllm_ascend.patch.platform.patch_balance_schedule import *  # noqa: F401, F403\n    from vllm_ascend.patch.platform.patch_core import *  # noqa: F401, F403\n\nfrom vllm_ascend.patch.platform.patch_xxx import *  # noqa: F401, F403",
+      "context": "only patch these 2 files if `VLLM_ASCEND_BALANCE_SCHEDULING` is set and vllm version is 0.13.0"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/patch/platform/__init__.py\n+++ b/vllm_ascend/patch/platform/__init__.py\n@@ -1,6 +1,8 @@\n import importlib\n+from vllm_ascend import envs\n \n-from vllm_ascend.patch.platform.patch_balance_schedule import *  # noqa: F401, F403\n-from vllm_ascend.patch.platform.patch_core import *  # noqa: F401, F403\n+if envs.VLLM_ASCEND_BALANCE_SCHEDULING and vllm_version == \"0.13.0\":\n+    from vllm_ascend.patch.platform.patch_balance_schedule import *  # noqa: F401, F403\n+    from vllm_ascend.patch.platform.patch_core import *  # noqa: F401, F403\n \n from vllm_ascend.patch.platform.patch_xxx import *  # noqa: F401, F403",
+      "stats": "1 file changed, +4 lines, -2 lines",
+      "key_changes": [
+        "在第 2-2 行新增了代码",
+        "修改了第 3-4 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

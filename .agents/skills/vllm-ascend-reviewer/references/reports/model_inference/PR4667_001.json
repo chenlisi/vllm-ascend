@@ -1,0 +1,60 @@
+{
+  "report_id": "PR4667_001",
+  "pr_number": 4667,
+  "pr_title": "[CustomOp] Register AscendApplyRotaryEmb CustomOp and remove related patch",
+  "pr_status": "merged",
+  "merged_at": "2025-12-23T02:04:38Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "blocker",
+  "affected_files": [
+    "vllm_ascend/patch/worker/patch_qwen2_5_vl.py:140",
+    "vllm_ascend/ops/rotary_embedding.py:469"
+  ],
+  "landing_sha": "7a63720",
+  "source_quote": "Meaningless comments, recommended for deletion.",
+  "correspondence": [
+    {
+      "review_quote": "Sparkheart 指出存在无意义注释建议删除。gemini-code-assist[bot] 发现 cos/sin 张量的 shape 操作存在严重 bug，torch.cat 会导致维度翻倍。作者修复了 bug 并删除了无意义注释，确认该 patch 代码最终会被完全移除。1/1 人工建议落地。",
+      "patch_snippet": "",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "7a63720",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "从其他模型复制张量操作逻辑时，必须验证输入张量的 shape 是否一致，避免 torch.cat 等操作导致维度错误。",
+    "context": "",
+    "checkpoints": [
+      "cos/sin 张量的输入 shape 是否与目标模型匹配",
+      "是否存在不必要的 torch.cat 操作",
+      "reshape 后的维度是否正确",
+      "是否删除了无意义的注释"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/rotary_embedding.py",
+      "line": 455,
+      "code": "class AscendApplyRotaryEmb(CustomOp):\n    \"\"\"Custom operator for applying rotary embedding on Ascend.\"\"\"\n\n    def __init__(self, head_dim: int) -> None:\n        super().__init__()\n        self.head_dim = head_dim\n\n    def forward_native(\n        self,\n        x: torch.Tensor,\n        cos: torch.Tensor,\n        sin: torch.Tensor,\n    ) -> torch.Tensor:\n        \"\"\"Apply rotary embedding to input tensor.\"\"\"\n        head_dim = x.shape[-1]\n\n        cos = torch.cat((cos, cos), dim=-1)\n        sin = torch.cat((sin, sin), dim=-1)\n        cos = cos.reshape(1, -1, 1, head_dim)\n        sin = sin.reshape(1, -1, 1, head_dim)\n\n        output = torch_npu.npu_rotary_mul(x, cos, sin)\n        return output",
+      "context": "Sparkheart: Meaningless comments, recommended for deletion."
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/rotary_embedding.py",
+      "line": 455,
+      "code": "class AscendApplyRotaryEmb(CustomOp):\n    \"\"\"Custom operator for applying rotary embedding on Ascend.\"\"\"\n\n    def __init__(self, head_dim: int) -> None:\n        super().__init__()\n        self.head_dim = head_dim\n\n    def forward_native(\n        self,\n        x: torch.Tensor,\n        cos: torch.Tensor,\n        sin: torch.Tensor,\n    ) -> torch.Tensor:\n        \"\"\"Apply rotary embedding to input tensor.\"\"\"\n        head_dim = x.shape[-1]\n\n        cos = cos.reshape(1, -1, 1, head_dim)\n        sin = sin.reshape(1, -1, 1, head_dim)\n\n        output = torch_npu.npu_rotary_mul(x, cos, sin)\n        return output",
+      "context": "Sparkheart: Meaningless comments, recommended for deletion."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/rotary_embedding.py\n+++ b/vllm_ascend/ops/rotary_embedding.py\n@@ -455,23 +455,21 @@\n         \"\"\"Apply rotary embedding to input tensor.\"\"\"\n         head_dim = x.shape[-1]\n \n-        cos = torch.cat((cos, cos), dim=-1)\n-        sin = torch.cat((sin, sin), dim=-1)\n         cos = cos.reshape(1, -1, 1, head_dim)\n         sin = sin.reshape(1, -1, 1, head_dim)\n ",
+      "stats": "1 file changed, +0 lines, -2 lines",
+      "key_changes": [
+        "删除了第 17-18 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

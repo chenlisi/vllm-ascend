@@ -1,0 +1,73 @@
+{
+  "report_id": "PR7354_001",
+  "pr_number": 7354,
+  "pr_title": "[CI] add scheduled stale issue management",
+  "pr_status": "merged",
+  "merged_at": "2026-03-17T08:03:45Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    ".github/workflows/schedule_stale_manage.yaml:26",
+    ".github/workflows/schedule_stale_manage.yaml:27",
+    ".github/workflows/schedule_stale_manage.yaml:25",
+    ".github/workflows/schedule_stale_manage.yaml:18",
+    ".github/workflows/schedule_stale_manage.yaml:13"
+  ],
+  "landing_sha": "d6bc6cb",
+  "source_quote": "zeshengzong 建议修改 stale 提示文案，使措辞更准确。",
+  "correspondence": [
+    {
+      "review_quote": "zeshengzong 指出 stale 提示文案需要优化（3处），Yikun 询问了关闭 issue 的显示用户并建议移除 PR 权限。作者通过 commit `d6bc6cb` 移除 repo_token、更新提示信息，并通过 commit `2b6e1a3` 移除 PR 权限，5/5 建议全部落地。",
+      "patch_snippet": "commit `d6bc6cb`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "d6bc6cb",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "GitHub Actions workflow 配置应遵循最小权限原则，只保留当前需要的权限；stale issue 等自动化提示文案应清晰准确，告知用户具体操作方式。",
+    "context": "",
+    "checkpoints": [
+      "workflow 的 permissions 是否只包含必要的权限",
+      "是否在暂不支持某功能时移除了相关权限",
+      "stale 提示文案是否清晰说明了自动关闭的时间和处理方式",
+      "是否移除了不必要的 repo_token"
+    ],
+    "antipattern": {
+      "file": ".github/workflows/schedule_stale_manage.yaml",
+      "line": 0,
+      "code": "name: \"Close stale resolved/wait-feedback issues\"\non:\n  schedule:\n    - cron: '0 6,14,22 * * *'\n  issue_comment:\n    types: [created]\n\njobs:\n  remove-wait-feedback-on-comment:\n    if: ${{ github.event_name == 'issue_comment' && contains(github.event.issue.labels.*.name, 'wait-feedback') }}\n    runs-on: linux-amd64-cpu-2-hk\n    permissions:\n      issues: write\n      pull-requests: write\n    steps:\n      - name: Install system dependencies\n        run: |\n      - run: gh issue edit \"${{ github.event.issue.number }}\" --remove-label \"wait-feedback\" --repo \"${{ github.repository }}\"\n        env:\n          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n  stale:\n    if: ${{ github.event_name == 'schedule' }}\n    runs-on: linux-amd64-cpu-2-hk\n    steps:\n      - uses: actions/stale@v10\n        with:\n          any-of-labels: 'resolved'\n          operations-per-run: 1000\n          days-before-stale: 7\n          stale-issue-label: 'stale'\n          stale-issue-message: |\n            This issue has been marked as `resolved` but has not received any feedback for some time, so it is now labeled as `stale`.\n            If you feel this was a mistake, please leave a comment to remove the `stale` label.\n            `Stale` issues will automatically be closed after some days of inactivity.\n          repo-token: ${{ secrets.GITHUB_TOKEN }}\n          days-before-close: 14",
+      "context": "zeshengzong 建议修改 stale 提示文案，使措辞更准确。"
+    },
+    "pattern": {
+      "file": ".github/workflows/schedule_stale_manage.yaml",
+      "line": 0,
+      "code": "name: \"Close stale resolved/wait-feedback issues\"\non:\n  schedule:\n    - cron: '0 6,14,22 * * *'\n  issue_comment:\n    types: [created]\n\njobs:\n  remove-wait-feedback-on-comment:\n    if: ${{ github.event_name == 'issue_comment' && contains(github.event.issue.labels.*.name, 'wait-feedback') }}\n    runs-on: linux-amd64-cpu-2-hk\n    permissions:\n      issues: write\n    steps:\n      - name: Install system dependencies\n        run: |\n      - run: gh issue edit \"${{ github.event.issue.number }}\" --remove-label \"wait-feedback\" --repo \"${{ github.repository }}\"\n        env:\n          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n  stale:\n    if: ${{ github.event_name == 'schedule' }}\n    runs-on: linux-amd64-cpu-2-hk\n    permissions:\n      actions: write\n      issues: write\n    steps:\n      - uses: actions/stale@v10\n        with:\n          any-of-labels: 'resolved'\n          operations-per-run: 1000\n          days-before-stale: 7\n          stale-issue-label: 'stale'\n          stale-issue-message: |\n            This issue has been marked as `resolved` but has not received any feedback for some time, so it is now labeled as `stale`. \n            If you feel this was a mistake, please leave a comment to have the `stale` label removed. \n            `Stale` issues will automatically be closed after 14 days of inactivity.\n          days-before-close: 14",
+      "context": "zeshengzong 建议修改 stale 提示文案，使措辞更准确。"
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/schedule_stale_manage.yaml\n+++ b/.github/workflows/schedule_stale_manage.yaml\n@@ -1,36 +1,37 @@\n     runs-on: linux-amd64-cpu-2-hk\n     permissions:\n       issues: write\n-      pull-requests: write\n     steps:\n       - name: Install system dependencies\n         run: |\n@@ -1,36 +1,37 @@\n   stale:\n     if: ${{ github.event_name == 'schedule' }}\n     runs-on: linux-amd64-cpu-2-hk\n+    permissions:\n+      actions: write\n+      issues: write\n     steps:\n       - uses: actions/stale@v10\n         with:\n@@ -1,36 +1,37 @@\n           days-before-stale: 7\n           stale-issue-label: 'stale'\n           stale-issue-message: |\n-            This issue has been marked as `resolved` but has not received any feedback for some time, so it is now labeled as `stale`.\n-            If you feel this was a mistake, please leave a comment to remove the `stale` label.\n-            `Stale` issues will automatically be closed after some days of inactivity.\n-          repo-token: ${{ secrets.GITHUB_TOKEN }}\n+            This issue has been marked as `resolved` but has not received any feedback for some time, so it is now labeled as `stale`. \n+            If you feel this was a mistake, please leave a comment to have the `stale` label removed. \n+            `Stale` issues will automatically be closed after 14 days of inactivity.\n           days-before-close: 14",
+      "stats": "1 file changed, +6 lines, -5 lines",
+      "key_changes": [
+        "- pull-requests: write",
+        "+ permissions:",
+        "+ actions: write",
+        "+ issues: write",
+        "- This issue has been marked as `resolved` but has not received any feedback for some time, so it is now labeled as `stale`.",
+        "- If you feel this was a mistake, please leave a comment to remove the `stale` label.",
+        "- `Stale` issues will automatically be closed after some days of inactivity.",
+        "- repo-token: ${{ secrets.GITHUB_TOKEN }}",
+        "+ This issue has been marked as `resolved` but has not received any feedback for some time, so it is now labeled as `stale`.",
+        "+ If you feel this was a mistake, please leave a comment to have the `stale` label removed.",
+        "+ `Stale` issues will automatically be closed after 14 days of inactivity."
+      ]
+    },
+    "language": "yaml",
+    "_status": "pending_llm_extract"
+  }
+}

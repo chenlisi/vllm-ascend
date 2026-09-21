@@ -1,0 +1,68 @@
+{
+  "report_id": "PR10602_001",
+  "pr_number": 10602,
+  "pr_title": "[BugFix] Add compatibility guard for unsupported CLI params on Ascend NPU",
+  "pr_status": "merged",
+  "merged_at": "2026-06-23T10:00:41Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/platform.py:1227",
+    "vllm_ascend/platform.py:1205"
+  ],
+  "landing_sha": "f2ce325",
+  "source_quote": "这里是不是写错了，应该是False吧\nwhy `is not None` here?",
+  "correspondence": [
+    {
+      "review_quote": "Tflowers-0129 发现 `platform.py:1227` 处的重置值写错了，应该是 `False` 而非 `None`。realliujiaxu 质疑 `platform.py:1205` 处使用 `is not None` 的条件判断逻辑——当属性值为 `False` 时 `False is not None` 为 `True`，会导致已经为安全默认值的参数也触发 warning。作者已修正条件判断和重置值。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f2ce325",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在对不支持的 CLI 参数进行静默重置时，条件判断应使用 truthy 检查（直接检查参数值是否为 `True`），而非 `is not None`。因为 `False is not None` 为 `True`，会导致已经为安全默认值的参数也触发不必要的 warning。",
+    "context": "",
+    "checkpoints": [
+      "检查参数重置条件是否使用了 `is not None`",
+      "确认条件判断是否只在参数为 `True`（不安全值）时触发",
+      "验证重置后的值是否正确（如 `False`）"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/platform.py",
+      "line": 1200,
+      "code": "    @classmethod\n    def _fix_incompatible_config(\n        cls,\n        vllm_config: \"VllmConfig\",\n    ) -> None:\n        \"\"\"Silently reset unsupported CLI params on Ascend NPU.\"\"\"\n        # ... 前序参数重置逻辑\n\n        # calculate_kv_scales 重置\n        if getattr(vllm_config.cache_config, \"calculate_kv_scales\", False):\n            logger.warning(\n                \"Parameter is not supported on Ascend NPU. \"\n                \"parameter=calculate_kv_scales, action: resetting to False.\"\n            )\n            vllm_config.cache_config.calculate_kv_scales = False\n\n        # enable_eplb / enable_elastic_ep 重置\n        if getattr(vllm_config.parallel_config, \"enable_eplb\", False):\n            logger.warning(\"... resetting enable_eplb to False ...\")\n            vllm_config.parallel_config.enable_eplb = False\n\n        # use_inductor_graph_partition 重置 (错误: 条件使用了 is not None)\n        if getattr(vllm_config.compilation_config,\n                   \"use_inductor_graph_partition\",\n                   False) is not None:\n            logger.warning(\n                \"Parameter is not supported on Ascend NPU \"\n                \"(use_inductor is not None). \"\n                \"parameter=use_inductor_graph_partition, \"\n                \"action: resetting to None.\"\n            )\n            vllm_config.compilation_config.use_inductor_graph_partition = None",
+      "context": "这里是不是写错了，应该是False吧"
+    },
+    "pattern": {
+      "file": "vllm_ascend/platform.py",
+      "line": 1200,
+      "code": "    @classmethod\n    def _fix_incompatible_config(\n        cls,\n        vllm_config: \"VllmConfig\",\n    ) -> None:\n        \"\"\"Silently reset unsupported CLI params on Ascend NPU.\"\"\"\n        # ... 前序参数重置逻辑\n\n        # calculate_kv_scales 重置\n        if getattr(vllm_config.cache_config, \"calculate_kv_scales\", False):\n            logger.warning(\n                \"Parameter is not supported on Ascend NPU. \"\n                \"parameter=calculate_kv_scales, action: resetting to False.\"\n            )\n            vllm_config.cache_config.calculate_kv_scales = False\n\n        # enable_eplb / enable_elastic_ep 重置\n        if getattr(vllm_config.parallel_config, \"enable_eplb\", False):\n            logger.warning(\"... resetting enable_eplb to False ...\")\n            vllm_config.parallel_config.enable_eplb = False\n\n        # use_inductor_graph_partition 重置 (修正: 使用 truthy 检查, 重置为 False)\n        if getattr(vllm_config.compilation_config,\n                   \"use_inductor_graph_partition\",\n                   False):\n            logger.warning(\n                \"Parameter is not supported on Ascend NPU \"\n                \"(use_inductor is False). \"\n                \"parameter=use_inductor_graph_partition, \"\n                \"action: resetting to False.\"\n            )\n            vllm_config.compilation_config.use_inductor_graph_partition = False",
+      "context": "这里是不是写错了，应该是False吧"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/platform.py\n+++ b/vllm_ascend/platform.py\n@@ -19,14 +19,14 @@\n             logger.warning(\"... resetting enable_eplb to False ...\")\n             vllm_config.parallel_config.enable_eplb = False\n \n-        # use_inductor_graph_partition 重置 (错误: 条件使用了 is not None)\n+        # use_inductor_graph_partition 重置 (修正: 使用 truthy 检查, 重置为 False)\n         if getattr(vllm_config.compilation_config,\n                    \"use_inductor_graph_partition\",\n-                   False) is not None:\n+                   False):\n             logger.warning(\n                 \"Parameter is not supported on Ascend NPU \"\n-                \"(use_inductor is not None). \"\n+                \"(use_inductor is False). \"\n                 \"parameter=use_inductor_graph_partition, \"\n-                \"action: resetting to None.\"\n+                \"action: resetting to False.\"\n             )\n-            vllm_config.compilation_config.use_inductor_graph_partition = None\n+            vllm_config.compilation_config.use_inductor_graph_partition = False",
+      "stats": "1 file changed, +5 lines, -5 lines",
+      "key_changes": [
+        "移除: # use_inductor_graph_partition 重置 (错误: 条件使用了 is not None)",
+        "新增: # use_inductor_graph_partition 重置 (修正: 使用 truthy 检查, 重置为 False)",
+        "移除: False) is not None:",
+        "新增: False):",
+        "移除: \"(use_inductor is not None). \"",
+        "新增: \"(use_inductor is False). \"",
+        "移除: \"action: resetting to None.\"",
+        "新增: \"action: resetting to False.\"",
+        "移除: vllm_config.compilation_config.use_inductor_graph_partition = None",
+        "新增: vllm_config.compilation_config.use_inductor_graph_partition = False"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

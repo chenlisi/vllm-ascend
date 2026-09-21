@@ -1,0 +1,67 @@
+{
+  "report_id": "PR10864_001",
+  "pr_number": 10864,
+  "pr_title": "[Refactor] Share catlass dependency setup for ACLNN builds",
+  "pr_status": "merged",
+  "merged_at": "2026-06-24T12:24:52Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "csrc/build_aclnn.sh:22"
+  ],
+  "landing_sha": "697fae1",
+  "source_quote": "use `log`",
+  "correspondence": [
+    {
+      "review_quote": "realliujiaxu 建议在构建脚本中使用 `log` 替代 `echo` 进行日志输出。作者通过 commit `697fae1`（\"use log\"）将 echo 替换为 log，统一了构建脚本的日志输出方式。",
+      "patch_snippet": "commit `697fae1`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "697fae1",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在构建脚本中，应使用项目定义的 `log` 函数进行日志输出，而非直接使用 `echo`，以保持日志格式一致性和可追溯性。",
+    "context": "",
+    "checkpoints": [
+      "检查构建脚本中是否存在直接使用 `echo` 输出日志的情况",
+      "确认是否使用了项目统一的 `log` 函数",
+      "验证日志输出格式是否一致"
+    ],
+    "antipattern": {
+      "file": "csrc/build_aclnn.sh",
+      "line": 22,
+      "code": "#!/bin/bash\n# csrc/build_aclnn.sh - ACLNN 构建脚本\n\nROOT_DIR=$(cd \"$(dirname \"$0\")/..\" && pwd)\n\n# 每个 SOC 版本分支中重复的 catlass 依赖设置逻辑\nbuild_for_soc() {\n    local soc_version=$1\n\n    case \"${soc_version}\" in\n        \"910A\"|\"910B\")\n            # catlass 依赖设置 - 重复逻辑\n            catlass_commit=$(git config -f \"${ROOT_DIR}/.gitmodules\" \\\n                --get submodule.csrc/third_party/catlass.commit)\n            catlass_path=\"${ROOT_DIR}/csrc/third_party/catlass\"\n            git submodule init \"${catlass_path}\"\n            git submodule update \"${catlass_path}\"\n            cd \"${catlass_path}\"\n            git checkout \"${catlass_commit}\"\n            absolute_catlass_path=$(cd \"${catlass_path}\" && pwd)\n            export CPATH=\"${absolute_catlass_path}:${CPATH}\"\n            echo \"Setting up catlass dependency...\"\n            ;;\n        \"910C\")\n            # 同样的 catlass 依赖设置 - 重复逻辑\n            catlass_commit=$(git config -f \"${ROOT_DIR}/.gitmodules\" \\\n                --get submodule.csrc/third_party/catlass.commit)\n            catlass_path=\"${ROOT_DIR}/csrc/third_party/catlass\"\n            git submodule init \"${catlass_path}\"\n            git submodule update \"${catlass_path}\"\n            cd \"${catlass_path}\"\n            git checkout \"${catlass_commit}\"\n            absolute_catlass_path=$(cd \"${catlass_path}\" && pwd)\n            export CPATH=\"${absolute_catlass_path}:${CPATH}\"\n            echo \"Setting up catlass dependency...\"\n            ;;\n    esac\n}",
+      "context": "1. 将各 SOC 分支中重复的 catlass 依赖设置逻辑抽取为共享函数 `setup_catlass_dependency`，消除代码重复。"
+    },
+    "pattern": {
+      "file": "csrc/build_aclnn.sh",
+      "line": 22,
+      "code": "#!/bin/bash\n# csrc/build_aclnn.sh - ACLNN 构建脚本\n\nROOT_DIR=$(cd \"$(dirname \"$0\")/..\" && pwd)\n\n# 共享函数：集中管理 catlass 依赖设置逻辑\nsetup_catlass_dependency() {\n    local catlass_commit\n    catlass_commit=$(git config -f \"${ROOT_DIR}/.gitmodules\" \\\n        --get submodule.csrc/third_party/catlass.commit)\n    local catlass_path=\"${ROOT_DIR}/csrc/third_party/catlass\"\n\n    git submodule init \"${catlass_path}\"\n    git submodule update \"${catlass_path}\"\n    cd \"${catlass_path}\"\n    git checkout \"${catlass_commit}\"\n\n    absolute_catlass_path=$(cd \"${catlass_path}\" && pwd) || {\n        echo \"Error: Failed to resolve absolute path for catlass\" >&2\n        exit 1\n    }\n    export CPATH=\"${absolute_catlass_path}${CPATH:+:${CPATH}}\"\n    log \"Setting up catlass dependency...\"\n}\n\nbuild_for_soc() {\n    local soc_version=$1\n\n    case \"${soc_version}\" in\n        \"910A\"|\"910B\")\n            setup_catlass_dependency\n            ;;\n        \"910C\")\n            setup_catlass_dependency\n            ;;\n    esac\n}",
+      "context": "1. 将各 SOC 分支中重复的 catlass 依赖设置逻辑抽取为共享函数 `setup_catlass_dependency`，消除代码重复。"
+    },
+    "diff": {
+      "unified": "--- a/csrc/build_aclnn.sh\n+++ b/csrc/build_aclnn.sh\n@@ -3,36 +3,35 @@\n \n ROOT_DIR=$(cd \"$(dirname \"$0\")/..\" && pwd)\n \n-# 每个 SOC 版本分支中重复的 catlass 依赖设置逻辑\n+# 共享函数：集中管理 catlass 依赖设置逻辑\n+setup_catlass_dependency() {\n+    local catlass_commit\n+    catlass_commit=$(git config -f \"${ROOT_DIR}/.gitmodules\" \\\n+        --get submodule.csrc/third_party/catlass.commit)\n+    local catlass_path=\"${ROOT_DIR}/csrc/third_party/catlass\"\n+\n+    git submodule init \"${catlass_path}\"\n+    git submodule update \"${catlass_path}\"\n+    cd \"${catlass_path}\"\n+    git checkout \"${catlass_commit}\"\n+\n+    absolute_catlass_path=$(cd \"${catlass_path}\" && pwd) || {\n+        echo \"Error: Failed to resolve absolute path for catlass\" >&2\n+        exit 1\n+    }\n+    export CPATH=\"${absolute_catlass_path}${CPATH:+:${CPATH}}\"\n+    log \"Setting up catlass dependency...\"\n+}\n+\n build_for_soc() {\n     local soc_version=$1\n \n     case \"${soc_version}\" in\n         \"910A\"|\"910B\")\n-            # catlass 依赖设置 - 重复逻辑\n-            catlass_commit=$(git config -f \"${ROOT_DIR}/.gitmodules\" \\\n-                --get submodule.csrc/third_party/catlass.commit)\n-            catlass_path=\"${ROOT_DIR}/csrc/third_party/catlass\"\n-            git submodule init \"${catlass_path}\"\n-            git submodule update \"${catlass_path}\"\n-            cd \"${catlass_path}\"\n-            git checkout \"${catlass_commit}\"\n-            absolute_catlass_path=$(cd \"${catlass_path}\" && pwd)\n-            export CPATH=\"${absolute_catlass_path}:${CPATH}\"\n-            echo \"Setting up catlass dependency...\"\n+            setup_catlass_dependency\n             ;;\n         \"910C\")\n-            # 同样的 catlass 依赖设置 - 重复逻辑\n-            catlass_commit=$(git config -f \"${ROOT_DIR}/.gitmodules\" \\\n-                --get submodule.csrc/third_party/catlass.commit)\n-            catlass_path=\"${ROOT_DIR}/csrc/third_party/catlass\"\n-            git submodule init \"${catlass_path}\"\n-            git submodule update \"${catlass_path}\"\n-            cd \"${catlass_path}\"\n-            git checkout \"${catlass_commit}\"\n-            absolute_catlass_path=$(cd \"${catlass_path}\" && pwd)\n-            export CPATH=\"${absolute_catlass_path}:${CPATH}\"\n-            echo \"Setting up catlass dependency...\"\n+            setup_catlass_dependency\n             ;;\n     esac\n }",
+      "stats": "1 file changed, +22 lines, -23 lines",
+      "key_changes": [
+        "移除: # 每个 SOC 版本分支中重复的 catlass 依赖设置逻辑",
+        "新增: # 共享函数：集中管理 catlass 依赖设置逻辑",
+        "新增: setup_catlass_dependency() {",
+        "新增: local catlass_commit",
+        "新增: catlass_commit=$(git config -f \"${ROOT_DIR}/.gitmodules\" \\",
+        "新增: --get submodule.csrc/third_party/catlass.commit)",
+        "新增: local catlass_path=\"${ROOT_DIR}/csrc/third_party/catlass\"",
+        "新增: git submodule init \"${catlass_path}\"",
+        "新增: git submodule update \"${catlass_path}\"",
+        "新增: cd \"${catlass_path}\""
+      ]
+    },
+    "language": "bash",
+    "_status": "extracted"
+  }
+}

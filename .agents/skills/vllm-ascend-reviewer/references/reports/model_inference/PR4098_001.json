@@ -1,0 +1,58 @@
+{
+  "report_id": "PR4098_001",
+  "pr_number": 4098,
+  "pr_title": "[feature] support pcp + mtp (in pd co-locate scenario)",
+  "pr_status": "merged",
+  "merged_at": "2025-11-12T09:22:21Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "blocker",
+  "affected_files": [
+    "vllm_ascend/spec_decode/mtp_proposer.py:543",
+    "vllm_ascend/attention/mla_v1.py:2009"
+  ],
+  "landing_sha": "7c49c75",
+  "source_quote": "![critical] The iteration over `req_scheduled_tokens`, which is a dictionary, does not guarantee the order of requests. This can lead to incorrect separation of decode and prefill requests because the logic relies on an ordered sequence where decode requests appear before prefill requests. You should iterate over `self.runner.input_batch.req_ids` instead, as it is guaranteed to be correctly ordered after batch reordering.\nput this operation to building stage of attention metadata instead of performing it in each forward.",
+  "correspondence": [
+    {
+      "review_quote": "gemini-code-assist[bot] 指出 `mtp_proposer.py:543` 遍历 dict 不保证顺序，可能导致 decode/prefill 请求分离错误。作者回复 \"modified as suggested\" 并通过 commit `7c49c75` 改为遍历 `self.runner.input_batch.req_ids`。whx-sjtu 指出 `mla_v1.py:2009` 的操作应从每次 forward 移至 attention metadata 构建阶段以减少推理延迟。2/2 建议全部落地。",
+      "patch_snippet": "commit `7c49c75`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "7c49c75",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "当逻辑依赖元素的特定顺序（如 decode 请求在 prefill 请求之前）时，不应遍历 dict 等无序集合，而应遍历保证顺序的集合（如 `input_batch.req_ids`）。",
+    "context": "",
+    "checkpoints": [
+      "遍历 dict 时是否依赖了元素顺序",
+      "是否应改用 `input_batch.req_ids` 等保证顺序的集合"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/spec_decode/mtp_proposer.py",
+      "line": 530,
+      "code": "class MTPProposer:\n    def propose(self, ...):\n        num_decode_reqs = self._get_num_decode_reqs()\n        req_scheduled_tokens_p = {}\n        req_scheduled_tokens_d = {}\n\n        for i, req_id in enumerate(req_scheduled_tokens):\n            if i < num_decode_reqs:\n                req_scheduled_tokens_d[req_id] = req_scheduled_tokens[req_id]\n            else:\n                req_scheduled_tokens_p[req_id] = req_scheduled_tokens[req_id]",
+      "context": "![critical] The iteration over `req_scheduled_tokens`, which is a dictionary, does not guarantee the order of requests. This can lead to incorrect separation of decode and prefill requests because the logic relies on an ordered sequence where decode requests appear before prefill requests. You should iterate over `self.runner.input_batch.req_ids` instead, as it is guaranteed to be correctly ordered after batch reordering."
+    },
+    "pattern": {
+      "file": "vllm_ascend/spec_decode/mtp_proposer.py",
+      "line": 530,
+      "code": "class MTPProposer:\n    def propose(self, ...):\n        num_decode_reqs = self._get_num_decode_reqs()\n        req_scheduled_tokens_p = {}\n        req_scheduled_tokens_d = {}\n\n        for i, req_id in enumerate(self.runner.input_batch.req_ids):\n            if i < num_decode_reqs:\n                req_scheduled_tokens_d[req_id] = req_scheduled_tokens[req_id]\n            else:\n                req_scheduled_tokens_p[req_id] = req_scheduled_tokens[req_id]",
+      "context": "![critical] The iteration over `req_scheduled_tokens`, which is a dictionary, does not guarantee the order of requests. This can lead to incorrect separation of decode and prefill requests because the logic relies on an ordered sequence where decode requests appear before prefill requests. You should iterate over `self.runner.input_batch.req_ids` instead, as it is guaranteed to be correctly ordered after batch reordering."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/spec_decode/mtp_proposer.py\n+++ b/vllm_ascend/spec_decode/mtp_proposer.py\n@@ -530,11 +530,11 @@\n         req_scheduled_tokens_p = {}\n         req_scheduled_tokens_d = {}\n \n-        for i, req_id in enumerate(req_scheduled_tokens):\n+        for i, req_id in enumerate(self.runner.input_batch.req_ids):\n             if i < num_decode_reqs:\n                 req_scheduled_tokens_d[req_id] = req_scheduled_tokens[req_id]\n             else:",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "修改了第 7-7 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

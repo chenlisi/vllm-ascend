@@ -1,0 +1,62 @@
+{
+  "report_id": "PR7926_001",
+  "pr_number": 7926,
+  "pr_title": "[Feature] [310p] Add recurrent_gated_delta_rule_310 AscendC Custom Op",
+  "pr_status": "merged",
+  "merged_at": "2026-04-08T08:38:55Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "csrc/recurrent_gated_delta_rule_v310/op_host/aclnn_recurrent_gated_delta_rule_v310.h:36"
+  ],
+  "landing_sha": "a3aa1a8",
+  "source_quote": "plz avoid to use Chinese comment",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao: csrc/recurrent_gated_delta_rule_v310/op_host/aclnn_recurrent_gated_delta_rule_v310.h:36",
+      "patch_snippet": "评后sha a3aa1a8 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "a3aa1a8",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "所有代码文件中的注释必须使用英文编写，禁止使用中文或其他非英文语言编写注释，以确保代码的国际可读性和团队协作效率。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "csrc/recurrent_gated_delta_rule_v310/op_host/aclnn_recurrent_gated_delta_rule_v310.h",
+      "line": 36,
+      "code": "// 文件: csrc/recurrent_gated_delta_rule_v310/op_host/aclnn_recurrent_gated_delta_rule_v310.h\n// 行号: 28-45 (根据评审意见推断)\n// 评审人 MengqingCao: \"plz avoid to use Chinese comment\"\n// commit a3aa1a8 \"submit\" (+21/-22) 移除了中文注释\n\n#ifndef OP_API_ACLNN_RECURRENT_GATED_DELTA_RULE_V310_H\n#define OP_API_ACLNN_RECURRENT_GATED_DELTA_RULE_V310_H\n\n#include \"aclnn/aclnn_base.h\"\n\n// 初始化 RecurrentGatedDeltaRule 算子参数\n// 设置 head_num, head_size, state_size 等配置\nstruct RecurrentGatedDeltaRuleV310Params {\n    void* query;\n    void* key;\n    void* value;\n    void* beta;\n    void* stateRef;\n    int* actualSeqLengths;\n    int* ssmStateIndices;\n    void* g;\n    void* gk;\n    int* numAcceptedTokens;\n    float scale;\n    void* out;\n};\n\n// 声明 ACLNN 接口函数\naclnnStatus aclnnRecurrentGatedDeltaRuleV310(\n    aclrtStream stream,\n    const RecurrentGatedDeltaRuleV310Params& params);\n\n#endif // OP_API_ACLNN_RECURRENT_GATED_DELTA_RULE_V310_H",
+      "context": "plz avoid to use Chinese comment"
+    },
+    "pattern": {
+      "file": "csrc/recurrent_gated_delta_rule_v310/op_host/aclnn_recurrent_gated_delta_rule_v310.h",
+      "line": 36,
+      "code": "// 文件: csrc/recurrent_gated_delta_rule_v310/op_host/aclnn_recurrent_gated_delta_rule_v310.h\n// 行号: 28-45 (根据评审意见推断)\n// 中文注释已替换为英文注释\n\n#ifndef OP_API_ACLNN_RECURRENT_GATED_DELTA_RULE_V310_H\n#define OP_API_ACLNN_RECURRENT_GATED_DELTA_RULE_V310_H\n\n#include \"aclnn/aclnn_base.h\"\n\n// Initialize RecurrentGatedDeltaRule operator parameters\n// Configure head_num, head_size, state_size and other settings\nstruct RecurrentGatedDeltaRuleV310Params {\n    void* query;\n    void* key;\n    void* value;\n    void* beta;\n    void* stateRef;\n    int* actualSeqLengths;\n    int* ssmStateIndices;\n    void* g;\n    void* gk;\n    int* numAcceptedTokens;\n    float scale;\n    void* out;\n};\n\n// Declare ACLNN interface function\naclnnStatus aclnnRecurrentGatedDeltaRuleV310(\n    aclrtStream stream,\n    const RecurrentGatedDeltaRuleV310Params& params);\n\n#endif // OP_API_ACLNN_RECURRENT_GATED_DELTA_RULE_V310_H",
+      "context": "plz avoid to use Chinese comment"
+    },
+    "diff": {
+      "unified": "--- a/csrc/recurrent_gated_delta_rule_v310/op_host/aclnn_recurrent_gated_delta_rule_v310.h\n+++ b/csrc/recurrent_gated_delta_rule_v310/op_host/aclnn_recurrent_gated_delta_rule_v310.h\n@@ -1,15 +1,14 @@\n // 文件: csrc/recurrent_gated_delta_rule_v310/op_host/aclnn_recurrent_gated_delta_rule_v310.h\n // 行号: 28-45 (根据评审意见推断)\n-// 评审人 MengqingCao: \"plz avoid to use Chinese comment\"\n-// commit a3aa1a8 \"submit\" (+21/-22) 移除了中文注释\n+// 中文注释已替换为英文注释\n \n #ifndef OP_API_ACLNN_RECURRENT_GATED_DELTA_RULE_V310_H\n #define OP_API_ACLNN_RECURRENT_GATED_DELTA_RULE_V310_H\n \n #include \"aclnn/aclnn_base.h\"\n \n-// 初始化 RecurrentGatedDeltaRule 算子参数\n-// 设置 head_num, head_size, state_size 等配置\n+// Initialize RecurrentGatedDeltaRule operator parameters\n+// Configure head_num, head_size, state_size and other settings\n struct RecurrentGatedDeltaRuleV310Params {\n     void* query;\n     void* key;\n@@ -25,7 +24,7 @@\n     void* out;\n };\n \n-// 声明 ACLNN 接口函数\n+// Declare ACLNN interface function\n aclnnStatus aclnnRecurrentGatedDeltaRuleV310(\n     aclrtStream stream,\n     const RecurrentGatedDeltaRuleV310Params& params);\n",
+      "stats": "1 file changed, +4 lines, -5 lines",
+      "key_changes": [
+        "-// 评审人 MengqingCao: \"plz avoid to use Chinese comment\"",
+        "-// commit a3aa1a8 \"submit\" (+21/-22) 移除了中文注释",
+        "+// 中文注释已替换为英文注释",
+        "-// 初始化 RecurrentGatedDeltaRule 算子参数",
+        "-// 设置 head_num, head_size, state_size 等配置",
+        "+// Initialize RecurrentGatedDeltaRule operator parameters",
+        "+// Configure head_num, head_size, state_size and other settings",
+        "-// 声明 ACLNN 接口函数",
+        "+// Declare ACLNN interface function"
+      ]
+    },
+    "language": "c",
+    "_status": "pending_llm_extract"
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "report_id": "PR12885_003",
+  "pr_number": 12885,
+  "pr_title": "[BugFix][NetLoader] Fix processed-layout P2P for INT8_CACHE=no",
+  "pr_status": "merged",
+  "dimension": [
+    "design"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/model_loader/netloader/netloader.py:48"
+  ],
+  "landing_sha": "f011ca4",
+  "source_quote": "AscendFusedMoE no longer exists on main — it was refactored into AscendMoERunner. The try/except ImportError silently sets it to None, making the entire `isinstance(module, AscendFusedMoE)` branch dead code. The AscendMoERunner fallback path also won't match: FusedMoE is now a factory function returning the runner instance directly, so the module IS the runner, not held under a `.runner` attribute; `getattr(module, \"runner\", None)` returns None for every module. Suggested simplification: `if isinstance(module, AscendMoERunner): _unwrap_quant_method(module._quant_method)`.",
+  "correspondence": [
+    {
+      "review_quote": "xuchi-0808: vllm_ascend/model_loader/netloader/netloader.py:48",
+      "patch_snippet": "评后sha f011ca4 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f011ca4",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "当上游将某类重构/重命名（如 `AscendFusedMoE` → `AscendMoERunner`，`FusedMoE` 由类变为工厂函数返回 runner 实例）后，下游 patch 中依赖旧类名/旧属性路径（如 `module.runner`）的 `isinstance` 分支会变为死代码，须同步更新为直接匹配新类并访问正确属性。",
+    "context": "",
+    "checkpoints": [
+      "检查 patch 中 `isinstance(module, OldClass)` 在上游重命名后是否仍存在（`try/except ImportError` 置 None 即为死代码信号）",
+      "检查 `getattr(module, \"runner\", None)` 等属性路径在上游\"工厂函数返回实例\"改造后是否失效",
+      "重构后直接 `isinstance(module, NewRunner)` 并访问实例标准属性（如 `_quant_method`）"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/model_loader/netloader/netloader.py",
+      "line": 44,
+      "code": "from contextlib import contextmanager\n\n@contextmanager\ndef pre_transfer_weight_processing(model: nn.Module):\n    \"\"\"Unwrap FusedMoE shared-expert validation during pre-transfer process_weights.\"\"\"\n    try:\n        from vllm_ascend.ops.fused_moe.fused_moe import AscendFusedMoE  # 已不存在，ImportError\n    except ImportError:\n        AscendFusedMoE = None   # 死代码：上游已将 AscendFusedMoE 重构为 AscendMoERunner\n    try:\n        from vllm_ascend.ops.fused_moe.fused_moe import AscendMoERunner\n    except ImportError:\n        AscendMoERunner = None\n\n    # ... 省略部分上下文管理逻辑 ...\n    try:\n        yield\n    finally:\n        # restore wrapped process_weights_after_loading\n        for module in model.modules():\n            if AscendFusedMoE is not None and isinstance(module, AscendFusedMoE):   # 永不命中\n                quant_method = getattr(module, \"quant_method\", None) or getattr(\n                    module, \"_quant_method\", None)\n                _unwrap_quant_method(quant_method)\n            runner = getattr(module, \"runner\", None)   # runner 属性不存在，FusedMoE 已变为工厂函数\n            if AscendMoERunner is not None and isinstance(runner, AscendMoERunner):\n                _unwrap_quant_method(getattr(runner, \"_quant_method\", None))",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/model_loader/netloader/netloader.py",
+      "line": 44,
+      "code": "from contextlib import contextmanager\n\n@contextmanager\ndef pre_transfer_weight_processing(model: nn.Module):\n    \"\"\"Unwrap MoE shared-expert validation during pre-transfer process_weights.\"\"\"\n    try:\n        from vllm_ascend.ops.fused_moe.fused_moe import AscendMoERunner\n    except ImportError:\n        AscendMoERunner = None\n\n    # ... 省略部分上下文管理逻辑 ...\n    try:\n        yield\n    finally:\n        # 模块即 runner（FusedMoE 是工厂函数直接返回 runner 实例），\n        # 直接 isinstance 匹配 AscendMoERunner 并访问 _quant_method\n        for module in model.modules():\n            if AscendMoERunner is not None and isinstance(module, AscendMoERunner):\n                _unwrap_quant_method(module._quant_method)",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/model_loader/netloader/netloader.py\n+++ b/vllm_ascend/model_loader/netloader/netloader.py\n@@ -2,11 +2,7 @@\n \n @contextmanager\n def pre_transfer_weight_processing(model: nn.Module):\n-    \"\"\"Unwrap FusedMoE shared-expert validation during pre-transfer process_weights.\"\"\"\n-    try:\n-        from vllm_ascend.ops.fused_moe.fused_moe import AscendFusedMoE  # 已不存在，ImportError\n-    except ImportError:\n-        AscendFusedMoE = None   # 死代码：上游已将 AscendFusedMoE 重构为 AscendMoERunner\n+    \"\"\"Unwrap MoE shared-expert validation during pre-transfer process_weights.\"\"\"\n     try:\n         from vllm_ascend.ops.fused_moe.fused_moe import AscendMoERunner\n     except ImportError:\n@@ -16,12 +12,8 @@\n     try:\n         yield\n     finally:\n-        # restore wrapped process_weights_after_loading\n+        # 模块即 runner（FusedMoE 是工厂函数直接返回 runner 实例），\n+        # 直接 isinstance 匹配 AscendMoERunner 并访问 _quant_method\n         for module in model.modules():\n-            if AscendFusedMoE is not None and isinstance(module, AscendFusedMoE):   # 永不命中\n-                quant_method = getattr(module, \"quant_method\", None) or getattr(\n-                    module, \"_quant_method\", None)\n-                _unwrap_quant_method(quant_method)\n-            runner = getattr(module, \"runner\", None)   # runner 属性不存在，FusedMoE 已变为工厂函数\n-            if AscendMoERunner is not None and isinstance(runner, AscendMoERunner):\n-                _unwrap_quant_method(getattr(runner, \"_quant_method\", None))\n+            if AscendMoERunner is not None and isinstance(module, AscendMoERunner):\n+                _unwrap_quant_method(module._quant_method)",
+      "stats": "1 file changed, +5 lines, -13 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "report_id": "PR13819_001",
+  "pr_number": 13819,
+  "pr_title": "[Feature] Support dynamic speculative decoding with DFlash and Unified dynamic selection logic",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/spec_decode/llm_base_proposer.py:1188",
+    "vllm_ascend/spec_decode/dspark_proposer.py:68"
+  ],
+  "landing_sha": "e5a3b16",
+  "source_quote": "![critical]\nThe keyword argument `num_blk` is passed here, but `DynamicSpecScheduler.update` expects `num_reqs`. This will raise a `TypeError` at runtime.\n![critical]\n`DynamicSpecScheduler` is used here but is not imported in this file. This will raise a `NameError` at runtime. Please add `from vllm_ascend.spec_decode.dynamic_utils.dynamic_scheduler import DynamicSpecScheduler` to the imports at the top of the file.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/spec_decode/llm_base_proposer.py:1188",
+      "patch_snippet": "评后sha e5a3b16 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/spec_decode/dspark_proposer.py:68",
+      "patch_snippet": "评后sha e5a3b16 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "e5a3b16",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "在 Python 中通过关键字参数（kwargs）调用函数时，kwarg 名称必须与函数定义中的参数名完全一致，否则会抛出 `TypeError`。特别是当引入新的调度器/管理器类（如 `DynamicSpecScheduler`）时，需检查所有调用点的 kwarg 名是否与 `update` 方法签名匹配。同时，在多个模块中引用新类时，必须确保每个使用该类的模块都正确 import，或通过重构将使用集中到单一入口点消除分散的 import 依赖。",
+    "context": "",
+    "checkpoints": [
+      "识别新增类/函数的所有调用点，逐一核对 kwarg 名是否与定义签名一致",
+      "检查跨模块引用时是否每个模块都有正确的 import 语句",
+      "考虑通过重构（将逻辑集中到单一类中）消除分散的 import 依赖，降低遗漏 import 的风险",
+      "新增 `DynamicSpecScheduler` 等调度器类时，确保调用方通过统一入口（如 `self.dynamic_spec`）而非直接引用类名"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/spec_decode/llm_base_proposer.py",
+      "line": 1188,
+      "code": "# vllm_ascend/spec_decode/llm_base_proposer.py\n# 位于 AscendDsparkProposer 的 draft 方法内，约第 1175-1193 行\n                    num_blk = logits.shape[0]\n                    draft_token_ids = self._dspark_draft_buffer[:num_blk]\n                    draft_token_ids[:, 0].copy_(self._dspark_seed_buffer[:num_blk])\n                    for idx in range(self.num_speculative_tokens):\n                        markov_emb = self.model.markov_embed(draft_token_ids[:, idx])\n                        logits_bias = self.model.markov_bias(markov_emb)\n                        logits[:, idx].add_(logits_bias)\n                        draft_token_ids[:, idx + 1].copy_(logits[:, idx].argmax(dim=-1))\n\n                    # Dynamic verify-length path, implemented in DynamicSpecScheduler\n                    # Only the dspark method is handled here since it relies on\n                    # the DSpark confidence head.\n                    if self.dynamic_spec is not None:\n                        self.dynamic_spec.update(\n                            model=self.model,\n                            last_hidden_states=last_hidden_states,\n                            draft_token_ids=draft_token_ids,\n                            num_blk=num_blk,  # ❌ kwarg 名为 num_blk，但 update() 签名期望 num_reqs → TypeError\n                        )",
+      "context": "vllm_ascend/spec_decode/llm_base_proposer.py 位于 AscendDsparkProposer 的 draft 方法内，约第 1175-1193 行 Dynamic verify-length path, implemented in DynamicSpecScheduler"
+    },
+    "pattern": {
+      "file": "vllm_ascend/spec_decode/llm_base_proposer.py",
+      "line": 1188,
+      "code": "# vllm_ascend/spec_decode/llm_base_proposer.py\n# ✅ 使用 num_reqs=num_blk，kwarg 名与 DynamicSpecScheduler.update 签名匹配\n                    num_blk = logits.shape[0]\n                    draft_token_ids = self._dspark_draft_buffer[:num_blk]\n                    draft_token_ids[:, 0].copy_(self._dspark_seed_buffer[:num_blk])\n                    for idx in range(self.num_speculative_tokens):\n                        markov_emb = self.model.markov_embed(draft_token_ids[:, idx])\n                        logits_bias = self.model.markov_bias(markov_emb)\n                        logits[:, idx].add_(logits_bias)\n                        draft_token_ids[:, idx + 1].copy_(logits[:, idx].argmax(dim=-1))\n\n                    # Dynamic verify-length path, implemented in DynamicSpecScheduler\n                    # Only the dspark method is handled here since it relies on\n                    # the DSpark confidence head.\n                    if self.dynamic_spec is not None:\n                        self.dynamic_spec.update(\n                            model=self.model,\n                            last_hidden_states=last_hidden_states,\n                            draft_token_ids=draft_token_ids,\n                            num_reqs=num_blk,  # ✅ 修复：num_reqs 而非 num_blk\n                        )",
+      "context": "vllm_ascend/spec_decode/llm_base_proposer.py ✅ 使用 num_reqs=num_blk，kwarg 名与 DynamicSpecScheduler.update 签名匹配 Dynamic verify-length path, implemented in DynamicSpecScheduler"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/spec_decode/llm_base_proposer.py\n+++ b/vllm_ascend/spec_decode/llm_base_proposer.py\n@@ -1,5 +1,5 @@\n # vllm_ascend/spec_decode/llm_base_proposer.py\n-# 位于 AscendDsparkProposer 的 draft 方法内，约第 1175-1193 行\n+# ✅ 使用 num_reqs=num_blk，kwarg 名与 DynamicSpecScheduler.update 签名匹配\n                     num_blk = logits.shape[0]\n                     draft_token_ids = self._dspark_draft_buffer[:num_blk]\n                     draft_token_ids[:, 0].copy_(self._dspark_seed_buffer[:num_blk])\n@@ -17,5 +17,5 @@\n                             model=self.model,\n                             last_hidden_states=last_hidden_states,\n                             draft_token_ids=draft_token_ids,\n-                            num_blk=num_blk,  # ❌ kwarg 名为 num_blk，但 update() 签名期望 num_reqs → TypeError\n+                            num_reqs=num_blk,  # ✅ 修复：num_reqs 而非 num_blk\n                         )\n",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "移除: num_blk=num_blk,  # ❌ kwarg 名为 num_blk，但 update() 签名期望 num_reqs → TypeError",
+        "新增: num_reqs=num_blk,  # ✅ 修复：num_reqs 而非 num_blk"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

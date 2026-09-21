@@ -1,0 +1,60 @@
+{
+  "report_id": "PR4820_001",
+  "pr_number": 4820,
+  "pr_title": "[CI] Skip `test_suffix_correctness`",
+  "pr_status": "merged",
+  "merged_at": "2025-12-09T03:48:13Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    ".github/workflows/_e2e_test.yaml:111",
+    "vllm_ascend/utils.py:491"
+  ],
+  "landing_sha": "f9a7d2c",
+  "source_quote": "why move this here? I think it's better to keep it under `v1 spec decode test` header",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 质疑为何将测试从 `v1 spec decode test` 分类下移出，认为应保持在原位置。同时建议 `utils.py` 中的修复可以放到另一个 PR 中处理。作者解释了从问题及时暴露角度，需要在 CI 测试阶段尽早进行多样化测试以快速发现问题。2/2 建议已讨论处理。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f9a7d2c",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 CI 配置文件中跳过或移动测试时，应保持测试分类结构的清晰性，避免随意改变测试的组织位置。对于代码修复类变更，应拆分到独立 PR 以保持 PR 职责单一。",
+    "context": "",
+    "checkpoints": [
+      "跳过测试时是否保持了原有的分类结构（如 `v1 spec decode test` header）",
+      "是否将不相关的修复拆分到独立 PR",
+      "跳过测试是否有明确的理由说明"
+    ],
+    "antipattern": {
+      "file": ".github/workflows/_e2e_test.yaml",
+      "line": 100,
+      "code": "jobs:\n  e2e-test:\n    steps:\n      - name: test_ngram_correctness\n        run: |\n          pytest tests/e2e/test_ngram_correctness.py\n      - name: test_suffix_correctness\n        run: |\n          pytest tests/e2e/test_suffix_correctness.py\n      - name: test_mtp_correctness\n        run: |\n          pytest tests/e2e/test_mtp_correctness.py",
+      "context": "MengqingCao: why move this here? I think it's better to keep it under `v1 spec decode test` header"
+    },
+    "pattern": {
+      "file": ".github/workflows/_e2e_test.yaml",
+      "line": 100,
+      "code": "jobs:\n  e2e-test:\n    steps:\n      - name: test_suffix_correctness\n        if: false  # Skip: known accuracy issue\n        run: |\n          pytest tests/e2e/test_suffix_correctness.py\n      - name: test_ngram_correctness\n        run: |\n          pytest tests/e2e/test_ngram_correctness.py\n      - name: test_mtp_correctness\n        run: |\n          pytest tests/e2e/test_mtp_correctness.py",
+      "context": "MengqingCao: why move this here? I think it's better to keep it under `v1 spec decode test` header"
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/_e2e_test.yaml\n+++ b/.github/workflows/_e2e_test.yaml\n@@ -100,12 +100,13 @@\n jobs:\n   e2e-test:\n     steps:\n+      - name: test_suffix_correctness\n+        if: false  # Skip: known accuracy issue\n+        run: |\n+          pytest tests/e2e/test_suffix_correctness.py\n       - name: test_ngram_correctness\n         run: |\n           pytest tests/e2e/test_ngram_correctness.py\n-      - name: test_suffix_correctness\n-        run: |\n-          pytest tests/e2e/test_suffix_correctness.py\n       - name: test_mtp_correctness\n         run: |\n           pytest tests/e2e/test_mtp_correctness.py",
+      "stats": "1 file changed, +4 lines, -3 lines",
+      "key_changes": [
+        "在第 4-7 行新增了代码",
+        "删除了第 7-9 行的代码"
+      ]
+    },
+    "language": "yaml",
+    "_status": "extracted"
+  }
+}

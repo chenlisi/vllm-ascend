@@ -1,0 +1,60 @@
+{
+  "report_id": "PR4963_001",
+  "pr_number": 4963,
+  "pr_title": "[Fix] Fixes issues in MTP with async scheduling and ACL graph",
+  "pr_status": "merged",
+  "merged_at": "2025-12-13T16:10:12Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/spec_decode/mtp_proposer.py:815",
+    "vllm_ascend/worker/model_runner_v1.py:995"
+  ],
+  "landing_sha": "7301d7e",
+  "source_quote": "The variable `layer_name` is referenced in the condition at line 809 before it's defined. The for loop that defines `layer_name` starts at line 810, which is inside the conditional block. This will cause a NameError when the condition is evaluated. The loop declaration should be moved before the conditional check, or the condition should be restructured to not reference `layer_name` until it is defined within the loop body.",
+  "correspondence": [
+    {
+      "review_quote": "Copilot 指出 `layer_name` 在条件判断中被引用但在定义之前使用的问题，建议将循环声明移到条件检查之前。jianzs 建议在 `model_runner_v1.py:995` 添加 `num_input_tokens <= self.cudagraph_batch_sizes[-1]` 条件检查以防止越界。作者确认采纳 jianzs 的建议，2/2 建议已处理。",
+      "patch_snippet": "",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "7301d7e",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 MTP（Multi-Token Proposing）与异步调度和 ACL graph 配合使用时，需确保：1）避免依赖循环变量泄漏，显式定义变量；2）当 input tokens 超过最大 ACL graph batch size 时，不进行 padding 以避免越界错误。",
+    "context": "",
+    "checkpoints": [
+      "是否避免依赖循环变量泄漏（如 `for x in list` 后的 `x`），改为显式定义（如 `list[0]`）",
+      "在 ACL graph 模式下是否检查 `num_input_tokens <= self.cudagraph_batch_sizes[-1]`",
+      "异步调度时 attention metadata 的 `seq_lens_list` 和 `block_table` 是否正确裁剪到实际大小",
+      "tensor shape 是否显式对齐以防止 shape mismatch 错误"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/spec_decode/mtp_proposer.py",
+      "line": 0,
+      "code": "        for layer_name in self.attn_layer_name:\n            pass\n\n\n                    original_aclgraph_runtime_mode = \\\n                        self.aclgraph_runtime_mode\n                    if original_aclgraph_runtime_mode == CUDAGraphMode.FULL and \\\n                        self.use_async_scheduling and attn_metadata[layer_name].decode is not None:\n                        actual_size = len(attn_metadata[layer_name].decode.\n                                          actual_seq_lengths_q)\n                        attn_metadata[layer_name].decode.seq_lens_list = \\\n                            attn_metadata[layer_name].decode.seq_lens_list[:actual_size]\n                        attn_metadata[layer_name].decode.block_table = \\\n                            attn_metadata[layer_name].decode.block_table[:actual_size]",
+      "context": "Copilot: The variable `layer_name` is referenced in the condition at line 809 before it's defined. The for loop that defines `layer_name` starts at line 810, which is inside the conditional block. This will cause a NameError when the condition is evaluated. The loop declaration should be moved before the conditional check, or the condition should be restructured to not reference `layer_name` until it is defined within the loop body."
+    },
+    "pattern": {
+      "file": "vllm_ascend/spec_decode/mtp_proposer.py",
+      "line": 0,
+      "code": "        for layer_name in self.attn_layer_name:\n            pass\n\n\n                    original_aclgraph_runtime_mode = \\\n                        self.aclgraph_runtime_mode\n                    layer_name = self.attn_layer_name[0]\n                    if original_aclgraph_runtime_mode == CUDAGraphMode.FULL and \\\n                        self.use_async_scheduling and attn_metadata[layer_name].decode is not None:\n                        actual_size = len(attn_metadata[layer_name].decode.\n                                          actual_seq_lengths_q)\n                        attn_metadata[layer_name].decode.seq_lens_list = \\\n                            attn_metadata[layer_name].decode.seq_lens_list[:actual_size]\n                        attn_metadata[layer_name].decode.block_table = \\\n                            attn_metadata[layer_name].decode.block_table[:actual_size]",
+      "context": "Copilot: The variable `layer_name` is referenced in the condition at line 809 before it's defined. The for loop that defines `layer_name` starts at line 810, which is inside the conditional block. This will cause a NameError when the condition is evaluated. The loop declaration should be moved before the conditional check, or the condition should be restructured to not reference `layer_name` until it is defined within the loop body."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/spec_decode/mtp_proposer.py\n+++ b/vllm_ascend/spec_decode/mtp_proposer.py\n@@ -1,14 +1,15 @@\n \n                     original_aclgraph_runtime_mode = \\\n                         self.aclgraph_runtime_mode\n+                    layer_name = self.attn_layer_name[0]\n                     if original_aclgraph_runtime_mode == CUDAGraphMode.FULL and \\\n                         self.use_async_scheduling and attn_metadata[layer_name].decode is not None:\n                         actual_size = len(attn_metadata[layer_name].decode.",
+      "stats": "1 file changed, +1 lines, -0 lines",
+      "key_changes": [
+        "在第 7-7 行新增了代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

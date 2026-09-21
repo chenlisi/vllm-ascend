@@ -1,0 +1,75 @@
+{
+  "report_id": "PR11541_001",
+  "pr_number": 11541,
+  "pr_title": "[Test]Modify the 310p configuration file",
+  "pr_status": "merged",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "important",
+  "affected_files": [
+    ".github/workflows/schedule_weekly_test_310p.yaml:30",
+    ".github/workflows/schedule_weekly_test_310p.yaml:121",
+    ".github/workflows/schedule_weekly_test_310p.yaml:153",
+    ".github/workflows/schedule_weekly_test_310p.yaml:253"
+  ],
+  "landing_sha": "6b1426c",
+  "source_quote": "delete `(main or releases/v0.18.0)'`\n310p config does not have multi_node and double_node\nsame as above, 310p config does not have multi_node and double_node\nshould be deleted",
+  "correspondence": [
+    {
+      "review_quote": "zhangxinyuehfad: .github/workflows/schedule_weekly_test_310p.yaml:30",
+      "patch_snippet": "评后sha 6b1426c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "zhangxinyuehfad: .github/workflows/schedule_weekly_test_310p.yaml:121",
+      "patch_snippet": "评后sha 6b1426c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "zhangxinyuehfad: .github/workflows/schedule_weekly_test_310p.yaml:153",
+      "patch_snippet": "评后sha 6b1426c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "zhangxinyuehfad: .github/workflows/schedule_weekly_test_310p.yaml:253",
+      "patch_snippet": "评后sha 6b1426c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "6b1426c",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "CI 配置文件中的分支引用、硬件配置项应与目标测试环境实际能力匹配。310p 不支持 multi_node 和 double_node 配置，不应出现在 310p 的 CI 配置中。过期分支引用（如 `releases/v0.18.0`）应及时清理。",
+    "context": "",
+    "checkpoints": [
+      "CI 配置文件中不应包含无效的分支引用（如已过期 releases 分支）",
+      "硬件特定配置文件中的配置项应与目标硬件能力匹配",
+      "不应存在冗余或重复的配置项"
+    ],
+    "antipattern": {
+      "file": ".github/workflows/schedule_weekly_test_310p.yaml",
+      "line": 30,
+      "code": "name: weekly test for 310p (main or releases/v0.18.0)\n\non:\n  schedule:\n    - cron: '0 0 * * *'\n  workflow_dispatch:\n\njobs:\n  build:\n    name: weekly test for 310p\n    if: github.repository == 'vllm-project/vllm-ascend'\n    runs-on: [self-hosted, Linux, arm64, ascenda]",
+      "context": "修改前代码 (yaml)"
+    },
+    "pattern": {
+      "file": ".github/workflows/schedule_weekly_test_310p.yaml",
+      "line": 30,
+      "code": "name: weekly test for 310p\n\non:\n  schedule:\n    - cron: '0 0 * * *'\n  workflow_dispatch:\n\njobs:\n  build:\n    name: weekly test for 310p\n    if: github.repository == 'vllm-project/vllm-ascend'\n    runs-on: [self-hosted, Linux, arm64, ascenda]",
+      "context": "修改后代码 (yaml)"
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/schedule_weekly_test_310p.yaml\n+++ b/.github/workflows/schedule_weekly_test_310p.yaml\n@@ -1,4 +1,4 @@\n-name: weekly test for 310p (main or releases/v0.18.0)\n+name: weekly test for 310p\n \n on:\n   schedule:",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "yaml",
+    "_status": "pending_llm_extract"
+  }
+}

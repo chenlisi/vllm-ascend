@@ -1,0 +1,68 @@
+{
+  "report_id": "PR12140_001",
+  "pr_number": 12140,
+  "pr_title": "[CI] add hitest test",
+  "pr_status": "merged",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "important",
+  "affected_files": [
+    ".github/workflows/pr_test.yaml:103",
+    ".github/workflows/pr_test.yaml:228",
+    ".github/workflows/pr_test.yaml:270"
+  ],
+  "landing_sha": "e8618b8",
+  "source_quote": "useless change\nrename `manual-hitest.yaml` to `_manual-hitest.yaml`\nlooks there is no `_analyze_failure.yaml`",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan: .github/workflows/pr_test.yaml:103",
+      "patch_snippet": "评后sha e8618b8 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wangxiyuan: .github/workflows/pr_test.yaml:228",
+      "patch_snippet": "评后sha e8618b8 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wangxiyuan: .github/workflows/pr_test.yaml:270",
+      "patch_snippet": "评后sha e8618b8 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "e8618b8",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 `.github/workflows/` 目录中，以 `_` 前缀命名的 workflow 文件不会被 GitHub Actions 自动触发。手动触发的 workflow 应使用 `_` 前缀命名，并在引用时保持一致。",
+    "context": "",
+    "checkpoints": [
+      "手动触发的 workflow 文件是否使用了 `_` 前缀",
+      "PR 中的文件引用是否与实际文件名一致"
+    ],
+    "antipattern": {
+      "file": ".github/workflows/pr_test.yaml",
+      "line": 95,
+      "code": "  hitest-test:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout code\n        uses: actions/checkout@v4\n\n      - name: Setup Python\n        uses: actions/setup-python@v5\n        with:\n          python-version: '3.10'\n\n      - name: Useless change that should be reverted  # ← wangxiyuan: useless change\n        run: |\n          echo \"This change serves no purpose\"\n\n      - name: Run hitest\n        run: |\n          pytest tests/hitest/",
+      "context": "修改前代码 (yaml)"
+    },
+    "pattern": {
+      "file": ".github/workflows/pr_test.yaml",
+      "line": 95,
+      "code": "  hitest-test:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout code\n        uses: actions/checkout@v4\n\n      - name: Setup Python\n        uses: actions/setup-python@v5\n        with:\n          python-version: '3.10'\n\n      - name: Run hitest\n        run: |\n          pytest tests/hitest/",
+      "context": "修改后代码 (yaml)"
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/pr_test.yaml\n+++ b/.github/workflows/pr_test.yaml\n@@ -9,10 +9,6 @@\n         with:\n           python-version: '3.10'\n \n-      - name: Useless change that should be reverted  # ← wangxiyuan: useless change\n-        run: |\n-          echo \"This change serves no purpose\"\n-\n       - name: Run hitest\n         run: |\n           pytest tests/hitest/",
+      "stats": "1 file changed, +0 lines, -4 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "yaml",
+    "_status": "pending_llm_extract"
+  }
+}

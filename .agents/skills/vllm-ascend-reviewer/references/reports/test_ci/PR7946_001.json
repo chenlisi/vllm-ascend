@@ -1,0 +1,64 @@
+{
+  "report_id": "PR7946_001",
+  "pr_number": 7946,
+  "pr_title": "[BugFix] Modify Failed vLLM Test Cases",
+  "pr_status": "merged",
+  "merged_at": "2026-04-13T01:54:16Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    ".github/workflows/pr-test-upstream.yaml:23",
+    ".github/workflows/schedule_vllm_e2e_test.yaml:1"
+  ],
+  "landing_sha": "a051194",
+  "source_quote": "remove `pull_request` trigger\nschedule_vllm_e2e_test.yaml",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan: .github/workflows/pr-test-upstream.yaml:23",
+      "patch_snippet": "评后sha a051194 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wangxiyuan: .github/workflows/schedule_vllm_e2e_test.yaml:1",
+      "patch_snippet": "评后sha a051194 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "a051194",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "上游兼容性测试工作流不应在每次 PR 提交时触发，应仅通过定时任务（schedule）触发，避免不必要的 CI 资源消耗。工作流文件命名应清晰反映其用途。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": ".github/workflows/pr-test-upstream.yaml",
+      "line": 15,
+      "code": "# 上游兼容性测试不应在每次 PR 提交时触发\n\nname: PR Test Upstream\n\non:\n  push:\n    branches:\n      - main\n  pull_request:\n    branches:\n      - main\n  schedule:\n    - cron: '0 0 * * *'\n  workflow_dispatch:\n\njobs:\n  test-upstream:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - name: Run upstream tests\n        run: |\n          pip install git+https://github.com/vllm-project/vllm.git@main\n          pytest tests/",
+      "context": "remove `pull_request` trigger\nschedule_vllm_e2e_test.yaml"
+    },
+    "pattern": {
+      "file": ".github/workflows/pr-test-upstream.yaml",
+      "line": 15,
+      "code": "# commit a051194 \"delete pull request\" (+0/-5)\n\nname: PR Test Upstream\n\non:\n  push:\n    branches:\n      - main\n  schedule:\n    - cron: '0 0 * * *'\n  workflow_dispatch:\n\njobs:\n  test-upstream:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - name: Run upstream tests\n        run: |\n          pip install git+https://github.com/vllm-project/vllm.git@main\n          pytest tests/",
+      "context": "remove `pull_request` trigger\nschedule_vllm_e2e_test.yaml"
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/pr-test-upstream.yaml\n+++ b/.github/workflows/pr-test-upstream.yaml\n@@ -1,12 +1,9 @@\n-# 上游兼容性测试不应在每次 PR 提交时触发\n+# commit a051194 \"delete pull request\" (+0/-5)\n \n name: PR Test Upstream\n \n on:\n   push:\n-    branches:\n-      - main\n-  pull_request:\n     branches:\n       - main\n   schedule:\n",
+      "stats": "1 file changed, +1 lines, -4 lines",
+      "key_changes": [
+        "-# 上游兼容性测试不应在每次 PR 提交时触发",
+        "+# commit a051194 \"delete pull request\" (+0/-5)",
+        "-    branches:",
+        "-      - main",
+        "-  pull_request:"
+      ]
+    },
+    "language": "yaml",
+    "_status": "pending_llm_extract"
+  }
+}

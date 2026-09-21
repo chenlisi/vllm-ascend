@@ -1,0 +1,60 @@
+{
+  "report_id": "PR4628_001",
+  "pr_number": 4628,
+  "pr_title": "[Refactor] 1/N Refactor attention_v1 & extract attention_cp",
+  "pr_status": "merged",
+  "merged_at": "2025-12-06T01:33:29Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/attention_v1.py:339",
+    "vllm_ascend/attention/attention_cp.py:142",
+    "vllm_ascend/attention/attention_cp.py:103"
+  ],
+  "landing_sha": "12de71f",
+  "source_quote": "prefill & decode metadata migrated to AscendMetadataForPrefill/Decode, external usage no longer needed?",
+  "correspondence": [
+    {
+      "review_quote": "momo609 询问 prefill & decode metadata 迁移后外部是否不再需要，作者确认已移至 attention_cp。Sparkheart 指出 pcp_rank/dcp_rank 缺少越界校验、assertion 缺少错误说明。作者回复重构代码不改变原始逻辑，可在后续 PR 中修复。3/3 评论已确认。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "12de71f",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在代码重构过程中，新增的索引访问应包含越界校验，assertion 应包含清晰的错误说明。",
+    "context": "",
+    "checkpoints": [
+      "索引访问（如 pcp_rank, dcp_rank）是否有越界校验",
+      "assertion 是否包含错误说明信息",
+      "重构是否改变了原始逻辑"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 325,
+      "code": "class AscendAttentionMetadataBuilder(AscendAttentionMetadataBuilderBase):\n    \"\"\"Build attention metadata for Ascend backend.\"\"\"\n\n    metadata_cls: type[AscendMetadata] = AscendMetadata\n\n    def _build_backend_metadata(\n        self,\n        common_attn_metadata: AscendCommonAttentionMetadata,\n        *,\n        block_table: torch.Tensor,\n        query_lens: torch.Tensor,\n        seq_lens: torch.Tensor,\n        num_decodes: int,\n        num_prefills: int,\n    ) -> dict[str, object]:\n        prefill_meta = self._build_prefill_metadata(...)\n        decode_meta = self._build_decode_metadata(...)\n        return {\"prefill\": prefill_meta, \"decode\": decode_meta}",
+      "context": "momo609: prefill & decode metadata migrated to AscendMetadataForPrefill/Decode, external usage no longer needed?"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 325,
+      "code": "class AscendAttentionMetadataBuilder(AscendAttentionMetadataBuilderBase):\n    \"\"\"Build attention metadata for Ascend backend.\"\"\"\n\n    metadata_cls: type[AscendMetadata] = AscendMetadata\n\n    def _build_backend_metadata(\n        self,\n        common_attn_metadata: AscendCommonAttentionMetadata,\n        *,\n        block_table: torch.Tensor,\n        query_lens: torch.Tensor,\n        seq_lens: torch.Tensor,\n        num_decodes: int,\n        num_prefills: int,\n    ) -> dict[str, object]:\n        return {}",
+      "context": "momo609: prefill & decode metadata migrated to AscendMetadataForPrefill/Decode, external usage no longer needed?"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/attention_v1.py\n+++ b/vllm_ascend/attention/attention_v1.py\n@@ -325,18 +325,16 @@\n         num_decodes: int,\n         num_prefills: int,\n     ) -> dict[str, object]:\n-        prefill_meta = self._build_prefill_metadata(...)\n-        decode_meta = self._build_decode_metadata(...)\n-        return {\"prefill\": prefill_meta, \"decode\": decode_meta}\n+        return {}",
+      "stats": "1 file changed, +1 lines, -3 lines",
+      "key_changes": [
+        "修改了第 16-18 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

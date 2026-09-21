@@ -1,0 +1,56 @@
+{
+  "report_id": "PR12048_001",
+  "pr_number": 12048,
+  "pr_title": "[Doc][Misc] Add privileged flag to docker run command in DeepSeek-V3.2 tutorial",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/models/DeepSeek-V3.2.md:84"
+  ],
+  "landing_sha": "867e3be",
+  "source_quote": "plz also add this for A2",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao: docs/source/tutorials/models/DeepSeek-V3.2.md:84",
+      "patch_snippet": "评后sha 867e3be 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "867e3be",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "修改教程文档中的配置命令时，应检查所有适用的硬件系列（如 A2、A3、A5），确保修改覆盖完整，避免遗漏某个场景。",
+    "context": "",
+    "checkpoints": [
+      "检查文档中是否有多个硬件系列的配置示例",
+      "确认修改已覆盖所有适用场景"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/DeepSeek-V3.2.md",
+      "line": 84,
+      "code": "### A3 Series\n\n```bash\ndocker run -td --privileged=true \\\n    --name vllm-ascend \\\n    --device /dev/davinci0 \\\n    --device /dev/davinci1 \\\n    --device /dev/davinci_manager \\\n    --device /dev/devmm_svm \\\n    --device /dev/hisi_hdc \\\n    -v /usr/local/Ascend/driver:/usr/local/Ascend/driver \\\n    -v /usr/local/Ascend/add-ons:/usr/local/Ascend/add-ons \\\n    vllm-ascend:latest\n```\n\n### A2 Series\n\n```bash\ndocker run -td \\\n    --name vllm-ascend \\\n    --device /dev/davinci0 \\\n    --device /dev/davinci1 \\\n    --device /dev/davinci_manager \\\n    --device /dev/devmm_svm \\\n    --device /dev/hisi_hdc \\\n    -v /usr/local/Ascend/driver:/usr/local/Ascend/driver \\\n    -v /usr/local/Ascend/add-ons:/usr/local/Ascend/add-ons \\\n    vllm-ascend:latest\n```",
+      "context": "修改前代码 (markdown)"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/DeepSeek-V3.2.md",
+      "line": 84,
+      "code": "### A3 Series\n\n```bash\ndocker run -td --privileged=true \\\n    --name vllm-ascend \\\n    --device /dev/davinci0 \\\n    --device /dev/davinci1 \\\n    --device /dev/davinci_manager \\\n    --device /dev/devmm_svm \\\n    --device /dev/hisi_hdc \\\n    -v /usr/local/Ascend/driver:/usr/local/Ascend/driver \\\n    -v /usr/local/Ascend/add-ons:/usr/local/Ascend/add-ons \\\n    vllm-ascend:latest\n```\n\n### A2 Series\n\n```bash\ndocker run -td --privileged=true \\\n    --name vllm-ascend \\\n    --device /dev/davinci0 \\\n    --device /dev/davinci1 \\\n    --device /dev/davinci_manager \\\n    --device /dev/devmm_svm \\\n    --device /dev/hisi_hdc \\\n    -v /usr/local/Ascend/driver:/usr/local/Ascend/driver \\\n    -v /usr/local/Ascend/add-ons:/usr/local/Ascend/add-ons \\\n    vllm-ascend:latest\n```",
+      "context": "修改后代码 (markdown)"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/DeepSeek-V3.2.md\n+++ b/docs/source/tutorials/models/DeepSeek-V3.2.md\n@@ -16,7 +16,7 @@\n ### A2 Series\n \n ```bash\n-docker run -td \\\n+docker run -td --privileged=true \\\n     --name vllm-ascend \\\n     --device /dev/davinci0 \\\n     --device /dev/davinci1 \\",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "修改代码逻辑"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

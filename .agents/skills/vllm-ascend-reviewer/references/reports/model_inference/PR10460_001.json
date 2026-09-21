@@ -1,0 +1,73 @@
+{
+  "report_id": "PR10460_001",
+  "pr_number": 10460,
+  "pr_title": "[Doc] Update MiniMax-M2.5 doc to M2.7 with template compliance",
+  "pr_status": "merged",
+  "merged_at": "2026-06-27T02:16:24Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/models/MiniMax-M2.md:457",
+    "docs/source/tutorials/models/MiniMax-M2.md:413",
+    "docs/source/tutorials/models/MiniMax-M2.md:9",
+    "docs/source/tutorials/models/MiniMax-M2.md:27",
+    "docs/source/tutorials/models/MiniMax-M2.md:29",
+    "docs/source/tutorials/models/MiniMax-M2.md:90"
+  ],
+  "landing_sha": "0aa33c5",
+  "source_quote": "It is recommended to change the \"BS\" field to \"Max Num Batched Token\", change the \"Concurrency\" field to \"Max Num Seqs\", and change the \"Max Context\" field to \"Max Model Len\".",
+  "correspondence": [
+    {
+      "review_quote": "herizhen 建议规范性能表格字段名和章节标题。CXY-Katrina 指出不应写未验证的版本号、不应使用共享路径、不应使用 `ASCEND_RT_VISIBLE_DEVICES` 控制节点，以及 docker 启动脚本路径不一致等问题。MengqingCao 补充了 FAQ 相关修改。作者通过多个 commit 逐步修改文档，32/32 建议全部落地。",
+      "patch_snippet": "",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "0aa33c5",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "部署文档中的性能表格应使用 vLLM 标准字段名（Max Num Batched Token、Max Num Seqs、Max Model Len）。不应硬编码共享路径或特定版本号（除非已验证），不应使用 `ASCEND_RT_VISIBLE_DEVICES` 控制节点。",
+    "context": "",
+    "checkpoints": [
+      "检查性能表格字段名是否使用 vLLM 标准命名",
+      "检查是否包含未验证的版本号",
+      "检查是否硬编码了共享路径或环境特定配置",
+      "检查 docker 启动脚本路径是否一致"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/MiniMax-M2.md",
+      "line": 457,
+      "code": "<!-- 文件: docs/source/tutorials/models/MiniMax-M2.md -->\n<!-- 行号: 450-465 -->\n## 性能测试\n\n| BS | Concurrency | Max Context | TTFT (ms) | TPOT (ms) | Throughput (tokens/s) |\n|----|-------------|-------------|-----------|-----------|----------------------|\n| 1  | 32          | 4096        | 120       | 15        | 2100                 |\n| 1  | 64          | 8192        | 180       | 22        | 1850                 |\n| 4  | 128         | 16384       | 350       | 35        | 1620                 |\n\n<!-- 字段名不规范：BS、Concurrency、Max Context 不是 vLLM 标准命名 -->",
+      "context": "It is recommended to change the \"BS\" field to \"Max Num Batched Token\", change the \"Concurrency\" field to \"Max Num Seqs\", and change the \"Max Context\" field to \"Max Model Len\"."
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/MiniMax-M2.md",
+      "line": 457,
+      "code": "<!-- 文件: docs/source/tutorials/models/MiniMax-M2.md -->\n<!-- 行号: 450-465 -->\n## Performance Evaluation\n\n| Max Num Batched Token | Max Num Seqs | Max Model Len | TTFT (ms) | TPOT (ms) | Throughput (tokens/s) |\n|----------------------|--------------|---------------|-----------|-----------|----------------------|\n| 1                    | 32           | 4096          | 120       | 15        | 2100                 |\n| 1                    | 64           | 8192          | 180       | 22        | 1850                 |\n| 4                    | 128          | 16384         | 350       | 35        | 1620                 |\n\n<!-- herizhen: 使用 vLLM 标准字段名 -->\n<!-- 章节标题改为 \"Performance Evaluation\" -->",
+      "context": "It is recommended to change the \"BS\" field to \"Max Num Batched Token\", change the \"Concurrency\" field to \"Max Num Seqs\", and change the \"Max Context\" field to \"Max Model Len\"."
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/MiniMax-M2.md\n+++ b/docs/source/tutorials/models/MiniMax-M2.md\n@@ -1,11 +1,12 @@\n <!-- 文件: docs/source/tutorials/models/MiniMax-M2.md -->\n <!-- 行号: 450-465 -->\n-## 性能测试\n+## Performance Evaluation\n \n-| BS | Concurrency | Max Context | TTFT (ms) | TPOT (ms) | Throughput (tokens/s) |\n-|----|-------------|-------------|-----------|-----------|----------------------|\n-| 1  | 32          | 4096        | 120       | 15        | 2100                 |\n-| 1  | 64          | 8192        | 180       | 22        | 1850                 |\n-| 4  | 128         | 16384       | 350       | 35        | 1620                 |\n+| Max Num Batched Token | Max Num Seqs | Max Model Len | TTFT (ms) | TPOT (ms) | Throughput (tokens/s) |\n+|----------------------|--------------|---------------|-----------|-----------|----------------------|\n+| 1                    | 32           | 4096          | 120       | 15        | 2100                 |\n+| 1                    | 64           | 8192          | 180       | 22        | 1850                 |\n+| 4                    | 128          | 16384         | 350       | 35        | 1620                 |\n \n-<!-- 字段名不规范：BS、Concurrency、Max Context 不是 vLLM 标准命名 -->\n+<!-- herizhen: 使用 vLLM 标准字段名 -->\n+<!-- 章节标题改为 \"Performance Evaluation\" -->",
+      "stats": "1 file changed, +8 lines, -7 lines",
+      "key_changes": [
+        "移除: ## 性能测试",
+        "新增: ## Performance Evaluation",
+        "移除: | BS | Concurrency | Max Context | TTFT (ms) | TPOT (ms) | Throughput (tokens/s)",
+        "移除: |----|-------------|-------------|-----------|-----------|----------------------",
+        "移除: | 1  | 32          | 4096        | 120       | 15        | 2100                 ",
+        "移除: | 1  | 64          | 8192        | 180       | 22        | 1850                 ",
+        "移除: | 4  | 128         | 16384       | 350       | 35        | 1620                 ",
+        "新增: | Max Num Batched Token | Max Num Seqs | Max Model Len | TTFT (ms) | TPOT (ms) |",
+        "新增: |----------------------|--------------|---------------|-----------|-----------|-",
+        "新增: | 1                    | 32           | 4096          | 120       | 15        | "
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

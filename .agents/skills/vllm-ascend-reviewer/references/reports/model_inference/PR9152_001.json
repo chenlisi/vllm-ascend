@@ -1,0 +1,71 @@
+{
+  "report_id": "PR9152_001",
+  "pr_number": 9152,
+  "pr_title": "[Feature] WeightTransfer: Add HCCLWeightTransferEngine backend for Ascend NPU",
+  "pr_status": "merged",
+  "merged_at": "2026-06-16T12:07:39Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/__init__.py:47",
+    "tests/ut/distributed/test_hccl_weight_transfer.py:6",
+    "vllm_ascend/distributed/weight_transfer/hccl_engine.py:41"
+  ],
+  "landing_sha": "beee70c",
+  "source_quote": "please make a rfc to track the developing plan,because we also need to implement IPC weight transfer etc.\nyou'd better add a e2e test\nadd docsring for these field",
+  "correspondence": [
+    {
+      "review_quote": "Ronald1995: vllm_ascend/__init__.py:47",
+      "patch_snippet": "评后sha beee70c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Ronald1995: tests/ut/distributed/test_hccl_weight_transfer.py:6",
+      "patch_snippet": "评后sha beee70c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Ronald1995: vllm_ascend/distributed/weight_transfer/hccl_engine.py:41",
+      "patch_snippet": "评后sha beee70c 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "beee70c",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "please make a rfc to track the developing plan,because we also need to implement IPC weight transfer etc.",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/distributed/weight_transfer/packed_tensor.py",
+      "line": 112,
+      "code": "# gemini-code-assist 标记为 high priority\n\n    def unpack_tensor(\n        packed_tensor: torch.Tensor,\n        names: list[str],\n        shapes: list[list[int]],\n        dtypes: list[torch.dtype],\n        tensor_sizes: list[int],\n    ) -> list[tuple[str, torch.Tensor]]:\n        \"\"\"Unpack a packed uint8 tensor into a list of typed tensors.\"\"\"\n        unpacked_tensors = packed_tensor.split(tensor_sizes)\n        unpacked_list = [\n            (name, tensor.contiguous().view(dtype).view(*shape))\n            for name, shape, dtype, tensor in zip(names, shapes, dtypes, unpacked_tensors)\n        ]\n        return unpacked_list",
+      "context": "please make a rfc to track the developing plan,because we also need to implement IPC weight transfer etc.\nyou'd better add a e2e test\nadd docsring for these field"
+    },
+    "pattern": {
+      "file": "vllm_ascend/distributed/weight_transfer/packed_tensor.py",
+      "line": 112,
+      "code": "# gemini-code-assist suggestion:\n# .contiguous() 是冗余的，packed_tensor 是连续一维张量，\n# split() 在连续一维张量上返回连续视图，移除可避免不必要的中间拷贝\n\n    def unpack_tensor(\n        packed_tensor: torch.Tensor,\n        names: list[str],\n        shapes: list[list[int]],\n        dtypes: list[torch.dtype],\n        tensor_sizes: list[int],\n    ) -> list[tuple[str, torch.Tensor]]:\n        \"\"\"Unpack a packed uint8 tensor into a list of typed tensors.\"\"\"\n        unpacked_tensors = packed_tensor.split(tensor_sizes)\n        unpacked_list = [\n            (name, tensor.view(dtype).view(*shape))\n            for name, shape, dtype, tensor in zip(names, shapes, dtypes, unpacked_tensors)\n        ]\n        return unpacked_list",
+      "context": "please make a rfc to track the developing plan,because we also need to implement IPC weight transfer etc.\nyou'd better add a e2e test\nadd docsring for these field"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/distributed/weight_transfer/packed_tensor.py\n+++ b/vllm_ascend/distributed/weight_transfer/packed_tensor.py\n@@ -1,4 +1,6 @@\n-# gemini-code-assist 标记为 high priority\n+# gemini-code-assist suggestion:\n+# .contiguous() 是冗余的，packed_tensor 是连续一维张量，\n+# split() 在连续一维张量上返回连续视图，移除可避免不必要的中间拷贝\n \n     def unpack_tensor(\n         packed_tensor: torch.Tensor,\n@@ -10,7 +12,7 @@\n         \"\"\"Unpack a packed uint8 tensor into a list of typed tensors.\"\"\"\n         unpacked_tensors = packed_tensor.split(tensor_sizes)\n         unpacked_list = [\n-            (name, tensor.contiguous().view(dtype).view(*shape))\n+            (name, tensor.view(dtype).view(*shape))\n             for name, shape, dtype, tensor in zip(names, shapes, dtypes, unpacked_tensors)\n         ]\n         return unpacked_list\n",
+      "stats": "1 file changed, +4 lines, -2 lines",
+      "key_changes": [
+        "-# gemini-code-assist 标记为 high priority",
+        "+# gemini-code-assist suggestion:",
+        "+# .contiguous() 是冗余的，packed_tensor 是连续一维张量，",
+        "+# split() 在连续一维张量上返回连续视图，移除可避免不必要的中间拷贝",
+        "-            (name, tensor.contiguous().view(dtype).view(*shape))",
+        "+            (name, tensor.view(dtype).view(*shape))"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

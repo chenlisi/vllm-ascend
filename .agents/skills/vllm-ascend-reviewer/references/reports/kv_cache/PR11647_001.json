@@ -1,0 +1,93 @@
+{
+  "report_id": "PR11647_001",
+  "pr_number": 11647,
+  "pr_title": "[Feature][Refator] Decouple the allocation of SFA kv and indexer cache",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/sfa_v1.py:1510",
+    "vllm_ascend/worker/model_runner_v1.py:4088",
+    "vllm_ascend/worker/model_runner_v1.py:4113",
+    "vllm_ascend/worker/model_runner_v1.py:4109",
+    "vllm_ascend/worker/model_runner_v1.py:4418",
+    "vllm_ascend/worker/model_runner_v1.py:4756"
+  ],
+  "landing_sha": "1ecf846",
+  "source_quote": "what if this is the indexer layer without kvcache? It seems break the index cache?\nThe `self.use_sparse` is defined by `hf_config.index_topk`, thus it seems redundant to check `has_sfa_indexer_cache` here.\nit's better to move this to `bind_kv_cache`\nthe `kv_caches` of `modelrunner` instance won't contain indexer cache, why do we need to filter the indexer cache out?\nif self.use_sparse and current_sparse_c8:\nkv_cache_raw_tensors[layer_name_inner] = (k_tensor,)\nelse:\nassert v_tensor is not None\nkv_cache_raw_tensors[layer_name_inner] = (k_tensor, v_tensor)\nif self.use_sparse and current_sparse_c8:\nv_cache = None\nkv_caches[layer_name] = (k_cache,)\nelse:\nassert raw_v_tensor is not None\nv_cache = raw_v_tensor.view(v_cache_dtype).view(v_shape)\nkv_caches[layer_name] = (k_cache, v_cache)\nokay, thx for the details, it make sense to me then.",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao: vllm_ascend/attention/sfa_v1.py:1510",
+      "patch_snippet": "评后sha 1ecf846 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/worker/model_runner_v1.py:4088",
+      "patch_snippet": "评后sha 1ecf846 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/worker/model_runner_v1.py:4113",
+      "patch_snippet": "评后sha 1ecf846 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/worker/model_runner_v1.py:4109",
+      "patch_snippet": "评后sha 1ecf846 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/worker/model_runner_v1.py:4418",
+      "patch_snippet": "评后sha 1ecf846 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/worker/model_runner_v1.py:4756",
+      "patch_snippet": "评后sha 1ecf846 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: vllm_ascend/attention/sfa_v1.py:1510",
+      "patch_snippet": "评后sha 1ecf846 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "1ecf846",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 model runner 中处理 KV cache 时，sparse C8 场景下 SFA 层只有 k_cache（无 v_cache），需要用 `(k_cache,)` 单元素元组；非 sparse C8 场景则需要 `(k_cache, v_cache)` 双元素元组。同时应避免冗余的条件检查（如 `has_sfa_indexer_cache` 在 `self.use_sparse` 已确定时是多余的），以及不必要的 cache 过滤操作。",
+    "context": "",
+    "checkpoints": [
+      "检查 `kv_cache_raw_tensors` 和 `kv_caches` 的赋值是否遵循 sparse C8 的统一模式",
+      "确认是否存在冗余的 `has_sfa_indexer_cache` 检查（当 `self.use_sparse` 已确定时）",
+      "确认是否有不必要的 indexer cache 过滤操作",
+      "KV cache 绑定逻辑应放在 `bind_kv_cache` 方法中"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 4080,
+      "code": "    def _allocate_sfa_kv_caches(\n        self,\n        kv_cache_config: KVCacheConfig,\n        ...\n    ) -> dict[str, torch.Tensor]:\n        \"\"\"Allocate SFA KV caches with decoupled indexer cache.\"\"\"\n        kv_caches = {}\n        has_sfa_indexer_cache = self._check_indexer_cache()\n\n        for layer_name, cache_spec in kv_cache_config.items():\n            # Redundant check: self.use_sparse already implies indexer\n            if self.use_sparse and has_sfa_indexer_cache:\n                k_cache = self._allocate_k_cache(layer_name)\n                kv_caches[layer_name] = (k_cache,)\n            else:\n                k_cache, v_cache = self._allocate_kv_cache(layer_name)\n                kv_caches[layer_name] = (k_cache, v_cache)\n        return kv_caches",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/sfa_v1.py",
+      "line": 1510,
+      "code": "    def _allocate_sfa_kv_caches(\n        self,\n        kv_cache_config: KVCacheConfig,\n        ...\n    ) -> dict[str, torch.Tensor]:\n        \"\"\"Allocate SFA KV caches with decoupled indexer cache.\"\"\"\n        kv_caches = {}\n        # Removed redundant has_sfa_indexer_cache check;\n        # self.use_sparse is defined by hf_config.index_topk\n\n        for layer_name, cache_spec in kv_cache_config.items():\n            if self.use_sparse:\n                k_cache = self._allocate_k_cache(layer_name)\n                kv_caches[layer_name] = (k_cache,)\n            else:\n                k_cache, v_cache = self._allocate_kv_cache(layer_name)\n                kv_caches[layer_name] = (k_cache, v_cache)\n        return kv_caches",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/sfa_v1.py\n+++ b/vllm_ascend/attention/sfa_v1.py\n@@ -5,11 +5,11 @@\n     ) -> dict[str, torch.Tensor]:\n         \"\"\"Allocate SFA KV caches with decoupled indexer cache.\"\"\"\n         kv_caches = {}\n-        has_sfa_indexer_cache = self._check_indexer_cache()\n+        # Removed redundant has_sfa_indexer_cache check;\n+        # self.use_sparse is defined by hf_config.index_topk\n \n         for layer_name, cache_spec in kv_cache_config.items():\n-            # Redundant check: self.use_sparse already implies indexer\n-            if self.use_sparse and has_sfa_indexer_cache:\n+            if self.use_sparse:\n                 k_cache = self._allocate_k_cache(layer_name)\n                 kv_caches[layer_name] = (k_cache,)\n             else:",
+      "stats": "1 file changed, +3 lines, -3 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

@@ -1,0 +1,98 @@
+{
+  "report_id": "PR9602_001",
+  "pr_number": 9602,
+  "pr_title": "[Doc][Misc] Prepare v0.20.2rc1 release notes",
+  "pr_status": "merged",
+  "merged_at": "2026-06-03T15:24:09Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "docs/source/user_guide/release_notes.md:10",
+    "docs/source/user_guide/release_notes.md:15",
+    "docs/source/user_guide/release_notes.md:52",
+    "docs/source/user_guide/release_notes.md:3"
+  ],
+  "landing_sha": "c9af78a",
+  "source_quote": "let's move this to section dependency\nThis pr just make compatibility for A5, let's remove this.\nwe should list the know issues that are confirmed to be a problem here, instead of list every issues raised up.\nplz update the date",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao: docs/source/user_guide/release_notes.md:10",
+      "patch_snippet": "评后sha c9af78a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: docs/source/user_guide/release_notes.md:15",
+      "patch_snippet": "评后sha c9af78a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: docs/source/user_guide/release_notes.md:52",
+      "patch_snippet": "评后sha c9af78a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: docs/source/user_guide/release_notes.md:3",
+      "patch_snippet": "评后sha c9af78a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "c9af78a",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "发布说明中的已知问题应仅列出经过确认的实际问题，而非所有提出的 issue；内容应按照正确的章节组织（如依赖相关内容放在 dependency 章节）；发布日期需及时更新。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "docs/source/user_guide/release_notes.md",
+      "line": 1,
+      "code": "<!-- （根据评审意见推断）发布说明中存在以下问题: -->\n<!-- 1. 依赖相关内容放在了错误的位置（应在 dependency 章节） -->\n<!-- 2. 包含了仅 A5 兼容性的说明，应移除 -->\n<!-- 3. 已知问题列表包含了未确认的问题 -->\n<!-- 4. 发布日期未更新 -->\n<!-- MengqingCao 评论: \"we should list the know issues that are confirmed -->\n<!--   to be a problem here, instead of list every issues raised up.\" -->\n\n# v0.20.2rc1 Release Notes\n\nRelease date: TBD\n\n## New Features\n- DeepSeek V4 support with MLA optimization\n- A5 hardware compatibility improvements\n- ...\n\n## Dependencies\n- CANN >= 9.0.0\n- Python >= 3.10\n\n## Compatibility Notes\n- #9012 A5-specific compatibility note (应移至 Dependencies 章节)\n- #1234 Potential memory issue (unconfirmed, raised by user)\n- #5678 Feature request for X (not a bug)\n\n## Known Issues\n- #1234 Potential memory issue (unconfirmed)\n- #5678 Feature request for X\n- #9012 A5-specific compatibility note",
+      "context": "let's move this to section dependency\nThis pr just make compatibility for A5, let's remove this.\nwe should list the know issues that are confirmed to be a problem here, instead of list every issues ra"
+    },
+    "pattern": {
+      "file": "docs/source/user_guide/release_notes.md",
+      "line": 1,
+      "code": "<!-- MengqingCao 评审意见落地: -->\n<!-- 1. 将依赖相关内容移动到 dependency 章节 -->\n<!-- 2. 移除仅 A5 兼容性说明 -->\n<!-- 3. 仅保留已确认的已知问题 -->\n<!-- 4. 更新发布日期 -->\n\n# v0.20.2rc1 Release Notes\n\nRelease date: 2026-06-03\n\n## New Features\n- DeepSeek V4 support with MLA optimization\n\n## Dependencies\n- CANN >= 9.0.0\n- Python >= 3.10\n- #9012 依赖相关内容移至此章节\n\n## Known Issues\n- #1234 Memory leak in W4A4 quantization (confirmed on A2)\n<!-- 仅列出经过确认的实际问题，移除未确认的 issue -->",
+      "context": "let's move this to section dependency\nThis pr just make compatibility for A5, let's remove this.\nwe should list the know issues that are confirmed to be a problem here, instead of list every issues ra"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/user_guide/release_notes.md\n+++ b/docs/source/user_guide/release_notes.md\n@@ -1,30 +1,21 @@\n-<!-- （根据评审意见推断）发布说明中存在以下问题: -->\n-<!-- 1. 依赖相关内容放在了错误的位置（应在 dependency 章节） -->\n-<!-- 2. 包含了仅 A5 兼容性的说明，应移除 -->\n-<!-- 3. 已知问题列表包含了未确认的问题 -->\n-<!-- 4. 发布日期未更新 -->\n-<!-- MengqingCao 评论: \"we should list the know issues that are confirmed -->\n-<!--   to be a problem here, instead of list every issues raised up.\" -->\n+<!-- MengqingCao 评审意见落地: -->\n+<!-- 1. 将依赖相关内容移动到 dependency 章节 -->\n+<!-- 2. 移除仅 A5 兼容性说明 -->\n+<!-- 3. 仅保留已确认的已知问题 -->\n+<!-- 4. 更新发布日期 -->\n \n # v0.20.2rc1 Release Notes\n \n-Release date: TBD\n+Release date: 2026-06-03\n \n ## New Features\n - DeepSeek V4 support with MLA optimization\n-- A5 hardware compatibility improvements\n-- ...\n \n ## Dependencies\n - CANN >= 9.0.0\n - Python >= 3.10\n-\n-## Compatibility Notes\n-- #9012 A5-specific compatibility note (应移至 Dependencies 章节)\n-- #1234 Potential memory issue (unconfirmed, raised by user)\n-- #5678 Feature request for X (not a bug)\n+- #9012 依赖相关内容移至此章节\n \n ## Known Issues\n-- #1234 Potential memory issue (unconfirmed)\n-- #5678 Feature request for X\n-- #9012 A5-specific compatibility note\n+- #1234 Memory leak in W4A4 quantization (confirmed on A2)\n+<!-- 仅列出经过确认的实际问题，移除未确认的 issue -->\n",
+      "stats": "1 file changed, +9 lines, -18 lines",
+      "key_changes": [
+        "-<!-- （根据评审意见推断）发布说明中存在以下问题: -->",
+        "-<!-- 1. 依赖相关内容放在了错误的位置（应在 dependency 章节） -->",
+        "-<!-- 2. 包含了仅 A5 兼容性的说明，应移除 -->",
+        "-<!-- 3. 已知问题列表包含了未确认的问题 -->",
+        "-<!-- 4. 发布日期未更新 -->",
+        "-<!-- MengqingCao 评论: \"we should list the know issues that are confirmed -->",
+        "-<!--   to be a problem here, instead of list every issues raised up.\" -->",
+        "+<!-- MengqingCao 评审意见落地: -->",
+        "+<!-- 1. 将依赖相关内容移动到 dependency 章节 -->",
+        "+<!-- 2. 移除仅 A5 兼容性说明 -->",
+        "+<!-- 3. 仅保留已确认的已知问题 -->",
+        "+<!-- 4. 更新发布日期 -->",
+        "-Release date: TBD",
+        "+Release date: 2026-06-03",
+        "-- A5 hardware compatibility improvements",
+        "-- ...",
+        "-",
+        "-## Compatibility Notes",
+        "-- #9012 A5-specific compatibility note (应移至 Dependencies 章节)",
+        "-- #1234 Potential memory issue (unconfirmed, raised by user)",
+        "-- #5678 Feature request for X (not a bug)",
+        "+- #9012 依赖相关内容移至此章节",
+        "-- #1234 Potential memory issue (unconfirmed)",
+        "-- #5678 Feature request for X",
+        "-- #9012 A5-specific compatibility note",
+        "+- #1234 Memory leak in W4A4 quantization (confirmed on A2)",
+        "+<!-- 仅列出经过确认的实际问题，移除未确认的 issue -->"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

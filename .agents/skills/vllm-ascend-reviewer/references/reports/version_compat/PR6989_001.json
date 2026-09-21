@@ -1,0 +1,60 @@
+{
+  "report_id": "PR6989_001",
+  "pr_number": 6989,
+  "pr_title": "[bugs] fix install FIA sh",
+  "pr_status": "merged",
+  "merged_at": "2026-03-06T03:42:33Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tools/install_flash_infer_attention_score_ops_a2.sh:27",
+    "tools/install_flash_infer_attention_score_ops_a3.sh:26"
+  ],
+  "landing_sha": "ecc02f9",
+  "source_quote": "```suggestion\nwget https://vllm-ascend.obs.cn-north-4.myhuaweicloud.com/vllm-ascend/cann-8.5.1/fused_infer_attention_score_$(uname -i).tar.gz\n```",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 提供了更新下载链接的 suggestion，将 cann-8.5.0 更新为 cann-8.5.1。wxsIcey 补充建议将硬编码的 CANN 版本改为变量化。作者通过 commit `ecc02f9` 和 `20ef373` 更新了 a2 和 a3 脚本的下载链接，2/4 建议直接落地（a2 脚本链接更新），其余建议通过后续 sha 落地。",
+      "patch_snippet": "commit `ecc02f9`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "ecc02f9",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "安装脚本中的 CANN 版本号和下载链接应使用变量（如 `${CANN_VERSION}`）而非硬编码值，以便在升级 operator 包时无需修改脚本代码。同时，下载链接需与实际可用的 OBS 路径保持一致。",
+    "context": "",
+    "checkpoints": [
+      "检查安装脚本中是否存在硬编码的版本号（如 `cann-8.5.0`）",
+      "确认下载链接指向的 OBS 路径是否有效",
+      "验证 a2 和 a3 脚本是否使用一致的版本",
+      "确认版本升级时是否需要同步更新所有相关脚本"
+    ],
+    "antipattern": {
+      "file": "tools/install_flash_infer_attention_score_ops_a2.sh",
+      "line": 15,
+      "code": "set -e\n\n\nASCEND_TOOLKIT_HOME=${ASCEND_TOOLKIT_HOME:-/usr/local/Ascend/ascend-toolkit/latest}\n\nmkdir -p ${ASCEND_TOOLKIT_HOME}/ops_transformer\n\ncd /tmp\nwget https://vllm-ascend.obs.cn-north-4.myhuaweicloud.com/vllm-ascend/cann-8.5.0/fused_infer_attention_score_$(uname -i).tar.gz\n\ntar -xzf fused_infer_attention_score_$(uname -i).tar.gz -C ${ASCEND_TOOLKIT_HOME}/ops_transformer\ncp -f ${ASCEND_TOOLKIT_HOME}/ops_transformer/fused_infer_attention_score_a2/*.so ${ASCEND_TOOLKIT_HOME}/ops_transformer/\nrm -f libopmaster_*.so",
+      "context": "```suggestion"
+    },
+    "pattern": {
+      "file": "tools/install_flash_infer_attention_score_ops_a2.sh",
+      "line": 15,
+      "code": "set -e\n\n\nASCEND_TOOLKIT_HOME=${ASCEND_TOOLKIT_HOME:-/usr/local/Ascend/ascend-toolkit/latest}\n\nmkdir -p ${ASCEND_TOOLKIT_HOME}/ops_transformer\n\ncd /tmp\nwget https://vllm-ascend.obs.cn-north-4.myhuaweicloud.com/vllm-ascend/cann-8.5.1/fused_infer_attention_score_$(uname -i).tar.gz\n\ntar -xzf fused_infer_attention_score_$(uname -i).tar.gz -C ${ASCEND_TOOLKIT_HOME}/ops_transformer\ncp -f ${ASCEND_TOOLKIT_HOME}/ops_transformer/fused_infer_attention_score_a2/*.so ${ASCEND_TOOLKIT_HOME}/ops_transformer/\nrm -f libopmaster_*.so",
+      "context": "```suggestion"
+    },
+    "diff": {
+      "unified": "--- a/tools/install_flash_infer_attention_score_ops_a2.sh\n+++ b/tools/install_flash_infer_attention_score_ops_a2.sh\n@@ -15,13 +15,13 @@\n mkdir -p ${ASCEND_TOOLKIT_HOME}/ops_transformer\n \n cd /tmp\n-wget https://vllm-ascend.obs.cn-north-4.myhuaweicloud.com/vllm-ascend/cann-8.5.0/fused_infer_attention_score_$(uname -i).tar.gz\n+wget https://vllm-ascend.obs.cn-north-4.myhuaweicloud.com/vllm-ascend/cann-8.5.1/fused_infer_attention_score_$(uname -i).tar.gz\n \n tar -xzf fused_infer_attention_score_$(uname -i).tar.gz -C ${ASCEND_TOOLKIT_HOME}/ops_transformer\n cp -f ${ASCEND_TOOLKIT_HOME}/ops_transformer/fused_infer_attention_score_a2/*.so ${ASCEND_TOOLKIT_HOME}/ops_transformer/",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "修改了第 9-9 行的代码"
+      ]
+    },
+    "language": "sh",
+    "_status": "extracted"
+  }
+}

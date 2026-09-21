@@ -1,0 +1,58 @@
+{
+  "report_id": "PR6715_001",
+  "pr_number": 6715,
+  "pr_title": "[Feat]Xlite Qwen3 MoE Support Data Parallel",
+  "pr_status": "merged",
+  "merged_at": "2026-03-06T08:31:43Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/xlite/xlite.py:308"
+  ],
+  "landing_sha": "3a141d8",
+  "source_quote": "The naming seems a little wired. BTW, I think the pad in `CudagraphDispatcher` does not only occurs in DP scenario, but also when the batch size is not included in the capture sizes. @yiz-liu plz also take a look.",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 指出命名有些奇怪，并指出 `CudagraphDispatcher` 中的 pad 不仅发生在 DP 场景中，也发生在 batch size 不在 capture sizes 中时。作者解释了使用 `batch_descriptor.num_tokens` 替代 `num_actual_tokens` 的原因：在 DP 场景下集合通信要求所有 rank 的 tensor 大小一致，1/1 建议落地。",
+      "patch_snippet": "",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "3a141d8",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在数据并行（DP）场景中，集合通信（如 all-reduce）要求所有 rank 的 tensor 大小完全一致。不能使用实际 token 数截断 tensor，而应使用统一的 batch 大小。",
+    "context": "",
+    "checkpoints": [
+      "DP 场景下不能使用 `num_actual_tokens` 截断 hidden_states",
+      "应使用 `batch_descriptor.num_tokens` 确保所有 rank 大小一致",
+      "CudagraphDispatcher 中的 pad 逻辑需考虑非 DP 场景（batch size 不在 capture sizes 中时）"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/xlite/xlite.py",
+      "line": 295,
+      "code": "class XliteWrapper:\n    \"\"\"Xlite graph wrapper for model execution.\"\"\"\n\n    def forward(self, hidden_states, batch_descriptor, ...):\n        \"\"\"Execute forward pass with Xlite graph.\"\"\"\n        num_actual_tokens = batch_descriptor.num_actual_tokens\n        hidden_states = hidden_states[:num_actual_tokens]\n\n        if self.xlite_graph_enabled:\n            output = self._run_xlite_graph(hidden_states, ...)\n        else:\n            output = self._eager_forward(hidden_states, ...)\n\n        return output",
+      "context": "The naming seems a little wired. BTW, I think the pad in `CudagraphDispatcher` does not only occurs in DP scenario, but also when the batch size is not included in the capture sizes. @yiz-liu plz also take a look."
+    },
+    "pattern": {
+      "file": "vllm_ascend/xlite/xlite.py",
+      "line": 295,
+      "code": "class XliteWrapper:\n    \"\"\"Xlite graph wrapper for model execution.\"\"\"\n\n    def forward(self, hidden_states, batch_descriptor, ...):\n        \"\"\"Execute forward pass with Xlite graph.\"\"\"\n        hidden_states = hidden_states[:batch_descriptor.num_tokens]\n\n        if self.xlite_graph_enabled:\n            output = self._run_xlite_graph(hidden_states, ...)\n        else:\n            output = self._eager_forward(hidden_states, ...)\n\n        return output",
+      "context": "The naming seems a little wired. BTW, I think the pad in `CudagraphDispatcher` does not only occurs in DP scenario, but also when the batch size is not included in the capture sizes. @yiz-liu plz also take a look."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/xlite/xlite.py\n+++ b/vllm_ascend/xlite/xlite.py\n@@ -295,14 +295,13 @@\n \n     def forward(self, hidden_states, batch_descriptor, ...):\n         \"\"\"Execute forward pass with Xlite graph.\"\"\"\n-        num_actual_tokens = batch_descriptor.num_actual_tokens\n-        hidden_states = hidden_states[:num_actual_tokens]\n+        hidden_states = hidden_states[:batch_descriptor.num_tokens]\n \n         if self.xlite_graph_enabled:\n             output = self._run_xlite_graph(hidden_states, ...)",
+      "stats": "1 file changed, +1 lines, -2 lines",
+      "key_changes": [
+        "修改了第 6-7 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

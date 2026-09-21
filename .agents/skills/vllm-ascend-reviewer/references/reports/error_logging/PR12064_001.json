@@ -1,0 +1,49 @@
+{
+  "report_id": "PR12064_001",
+  "pr_number": 12064,
+  "pr_title": "[BugFix][KV Pool] Gate Memcache lazy init by protocol and make register buffer default",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "8d34804",
+  "source_quote": "### Robust Configuration Parsing & Exception Handling\n> The current implementation of `_is_device_sdma()` is fragile:\n1. **Fragile Substring Matching**: A simple substring check (`\"ock.mmc.local_service.protocol = device_sdma\" in config_file.read()`) can easily fail if there are minor formatting variations (e.g., different spacing around `=`) or if the line is commented out (e.g., `# ock.mmc.local_service.protocol = device_sdma`).\n2. **Unhandled Exceptions**: If `MMC_META_CONFIG_PATH` is set but the file does not exist or is unreadable, `open()` will raise an unhandled exception.\n> Suggested solution: robust parser — strip whitespace, skip blank / `#` / `;` comment lines, key=value `split(\"=\",1)` with `.strip()` both sides, wrap in try-except + logger.warning fallback to `False`.\n如果这里用户添加了注释，是不是会出现解析失败？\n有可能，当前可以暂时维持这个逻辑，因为用户的 json 文件一般比较模板化。这个事情可以作为一个 TODO，后续对于非标准输入的情况做处理。",
+  "correspondence": [],
+  "verification": {
+    "merged": true,
+    "modified_commit": "8d34804",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当代码要从一个\"人工可能编辑过的配置载体\"（MMC .conf、.properties、TOML/INI 的手工拼接、甚至 JSON/YAML）读取布尔开关/枚举值时，禁止把整个内容 `.read()` 出来做 `\"<fixed_substring>\" in content` 匹配。正确做法是按格式解析（至少达到 partition key/value、strip whitespace、跳注释/空行的最低结构化门槛）；并显式决定\"解析失败 → 退化 False + warning 还是 raise ValueError\"——**不得**出现异常直接冒泡到 init 外层，也**不得**出现\"注释里碰巧包含关键字就误判开关\"的假阳性。",
+    "context": "",
+    "checkpoints": [
+      "搜索 `\"open(\" + in + config_content\", \"<key_pattern>\" in f.read()\"`、`\"substring\" in Path().read_text()` 这种模式",
+      "检查解析函数对下列四类输入的行为："
+    ],
+    "antipattern": {
+      "file": "memcache_backend.py",
+      "line": 0,
+      "code": "# memcache_backend.py L21-L25（gemini review 时的脆弱实现）\nimport os\n\ndef _is_device_sdma() -> bool:\n    \"\"\"Check if the configured transport protocol is device_sdma.\"\"\"\n    return \"ock.mmc.local_service.protocol = device_sdma\" in open(\n        os.getenv(\"MMC_META_CONFIG_PATH\"), encoding=\"utf-8\"\n    ).read()\n    # ↑↑ 没有行结构概念：\n    #    • \"# key = device_sdma\" 也会误判 True（注释行被匹配）\n    #    • \"key=device_sdma\"（无空格）会误判 False（空格变体不兼容）\n    #    • 文件不存在 / 变量未 set → 直接异常炸，MemcacheBackend init 崩溃\n    #    • 环境变量名 MMC_META_CONFIG_PATH 与后续修改后不一致",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "memcache_backend.py",
+      "line": 0,
+      "code": "# memcache_backend.py L43-L55（commit 8d34804：逐行 partition 解析 + 注释行跳过）\nimport os\nimport logging\n\nlogger = logging.getLogger(__name__)\n\ndef _is_device_sdma() -> bool:\n    \"\"\"Check if the configured transport protocol is device_sdma.\"\"\"\n    config_path = os.getenv(\"MMC_LOCAL_CONFIG_PATH\")  # 同时修改变量名\n    if not config_path:\n        raise ValueError(\"The environment variable 'MMC_LOCAL_CONFIG_PATH' is not set.\")\n        # ↑↑ gemini 建议 return False + warning；作者选择直接 raise（Fail Fast 策略）\n    with open(config_path, encoding=\"utf-8\") as config_file:\n        for line in config_file:\n            line = line.strip()\n            if not line or line.startswith((\"#\", \";\")):  # ✅ 整行注释 / 空行跳过\n                continue\n            key, separator, value = line.partition(\"=\")    # ✅ 用 partition 拆 key=value\n            if separator and key.strip() == \"ock.mmc.local_service.protocol\":\n                return value.strip() == \"device_sdma\"\n                # ↑↑ 注意：如果 value 尾部有 # inline comment（如 \"device_sdma #enable\"），\n                #        value.strip() != \"device_sdma\"，会返回 False。\n                #        Tflowers 提了，作者说留 TODO。\n    return False",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/memcache_backend.py\n+++ b/memcache_backend.py\n@@ -1,13 +1,24 @@\n-# memcache_backend.py L21-L25（gemini review 时的脆弱实现）\n+# memcache_backend.py L43-L55（commit 8d34804：逐行 partition 解析 + 注释行跳过）\n import os\n+import logging\n+\n+logger = logging.getLogger(__name__)\n \n def _is_device_sdma() -> bool:\n     \"\"\"Check if the configured transport protocol is device_sdma.\"\"\"\n-    return \"ock.mmc.local_service.protocol = device_sdma\" in open(\n-        os.getenv(\"MMC_META_CONFIG_PATH\"), encoding=\"utf-8\"\n-    ).read()\n-    # ↑↑ 没有行结构概念：\n-    #    • \"# key = device_sdma\" 也会误判 True（注释行被匹配）\n-    #    • \"key=device_sdma\"（无空格）会误判 False（空格变体不兼容）\n-    #    • 文件不存在 / 变量未 set → 直接异常炸，MemcacheBackend init 崩溃\n-    #    • 环境变量名 MMC_META_CONFIG_PATH 与后续修改后不一致\n+    config_path = os.getenv(\"MMC_LOCAL_CONFIG_PATH\")  # 同时修改变量名\n+    if not config_path:\n+        raise ValueError(\"The environment variable 'MMC_LOCAL_CONFIG_PATH' is not set.\")\n+        # ↑↑ gemini 建议 return False + warning；作者选择直接 raise（Fail Fast 策略）\n+    with open(config_path, encoding=\"utf-8\") as config_file:\n+        for line in config_file:\n+            line = line.strip()\n+            if not line or line.startswith((\"#\", \";\")):  # ✅ 整行注释 / 空行跳过\n+                continue\n+            key, separator, value = line.partition(\"=\")    # ✅ 用 partition 拆 key=value\n+            if separator and key.strip() == \"ock.mmc.local_service.protocol\":\n+                return value.strip() == \"device_sdma\"\n+                # ↑↑ 注意：如果 value 尾部有 # inline comment（如 \"device_sdma #enable\"），\n+                #        value.strip() != \"device_sdma\"，会返回 False。\n+                #        Tflowers 提了，作者说留 TODO。\n+    return False",
+      "stats": "1 file changed, +20 lines, -9 lines",
+      "key_changes": [
+        "添加 TODO 注释说明",
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

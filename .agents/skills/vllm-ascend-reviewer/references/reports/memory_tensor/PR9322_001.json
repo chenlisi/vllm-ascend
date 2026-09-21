@@ -1,0 +1,55 @@
+{
+  "report_id": "PR9322_001",
+  "pr_number": 9322,
+  "pr_title": "[BugFix] Fix the accuracy issue in DFlash FULL_DESCODE_ONLY mode caused by attn group sorting",
+  "pr_status": "merged",
+  "merged_at": "2026-05-21T09:37:41Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/attention/attention_v1.py:484"
+  ],
+  "landing_sha": "03ee55e",
+  "source_quote": "after dummy_run, the _ATTN_KEYS_BUFFER  will be []. The condition should be:\nif _ATTN_KEYS_BUFFER is None or not _ATTN_KEYS_BUFFER:",
+  "correspondence": [
+    {
+      "review_quote": "keyi-zz: vllm_ascend/attention/attention_v1.py:484",
+      "patch_snippet": "评后sha 03ee55e 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "03ee55e",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "after dummy_run, the _ATTN_KEYS_BUFFER  will be []. The condition should be:       if _ATTN_KEYS_BUFFER is None or not _ATTN_KEYS_BUFFER:",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 484,
+      "code": "# 每次 _ATTN_KEYS_BUFFER 重置时可能重复初始化",
+      "context": "after dummy_run, the _ATTN_KEYS_BUFFER  will be []. The condition should be:\nif _ATTN_KEYS_BUFFER is None or not _ATTN_KEYS_BUFFER:"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 484,
+      "code": "# 将 import regex 和 extract_layer_index 辅助函数移至模块顶层",
+      "context": "after dummy_run, the _ATTN_KEYS_BUFFER  will be []. The condition should be:\nif _ATTN_KEYS_BUFFER is None or not _ATTN_KEYS_BUFFER:"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/attention_v1.py\n+++ b/vllm_ascend/attention/attention_v1.py\n@@ -1 +1 @@\n-# 每次 _ATTN_KEYS_BUFFER 重置时可能重复初始化\n+# 将 import regex 和 extract_layer_index 辅助函数移至模块顶层\n",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "-# 每次 _ATTN_KEYS_BUFFER 重置时可能重复初始化",
+        "+# 将 import regex 和 extract_layer_index 辅助函数移至模块顶层"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

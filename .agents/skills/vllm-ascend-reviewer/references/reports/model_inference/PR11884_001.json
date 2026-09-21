@@ -1,0 +1,45 @@
+{
+  "report_id": "PR11884_001",
+  "pr_number": 11884,
+  "pr_title": "[Doc][Misc] Update Qwen3-VL documents",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "5ca0aed",
+  "source_quote": "",
+  "correspondence": [],
+  "verification": {
+    "merged": true,
+    "modified_commit": "5ca0aed",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "所有 `docs/source/tutorials/models/*.md` 下的模型部署文档（单模型教程），必须与项目标准化部署模板在以下 9 个维度保持一致。任何新增或更新的文档必须在合入前过模板一致性审查，由人类 reviewer 逐条校验。这 9 个维度为：(1) H1/H2 章节标题文案与编号；(2) 锚文本大小写（Supported Features List / Feature Guide / Model Weight 等固定短语）；(3) 表格列头星号命名（Total NPUs → *Total NPUs）与脚注位置（表头下方 = 表格之后第一行 blockquote）；(4) 3.1 Model Weight 小节链接文案固定 \"Model Weight\"，不得写 \"Download model weight\"；(5) 4.1 Docker Image 镜像 tag 必须使用 `{{ vllm_ascend_version }}` 模板占位符，不得硬编码 `v0.xx.yy`，跨 A2/A3 两个镜像系列都必须有；(6) 5.x 在线部署章节末尾必须提供 Service Verification curl 命令 + Expected Result HTTP 200 + choices 字段；(7) vllm serve 实际命令使用的模型名 / quantization 参数必须与 3.1 列举的 Validated weight name 一一对应，不得示例一个名字段落标题写另一个；(8) 章节号不得有模板不存在的段（如旧版 Ray 5.3、Pipeline Parallel 5.3、Offline Inference 5.4），模板没有的必须删除或合并到其他章节并整体重排；(9) FAQ 链接锚文本固定 \"Public FAQs\"（相对）或 \"Public FAQ\"（绝对跨域链接），不得写通用 FAQs。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "<!-- 文件: docs/source/tutorials/models/Qwen3-VL-235B-A22B-Instruct.md -->\n<!-- 行号: 15-35 (3.1 Model Weight 章节) -->\n### 3.1 Model Weight\n\nThe following validated weights are available for Qwen3-VL-235B-A22B:\n\n- `Qwen3-VL-235B-A22B-Instruct-w8a8-QuaRot`: W8A8 quantized model for Ascend A3.\n  [Download model weight](https://www.modelscope.cn/models/Eco-Tech/Qwen3-VL-235B-A22B-Instruct-w8a8-QuaRot)\n\nRefer to [supported features](../../user_guide/support_matrix/supported_models.md)\nto get the model's supported feature matrix.\n\nRefer to [feature guide](../../user_guide/feature_guide/index.md)\nto get feature configuration details.",
+      "context": "修改前代码 (markdown)"
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "<!-- 文件: docs/source/tutorials/models/Qwen3-VL-235B-A22B-Instruct.md -->\n<!-- 行号: 15-35 (3.1 Model Weight 章节) -->\n### 3.1 Model Weight\n\nThe following validated weights are available for Qwen3-VL-235B-A22B:\n\n- `Qwen3-VL-235B-A22B-Instruct-w8a8-QuaRot`: W8A8 quantized model for Ascend A3.\n  [Model Weight](https://www.modelscope.cn/models/Eco-Tech/Qwen3-VL-235B-A22B-Instruct-w8a8-QuaRot)\n\nRefer to [Supported Features List](../../user_guide/support_matrix/supported_models.md)\nto get the model's supported feature matrix.\n\nRefer to [Feature Guide](../../user_guide/feature_guide/index.md)\nto get the feature's configuration.",
+      "context": "修改后代码 (markdown)"
+    },
+    "diff": {
+      "unified": "--- a/file\n+++ b/file\n@@ -5,10 +5,10 @@\n The following validated weights are available for Qwen3-VL-235B-A22B:\n \n - `Qwen3-VL-235B-A22B-Instruct-w8a8-QuaRot`: W8A8 quantized model for Ascend A3.\n-  [Download model weight](https://www.modelscope.cn/models/Eco-Tech/Qwen3-VL-235B-A22B-Instruct-w8a8-QuaRot)\n+  [Model Weight](https://www.modelscope.cn/models/Eco-Tech/Qwen3-VL-235B-A22B-Instruct-w8a8-QuaRot)\n \n-Refer to [supported features](../../user_guide/support_matrix/supported_models.md)\n+Refer to [Supported Features List](../../user_guide/support_matrix/supported_models.md)\n to get the model's supported feature matrix.\n \n-Refer to [feature guide](../../user_guide/feature_guide/index.md)\n-to get feature configuration details.\n+Refer to [Feature Guide](../../user_guide/feature_guide/index.md)\n+to get the feature's configuration.",
+      "stats": "1 file changed, +4 lines, -4 lines",
+      "key_changes": [
+        "修改代码逻辑"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

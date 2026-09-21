@@ -1,0 +1,45 @@
+{
+  "report_id": "PR12121_001",
+  "pr_number": 0,
+  "pr_title": "",
+  "pr_status": "unknown",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [],
+  "landing_sha": "",
+  "source_quote": "",
+  "correspondence": [],
+  "verification": {
+    "merged": false,
+    "modified_commit": "",
+    "approvals": 0
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "<!-- docs/source/tutorials/models/GLM5.2.md L1180-L1190 -->\n<!-- GLM5.2 1M Context Configuration 配置表格段 -->\n\n| Deployment Mode | Node Configuration | Parallel Config | Max Model Len |\n| --- | --- | --- | --- |\n| Co-located | 1 Atlas 800 A3 node | `DP8 PP1 TP8 PCP1 DCP8` | `1024000` |\n| 2P2D PD disaggregation | 1 prefiller with 2 A3 nodes + 1 decoder with 2 A3 nodes | Prefill `DP4 PP1 TP8 PCP1 DCP8`, Decode `DP4 PP1 TP8 PCP1 DCP8` | `1024000` |\n<!-- ↑ L1185：标题写 \"2P2D\" 但列2描述为 \"1 prefiller + 1 decoder\" = 1P1D 拓扑，矛盾 -->",
+      "context": "修改前代码 (markdown)"
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "<!-- docs/source/tutorials/models/GLM5.2.md L1180-L1190 -->\n<!-- GLM5.2 1M Context Configuration 配置表格段 -->\n\n| Deployment Mode | Node Configuration | Parallel Config | Max Model Len |\n| --- | --- | --- | --- |\n| Co-located | 1 Atlas 800 A3 node | `DP8 PP1 TP8 PCP1 DCP8` | `1024000` |\n| 1P1D PD disaggregation | 1 prefiller with 2 A3 nodes + 1 decoder with 2 A3 nodes | Prefill `DP4 PP1 TP8 PCP1 DCP8`, Decode `DP4 PP1 TP8 PCP1 DCP8` | `1024000` |\n<!-- ↑ L1185：修正为 \"1P1D\"，与列2 \"1 prefiller + 1 decoder\" 一致 -->",
+      "context": "修改后代码 (markdown)"
+    },
+    "diff": {
+      "unified": "--- a/file\n+++ b/file\n@@ -4,5 +4,5 @@\n | Deployment Mode | Node Configuration | Parallel Config | Max Model Len |\n | --- | --- | --- | --- |\n | Co-located | 1 Atlas 800 A3 node | `DP8 PP1 TP8 PCP1 DCP8` | `1024000` |\n-| 2P2D PD disaggregation | 1 prefiller with 2 A3 nodes + 1 decoder with 2 A3 nodes | Prefill `DP4 PP1 TP8 PCP1 DCP8`, Decode `DP4 PP1 TP8 PCP1 DCP8` | `1024000` |\n-<!-- ↑ L1185：标题写 \"2P2D\" 但列2描述为 \"1 prefiller + 1 decoder\" = 1P1D 拓扑，矛盾 -->\n+| 1P1D PD disaggregation | 1 prefiller with 2 A3 nodes + 1 decoder with 2 A3 nodes | Prefill `DP4 PP1 TP8 PCP1 DCP8`, Decode `DP4 PP1 TP8 PCP1 DCP8` | `1024000` |\n+<!-- ↑ L1185：修正为 \"1P1D\"，与列2 \"1 prefiller + 1 decoder\" 一致 -->",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "修改代码逻辑"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

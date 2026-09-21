@@ -1,0 +1,45 @@
+{
+  "report_id": "PR12630_001",
+  "pr_number": 0,
+  "pr_title": "",
+  "pr_status": "unknown",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "",
+  "source_quote": "",
+  "correspondence": [],
+  "verification": {
+    "merged": false,
+    "modified_commit": "",
+    "approvals": 0
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/spec_decode/step3p5.py",
+      "line": 0,
+      "code": "# vllm_ascend/spec_decode/step3p5.py — AscendStep3p5MTPProposer.dummy_run()\n# commit c786823 / 06a41f9 版本（评前状态，缺失 synchronize 包装）\n\nclass AscendStep3p5MTPProposer(AscendSpecDecodeBaseProposer):\n    \"\"\"MTP proposer for step 3.5 speculative decoding.\"\"\"\n\n    def dummy_run(self, ...):\n        num_reqs = len(self.runner.input_batch.num_reqs)\n        aclgraph_runtime_mode = self.runner.aclgraph_runtime_mode\n\n        # ... 前面的 dummy run 逻辑 ...\n\n        if aclgraph_runtime_mode == CUDAGraphMode.FULL and len(self.runner.attn_groups) > 0:\n            num_computed_tokens_cpu = self.runner.input_batch.num_computed_tokens_cpu_tensor[:num_reqs]\n\n            # ❌ 裸 copy + copy_to_gpu，pinned CPU buffer 在 non-blocking H2D 期间\n            #    可能被下一 step 覆写，导致竞态条件\n            self.query_start_loc.cpu[: num_reqs + 1].copy_(\n                self.runner.query_start_loc.cpu[: num_reqs + 1])\n            self.query_start_loc.copy_to_gpu()\n\n            common_attn_metadata = AscendCommonAttentionMetadata(\n                query_start_loc=self.query_start_loc.gpu[: num_reqs + 1],",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/spec_decode/step3p5.py",
+      "line": 0,
+      "code": "# vllm_ascend/spec_decode/step3p5.py — AscendStep3p5MTPProposer.dummy_run()\n# commit 4cc10d4 版本（评后修复，与 gemini suggestion 完全一致）\n\nclass AscendStep3p5MTPProposer(AscendSpecDecodeBaseProposer):\n    \"\"\"MTP proposer for step 3.5 speculative decoding.\"\"\"\n\n    def dummy_run(self, ...):\n        num_reqs = len(self.runner.input_batch.num_reqs)\n        aclgraph_runtime_mode = self.runner.aclgraph_runtime_mode\n\n        # ... 前面的 dummy run 逻辑 ...\n\n        if aclgraph_runtime_mode == CUDAGraphMode.FULL and len(self.runner.attn_groups) > 0:\n            num_computed_tokens_cpu = self.runner.input_batch.num_computed_tokens_cpu_tensor[:num_reqs]\n\n            # ✅ 新增 context manager 包装（事件同步协议），\n            #    与 llm_base_proposer.py 中的修复保持一致\n            with self.runner.synchronize_input_prep():\n                self.query_start_loc.cpu[: num_reqs + 1].copy_(\n                    self.runner.query_start_loc.cpu[: num_reqs + 1])\n                self.query_start_loc.copy_to_gpu()\n\n            common_attn_metadata = AscendCommonAttentionMetadata(\n                query_start_loc=self.query_start_loc.gpu[: num_reqs + 1],",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/spec_decode/step3p5.py\n+++ b/vllm_ascend/spec_decode/step3p5.py\n@@ -1,5 +1,5 @@\n # vllm_ascend/spec_decode/step3p5.py — AscendStep3p5MTPProposer.dummy_run()\n-# commit c786823 / 06a41f9 版本（评前状态，缺失 synchronize 包装）\n+# commit 4cc10d4 版本（评后修复，与 gemini suggestion 完全一致）\n \n class AscendStep3p5MTPProposer(AscendSpecDecodeBaseProposer):\n     \"\"\"MTP proposer for step 3.5 speculative decoding.\"\"\"\n@@ -13,11 +13,12 @@\n         if aclgraph_runtime_mode == CUDAGraphMode.FULL and len(self.runner.attn_groups) > 0:\n             num_computed_tokens_cpu = self.runner.input_batch.num_computed_tokens_cpu_tensor[:num_reqs]\n \n-            # ❌ 裸 copy + copy_to_gpu，pinned CPU buffer 在 non-blocking H2D 期间\n-            #    可能被下一 step 覆写，导致竞态条件\n-            self.query_start_loc.cpu[: num_reqs + 1].copy_(\n-                self.runner.query_start_loc.cpu[: num_reqs + 1])\n-            self.query_start_loc.copy_to_gpu()\n+            # ✅ 新增 context manager 包装（事件同步协议），\n+            #    与 llm_base_proposer.py 中的修复保持一致\n+            with self.runner.synchronize_input_prep():\n+                self.query_start_loc.cpu[: num_reqs + 1].copy_(\n+                    self.runner.query_start_loc.cpu[: num_reqs + 1])\n+                self.query_start_loc.copy_to_gpu()\n \n             common_attn_metadata = AscendCommonAttentionMetadata(\n                 query_start_loc=self.query_start_loc.gpu[: num_reqs + 1],",
+      "stats": "1 file changed, +7 lines, -6 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

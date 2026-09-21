@@ -1,0 +1,62 @@
+{
+  "report_id": "PR5051_002",
+  "pr_number": 5051,
+  "pr_title": "[Feature] implement model runner v2 basic framework",
+  "pr_status": "merged",
+  "merged_at": "",
+  "dimension": [
+    "design",
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/worker_v1.py:95"
+  ],
+  "landing_sha": "5d395ff",
+  "source_quote": "rename to worker.py",
+  "correspondence": [
+    {
+      "review_quote": "rename to worker.py: wangxiyuan 👤 L95 worker_v1.py(ok, i will fix it)",
+      "patch_snippet": "评后sha 5d395ff \"make some fixes according to pr reviews\" 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "5d395ff",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "当重构一个被多处引用的核心 Python 模块文件名时（如 `worker_v1.py` → `worker.py`），仅做本体文件 rename 是不够的，必须完整扫描并同步替换 **4 类间接引用点**，否则会在 CI/UT 运行期或动态 import 时触发 `ModuleNotFoundError`。这 4 类按易漏程度从高到低是：(1) 反射/字符串形式的类路径 (2) UT monkeypatch 的 `@patch(\"dotted.path\")` target (3) 文档/翻译中嵌入的示例代码 (4) 普通 `from X import Y` 静态 import。",
+    "context": "",
+    "checkpoints": [
+      "重命名 PR 的 diff 必须存在 **对称性**：`+行数 ≈ −行数`（本 PR +1094/-1094 完全对称，是典型成功信号）",
+      "检查 `platform.py` / `config.py` / `entry_points` 等以字符串形式注册 worker_cls/model_cls 的元数据文件（最容易漏）",
+      "检查所有 UT 里 `@patch(\"a.b.c.func\")` / `monkeypatch.setattr(\"a.b.c\", x)` 的 dotted string path，它们不受 IDE rename refactor 覆盖",
+      "检查 `docs/**/*.md` / `docs/**/*.rst` / `locale/**/*.po` 中的代码块示例，人工 rename refactor 工具通常不扫描文档",
+      "作者回复\"ok i will fix it\"后，最终落地的 commit 标题最好含明确的\"according to pr reviews / fix review comments\"标识，便于后续追溯改因"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/worker_v1.py",
+      "line": 95,
+      "code": "parallel_config.worker_cls = \"vllm_ascend.worker.worker_v1.NPUWorker\"",
+      "context": "rename to worker.py"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/worker_v1.py",
+      "line": 95,
+      "code": "parallel_config.worker_cls = \"vllm_ascend.worker.worker.NPUWorker\"",
+      "context": "rename to worker.py"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/worker_v1.py\n+++ b/vllm_ascend/worker/worker_v1.py\n@@ -1 +1 @@\n-parallel_config.worker_cls = \"vllm_ascend.worker.worker_v1.NPUWorker\"\n+parallel_config.worker_cls = \"vllm_ascend.worker.worker.NPUWorker\"",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "- parallel_config.worker_cls = \"vllm_ascend.worker.worker_v1.NPUWorker\"",
+        "+ parallel_config.worker_cls = \"vllm_ascend.worker.worker.NPUWorker\""
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

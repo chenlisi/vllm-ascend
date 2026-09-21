@@ -1,0 +1,59 @@
+{
+  "report_id": "PR4154_001",
+  "pr_number": 4154,
+  "pr_title": "[perf][bugfix] improve performance of rejection sampler and eliminate HD synchronize in TopKTopPSampler",
+  "pr_status": "merged",
+  "merged_at": "2025-12-24T11:10:33Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/sample/sampler.py:150",
+    "vllm_ascend/sample/sampler.py:76"
+  ],
+  "landing_sha": "a076c51",
+  "source_quote": "in the original rejection sampler, there is `top_p.to(logits.dtype)`, please make sure removing `.to(logits.dtype)` is ok.",
+  "correspondence": [
+    {
+      "review_quote": "realliujiaxu 提出两个问题：(1) 指出原 rejection sampler 中有 `top_p.to(logits.dtype)` 类型转换，移除后需确认不会影响类型一致性；(2) 建议用临时变量 `use_fused_top_k_top_p_op` 代替实例属性，简化代码。作者通过 commit `a076c51` 将融合标志改为临时变量，通过 commit `95dda88` 移除了 `npu_top_k_top_p` 调用，两条意见均已落地。",
+      "patch_snippet": "commit `a076c51`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "a076c51",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在移除 `.to(dtype)` 等类型转换操作时，必须确认上下游数据的类型一致性，避免因类型不匹配导致的计算错误或运行时异常。",
+    "context": "",
+    "checkpoints": [
+      "检查是否移除了 `.to(dtype)` 类型转换",
+      "确认移除后变量的 dtype 是否与使用处一致",
+      "验证是否有单元测试覆盖类型边界情况"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/sample/sampler.py",
+      "line": 20,
+      "code": "import torch\nfrom typing import Optional\n\ndef _apply_top_k_top_p(\n    logits: torch.Tensor,\n    top_k: Optional[torch.Tensor],\n    top_p: Optional[torch.Tensor],\n):\n    \"\"\"Apply top-k and top-p sampling using NPU optimized kernel.\"\"\"\n    if k is None or 1 <= int(k.max()) <= 1024:\n        return npu_top_k_top_p(logits, top_k, top_p)",
+      "context": "in the original rejection sampler, there is `top_p.to(logits.dtype)`, please make sure removing `.to(logits.dtype)` is ok."
+    },
+    "pattern": {
+      "file": "vllm_ascend/sample/sampler.py",
+      "line": 20,
+      "code": "import torch\nfrom typing import Optional\n\ndef _apply_top_k_top_p(\n    logits: torch.Tensor,\n    top_k: Optional[torch.Tensor],\n    top_p: Optional[torch.Tensor],\n):\n    \"\"\"Apply top-k and top-p sampling using NPU optimized kernel.\"\"\"\n    if k is None or (k.numel() > 0 and 1 <= int(k.max()) <= 1024):\n        return npu_top_k_top_p(logits, top_k, top_p)",
+      "context": "in the original rejection sampler, there is `top_p.to(logits.dtype)`, please make sure removing `.to(logits.dtype)` is ok."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/sample/sampler.py\n+++ b/vllm_ascend/sample/sampler.py\n@@ -20,11 +20,11 @@\n     top_p: Optional[torch.Tensor],\n ):\n     \"\"\"Apply top-k and top-p sampling using NPU optimized kernel.\"\"\"\n-    if k is None or 1 <= int(k.max()) <= 1024:\n+    if k is None or (k.numel() > 0 and 1 <= int(k.max()) <= 1024):\n         return npu_top_k_top_p(logits, top_k, top_p)",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "修改了第 10-10 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

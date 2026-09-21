@@ -1,0 +1,97 @@
+{
+  "report_id": "PR8038_001",
+  "pr_number": 8038,
+  "pr_title": "[Feature][PCP][MM] Support multimodel reasoning when prefill context parallel feature is on",
+  "pr_status": "merged",
+  "merged_at": "2026-04-21T11:52:11Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/worker/model_runner_v1.py:1064",
+    "vllm_ascend/worker/model_runner_v1.py:1066"
+  ],
+  "landing_sha": "01a40ce",
+  "source_quote": "We should move the code above into `PCPManager` and call the function before calling `ModelRunner._preprocess`. This way, we won't need to modify `_preprocess`.\nMove the following code into `PCPManager` and call these functions like\nif self.pcp_size <= 1:\nself._gather_mm_embeddings(xxx)\nelse:\nself.pcp_manager._gather_mm_embeddings(xxx)\nOur primary goal is to reuse as much of the vLLM code as possible and minimize inheritance-based modifications, thereby reducing maintenance costs. Additionally, we should migrate PCP-related code to `PCPManager` as much as possible to facilitate reuse by `ModelRunnerV2`.",
+  "correspondence": [
+    {
+      "review_quote": "pisceskkk: vllm_ascend/worker/model_runner_v1.py:1064",
+      "patch_snippet": "评后sha 01a40ce 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "pisceskkk: vllm_ascend/worker/model_runner_v1.py:1066",
+      "patch_snippet": "评后sha 01a40ce 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "01a40ce",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "对于需要在 ModelRunner 中添加的平台特定功能（如 PCP），应将相关逻辑封装到独立的 Manager 类（如 `PCPManager`）中，而不是直接修改 ModelRunner 的方法。这样可以最大限度地复用 vLLM 上游代码，降低维护成本，并便于在 ModelRunnerV2 中复用。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 1050,
+      "code": "# and call the function before calling `ModelRunner._preprocess`.\n# This way, we won't need to modify `_preprocess`.\"\n# PCP 相关的多模态处理逻辑直接写在 ModelRunner._preprocess 中\n\nclass NPUModelRunner:\n    def _preprocess(self, model_input, prev_output):\n        # ... 原有预处理逻辑 ...\n        # PCP 多模态处理逻辑直接嵌入在 _preprocess 中\n        if self.pcp_size > 1:\n            # 直接处理 PCP 相关的 embedding 收集\n            pcp_num_tokens = self._get_pcp_local_token_count(model_input)\n            mm_embeddings = self._pcp_gather_mm_embeddings(\n                model_input, pcp_num_tokens)\n            # 对齐 multimodal embeddings 与 token positions\n            self._align_pcp_mm_embeddings(mm_embeddings)\n\n        return model_input\n\n    def _gather_mm_embeddings(self, model_input):\n        # 原始 embedding 收集逻辑\n        ...\n\n    def _pcp_gather_mm_embeddings(self, model_input, pcp_num_tokens):\n        # PCP 特定的 embedding 收集逻辑（应迁移到 PCPManager）\n        ...",
+      "context": "We should move the code above into `PCPManager` and call the function before calling `ModelRunner._preprocess`. This way, we won't need to modify `_preprocess`.\nMove the following code into `PCPManage"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/pcp_utils.py (+310/-1)",
+      "line": 1050,
+      "code": "# commit 01a40ce \"refactor code as comments\" (+65/-208, +310/-1)\n# 作者 leijie-ww 回复: \"ok, done\"\n# PCP 逻辑迁移到 PCPManager，ModelRunner 通过调用 PCPManager 方法\n\nclass NPUModelRunner:\n    def _preprocess(self, model_input, prev_output):\n        # ... 原有预处理逻辑 ...\n        # PCP 逻辑不再直接嵌入，改为调用 PCPManager\n        if self.pcp_size <= 1:\n            self._gather_mm_embeddings(model_input)\n        else:\n            self.pcp_manager._gather_mm_embeddings(model_input)\n\n        return model_input\n\n\n# PCPManager 中新增从 ModelRunner 迁移过来的方法\nclass PCPManager:\n    def __init__(self, pcp_size, ...):\n        self.pcp_size = pcp_size\n        # ...\n\n    def _gather_mm_embeddings(self, model_input):\n        \"\"\"PCP-aware multimodal embedding gathering.\n        Handles non-contiguous token positions when PCP is enabled.\"\"\"\n        # 从 ModelRunner 迁移过来的 PCP 多模态处理逻辑\n        ...\n\n    def _get_pcp_local_token_count(self, model_input):\n        \"\"\"Get local worker token count under PCP.\"\"\"\n        ...\n\n    def _align_pcp_mm_embeddings(self, mm_embeddings):\n        \"\"\"Align multimodal embeddings with token positions under PCP.\"\"\"\n        ...",
+      "context": "We should move the code above into `PCPManager` and call the function before calling `ModelRunner._preprocess`. This way, we won't need to modify `_preprocess`.\nMove the following code into `PCPManage"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/model_runner_v1.py\n+++ b/vllm_ascend/worker/model_runner_v1.py\n@@ -1,25 +1,35 @@\n-# and call the function before calling `ModelRunner._preprocess`.\n-# This way, we won't need to modify `_preprocess`.\"\n-# PCP 相关的多模态处理逻辑直接写在 ModelRunner._preprocess 中\n+# commit 01a40ce \"refactor code as comments\" (+65/-208, +310/-1)\n+# 作者 leijie-ww 回复: \"ok, done\"\n+# PCP 逻辑迁移到 PCPManager，ModelRunner 通过调用 PCPManager 方法\n \n class NPUModelRunner:\n     def _preprocess(self, model_input, prev_output):\n         # ... 原有预处理逻辑 ...\n-        # PCP 多模态处理逻辑直接嵌入在 _preprocess 中\n-        if self.pcp_size > 1:\n-            # 直接处理 PCP 相关的 embedding 收集\n-            pcp_num_tokens = self._get_pcp_local_token_count(model_input)\n-            mm_embeddings = self._pcp_gather_mm_embeddings(\n-                model_input, pcp_num_tokens)\n-            # 对齐 multimodal embeddings 与 token positions\n-            self._align_pcp_mm_embeddings(mm_embeddings)\n+        # PCP 逻辑不再直接嵌入，改为调用 PCPManager\n+        if self.pcp_size <= 1:\n+            self._gather_mm_embeddings(model_input)\n+        else:\n+            self.pcp_manager._gather_mm_embeddings(model_input)\n \n         return model_input\n \n+\n+# PCPManager 中新增从 ModelRunner 迁移过来的方法\n+class PCPManager:\n+    def __init__(self, pcp_size, ...):\n+        self.pcp_size = pcp_size\n+        # ...\n+\n     def _gather_mm_embeddings(self, model_input):\n-        # 原始 embedding 收集逻辑\n+        \"\"\"PCP-aware multimodal embedding gathering.\n+        Handles non-contiguous token positions when PCP is enabled.\"\"\"\n+        # 从 ModelRunner 迁移过来的 PCP 多模态处理逻辑\n         ...\n \n-    def _pcp_gather_mm_embeddings(self, model_input, pcp_num_tokens):\n-        # PCP 特定的 embedding 收集逻辑（应迁移到 PCPManager）\n+    def _get_pcp_local_token_count(self, model_input):\n+        \"\"\"Get local worker token count under PCP.\"\"\"\n         ...\n+\n+    def _align_pcp_mm_embeddings(self, mm_embeddings):\n+        \"\"\"Align multimodal embeddings with token positions under PCP.\"\"\"\n+        ...\n",
+      "stats": "1 file changed, +24 lines, -14 lines",
+      "key_changes": [
+        "-# and call the function before calling `ModelRunner._preprocess`.",
+        "-# This way, we won't need to modify `_preprocess`.\"",
+        "-# PCP 相关的多模态处理逻辑直接写在 ModelRunner._preprocess 中",
+        "+# commit 01a40ce \"refactor code as comments\" (+65/-208, +310/-1)",
+        "+# 作者 leijie-ww 回复: \"ok, done\"",
+        "+# PCP 逻辑迁移到 PCPManager，ModelRunner 通过调用 PCPManager 方法",
+        "-        # PCP 多模态处理逻辑直接嵌入在 _preprocess 中",
+        "-        if self.pcp_size > 1:",
+        "-            # 直接处理 PCP 相关的 embedding 收集",
+        "-            pcp_num_tokens = self._get_pcp_local_token_count(model_input)",
+        "-            mm_embeddings = self._pcp_gather_mm_embeddings(",
+        "-                model_input, pcp_num_tokens)",
+        "-            # 对齐 multimodal embeddings 与 token positions",
+        "-            self._align_pcp_mm_embeddings(mm_embeddings)",
+        "+        # PCP 逻辑不再直接嵌入，改为调用 PCPManager",
+        "+        if self.pcp_size <= 1:",
+        "+            self._gather_mm_embeddings(model_input)",
+        "+        else:",
+        "+            self.pcp_manager._gather_mm_embeddings(model_input)",
+        "+",
+        "+# PCPManager 中新增从 ModelRunner 迁移过来的方法",
+        "+class PCPManager:",
+        "+    def __init__(self, pcp_size, ...):",
+        "+        self.pcp_size = pcp_size",
+        "+        # ...",
+        "+",
+        "-        # 原始 embedding 收集逻辑",
+        "+        \"\"\"PCP-aware multimodal embedding gathering.",
+        "+        Handles non-contiguous token positions when PCP is enabled.\"\"\"",
+        "+        # 从 ModelRunner 迁移过来的 PCP 多模态处理逻辑",
+        "-    def _pcp_gather_mm_embeddings(self, model_input, pcp_num_tokens):",
+        "-        # PCP 特定的 embedding 收集逻辑（应迁移到 PCPManager）",
+        "+    def _get_pcp_local_token_count(self, model_input):",
+        "+        \"\"\"Get local worker token count under PCP.\"\"\"",
+        "+",
+        "+    def _align_pcp_mm_embeddings(self, mm_embeddings):",
+        "+        \"\"\"Align multimodal embeddings with token positions under PCP.\"\"\"",
+        "+        ..."
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

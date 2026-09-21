@@ -1,0 +1,56 @@
+{
+  "report_id": "PR7222_001",
+  "pr_number": 7222,
+  "pr_title": "[Feature]Supports DSv3.1 PD separation and C8 quantization",
+  "pr_status": "merged",
+  "merged_at": "2026-03-16T14:49:05Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_layerwise_connector.py:1586",
+    "vllm_ascend/attention/mla_v1.py:841"
+  ],
+  "landing_sha": "447266b",
+  "source_quote": "The atb operator may report an error in A5.",
+  "correspondence": [
+    {
+      "review_quote": "weijinqian0 指出 The atb operator may report an error in A5.。作者通过 commit `447266b` 进行了修改，2/14 条建议落地。",
+      "patch_snippet": "commit `447266b`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "447266b",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "The atb operator may report an error in A5.",
+    "context": "",
+    "checkpoints": [
+      "检查 `vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_layerwise_connector.py:1586` 相关代码是否符合评审意见",
+      "确认修改已覆盖评审人提出的所有问题"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_layerwise_connector.py",
+      "line": 1586,
+      "code": "",
+      "context": "The atb operator may report an error in A5."
+    },
+    "pattern": {
+      "file": "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_layerwise_connector.py",
+      "line": 1586,
+      "code": "",
+      "context": "The atb operator may report an error in A5."
+    },
+    "diff": {
+      "unified": "",
+      "stats": "1 file changed, +0 lines, -0 lines",
+      "key_changes": []
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

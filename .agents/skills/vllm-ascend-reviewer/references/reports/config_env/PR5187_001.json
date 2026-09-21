@@ -1,0 +1,59 @@
+{
+  "report_id": "PR5187_001",
+  "pr_number": 5187,
+  "pr_title": "[CI] Use offline mode for nightly test",
+  "pr_status": "merged",
+  "merged_at": "",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    ".github/workflows/_e2e_nightly_single_node.yaml:61",
+    ".github/workflows/pr_tag_image_build_and_push.yaml:29"
+  ],
+  "landing_sha": "ff34433",
+  "source_quote": "HF_HUB_OFFLINE?",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan 指出应使用 `HF_HUB_OFFLINE` 并保持仓库全局一致，作者确认已与 `_e2e_test.yaml` 保持一致。MengqingCao 询问为何移除 sync，作者进行了相应调整。2/2 建议落地。",
+      "patch_snippet": "",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "ff34433",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "CI 配置中的环境变量（如离线模式设置）应在整个仓库中保持一致，统一使用 `HF_HUB_OFFLINE` 而非其他变体。",
+    "context": "",
+    "checkpoints": [
+      "离线模式环境变量是否统一使用 `HF_HUB_OFFLINE`",
+      "所有 workflow 文件中的环境变量设置是否一致",
+      "修改 CI 配置时是否检查了仓库中其他类似配置"
+    ],
+    "antipattern": {
+      "file": ".github/workflows/_e2e_nightly_single_node.yaml",
+      "line": 0,
+      "code": "name: e2e nightly single node\n\non:\n  schedule:\n    - cron: '0 0 * * *'\n\njobs:\n  nightly-test:\n    runs-on: [self-hosted, linux]\n    env:\n      TRANSFORMERS_OFFLINE: 1  # L61: 不一致的写法，仓库其他地方使用 HF_HUB_OFFLINE\n    steps:\n      - uses: actions/checkout@v4\n      - name: Run e2e nightly tests\n        run: |\n          pytest tests/e2e/nightly/ -v",
+      "context": "HF_HUB_OFFLINE?"
+    },
+    "pattern": {
+      "file": ".github/workflows/_e2e_nightly_single_node.yaml",
+      "line": 0,
+      "code": "name: e2e nightly single node\n\non:\n  schedule:\n    - cron: '0 0 * * *'\n\njobs:\n  nightly-test:\n    runs-on: [self-hosted, linux]\n    env:\n      HF_HUB_OFFLINE: 1  # L61: 统一写法，与 _e2e_test.yaml 保持一致\n    steps:\n      - uses: actions/checkout@v4\n      - name: Run e2e nightly tests\n        run: |\n          pytest tests/e2e/nightly/ -v",
+      "context": "HF_HUB_OFFLINE?"
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/_e2e_nightly_single_node.yaml\n+++ b/.github/workflows/_e2e_nightly_single_node.yaml\n@@ -1,16 +1,16 @@\n   nightly-test:\n     runs-on: [self-hosted, linux]\n     env:\n-      TRANSFORMERS_OFFLINE: 1  # L61: 不一致的写法，仓库其他地方使用 HF_HUB_OFFLINE\n+      HF_HUB_OFFLINE: 1  # L61: 统一写法，与 _e2e_test.yaml 保持一致\n     steps:\n       - uses: actions/checkout@v4\n       - name: Run e2e nightly tests",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "修改了第 11-11 行的代码"
+      ]
+    },
+    "language": "yaml",
+    "_status": "extracted"
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "report_id": "PR13048_002",
+  "pr_number": 13048,
+  "pr_title": "[Performance][Kernel]optimize compute_slot_mapping_kernel",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/worker/block_table.py:169"
+  ],
+  "landing_sha": "f689d07",
+  "source_quote": "![critical](https://www.gstatic.com/codereviewagent/critical.svg)\n> Critical Bug: Potential Runtime Crash on vLLM 0.25.1\n> This PR replaces the imported `_compute_slot_mapping_kernel` with a local custom kernel. The local kernel's signature always expects `KV_CACHE_BLOCK_SIZE` and `BLOCKS_PER_KV_BLOCK` as constexpr arguments.\n> However, on line 171, there is a conditional check: `if not vllm_version_is(\"0.25.1\"):`. If the vLLM version is `0.25.1`, `KV_CACHE_BLOCK_SIZE` and `BLOCKS_PER_KV_BLOCK` will not be added to `kernel_kwargs`. When the local kernel is launched, Triton will throw a `TypeError` due to missing required arguments.\n> Since we are now always using the local kernel, we should remove the `vllm_version_is(\"0.25.1\")` check and always pass these arguments.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/worker/block_table.py:169",
+      "patch_snippet": "评后sha f689d07 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f689d07",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "当用本地自定义实现替换上游 import 的实现时，如果本地实现不依赖版本差异，应移除为兼容上游版本而保留的条件分支（如 `vllm_version_is`），避免条件不满足时缺少必需参数导致运行时崩溃。",
+    "context": "",
+    "checkpoints": [
+      "识别代码中是否存在 `vllm_version_is(...)` 等版本条件分支",
+      "确认替换为本地实现后，是否所有版本都需要相同的参数",
+      "如果本地实现统一了行为，移除版本条件分支，始终传入完整参数"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/block_table.py",
+      "line": 169,
+      "code": "    def compute_slot_mapping(self, num_tokens, num_reqs, ...):\n        from vllm_ascend.ops.triton.compute_slot_mapping import (\n            _compute_slot_mapping_kernel,\n        )\n\n        total_cp_world_size = ...\n        total_cp_rank = ...\n\n        kernel_kwargs = {\n            \"TOTAL_CP_WORLD_SIZE\": total_cp_world_size,\n            \"TOTAL_CP_RANK\": total_cp_rank,\n            \"CP_KV_CACHE_INTERLEAVE_SIZE\": self.cp_kv_cache_interleave_size,\n            \"PAD_ID\": PAD_SLOT_ID,\n            \"BLOCK_SIZE\": 1024,\n        }\n        # 0.25.1 时不传 KV_CACHE_BLOCK_SIZE 和 BLOCKS_PER_KV_BLOCK\n        if not vllm_version_is(\"0.25.1\"):\n            kernel_kwargs.update(\n                KV_CACHE_BLOCK_SIZE=self.physical_block_size,\n                BLOCKS_PER_KV_BLOCK=self.blocks_per_phys_block,\n            )\n\n        _compute_slot_mapping_kernel[(num_reqs + 1,)](\n            self.positions_ptr,\n            self.block_table,\n            self.slot_mapping,\n            num_tokens,\n            self.max_num_batched_tokens,\n            **kernel_kwargs,\n        )",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/block_table.py",
+      "line": 169,
+      "code": "    def compute_slot_mapping(self, num_tokens, num_reqs, ...):\n        from vllm_ascend.ops.triton.compute_slot_mapping import (\n            _compute_slot_mapping_kernel,\n        )\n\n        total_cp_world_size = ...\n        total_cp_rank = ...\n\n        # Always pass KV_CACHE_BLOCK_SIZE and BLOCKS_PER_KV_BLOCK:\n        # the local kernel requires them regardless of vLLM version.\n        TILE_BLOCK_SIZE = 1024\n        kernel_kwargs = {\n            \"KV_CACHE_BLOCK_SIZE\": self.physical_block_size,\n            \"BLOCKS_PER_KV_BLOCK\": self.blocks_per_phys_block,\n            \"TOTAL_CP_WORLD_SIZE\": total_cp_world_size,\n            \"TOTAL_CP_RANK\": total_cp_rank,\n            \"CP_KV_CACHE_INTERLEAVE_SIZE\": self.cp_kv_cache_interleave_size,\n            \"PAD_ID\": PAD_SLOT_ID,\n            \"TILE_BLOCK_SIZE\": TILE_BLOCK_SIZE,\n            \"BLOCK_TABLE_WINDOW_SIZE\": _next_power_of_2(\n                cdiv(TILE_BLOCK_SIZE, self.block_size) + 1\n            ),\n        }\n\n        _compute_slot_mapping_kernel[(num_reqs + 1,)](\n            self.positions_ptr,\n            self.block_table,\n            self.slot_mapping,\n            num_tokens,\n            self.max_num_batched_tokens,\n            **kernel_kwargs,\n        )",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/block_table.py\n+++ b/vllm_ascend/worker/block_table.py\n@@ -6,19 +6,21 @@\n         total_cp_world_size = ...\n         total_cp_rank = ...\n \n+        # Always pass KV_CACHE_BLOCK_SIZE and BLOCKS_PER_KV_BLOCK:\n+        # the local kernel requires them regardless of vLLM version.\n+        TILE_BLOCK_SIZE = 1024\n         kernel_kwargs = {\n+            \"KV_CACHE_BLOCK_SIZE\": self.physical_block_size,\n+            \"BLOCKS_PER_KV_BLOCK\": self.blocks_per_phys_block,\n             \"TOTAL_CP_WORLD_SIZE\": total_cp_world_size,\n             \"TOTAL_CP_RANK\": total_cp_rank,\n             \"CP_KV_CACHE_INTERLEAVE_SIZE\": self.cp_kv_cache_interleave_size,\n             \"PAD_ID\": PAD_SLOT_ID,\n-            \"BLOCK_SIZE\": 1024,\n+            \"TILE_BLOCK_SIZE\": TILE_BLOCK_SIZE,\n+            \"BLOCK_TABLE_WINDOW_SIZE\": _next_power_of_2(\n+                cdiv(TILE_BLOCK_SIZE, self.block_size) + 1\n+            ),\n         }\n-        # 0.25.1 时不传 KV_CACHE_BLOCK_SIZE 和 BLOCKS_PER_KV_BLOCK\n-        if not vllm_version_is(\"0.25.1\"):\n-            kernel_kwargs.update(\n-                KV_CACHE_BLOCK_SIZE=self.physical_block_size,\n-                BLOCKS_PER_KV_BLOCK=self.blocks_per_phys_block,\n-            )\n \n         _compute_slot_mapping_kernel[(num_reqs + 1,)](\n             self.positions_ptr,",
+      "stats": "1 file changed, +9 lines, -7 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "report_id": "PR14066_001",
+  "pr_number": 14066,
+  "pr_title": "[Performance] [Ops][Feature] Parallelize spec_decode input copy kernel across batch dimension",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/spec_decode/dflash_proposer.py:95"
+  ],
+  "landing_sha": "f6d0bee",
+  "source_quote": "![high]\nBy changing the grid from `[1,]` to `[batch_size,]`, the kernel launch will crash if `batch_size` is `0` (since a grid dimension of `0` is invalid in Triton/CUDA). In the original implementation, a `batch_size` of `0` was safe because the grid was `[1,]` and the internal loop `range(0, batch_size)` simply did not execute.\n> To prevent runtime crashes when `batch_size` is `0`, we should guard the kernel launch with `if batch_size > 0:`.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/spec_decode/dflash_proposer.py:95",
+      "patch_snippet": "评后sha f6d0bee 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f6d0bee",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "当将 Triton kernel 的 grid 从固定值 `[1,]` 改为动态值 `[batch_size,]` 以并行化时，必须用 `if batch_size > 0:` 守卫 kernel launch。`batch_size=0` 时 grid 维度为 0，在 Triton/CUDA/NPU 中是无效的（`coreDim=0 is invalid`），会导致运行时崩溃。原实现 grid 为 `[1,]` 时，内部循环 `range(0, batch_size)` 在 `batch_size=0` 时自然不执行，不会崩溃；改为动态 grid 后这个隐式安全行为丢失，必须显式守卫。",
+    "context": "",
+    "checkpoints": [
+      "识别 Triton kernel 的 grid 配置是否包含动态维度（如 `[batch_size,]`、`[num_tokens,]`）",
+      "确认该动态维度是否可能为 0（空 batch、空 prompt、dummy run 等场景）",
+      "在 kernel launch 前加 `if batch_size > 0:` 或类似条件守卫",
+      "验证 batch_size=0 时是否正确跳过 kernel launch 而非崩溃"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/spec_decode/dflash_proposer.py",
+      "line": 95,
+      "code": "# vllm_ascend/spec_decode/dflash_proposer.py\n# 位于 kernel launch 代码段，约第 85-100 行\n        self.arange_dflash = torch.arange(self.max_positions + 1, device=device, dtype=torch.int32)\n\n        self._dflash_hidden_states = torch.zeros(\n            (self.max_num_tokens, self.hidden_size), dtype=self.dtype, device=self.device\n        )\n\n        self.parallel_drafting_hidden_state_tensor = None\n\n        dynamic_spec_config = get_ascend_config().dynamic_spec_config\n        self.dynamic_spec = None\n\n        # ❌ grid=[batch_size,] 在 batch_size=0 时崩溃（grid 维度为 0 在 Triton/CUDA 中无效）\n        copy_and_expand_dflash_and_dspark_inputs_kernel_single_grid[batch_size,](\n            next_token_ids_ptr=next_token_ids,\n            target_positions_ptr=target_positions,\n            # ... kernel args ...\n            batch_size=batch_size,\n        )",
+      "context": "vllm_ascend/spec_decode/dflash_proposer.py 位于 kernel launch 代码段，约第 85-100 行 ❌ grid=[batch_size,] 在 batch_size=0 时崩溃（grid 维度为 0 在 Triton/CUDA 中无效）"
+    },
+    "pattern": {
+      "file": "vllm_ascend/spec_decode/dflash_proposer.py",
+      "line": 95,
+      "code": "# vllm_ascend/spec_decode/dflash_proposer.py\n        self.arange_dflash = torch.arange(self.max_positions + 1, device=device, dtype=torch.int32)\n\n        self._dflash_hidden_states = torch.zeros(\n            (self.max_num_tokens, self.hidden_size), dtype=self.dtype, device=self.device\n        )\n\n        self.parallel_drafting_hidden_state_tensor = None\n\n        dynamic_spec_config = get_ascend_config().dynamic_spec_config\n        self.dynamic_spec = None\n\n        # ✅ 加 if batch_size > 0 守卫，空 batch 时跳过 kernel launch\n        if batch_size > 0:\n            copy_and_expand_dflash_and_dspark_inputs_kernel_single_grid[batch_size,](\n                next_token_ids_ptr=next_token_ids,\n                target_positions_ptr=target_positions,\n                # ... kernel args ...\n                batch_size=batch_size,\n            )",
+      "context": "vllm_ascend/spec_decode/dflash_proposer.py ✅ 加 if batch_size > 0 守卫，空 batch 时跳过 kernel launch ... kernel args ..."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/spec_decode/dflash_proposer.py\n+++ b/vllm_ascend/spec_decode/dflash_proposer.py\n@@ -1,5 +1,4 @@\n # vllm_ascend/spec_decode/dflash_proposer.py\n-# 位于 kernel launch 代码段，约第 85-100 行\n         self.arange_dflash = torch.arange(self.max_positions + 1, device=device, dtype=torch.int32)\n \n         self._dflash_hidden_states = torch.zeros(\n@@ -11,10 +10,11 @@\n         dynamic_spec_config = get_ascend_config().dynamic_spec_config\n         self.dynamic_spec = None\n \n-        # ❌ grid=[batch_size,] 在 batch_size=0 时崩溃（grid 维度为 0 在 Triton/CUDA 中无效）\n-        copy_and_expand_dflash_and_dspark_inputs_kernel_single_grid[batch_size,](\n-            next_token_ids_ptr=next_token_ids,\n-            target_positions_ptr=target_positions,\n-            # ... kernel args ...\n-            batch_size=batch_size,\n-        )\n+        # ✅ 加 if batch_size > 0 守卫，空 batch 时跳过 kernel launch\n+        if batch_size > 0:\n+            copy_and_expand_dflash_and_dspark_inputs_kernel_single_grid[batch_size,](\n+                next_token_ids_ptr=next_token_ids,\n+                target_positions_ptr=target_positions,\n+                # ... kernel args ...\n+                batch_size=batch_size,\n+            )\n",
+      "stats": "1 file changed, +8 lines, -8 lines",
+      "key_changes": [
+        "移除: copy_and_expand_dflash_and_dspark_inputs_kernel_single_grid[batch_size,](",
+        "移除: batch_size=batch_size,",
+        "新增: next_token_ids_ptr=next_token_ids,",
+        "新增: copy_and_expand_dflash_and_dspark_inputs_kernel_single_grid[batch_size,]("
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

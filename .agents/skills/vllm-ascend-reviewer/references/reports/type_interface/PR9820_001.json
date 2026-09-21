@@ -1,0 +1,64 @@
+{
+  "report_id": "PR9820_001",
+  "pr_number": 9820,
+  "pr_title": "[CI] fix nightly time out bug",
+  "pr_status": "merged",
+  "merged_at": "2026-06-11T10:45:46Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "tests/e2e/nightly/single_node/models/scripts/test_single_node.py:26"
+  ],
+  "landing_sha": "a5a2987",
+  "source_quote": "@wangxiyuan @leo-pony Is there any elegant solution to adjust the vllm envs in our CI test case?\n1. **Runtime TypeError**: `os.environ` 的值必须是字符串，赋值整数 `7200` 会抛出 `TypeError`。\n2. **Ineffective Timeout Cap**: `RemoteOpenAIServer` 默认 `max_wait_seconds` 为 2800 秒，设置 7200 秒无效。\n3. **Excessive Timeout Value**: 7200 秒（2小时）过长，建议 3600 秒（1小时）。\n> 建议修改：`os.environ[\"VLLM_ENGINE_READY_TIMEOUT_S\"] = \"3600\"`",
+  "correspondence": [
+    {
+      "review_quote": "linfeng-yuan: tests/e2e/nightly/single_node/models/scripts/test_single_node.py:26(2026-06-01 09:18:33)",
+      "patch_snippet": "评后sha a5a2987 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "a5a2987",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "Python 的 `os.environ` 字典只接受字符串值，赋值整数或其他类型会抛出 `TypeError: strval must be a string`。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "tests/e2e/nightly/single_node/models/scripts/test_single_node.py:26",
+      "line": 26,
+      "code": "# （根据评审意见推断）os.environ 赋值为整数，会抛出 TypeError\n# linfeng-yuan 评论: \"Is there any elegant solution to adjust the vllm envs in our CI test case?\"\n# gemini-code-assist[bot] 指出: \"Runtime TypeError: os.environ 的值必须是字符串\"\n# 且 7200 秒超过 RemoteOpenAIServer 默认 max_wait_seconds (2800秒)\nimport os\nimport subprocess\nimport sys\nimport pytest\nfrom pathlib import Path\n\n# 加载 DeepSeek-R1-0528-W8A8 等大型模型需要更长的超时时间\n# ❌ 整数类型赋值给 os.environ，会抛出 TypeError: strval must be a string\n# ❌ 7200 秒超过 RemoteOpenAIServer 默认 max_wait_seconds (2800秒)，设置无效\nos.environ[\"VLLM_ENGINE_READY_TIMEOUT_S\"] = 7200\n\nSCRIPT_DIR = Path(__file__).resolve().parent\nCONFIGS_DIR = SCRIPT_DIR.parent / \"configs\"\n\n\n@pytest.mark.parametrize(\"model_config\", [\n    \"DeepSeek-R1-0528-W8A8\",\n])\ndef test_single_node(model_config):\n    config_path = CONFIGS_DIR / f\"{model_config}.yaml\"\n    # 运行单节点 nightly 测试\n    subprocess.run([sys.executable, \"run_test.py\", str(config_path)], check=True)",
+      "context": "@wangxiyuan @leo-pony Is there any elegant solution to adjust the vllm envs in our CI test case?\n1. **Runtime TypeError**: `os.environ` 的值必须是字符串，赋值整数 `7200` 会抛出 `TypeError`。\n2. **Ineffective Timeout C"
+    },
+    "pattern": {
+      "file": "tests/e2e/nightly/single_node/models/scripts/test_single_node.py:26",
+      "line": 26,
+      "code": "# 修复: 使用字符串类型，超时值调整为合理的 3600 秒\n# gemini-code-assist[bot] suggestion: os.environ[\"VLLM_ENGINE_READY_TIMEOUT_S\"] = \"3600\"\nimport os\nimport subprocess\nimport sys\nimport pytest\nfrom pathlib import Path\n\n# 加载 DeepSeek-R1-0528-W8A8 等大型模型需要更长的超时时间\n# ✅ 字符串类型，1小时合理超时\nos.environ[\"VLLM_ENGINE_READY_TIMEOUT_S\"] = \"3600\"\n\nSCRIPT_DIR = Path(__file__).resolve().parent\nCONFIGS_DIR = SCRIPT_DIR.parent / \"configs\"\n\n\n@pytest.mark.parametrize(\"model_config\", [\n    \"DeepSeek-R1-0528-W8A8\",\n])\ndef test_single_node(model_config):\n    config_path = CONFIGS_DIR / f\"{model_config}.yaml\"\n    # 运行单节点 nightly 测试\n    subprocess.run([sys.executable, \"run_test.py\", str(config_path)], check=True)",
+      "context": "@wangxiyuan @leo-pony Is there any elegant solution to adjust the vllm envs in our CI test case?\n1. **Runtime TypeError**: `os.environ` 的值必须是字符串，赋值整数 `7200` 会抛出 `TypeError`。\n2. **Ineffective Timeout C"
+    },
+    "diff": {
+      "unified": "--- a/tests/e2e/nightly/single_node/models/scripts/test_single_node.py:26\n+++ b/tests/e2e/nightly/single_node/models/scripts/test_single_node.py:26\n@@ -1,7 +1,5 @@\n-# （根据评审意见推断）os.environ 赋值为整数，会抛出 TypeError\n-# linfeng-yuan 评论: \"Is there any elegant solution to adjust the vllm envs in our CI test case?\"\n-# gemini-code-assist[bot] 指出: \"Runtime TypeError: os.environ 的值必须是字符串\"\n-# 且 7200 秒超过 RemoteOpenAIServer 默认 max_wait_seconds (2800秒)\n+# 修复: 使用字符串类型，超时值调整为合理的 3600 秒\n+# gemini-code-assist[bot] suggestion: os.environ[\"VLLM_ENGINE_READY_TIMEOUT_S\"] = \"3600\"\n import os\n import subprocess\n import sys\n@@ -9,9 +7,8 @@\n from pathlib import Path\n \n # 加载 DeepSeek-R1-0528-W8A8 等大型模型需要更长的超时时间\n-# ❌ 整数类型赋值给 os.environ，会抛出 TypeError: strval must be a string\n-# ❌ 7200 秒超过 RemoteOpenAIServer 默认 max_wait_seconds (2800秒)，设置无效\n-os.environ[\"VLLM_ENGINE_READY_TIMEOUT_S\"] = 7200\n+# ✅ 字符串类型，1小时合理超时\n+os.environ[\"VLLM_ENGINE_READY_TIMEOUT_S\"] = \"3600\"\n \n SCRIPT_DIR = Path(__file__).resolve().parent\n CONFIGS_DIR = SCRIPT_DIR.parent / \"configs\"\n",
+      "stats": "1 file changed, +4 lines, -7 lines",
+      "key_changes": [
+        "-# （根据评审意见推断）os.environ 赋值为整数，会抛出 TypeError",
+        "-# linfeng-yuan 评论: \"Is there any elegant solution to adjust the vllm envs in our CI test case?\"",
+        "-# gemini-code-assist[bot] 指出: \"Runtime TypeError: os.environ 的值必须是字符串\"",
+        "-# 且 7200 秒超过 RemoteOpenAIServer 默认 max_wait_seconds (2800秒)",
+        "+# 修复: 使用字符串类型，超时值调整为合理的 3600 秒",
+        "+# gemini-code-assist[bot] suggestion: os.environ[\"VLLM_ENGINE_READY_TIMEOUT_S\"] = \"3600\"",
+        "-# ❌ 整数类型赋值给 os.environ，会抛出 TypeError: strval must be a string",
+        "-# ❌ 7200 秒超过 RemoteOpenAIServer 默认 max_wait_seconds (2800秒)，设置无效",
+        "-os.environ[\"VLLM_ENGINE_READY_TIMEOUT_S\"] = 7200",
+        "+# ✅ 字符串类型，1小时合理超时",
+        "+os.environ[\"VLLM_ENGINE_READY_TIMEOUT_S\"] = \"3600\""
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

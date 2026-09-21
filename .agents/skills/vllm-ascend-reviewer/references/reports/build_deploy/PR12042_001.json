@@ -1,0 +1,68 @@
+{
+  "report_id": "PR12042_001",
+  "pr_number": 12042,
+  "pr_title": "[CI][Doc] Upgrade cann to 9.0.1 in v0.23.0",
+  "pr_status": "merged",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "docs/source/community/versioning_policy.md:26",
+    "README.zh.md:58",
+    "README.md:64"
+  ],
+  "landing_sha": "cc10290",
+  "source_quote": "remove this line, we have not released 0.23 yet.\nditto\nwhy change the python to 3.12?",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan: docs/source/community/versioning_policy.md:26",
+      "patch_snippet": "评后sha cc10290 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wangxiyuan: README.zh.md:58",
+      "patch_snippet": "评后sha cc10290 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wangxiyuan: README.md:64",
+      "patch_snippet": "评后sha cc10290 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "cc10290",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "文档和版本策略文件中不应提前包含尚未正式发布的版本信息。版本信息应在正式发布时才添加到文档中。",
+    "context": "",
+    "checkpoints": [
+      "检查 PR diff 是否添加了未发布版本的信息",
+      "确认 README 和版本策略文件中的版本号与已发布版本一致"
+    ],
+    "antipattern": {
+      "file": "docs/source/community/versioning_policy.md",
+      "line": 26,
+      "code": "<!-- 文件: docs/source/community/versioning_policy.md -->\n<!-- 行号: 18-35 -->\n## Version Compatibility Matrix\n\n| vllm-ascend | CANN | torch-npu | Python |\n|-------------|------|-----------|--------|\n| v0.21.0 | 9.0.0 | 2.5.0 | >=3.9, <=3.11 |\n| v0.22.0 | 9.0.0 | 2.5.0 | >=3.9, <=3.11 |\n| v0.23.0 | 9.0.1 | 2.6.0 | >=3.9, <=3.12 |  <!-- v0.23.0 尚未发布 -->",
+      "context": "修改前代码 (markdown)"
+    },
+    "pattern": {
+      "file": "docs/source/community/versioning_policy.md",
+      "line": 26,
+      "code": "<!-- 文件: docs/source/community/versioning_policy.md -->\n<!-- 行号: 18-32 -->\n## Version Compatibility Matrix\n\n| vllm-ascend | CANN | torch-npu | Python |\n|-------------|------|-----------|--------|\n| v0.21.0 | 9.0.0 | 2.5.0 | >=3.9, <=3.11 |\n| v0.22.0 | 9.0.0 | 2.5.0 | >=3.9, <=3.11 |\n<!-- v0.23.0 行已移除，等待正式发布后再添加 -->",
+      "context": "修改后代码 (markdown)"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/community/versioning_policy.md\n+++ b/docs/source/community/versioning_policy.md\n@@ -1,9 +1,9 @@\n <!-- 文件: docs/source/community/versioning_policy.md -->\n-<!-- 行号: 18-35 -->\n+<!-- 行号: 18-32 -->\n ## Version Compatibility Matrix\n \n | vllm-ascend | CANN | torch-npu | Python |\n |-------------|------|-----------|--------|\n | v0.21.0 | 9.0.0 | 2.5.0 | >=3.9, <=3.11 |\n | v0.22.0 | 9.0.0 | 2.5.0 | >=3.9, <=3.11 |\n-| v0.23.0 | 9.0.1 | 2.6.0 | >=3.9, <=3.12 |  <!-- v0.23.0 尚未发布 -->\n+<!-- v0.23.0 行已移除，等待正式发布后再添加 -->",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "修改代码逻辑"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

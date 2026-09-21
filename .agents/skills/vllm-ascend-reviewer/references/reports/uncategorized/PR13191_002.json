@@ -1,0 +1,71 @@
+{
+  "report_id": "PR13191_002",
+  "pr_number": 13191,
+  "pr_title": "[Performance] Optimized Kernel copy_and_expand_dflash_and_dspark_inputs_kernel",
+  "pr_status": "merged",
+  "dimension": [
+    "design"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/spec_decode/dflash_proposer.py:112",
+    "vllm_ascend/ops/triton/spec_decode/utils.py:147",
+    "vllm_ascend/ops/triton/spec_decode/utils.py:97"
+  ],
+  "landing_sha": "458a42a",
+  "source_quote": "Change kernel name.\nRefactor the name `query_cache_pos` and add comment about it.\nIt is for multi-modal.\nChange the name to distinguish with `block_size`.",
+  "correspondence": [
+    {
+      "review_quote": "vllm_ascend/spec_decode/dflash_proposer.py:112",
+      "patch_snippet": "评后sha 458a42a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/ops/triton/spec_decode/utils.py:147",
+      "patch_snippet": "评后sha 458a42a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "vllm_ascend/ops/triton/spec_decode/utils.py:97",
+      "patch_snippet": "评后sha 458a42a 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "458a42a",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "Triton kernel 及其变量的命名应准确反映其实际执行模式（如并行/串行）和语义概念（如 position vs slot、tile size vs block size），避免名称产生误导或概念混淆。涉及多模态等特殊场景的变量应添加注释说明。",
+    "context": "",
+    "checkpoints": [
+      "kernel 名是否暗示了特定的执行模式（如 `_single_grid`、`_serial`），若执行模式已改变需同步改名",
+      "变量名是否与同作用域内其他变量产生概念混淆（如 `query_cache_pos` vs `query_pos`）",
+      "Triton kernel 参数 `BLOCK_SIZE`/`TILE_SIZE` 是否与 KV-cache `block_size` 区分",
+      "涉及多模态/M-RoPE 等特殊场景的变量是否有注释说明其与常规场景的差异"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/spec_decode/dflash_proposer.py",
+      "line": 108,
+      "code": "def copy_and_expand_dflash_and_dspark_inputs_kernel_single_grid(\n    ctx_positions_ptr, ctx_slot_mapping_ptr,\n    query_positions_ptr, query_slot_mapping_ptr,\n    ...\n):\n    # 原 kernel 名含 _single_grid 后缀（暗示单 program 串行执行）\n    # 重构为 grid-stride 并行后该名称产生误导",
+      "context": "原 kernel 名含 _single_grid 后缀（暗示单 program 串行执行） 重构为 grid-stride 并行后该名称产生误导"
+    },
+    "pattern": {
+      "file": "vllm_ascend/spec_decode/dflash_proposer.py",
+      "line": 112,
+      "code": "def copy_and_expand_dflash_and_dspark_inputs_kernel(\n    ctx_positions_ptr, ctx_slot_mapping_ptr,\n    query_positions_ptr, query_slot_mapping_ptr,\n    ...\n):\n    # ✅ 移除 _single_grid 后缀，名称准确反映 grid-stride 并行执行模式",
+      "context": "✅ 移除 _single_grid 后缀，名称准确反映 grid-stride 并行执行模式"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/spec_decode/dflash_proposer.py\n+++ b/vllm_ascend/spec_decode/dflash_proposer.py\n@@ -1,7 +1,6 @@\n-def copy_and_expand_dflash_and_dspark_inputs_kernel_single_grid(\n+def copy_and_expand_dflash_and_dspark_inputs_kernel(\n     ctx_positions_ptr, ctx_slot_mapping_ptr,\n     query_positions_ptr, query_slot_mapping_ptr,\n     ...\n ):\n-    # 原 kernel 名含 _single_grid 后缀（暗示单 program 串行执行）\n-    # 重构为 grid-stride 并行后该名称产生误导\n+    # ✅ 移除 _single_grid 后缀，名称准确反映 grid-stride 并行执行模式\n",
+      "stats": "1 file changed, +2 lines, -3 lines",
+      "key_changes": [
+        "移除: def copy_and_expand_dflash_and_dspark_inputs_kernel_single_grid(",
+        "新增: def copy_and_expand_dflash_and_dspark_inputs_kernel("
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

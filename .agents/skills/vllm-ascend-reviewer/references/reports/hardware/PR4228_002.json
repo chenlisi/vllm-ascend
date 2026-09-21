@@ -1,0 +1,59 @@
+{
+  "report_id": "PR4228_002",
+  "pr_number": 4228,
+  "pr_title": "vllm-ascend support Ascend950 with Qwen dense model.",
+  "pr_status": "merged",
+  "merged_at": "2025-12-12T07:50:57Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/worker_v1.py:362"
+  ],
+  "landing_sha": "cf5133b",
+  "source_quote": "_warm_up_atb is removed because atb is deprecated in Ascend950, it's ok but I found another atb use in worker_v1.py, which may break startup. is it ok?\n```\n# Line 28\nfrom torch_npu.op_plugin.atb._atb_ops import _register_atb_extensions\n# Line 91\n_register_atb_extensions()\n```",
+  "correspondence": [
+    {
+      "review_quote": "Liccol 发现虽然 `_warm_up_atb` 因 Ascend950 弃用 ATB 而被移除，但 `worker_v1.py` 中仍有其他 ATB 相关代码（导入和注册 ATB 扩展），可能导致启动失败。经与作者确认，在 Ascend950 上此代码可以正常运行，但作者随后通过 commit `cf5133b` 添加了 Ascend91095 的条件隔离，确保在不支持 ATB 的平台上不会调用相关代码。",
+      "patch_snippet": "commit `cf5133b`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "cf5133b",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "当某个功能仅在特定硬件平台上可用时（如 ATB 在某些 Ascend 型号上不可用），必须通过条件判断进行隔离，避免在不支持的平台上导致启动失败。",
+    "context": "",
+    "checkpoints": [
+      "检查是否有硬件特定的 API 调用未做条件隔离",
+      "确认条件判断是否覆盖了所有不支持的硬件型号",
+      "验证导入语句是否也需要条件隔离"
+    ],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "import torch\nimport torch_npu\nfrom torch_npu.op_plugin.atb._atb_ops import _register_atb_extensions  # 无条件导入\n\ndef init_worker(...):\n    _register_atb_extensions()  # 无条件注册 ATB 扩展",
+      "context": "_warm_up_atb is removed because atb is deprecated in Ascend950, it's ok but I found another atb use in worker_v1.py, which may break startup. is it ok?"
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "import torch\nimport torch_npu\n\ndef init_worker(...):\n    if not is_ascend91095():\n        from torch_npu.op_plugin.atb._atb_ops import _register_atb_extensions\n        _register_atb_extensions()",
+      "context": "_warm_up_atb is removed because atb is deprecated in Ascend950, it's ok but I found another atb use in worker_v1.py, which may break startup. is it ok?"
+    },
+    "diff": {
+      "unified": "--- a/a/file\n+++ b/b/file\n@@ -1,6 +1,7 @@\n import torch\n import torch_npu\n-from torch_npu.op_plugin.atb._atb_ops import _register_atb_extensions  # 无条件导入\n \n def init_worker(...):\n-    _register_atb_extensions()  # 无条件注册 ATB 扩展\n+    if not is_ascend91095():\n+        from torch_npu.op_plugin.atb._atb_ops import _register_atb_extensions\n+        _register_atb_extensions()",
+      "stats": "1 file changed, +3 lines, -2 lines",
+      "key_changes": [
+        "删除了第 3-3 行的代码",
+        "修改了第 6-6 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

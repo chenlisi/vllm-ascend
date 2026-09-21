@@ -1,0 +1,66 @@
+{
+  "report_id": "PR3495_001",
+  "pr_number": 3495,
+  "pr_title": "[Feat] Shared expert dp for deepseek and deepseek_mtp",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/models/layers/mla.py:128",
+    "vllm_ascend/utils.py:617"
+  ],
+  "landing_sha": "01d17fe",
+  "source_quote": "debug_layer_idx should be named as mtp_layer_idx\nit may comfused users. when we set enable_shared_expert_dp, it will lead to set sp=1. But these two settings' meanings are different.",
+  "correspondence": [
+    {
+      "review_quote": "weijinqian0: vllm_ascend/models/layers/mla.py:128(2025-10-16 03:18:29)",
+      "patch_snippet": "评后sha 01d17fe 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "weijinqian0: vllm_ascend/utils.py:617(2025-10-16 03:29:28)",
+      "patch_snippet": "评后sha 01d17fe 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "01d17fe",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "变量命名应准确反映其实际用途（如 `mtp_layer_idx` 而非 `debug_layer_idx`）。配置项之间的关联应明确，避免一个配置隐式设置另一个配置导致用户混淆。",
+    "context": "",
+    "checkpoints": [
+      "变量名是否准确反映其用途",
+      "配置项是否会产生意外的副作用（如设置 A 隐式修改 B）",
+      "相关配置项的含义是否有清晰文档说明"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/models/layers/mla.py",
+      "line": 128,
+      "code": "# vllm_ascend/models/layers/mla.py:118-138\nclass AscendMLA(nn.Module):\n    \"\"\"Multi-head Latent Attention for DeepSeek on Ascend NPU.\"\"\"\n\n    def __init__(\n        self,\n        num_heads: int,\n        head_size: int,\n        hidden_size: int,\n        num_kv_heads: int,\n        max_position: int = 8192,\n        ...\n    ) -> None:\n        super().__init__()\n        # ... 初始化代码 ...\n        self.debug_layer_idx = layer_idx  # 变量命名不准确\n        self.num_heads = num_heads\n        self.head_size = head_size\n        ...\n\n    def forward(\n        self,\n        positions: torch.Tensor,\n        hidden_states: torch.Tensor,\n        ...\n    ) -> torch.Tensor:\n        # 使用 debug_layer_idx 进行 MTP 层判断\n        if self.debug_layer_idx >= self.num_layers:\n            return hidden_states\n        ...",
+      "context": "vllm_ascend/models/layers/mla.py:118-138 ... 初始化代码 ... 使用 debug_layer_idx 进行 MTP 层判断"
+    },
+    "pattern": {
+      "file": "vllm_ascend/models/layers/mla.py",
+      "line": 128,
+      "code": "# vllm_ascend/models/layers/mla.py:118-138\nclass AscendMLA(nn.Module):\n    \"\"\"Multi-head Latent Attention for DeepSeek on Ascend NPU.\"\"\"\n\n    def __init__(\n        self,\n        num_heads: int,\n        head_size: int,\n        hidden_size: int,\n        num_kv_heads: int,\n        max_position: int = 8192,\n        ...\n    ) -> None:\n        super().__init__()\n        # ... 初始化代码 ...\n        self.mtp_layer_idx = layer_idx  # 重命名为更准确的名称\n        self.num_heads = num_heads\n        self.head_size = head_size\n        ...\n\n    def forward(\n        self,\n        positions: torch.Tensor,\n        hidden_states: torch.Tensor,\n        ...\n    ) -> torch.Tensor:\n        # 使用 mtp_layer_idx 进行 MTP 层判断\n        if self.mtp_layer_idx >= self.num_layers:\n            return hidden_states\n        ...",
+      "context": "vllm_ascend/models/layers/mla.py:118-138 ... 初始化代码 ... 使用 mtp_layer_idx 进行 MTP 层判断"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/models/layers/mla.py\n+++ b/vllm_ascend/models/layers/mla.py\n@@ -13,7 +13,7 @@\n     ) -> None:\n         super().__init__()\n         # ... 初始化代码 ...\n-        self.debug_layer_idx = layer_idx  # 变量命名不准确\n+        self.mtp_layer_idx = layer_idx  # 重命名为更准确的名称\n         self.num_heads = num_heads\n         self.head_size = head_size\n         ...\n@@ -24,7 +24,7 @@\n         hidden_states: torch.Tensor,\n         ...\n     ) -> torch.Tensor:\n-        # 使用 debug_layer_idx 进行 MTP 层判断\n-        if self.debug_layer_idx >= self.num_layers:\n+        # 使用 mtp_layer_idx 进行 MTP 层判断\n+        if self.mtp_layer_idx >= self.num_layers:\n             return hidden_states\n         ...\n",
+      "stats": "1 file changed, +3 lines, -3 lines",
+      "key_changes": [
+        "移除: self.debug_layer_idx = layer_idx  # 变量命名不准确",
+        "移除: if self.debug_layer_idx >= self.num_layers:",
+        "新增: if self.mtp_layer_idx >= self.num_layers:",
+        "新增: self.mtp_layer_idx = layer_idx  # 重命名为更准确的名称"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

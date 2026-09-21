@@ -1,0 +1,73 @@
+{
+  "report_id": "PR7725_001",
+  "pr_number": 7725,
+  "pr_title": "[Feature][310P]: 310P support W8A8 dynamic linear method",
+  "pr_status": "merged",
+  "merged_at": "2026-03-27T09:06:43Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/_310p/quantization/methods/w8a8_dynamic.py:177",
+    "vllm_ascend/_310p/quantization/methods/w8a8_dynamic.py:204",
+    "vllm_ascend/_310p/quantization/modelslim_config.py:99"
+  ],
+  "landing_sha": "9e759e0",
+  "source_quote": "这里也和分支保持一致吧：\ndef get_perchannel_param(\nself,\noutput_size: int,\nparams_dtype: torch.dtype,\n) -> dict[str, Any]:\n更清晰一些\n我看已经和主线保持一致了，这个NOTE必要吗\n仔细确认这里不会影响其他模型",
+  "correspondence": [
+    {
+      "review_quote": "Tflowers-0129: vllm_ascend/_310p/quantization/methods/w8a8_dynamic.py:177",
+      "patch_snippet": "评后sha 9e759e0 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Tflowers-0129: vllm_ascend/_310p/quantization/methods/w8a8_dynamic.py:204",
+      "patch_snippet": "评后sha 9e759e0 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "Tflowers-0129: vllm_ascend/_310p/quantization/modelslim_config.py:99",
+      "patch_snippet": "评后sha 9e759e0 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "9e759e0",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "新增的代码格式（如函数签名风格）应与项目主线保持一致，以提高代码可读性和维护性。同时，修改共享配置时应确认不影响其他模型。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "vllm_ascend/_310p/quantization/methods/w8a8_dynamic.py",
+      "line": 165,
+      "code": "from typing import Any\nimport torch\nimport torch.nn as nn\n\nclass AscendW8A8DynamicLinearMethod310:\n    \"\"\"310P W8A8 动态量化线性方法实现\"\"\"\n\n    def __init__(self, quant_config):\n        self.quant_config = quant_config\n\n    def get_weight(\n        self,\n        output_size: int,\n        params_dtype: torch.dtype,\n    ) -> dict[str, Any]:\n        \"\"\"获取量化权重张量\"\"\"\n        return {\n            \"weight\": torch.empty(output_size, params_dtype=params_dtype),\n        }\n\n    # ❌ 函数签名格式与主线不一致（单行参数）\n    def get_perchannel_param(self, output_size: int, params_dtype: torch.dtype) -> dict[str, Any]:\n        \"\"\"获取 per-channel 量化参数\"\"\"\n        return {\n            \"weight_scale\": torch.empty(output_size, 1, dtype=torch.float32),\n        }\n\n    def apply(self, layer: torch.nn.Module, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"前向推理：动态量化 + 量化矩阵乘法\"\"\"\n        # NOTE: 当前仅支持对称量化，weight_offset 为全零 tensor 未实际使用\n        ...",
+      "context": "这里也和分支保持一致吧：\ndef get_perchannel_param(\nself,\noutput_size: int,\nparams_dtype: torch.dtype,\n) -> dict[str, Any]:\n更清晰一些\n我看已经和主线保持一致了，这个NOTE必要吗\n仔细确认这里不会影响其他模型"
+    },
+    "pattern": {
+      "file": "vllm_ascend/_310p/quantization/methods/w8a8_dynamic.py",
+      "line": 165,
+      "code": "from typing import Any\nimport torch\nimport torch.nn as nn\n\nclass AscendW8A8DynamicLinearMethod310:\n    \"\"\"310P W8A8 动态量化线性方法实现\"\"\"\n\n    def __init__(self, quant_config):\n        self.quant_config = quant_config\n\n    def get_weight(\n        self,\n        output_size: int,\n        params_dtype: torch.dtype,\n    ) -> dict[str, Any]:\n        \"\"\"获取量化权重张量\"\"\"\n        return {\n            \"weight\": torch.empty(output_size, params_dtype=params_dtype),\n        }\n\n    # ✅ 与主线保持一致的多行参数格式，更清晰\n    def get_perchannel_param(\n        self,\n        output_size: int,\n        params_dtype: torch.dtype,\n    ) -> dict[str, Any]:\n        \"\"\"获取 per-channel 量化参数\"\"\"\n        return {\n            \"weight_scale\": torch.empty(output_size, 1, dtype=torch.float32),\n        }\n\n    def apply(self, layer: torch.nn.Module, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"前向推理：动态量化 + 量化矩阵乘法\"\"\"\n        # NOTE: 当前仅支持对称量化，weight_offset 为全零 tensor 未实际使用\n        ...",
+      "context": "这里也和分支保持一致吧：\ndef get_perchannel_param(\nself,\noutput_size: int,\nparams_dtype: torch.dtype,\n) -> dict[str, Any]:\n更清晰一些\n我看已经和主线保持一致了，这个NOTE必要吗\n仔细确认这里不会影响其他模型"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/_310p/quantization/methods/w8a8_dynamic.py\n+++ b/vllm_ascend/_310p/quantization/methods/w8a8_dynamic.py\n@@ -18,8 +18,12 @@\n             \"weight\": torch.empty(output_size, params_dtype=params_dtype),\n         }\n \n-    # ❌ 函数签名格式与主线不一致（单行参数）\n-    def get_perchannel_param(self, output_size: int, params_dtype: torch.dtype) -> dict[str, Any]:\n+    # ✅ 与主线保持一致的多行参数格式，更清晰\n+    def get_perchannel_param(\n+        self,\n+        output_size: int,\n+        params_dtype: torch.dtype,\n+    ) -> dict[str, Any]:\n         \"\"\"获取 per-channel 量化参数\"\"\"\n         return {\n             \"weight_scale\": torch.empty(output_size, 1, dtype=torch.float32),\n",
+      "stats": "1 file changed, +6 lines, -2 lines",
+      "key_changes": [
+        "-    # ❌ 函数签名格式与主线不一致（单行参数）",
+        "-    def get_perchannel_param(self, output_size: int, params_dtype: torch.dtype) -> dict[str, Any]:",
+        "+    # ✅ 与主线保持一致的多行参数格式，更清晰",
+        "+    def get_perchannel_param(",
+        "+        self,",
+        "+        output_size: int,",
+        "+        params_dtype: torch.dtype,",
+        "+    ) -> dict[str, Any]:"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

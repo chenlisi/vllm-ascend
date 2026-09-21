@@ -1,0 +1,71 @@
+{
+  "report_id": "PR9037_001",
+  "pr_number": 9037,
+  "pr_title": "[CI] Add csrc cache for image build",
+  "pr_status": "merged",
+  "merged_at": "2026-05-11T13:48:21Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    ".github/workflows/push_build_csrc_cache.yaml:144"
+  ],
+  "landing_sha": "f0150ff",
+  "source_quote": "why not move this to L132?",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao: .github/workflows/push_build_csrc_cache.yaml:144",
+      "patch_snippet": "评后sha f0150ff 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f0150ff",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "why not move this to L132?",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": ".github/workflows/push_build_csrc_cache.yaml",
+      "line": 125,
+      "code": "# MengqingCao 评论: \"why not move this to L132?\"\n# Potabk 回复: \"ok, let's make it more concise\"\n# （根据评审意见推断）第144行的 CI 步骤位置不合理，应移至第132行\n\njobs:\n  build:\n    runs-on: linux-arm64-cpu-16\n    container:\n      image: quay.io/ascend-ci/vllm-ascend:build\n    steps:\n      - name: Checkout source\n        uses: actions/checkout@v7\n\n      - name: Build csrc\n        run: |\n          python setup.py build\n\n      - name: Cache csrc artifacts\n        uses: actions/cache@v4\n        with:\n          path: csrc/build\n          key: csrc-${{ hashFiles('csrc/**') }}\n          restore-keys: |\n            csrc-\n\n      # 以下步骤原位于第144行，评审建议移至第132行\n      - name: Upload build artifacts\n        uses: actions/upload-artifact@v4\n        with:\n          name: csrc-artifacts\n          path: csrc/build/",
+      "context": "why not move this to L132?"
+    },
+    "pattern": {
+      "file": ".github/workflows/push_build_csrc_cache.yaml",
+      "line": 125,
+      "code": "# 根据 commit f0150ff \"tiny fix\"\n# 将步骤从第144行移动到第132行，使 CI 流程更简洁\n\njobs:\n  build:\n    runs-on: linux-arm64-cpu-16\n    container:\n      image: quay.io/ascend-ci/vllm-ascend:build\n    steps:\n      - name: Checkout source\n        uses: actions/checkout@v7\n\n      - name: Upload build artifacts\n        uses: actions/upload-artifact@v4\n        with:\n          name: csrc-artifacts\n          path: csrc/build/\n\n      - name: Build csrc\n        run: |\n          python setup.py build\n\n      - name: Cache csrc artifacts\n        uses: actions/cache@v4\n        with:\n          path: csrc/build\n          key: csrc-${{ hashFiles('csrc/**') }}\n          restore-keys: |\n            csrc-",
+      "context": "why not move this to L132?"
+    },
+    "diff": {
+      "unified": "--- a/.github/workflows/push_build_csrc_cache.yaml\n+++ b/.github/workflows/push_build_csrc_cache.yaml\n@@ -1,6 +1,5 @@\n-# MengqingCao 评论: \"why not move this to L132?\"\n-# Potabk 回复: \"ok, let's make it more concise\"\n-# （根据评审意见推断）第144行的 CI 步骤位置不合理，应移至第132行\n+# 根据 commit f0150ff \"tiny fix\"\n+# 将步骤从第144行移动到第132行，使 CI 流程更简洁\n \n jobs:\n   build:\n@@ -10,6 +9,12 @@\n     steps:\n       - name: Checkout source\n         uses: actions/checkout@v7\n+\n+      - name: Upload build artifacts\n+        uses: actions/upload-artifact@v4\n+        with:\n+          name: csrc-artifacts\n+          path: csrc/build/\n \n       - name: Build csrc\n         run: |\n@@ -22,10 +27,3 @@\n           key: csrc-${{ hashFiles('csrc/**') }}\n           restore-keys: |\n             csrc-\n-\n-      # 以下步骤原位于第144行，评审建议移至第132行\n-      - name: Upload build artifacts\n-        uses: actions/upload-artifact@v4\n-        with:\n-          name: csrc-artifacts\n-          path: csrc/build/\n",
+      "stats": "1 file changed, +8 lines, -10 lines",
+      "key_changes": [
+        "-# MengqingCao 评论: \"why not move this to L132?\"",
+        "-# Potabk 回复: \"ok, let's make it more concise\"",
+        "-# （根据评审意见推断）第144行的 CI 步骤位置不合理，应移至第132行",
+        "+# 根据 commit f0150ff \"tiny fix\"",
+        "+# 将步骤从第144行移动到第132行，使 CI 流程更简洁",
+        "+",
+        "+      - name: Upload build artifacts",
+        "+        uses: actions/upload-artifact@v4",
+        "+        with:",
+        "+          name: csrc-artifacts",
+        "+          path: csrc/build/",
+        "-",
+        "-      # 以下步骤原位于第144行，评审建议移至第132行",
+        "-      - name: Upload build artifacts",
+        "-        uses: actions/upload-artifact@v4",
+        "-        with:",
+        "-          name: csrc-artifacts",
+        "-          path: csrc/build/"
+      ]
+    },
+    "language": "yaml",
+    "_status": "pending_llm_extract"
+  }
+}

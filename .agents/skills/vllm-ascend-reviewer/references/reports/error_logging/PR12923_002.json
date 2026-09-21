@@ -1,0 +1,61 @@
+{
+  "report_id": "PR12923_002",
+  "pr_number": 12923,
+  "pr_title": "[Refactor][Distributed] Remove all_to_all patch and switch lm-head TP to all_to_all_single",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/spec_decode/llm_base_proposer.py:1153"
+  ],
+  "landing_sha": "c66a110",
+  "source_quote": "### Critical Divisibility Issue in Speculative Decoding with LM-Head TP\n> The new `lmhead_all_to_all` helper uses `all_to_all_single` with a static `view(world_size, -1, vocab_per_partition)` reshape, which strictly requires the number of tokens `N` (i.e., `logits.shape[0]`) to be divisible by `world_size`.\n> However, in `_run_merged_draft`, `logits` is computed from `sample_hidden_states`, which is indexed by `token_indices_to_sample`. When `lmhead_tp_enable()` is True, `token_indices_to_sample` is padded to `max_num_reqs_across_dp`:\n> ```python\nmax_num_reqs_across_dp = (\nself.vllm_config.scheduler_config.max_num_seqs * self.runner.uniform_decode_query_len\n)\n> If `max_num_reqs_across_dp` is not divisible by `world_size` (for example, if `max_num_seqs = 1` and `uniform_decode_query_len = 1` with `world_size = 2`), `logits.shape[0]` will not be divisible by `world_size`, causing a `RuntimeError` inside `lmhead_all_to_all`.\n> To prevent this, we must ensure that `max_num_reqs_across_dp` is always padded to a multiple of `world_size` of the LM-head TP group.",
+  "correspondence": [
+    {
+      "review_quote": "gemini-code-assist[bot]: vllm_ascend/spec_decode/llm_base_proposer.py:1153",
+      "patch_snippet": "评后sha c66a110 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "c66a110",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当某个通信原语（如 `lmhead_all_to_all` 内的 `view(world_size, -1, V/P)` + `dist.all_to_all_single`）要求 dim 0 size `N` 整除 `world_size` 时，所有决定 `N` 的上游量（如 `max_num_reqs_across_dp`）都必须 round-up 到 `world_size` 的倍数。需要全局排查所有消费点（如不同 proposer 的 `_run_merged_draft`），不能只改一个位置；同时保留原语内部的前置校验作为二级防线。",
+    "context": "",
+    "checkpoints": [
+      "识别整除性约束原语（`view(world_size, -1, ...)`、`all_to_all_single`、`tensor_split` 替换为 `view` 等）",
+      "反向追踪 dim 0 size 的所有上游决定量（如 `max_num_reqs_across_dp = max_num_seqs * uniform_decode_query_len`）",
+      "在每个决定量计算点加入 round-up：`x = ((x + tp_size - 1) // tp_size) * tp_size`",
+      "全局搜索同一通信原语的所有调用方（如 `llm_base_proposer.py` 两处 + `step3p5.py` 一处），对称修改，避免遗漏",
+      "区分\"需要 padding 的路径\"（如 spec_decode 从 per-rank `sample_hidden_states` 计算 logits）与\"无需 padding 的路径\"（如 `_get_logits_lmheadtp` 输入来自 `all_gather`，N 已是 P 倍数）",
+      "保留原语内部 `raise ValueError` 作为二级防线（防止未来新调用方忘记 padding）",
+      "优先用 `enable_reduce_sample` 等开关门控 padding，避免对未启用该路径的场景产生副作用"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/spec_decode/llm_base_proposer.py",
+      "line": 1080,
+      "code": "def _run_merged_draft(self, ...):\n    # ... 省略前置逻辑 ...\n    if lmhead_tp_enable():\n        max_num_reqs_across_dp = (\n            self.vllm_config.scheduler_config.max_num_seqs\n            * self.runner.uniform_decode_query_len\n        )\n        # ❌ 未对 world_size 整除做处理\n        # 当 max_num_seqs=1, uniform_decode_query_len=1, world_size=2 时\n        # logits.shape[0]=1 不整除 2，lmhead_all_to_all 内 view() 抛 RuntimeError\n        token_indices_to_sample = torch.arange(max_num_reqs_across_dp, ...)\n        sample_hidden_states = hidden_states[token_indices_to_sample]\n        logits = self._compute_logits(sample_hidden_states)\n        # logits.shape[0] = max_num_reqs_across_dp，不整除 world_size 时下游崩溃",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/spec_decode/llm_base_proposer.py",
+      "line": 1080,
+      "code": "def _run_merged_draft(self, ...):\n    # ... 省略前置逻辑 ...\n    if lmhead_tp_enable():\n        max_num_reqs_across_dp = (\n            self.vllm_config.scheduler_config.max_num_seqs\n            * self.runner.uniform_decode_query_len\n        )\n        if get_ascend_config().enable_reduce_sample:\n            tp_size = get_lmhead_tp_group().world_size\n            # Round up to a multiple of tp_size so lmhead_all_to_all's\n            # view(world_size, -1, V/P) reshape cannot fail on unequal split.\n            max_num_reqs_across_dp = (\n                (max_num_reqs_across_dp + tp_size - 1) // tp_size\n            ) * tp_size\n        token_indices_to_sample = torch.arange(max_num_reqs_across_dp, ...)\n        sample_hidden_states = hidden_states[token_indices_to_sample]\n        logits = self._compute_logits(sample_hidden_states)\n        # logits.shape[0] 现在是 tp_size 的倍数，lmhead_all_to_all 安全",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/spec_decode/llm_base_proposer.py\n+++ b/vllm_ascend/spec_decode/llm_base_proposer.py\n@@ -5,10 +5,14 @@\n             self.vllm_config.scheduler_config.max_num_seqs\n             * self.runner.uniform_decode_query_len\n         )\n-        # ❌ 未对 world_size 整除做处理\n-        # 当 max_num_seqs=1, uniform_decode_query_len=1, world_size=2 时\n-        # logits.shape[0]=1 不整除 2，lmhead_all_to_all 内 view() 抛 RuntimeError\n+        if get_ascend_config().enable_reduce_sample:\n+            tp_size = get_lmhead_tp_group().world_size\n+            # Round up to a multiple of tp_size so lmhead_all_to_all's\n+            # view(world_size, -1, V/P) reshape cannot fail on unequal split.\n+            max_num_reqs_across_dp = (\n+                (max_num_reqs_across_dp + tp_size - 1) // tp_size\n+            ) * tp_size\n         token_indices_to_sample = torch.arange(max_num_reqs_across_dp, ...)\n         sample_hidden_states = hidden_states[token_indices_to_sample]\n         logits = self._compute_logits(sample_hidden_states)\n-        # logits.shape[0] = max_num_reqs_across_dp，不整除 world_size 时下游崩溃\n+        # logits.shape[0] 现在是 tp_size 的倍数，lmhead_all_to_all 安全",
+      "stats": "1 file changed, +8 lines, -4 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

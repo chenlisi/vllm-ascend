@@ -1,0 +1,57 @@
+{
+  "report_id": "PR12950_001",
+  "pr_number": 12950,
+  "pr_title": "[Feature][v0.26.0rc] Support Kimi K3 on Ascend",
+  "pr_status": "merged",
+  "dimension": [
+    "test"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/ut/models/test_kimi_k3.py:36"
+  ],
+  "landing_sha": "23cfbd5",
+  "source_quote": "I can't figure out exactly what these tests are testing.\nPerhaps we could reduce these tests and add more comments.",
+  "correspondence": [
+    {
+      "review_quote": "drslark: tests/ut/models/test_kimi_k3.py:36",
+      "patch_snippet": "评后sha 23cfbd5 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "23cfbd5",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "单元测试应仅验证被测代码的实际行为，不应包含对 pass-through 字段（仅原样传递未做处理的字段）的断言，测试意图应通过命名和注释清晰表达。",
+    "context": "",
+    "checkpoints": [
+      "检查测试是否包含对未处理字段（pass-through）的断言",
+      "确认测试命名是否描述了被测行为",
+      "移除与当前实现无关的断言，聚焦于实际变更的契约"
+    ],
+    "antipattern": {
+      "file": "tests/ut/models/test_kimi_k3.py",
+      "line": 30,
+      "code": "import pytest\nfrom vllm_ascend.models.kimi_k3 import AscendKimiK3ForCausalLM\n\n\nclass TestKimiK3VisionConfig:\n    \"\"\"测试 Kimi K3 视觉配置相关逻辑\"\"\"\n\n    def test_kimi_k3_config_normalization(self):\n        # 混合了 pass-through 字段断言和实际规范化逻辑\n        # 测试意图不清晰\n        config = self._make_config()\n        normalized = normalize_vision_config(config)\n\n        # 以下大量断言混合 pass-through 和实际行为\n        assert normalized.field_a == config.field_a  # pass-through，无意义\n        assert normalized.field_b == config.field_b  # pass-through，无意义\n        assert normalized.field_c == config.field_c  # pass-through，无意义\n        assert normalized.use_unified_vision_chunk is False  # legacy flag\n        assert normalized.vt_hidden_size == config.vt_hidden_size  # pass-through\n        assert normalized.projector_width == config.text_hidden_size  # 实际行为\n        assert normalized.vision_field_mapping == {...}  # 实际行为\n        # ... 更多混合断言 ...",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "tests/ut/models/test_kimi_k3.py",
+      "line": 30,
+      "code": "import pytest\nfrom vllm_ascend.models.kimi_k3 import AscendKimiK3ForCausalLM\n\n\nclass TestKimiK3VisionConfig:\n    \"\"\"测试 Kimi K3 视觉配置相关逻辑\"\"\"\n\n    def test_kimi_k3_model_declares_checkpoint_packing_contract(self):\n        \"\"\"测试 packed_modules_mapping 契约：确保 MoE experts 的 packed modules\n        按照 w1(gate), w3(up), w2(down) 的顺序声明\"\"\"\n        assert AscendKimiK3ForCausalLM.packed_modules_mapping[\"experts\"] == [\n            \"experts.0.w1\", \"experts.0.w3\", \"experts.0.w2\",\n        ]\n\n    def test_kimi_k3_drops_legacy_vision_chunk_flag(self):\n        \"\"\"测试规范化逻辑移除了 legacy use_unified_vision_chunk flag\"\"\"\n        config = self._make_config()\n        normalized = normalize_vision_config(config)\n        # 聚焦实际行为：legacy flag 被移除\n        assert not hasattr(normalized, \"use_unified_vision_chunk\")\n\n    def test_kimi_k3_maps_vt_fields_to_canonical_vision_fields(self):\n        \"\"\"测试 checkpoint 中的 vt_* 字段被正确映射到 vLLM 标准视觉字段\"\"\"\n        config = self._make_config()\n        normalized = normalize_vision_config(config)\n        # 聚焦实际行为：vt_* 字段映射\n        assert normalized.vision_field_mapping == {...}\n\n    def test_kimi_k3_aligns_projector_width_with_text_hidden_size(self):\n        \"\"\"测试 projector width 与 text hidden size 对齐\"\"\"\n        config = self._make_config()\n        normalized = normalize_vision_config(config)\n        # 聚焦实际行为：projector width 对齐\n        assert normalized.projector_width == config.text_hidden_size",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/tests/ut/models/test_kimi_k3.py\n+++ b/tests/ut/models/test_kimi_k3.py\n@@ -5,18 +5,30 @@\n class TestKimiK3VisionConfig:\n     \"\"\"测试 Kimi K3 视觉配置相关逻辑\"\"\"\n \n-    def test_kimi_k3_config_normalization(self):\n-        # 混合了 pass-through 字段断言和实际规范化逻辑\n-        # 测试意图不清晰\n+    def test_kimi_k3_model_declares_checkpoint_packing_contract(self):\n+        \"\"\"测试 packed_modules_mapping 契约：确保 MoE experts 的 packed modules\n+        按照 w1(gate), w3(up), w2(down) 的顺序声明\"\"\"\n+        assert AscendKimiK3ForCausalLM.packed_modules_mapping[\"experts\"] == [\n+            \"experts.0.w1\", \"experts.0.w3\", \"experts.0.w2\",\n+        ]\n+\n+    def test_kimi_k3_drops_legacy_vision_chunk_flag(self):\n+        \"\"\"测试规范化逻辑移除了 legacy use_unified_vision_chunk flag\"\"\"\n         config = self._make_config()\n         normalized = normalize_vision_config(config)\n+        # 聚焦实际行为：legacy flag 被移除\n+        assert not hasattr(normalized, \"use_unified_vision_chunk\")\n \n-        # 以下大量断言混合 pass-through 和实际行为\n-        assert normalized.field_a == config.field_a  # pass-through，无意义\n-        assert normalized.field_b == config.field_b  # pass-through，无意义\n-        assert normalized.field_c == config.field_c  # pass-through，无意义\n-        assert normalized.use_unified_vision_chunk is False  # legacy flag\n-        assert normalized.vt_hidden_size == config.vt_hidden_size  # pass-through\n-        assert normalized.projector_width == config.text_hidden_size  # 实际行为\n-        assert normalized.vision_field_mapping == {...}  # 实际行为\n-        # ... 更多混合断言 ...\n+    def test_kimi_k3_maps_vt_fields_to_canonical_vision_fields(self):\n+        \"\"\"测试 checkpoint 中的 vt_* 字段被正确映射到 vLLM 标准视觉字段\"\"\"\n+        config = self._make_config()\n+        normalized = normalize_vision_config(config)\n+        # 聚焦实际行为：vt_* 字段映射\n+        assert normalized.vision_field_mapping == {...}\n+\n+    def test_kimi_k3_aligns_projector_width_with_text_hidden_size(self):\n+        \"\"\"测试 projector width 与 text hidden size 对齐\"\"\"\n+        config = self._make_config()\n+        normalized = normalize_vision_config(config)\n+        # 聚焦实际行为：projector width 对齐\n+        assert normalized.projector_width == config.text_hidden_size",
+      "stats": "1 file changed, +24 lines, -12 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

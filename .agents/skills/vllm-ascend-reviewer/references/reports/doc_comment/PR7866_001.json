@@ -1,0 +1,67 @@
+{
+  "report_id": "PR7866_001",
+  "pr_number": 7866,
+  "pr_title": "[Doc] update Qwen3.5 user guide",
+  "pr_status": "merged",
+  "merged_at": "2026-04-02T12:12:09Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/models/Qwen3.5-397B-A17B.md:287",
+    "docs/source/tutorials/models/Qwen3.5-397B-A17B.md:392",
+    "docs/source/tutorials/models/Qwen3.5-397B-A17B.md:111"
+  ],
+  "landing_sha": "1580ded",
+  "source_quote": "local_ip=\"xx.xx.xx.xx\"\nplz add a note to remand users that prefix caching is not supported on D nodes.\nhttps://github.com/vllm-project/vllm-ascend/issues/7944\nexport VLLM_ASCEND_ENABLE_FLASHCOMM1=1",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao: docs/source/tutorials/models/Qwen3.5-397B-A17B.md:287",
+      "patch_snippet": "评后sha 1580ded 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: docs/source/tutorials/models/Qwen3.5-397B-A17B.md:392",
+      "patch_snippet": "评后sha 1580ded 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "MengqingCao: docs/source/tutorials/models/Qwen3.5-397B-A17B.md:111",
+      "patch_snippet": "评后sha 1580ded 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "1580ded",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "文档示例中应使用占位符（如 `xx.xx.xx.xx`）替代真实 IP 地址，避免信息泄露。环境变量名称应仔细检查拼写。对于已知不支持的功能，应添加明确的说明。",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/Qwen3.5-397B-A17B.md",
+      "line": 280,
+      "code": "<!-- 评审人 MengqingCao 建议: ",
+      "context": "local_ip=\"xx.xx.xx.xx\"\nplz add a note to remand users that prefix caching is not supported on D nodes.\nhttps://github.com/vllm-project/vllm-ascend/issues/7944\nexport VLLM_ASCEND_ENABLE_FLASHCOMM1=1"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/Qwen3.5-397B-A17B.md",
+      "line": 280,
+      "code": "### Multi-node deployment",
+      "context": "local_ip=\"xx.xx.xx.xx\"\nplz add a note to remand users that prefix caching is not supported on D nodes.\nhttps://github.com/vllm-project/vllm-ascend/issues/7944\nexport VLLM_ASCEND_ENABLE_FLASHCOMM1=1"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/Qwen3.5-397B-A17B.md\n+++ b/docs/source/tutorials/models/Qwen3.5-397B-A17B.md\n@@ -1 +1 @@\n-<!-- 评审人 MengqingCao 建议: \n+### Multi-node deployment\n",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "-<!-- 评审人 MengqingCao 建议: ",
+        "+### Multi-node deployment"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

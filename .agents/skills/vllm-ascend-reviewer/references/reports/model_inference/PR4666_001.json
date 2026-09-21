@@ -1,0 +1,68 @@
+{
+  "report_id": "PR4666_001",
+  "pr_number": 4666,
+  "pr_title": "add DeepSeek-R1 tutorial.",
+  "pr_status": "merged",
+  "merged_at": "2025-12-11T00:52:27Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/DeepSeek-R1.md:40",
+    "docs/source/tutorials/DeepSeek-R1.md:120",
+    "docs/source/tutorials/DeepSeek-R1.md:28",
+    "docs/source/tutorials/DeepSeek-R1.md:97",
+    "docs/source/tutorials/DeepSeek-R1.md:141",
+    "docs/source/tutorials/DeepSeek-R1.md:184",
+    "docs/source/tutorials/DeepSeek-R1.md:248",
+    "docs/source/tutorials/DeepSeek-R1.md:257",
+    "docs/source/tutorials/DeepSeek-R1.md:271",
+    "docs/source/tutorials/DeepSeek-R1.md:284"
+  ],
+  "landing_sha": "3d67948",
+  "source_quote": "provide docker run command directly, like \"https://github.com/vllm-project/vllm-ascend/pull/4399\"",
+  "correspondence": [
+    {
+      "review_quote": "1092626063 指出需要提供 docker run 命令。MengqingCao 指出模型名称需与 modelscope 保持一致（DeepSeek-R1-W8A8），并提供了多处 suggestion 修正 vllm serve 命令。作者通过多个 commits 修改，11/11 建议全部落地。",
+      "patch_snippet": "",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "3d67948",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "教程文档中的模型名称必须与 modelscope/huggingface 等官方源上的名称完全一致（包括大小写），避免在大小写敏感的文件系统上出错。",
+    "context": "",
+    "checkpoints": [
+      "模型名称是否与官方源一致（如 DeepSeek-R1-W8A8 而非 DeepSeek-R1-w8a8）",
+      "vllm serve 命令中的模型路径是否正确",
+      "是否提供了完整的 docker run 命令"
+    ],
+    "antipattern": {
+      "file": "",
+      "line": 0,
+      "code": "<!-- 文件: docs/source/tutorials/DeepSeek-R1.md -->\n<!-- 行号: ~30-50 (commit 3d67948 之前) -->\n<!-- （pr/ 数据不足，以下为根据评审意见和文档结构推断的上下文） -->\n\n\n\nPrepare the Docker environment for deployment.\n\n<!-- 缺少 docker run 命令 -->\n<!-- 1092626063: provide docker run command directly, like PR #4399 -->\n\n\nDownload the model from ModelScope.",
+      "context": "1092626063: provide docker run command directly, like \"https://github.com/vllm-project/vllm-ascend/pull/4399\""
+    },
+    "pattern": {
+      "file": "",
+      "line": 0,
+      "code": "<!-- 文件: docs/source/tutorials/DeepSeek-R1.md -->\n<!-- 行号: ~30-50 (commit 3d67948) -->\n<!-- （pr/ 数据不足，以下为根据评审意见和文档结构推断的上下文） -->\n\n\n\nPrepare the Docker environment for deployment.\n\n<!-- FIX: 添加完整的 docker run 命令（参考 A3 series） -->",
+      "context": "1092626063: provide docker run command directly, like \"https://github.com/vllm-project/vllm-ascend/pull/4399\""
+    },
+    "diff": {
+      "unified": "--- a/a/file\n+++ b/b/file\n@@ -1,13 +1,9 @@\n <!-- 文件: docs/source/tutorials/DeepSeek-R1.md -->\n-<!-- 行号: ~30-50 (commit 3d67948 之前) -->\n+<!-- 行号: ~30-50 (commit 3d67948) -->\n <!-- （pr/ 数据不足，以下为根据评审意见和文档结构推断的上下文） -->\n \n \n \n Prepare the Docker environment for deployment.\n \n-<!-- 缺少 docker run 命令 -->\n-<!-- 1092626063: provide docker run command directly, like PR #4399 -->\n-\n-\n-Download the model from ModelScope.\n+<!-- FIX: 添加完整的 docker run 命令（参考 A3 series） -->",
+      "stats": "1 file changed, +2 lines, -6 lines",
+      "key_changes": [
+        "修改了第 2-2 行的代码",
+        "修改了第 9-13 行的代码"
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

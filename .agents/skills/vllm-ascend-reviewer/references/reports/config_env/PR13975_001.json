@@ -1,0 +1,59 @@
+{
+  "report_id": "PR13975_001",
+  "pr_number": 13975,
+  "pr_title": "[Feature][MRV2] Adapt model runner v2 for routed-experts capture",
+  "pr_status": "merged",
+  "dimension": [
+    "test"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/e2e/pull_request/two_card/rlhf/consistency/test_moe_routing_replay.py:42"
+  ],
+  "landing_sha": "a11fc03",
+  "source_quote": "we need to make sure that v1 branch is entered.",
+  "correspondence": [
+    {
+      "review_quote": "tests/e2e/pull_request/two_card/rlhf/consistency/test_moe_routing_replay.py:42",
+      "patch_snippet": "评后sha a11fc03 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "a11fc03",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "新增功能若同时适配 MRV1 和 MRV2，参数化测试矩阵（`use_v2=True/False`）必须确保 v1（`use_v2=False`）分支被测试覆盖。当需要跳过某些不支持的组合时，skip 条件必须精确限定（如 `use_v2 and model == \"X\"`），不能误跳过 v1 路径。v1 是默认分支，遗漏 v1 测试会导致默认路径回归。",
+    "context": "",
+    "checkpoints": [
+      "识别 `@parametrize(\"use_v2\", [True, False])` 测试，确认 v1（`use_v2=False`）用例存在且不被误跳过",
+      "skip 条件要精确：`use_v2 and <其他条件>`，不能写 `model == \"X\"`（会同时跳过 v1+该模型）",
+      "v1 是默认路径，必须被覆盖——不能只测 v2",
+      "若 v1 某模型也不支持，需单独说明，不能假设 v1 默认支持所有模型"
+    ],
+    "antipattern": {
+      "file": "tests/e2e/pull_request/two_card/rlhf/consistency/test_moe_routing_replay.py",
+      "line": 42,
+      "code": "# tests/e2e/pull_request/two_card/rlhf/consistency/test_moe_routing_replay.py\nimport os\nfrom unittest.mock import patch\n\nimport pytest\nfrom vllm import SamplingParams\nfrom vllm.sampling_params import RequestOutputKind\n\nfrom tests.e2e.conftest import VllmRunner\nfrom vllm_ascend.utils import vllm_version_is\n\nMODELS = [\n    \"Qwen/Qwen3.5-35B-A3B\",\n    \"Qwen/Qwen3-30B-A3B\",\n]\n\n@pytest.mark.parametrize(\"model\", MODELS)\n@pytest.mark.parametrize(\"use_v2\", [False, True], ids=[\"MRV1\", \"MRV2\"])\n@patch.dict(os.environ, {\"OMP_NUM_THREADS\": \"1\"})\ndef test_moe_routing_replay(model, use_v2):\n    \"\"\"Routed experts output is valid and non-empty for MoE models.\"\"\"\n    # ❌ 未明确保证 v1 分支被测试覆盖\n    # ❌ 没有 skip 条件，v2+Qwen3.5 组合可能失败\n    env_vars = {\"OMP_NUM_THREADS\": \"1\"}\n    if use_v2:\n        env_vars[\"VLLM_USE_V2_MODEL_RUNNER\"] = \"1\"\n\n    with patch.dict(os.environ, env_vars):\n        prompts = [\"Hello, please introduce yourself.\"]\n        with VllmRunner(\n            model,\n            tensor_parallel_size=2,\n            enable_expert_parallel=True,",
+      "context": "tests/e2e/pull_request/two_card/rlhf/consistency/test_moe_routing_replay.py ❌ 未明确保证 v1 分支被测试覆盖 ❌ 没有 skip 条件，v2+Qwen3.5 组合可能失败"
+    },
+    "pattern": {
+      "file": "tests/e2e/pull_request/two_card/rlhf/consistency/test_moe_routing_replay.py",
+      "line": 42,
+      "code": "# tests/e2e/pull_request/two_card/rlhf/consistency/test_moe_routing_replay.py\nimport os\nfrom unittest.mock import patch\n\nimport pytest\nfrom vllm import SamplingParams\nfrom vllm.sampling_params import RequestOutputKind\n\nfrom tests.e2e.conftest import VllmRunner\nfrom vllm_ascend.utils import vllm_version_is\n\nMODELS = [\n    \"Qwen/Qwen3.5-35B-A3B\",\n    \"Qwen/Qwen3-30B-A3B\",\n]\n\n@pytest.mark.parametrize(\"model\", MODELS)\n@pytest.mark.parametrize(\"use_v2\", [False, True], ids=[\"MRV1\", \"MRV2\"])\n@patch.dict(os.environ, {\"OMP_NUM_THREADS\": \"1\"})\ndef test_moe_routing_replay(model, use_v2):\n    \"\"\"Routed experts output is valid and non-empty for MoE models.\"\"\"\n    # ✅ skip 条件精确限定为 use_v2 + Qwen3.5，v1 (use_v2=False) 对两个模型都继续运行\n    if use_v2 and model == \"Qwen/Qwen3.5-35B-A3B\":\n        pytest.skip(\"MRV2 support for Qwen3.5-35B-A3B is not available yet\")\n    # ✅ use_v2=False (v1) 不会进入上面的 skip，v1 分支被覆盖\n\n    env_vars = {\"OMP_NUM_THREADS\": \"1\"}\n    if use_v2 and vllm_version_is(\"0.27.1\"):\n        pytest.skip(\"vLLM v0.27.1 does not support routed experts capture on MRV2\")\n    if use_v2:\n        env_vars[\"VLLM_USE_V2_MODEL_RUNNER\"] = \"1\"\n\n    with patch.dict(os.environ, env_vars):\n        prompts = [\"Hello, please introduce yourself.\"]\n        with VllmRunner(\n            model,\n            tensor_parallel_size=2,\n            enable_expert_parallel=True,",
+      "context": "tests/e2e/pull_request/two_card/rlhf/consistency/test_moe_routing_replay.py ✅ skip 条件精确限定为 use_v2 + Qwen3.5，v1 (use_v2=False) 对两个模型都继续运行 ✅ use_v2=False (v1) 不会进入上面的 skip，v1 分支被覆盖"
+    },
+    "diff": {
+      "unified": "--- a/tests/e2e/pull_request/two_card/rlhf/consistency/test_moe_routing_replay.py\n+++ b/tests/e2e/pull_request/two_card/rlhf/consistency/test_moe_routing_replay.py\n@@ -19,9 +19,14 @@\n @patch.dict(os.environ, {\"OMP_NUM_THREADS\": \"1\"})\n def test_moe_routing_replay(model, use_v2):\n     \"\"\"Routed experts output is valid and non-empty for MoE models.\"\"\"\n-    # ❌ 未明确保证 v1 分支被测试覆盖\n-    # ❌ 没有 skip 条件，v2+Qwen3.5 组合可能失败\n+    # ✅ skip 条件精确限定为 use_v2 + Qwen3.5，v1 (use_v2=False) 对两个模型都继续运行\n+    if use_v2 and model == \"Qwen/Qwen3.5-35B-A3B\":\n+        pytest.skip(\"MRV2 support for Qwen3.5-35B-A3B is not available yet\")\n+    # ✅ use_v2=False (v1) 不会进入上面的 skip，v1 分支被覆盖\n+\n     env_vars = {\"OMP_NUM_THREADS\": \"1\"}\n+    if use_v2 and vllm_version_is(\"0.27.1\"):\n+        pytest.skip(\"vLLM v0.27.1 does not support routed experts capture on MRV2\")\n     if use_v2:\n         env_vars[\"VLLM_USE_V2_MODEL_RUNNER\"] = \"1\"\n \n",
+      "stats": "1 file changed, +7 lines, -2 lines",
+      "key_changes": [
+        "新增: pytest.skip(\"vLLM v0.27.1 does not support routed experts capture on MRV2\")",
+        "新增: pytest.skip(\"MRV2 support for Qwen3.5-35B-A3B is not available yet\")"
+      ]
+    },
+    "language": "python",
+    "_status": "processed"
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "report_id": "PR12441_001",
+  "pr_number": 0,
+  "pr_title": "",
+  "pr_status": "unknown",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "",
+  "source_quote": "",
+  "correspondence": [],
+  "verification": {
+    "merged": false,
+    "modified_commit": "",
+    "approvals": 0
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/GLM5.2.md",
+      "line": 34,
+      "code": "## Ascend910B A3 series\n\n### Docker Image\n\n```bash\nexport IMAGE=quay.io/ascend/vllm-ascend:v0.23.0rc1-a3\n#        写死具体版本↑↑↑ v0.23.0rc1 → 每次发新版要手改所有md文档\n```\n\n### Startup Command\n\n```bash\n# A3 series startup with DP=2, TP=2\ndocker run --rm \\\n    --device /dev/davinci0 \\\n    --device /dev/davinci1 \\\n    -v /mnt/share/models:/root/.cache/modelscope/hub/models \\\n    $IMAGE \\\n    vllm serve /root/.cache/modelscope/hub/models/GLM-5.2-w4a8c8 \\\n        --data-parallel-size 2 \\\n        --tensor-parallel-size 2 \\\n        --additional-config '{\"enable_dsa_cp\": true}'\n```",
+      "context": "修改前代码 (markdown)"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/GLM5.2.md",
+      "line": 34,
+      "code": "## Ascend910B A3 series\n\n### Docker Image\n\n```bash\nexport IMAGE=quay.io/ascend/vllm-ascend:{{ vllm_ascend_version }}-a3\n#        标准模板变量语法，与其他tutorials完全一致，100%对应建议原文\n```\n\n### Startup Command\n\n```bash\n# A3 series startup with DP=2, TP=2\ndocker run --rm \\\n    --device /dev/davinci0 \\\n    --device /dev/davinci1 \\\n    -v /mnt/share/models:/root/.cache/modelscope/hub/models \\\n    $IMAGE \\\n    vllm serve /root/.cache/modelscope/hub/models/GLM-5.2-w4a8c8 \\\n        --data-parallel-size 2 \\\n        --tensor-parallel-size 2 \\\n        --additional-config '{\"enable_dsa_cp\": true}'\n```",
+      "context": "修改后代码 (markdown)"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/GLM5.2.md\n+++ b/docs/source/tutorials/models/GLM5.2.md\n@@ -3,8 +3,8 @@\n ### Docker Image\n \n ```bash\n-export IMAGE=quay.io/ascend/vllm-ascend:v0.23.0rc1-a3\n-#        写死具体版本↑↑↑ v0.23.0rc1 → 每次发新版要手改所有md文档\n+export IMAGE=quay.io/ascend/vllm-ascend:{{ vllm_ascend_version }}-a3\n+#        标准模板变量语法，与其他tutorials完全一致，100%对应建议原文\n ```\n \n ### Startup Command",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "将硬编码版本号替换为 Sphinx 模板变量 {{ vllm_ascend_version }}"
+      ]
+    },
+    "language": "markdown",
+    "_status": "pending_llm_extract"
+  }
+}

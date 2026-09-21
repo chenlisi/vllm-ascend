@@ -1,0 +1,59 @@
+{
+  "report_id": "PR10694_001",
+  "pr_number": 10694,
+  "pr_title": "[Feature][Performance] Support o-proj TP weights async allgather in DSA-CP",
+  "pr_status": "merged",
+  "merged_at": "2026-07-06T06:17:19Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/patch/worker/patch_process_weights_after_loading.py:4"
+  ],
+  "landing_sha": "9ffee9e",
+  "source_quote": "This patch needs to specify the mitigation plan in vllm-ascend/vllm_ascend/patch/__init__.py.",
+  "correspondence": [
+    {
+      "review_quote": "weiguihua2 指出新增的 patch 文件需要在 `vllm_ascend/patch/__init__.py` 中声明 mitigation plan（即说明为什么需要这个 patch 以及它解决的上游问题）。作者通过 commit `9ffee9e`（\"docs(patch): document DSA post-load hook patch\"）补充了文档说明，1/1 建议全部落地。",
+      "patch_snippet": "commit `9ffee9e`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "9ffee9e",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在 vllm-ascend 项目中新增 patch 文件时，必须在 `vllm_ascend/patch/__init__.py` 中声明该 patch 的 mitigation plan，说明为什么需要此 patch 以及它解决的上游问题。",
+    "context": "",
+    "checkpoints": [
+      "新增 patch 文件是否在 `patch/__init__.py` 中注册",
+      "是否说明了 patch 的 mitigation plan（解决什么问题）",
+      "是否文档化了 patch 的用途和原因"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/patch/worker/patch_process_weights_after_loading.py",
+      "line": 1,
+      "code": "# 新增 patch 文件，但未在 patch/__init__.py 中声明 mitigation plan\n\n\"\"\"\nPatch for process_weights_after_loading for DSAAttention.\n\"\"\"\n\nfrom vllm_ascend.attention.attention_v1 import DSAAttention\n\n\ndef process_weights_after_loading(model, *args, **kwargs):\n    \"\"\"Process DSA attention weights after loading.\"\"\"\n    for name, module in model.named_modules():\n        if isinstance(module, DSAAttention):\n            module._process_weights_after_loading()",
+      "context": "This patch needs to specify the mitigation plan in vllm-ascend/vllm_ascend/patch/__init__.py."
+    },
+    "pattern": {
+      "file": "vllm_ascend/patch/worker/patch_process_weights_after_loading.py",
+      "line": 1,
+      "code": "# patch 文件本身保持不变\n\n\"\"\"\nPatch for process_weights_after_loading for DSAAttention.\n\"\"\"\n\nfrom vllm_ascend.attention.attention_v1 import DSAAttention\n\n\ndef process_weights_after_loading(model, *args, **kwargs):\n    \"\"\"Process DSA attention weights after loading.\"\"\"\n    for name, module in model.named_modules():\n        if isinstance(module, DSAAttention):\n            module._process_weights_after_loading()",
+      "context": "This patch needs to specify the mitigation plan in vllm-ascend/vllm_ascend/patch/__init__.py."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/patch/worker/patch_process_weights_after_loading.py\n+++ b/vllm_ascend/patch/worker/patch_process_weights_after_loading.py\n@@ -1,4 +1,4 @@\n-# 新增 patch 文件，但未在 patch/__init__.py 中声明 mitigation plan\n+# patch 文件本身保持不变\n \n \"\"\"\n Patch for process_weights_after_loading for DSAAttention.",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "移除: # 新增 patch 文件，但未在 patch/__init__.py 中声明 mitigation plan",
+        "新增: # patch 文件本身保持不变"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

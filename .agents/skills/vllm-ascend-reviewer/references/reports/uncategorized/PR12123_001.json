@@ -1,0 +1,46 @@
+{
+  "report_id": "PR12123_001",
+  "pr_number": 12123,
+  "pr_title": "[BugFix]Fix the precision issue of the npu_dequant_swiglu_quant operator when x.shape=[2,192]",
+  "pr_status": "merged",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "important",
+  "affected_files": [],
+  "landing_sha": "b8e1707",
+  "source_quote": "速改\n修复回去，检验标准不能变",
+  "correspondence": [],
+  "verification": {
+    "merged": true,
+    "modified_commit": "b8e1707",
+    "approvals": 3
+  },
+  "rule": {
+    "description": "",
+    "context": "",
+    "checkpoints": [],
+    "antipattern": {
+      "file": "test_dequant_swiglu_quant.py",
+      "line": 0,
+      "code": "# test_dequant_swiglu_quant.py —— 容忍度段（L178 前后）\nprint(\"\\n--- Output diff ---\")  # debug 打印，正式测试不应留存\nprint(f\"Golden vs Fused      : {_diff(output_golden, output)}\")\nprint(f\"Golden vs Workaround : {_diff(output_golden, workaround_output)}\")\nprint(\"--- Scale diff ---\")\nprint(f\"Golden vs Fused      : {_diff(output_scale_golden, output_scale)}\")\nprint(f\"Golden vs Workaround : {_diff(output_scale_golden, workaround_scale)}\")\n\n# int8 quantization output: atol=1 covers the rounding error (max_abs=1 in all cases)\ntorch.testing.assert_close(output.cpu(), output_golden.cpu(), atol=1, rtol=0.1)\n# Dynamic quant scale: relax tolerance to cover both aligned and non-64-aligned outDimy\ntorch.testing.assert_close(output_scale.cpu(), output_scale_golden.cpu(), atol=0.05, rtol=0.1)\n# ↑ L178 附近：原基准 int8 atol=1/rtol=0.1（团队约定）；scale atol=0.05（历史上更松）\n# 且存在 _small_ops_dequant_swiglu_quant 未定义 → 调用处 NameError（gemini 也报过）",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "test_dequant_swiglu_quant.py",
+      "line": 178,
+      "code": "# test_dequant_swiglu_quant.py —— 容忍度段（e6a632c 修复后）\n# 删除 _small_ops_dequant_swiglu_quant 函数定义+调用点（消除 NameError）\n# int8 tolerance 恢复为 atol=1/rtol=0.1（团队约定物理公差）\n# scale tolerance 保持 atol=0.05/rtol=0.1（历史更松，覆盖 non-64-aligned outDimy）\n\ntorch.testing.assert_close(output.cpu(), output_golden.cpu(), atol=1, rtol=0.1)\ntorch.testing.assert_close(output_scale.cpu(), output_scale_golden.cpu(), atol=0.05, rtol=0.1)",
+      "context": "修改后代码 (python)：删除 workaround，恢复 int8 公差"
+    },
+    "diff": {
+      "unified": "--- a/test_dequant_swiglu_quant.py\n+++ b/test_dequant_swiglu_quant.py\n@@ -1,14 +1,7 @@\n-# test_dequant_swiglu_quant.py —— 容忍度段（L178 前后）\n-print(\"\\n--- Output diff ---\")  # debug 打印，正式测试不应留存\n-print(f\"Golden vs Fused      : {_diff(output_golden, output)}\")\n-print(f\"Golden vs Workaround : {_diff(output_golden, workaround_output)}\")\n-print(\"--- Scale diff ---\")\n-print(f\"Golden vs Fused      : {_diff(output_scale_golden, output_scale)}\")\n-print(f\"Golden vs Workaround : {_diff(output_scale_golden, workaround_scale)}\")\n+# test_dequant_swiglu_quant.py —— 容忍度段（e6a632c 修复后）\n+# 删除 _small_ops_dequant_swiglu_quant 函数定义+调用点（消除 NameError）\n+# int8 tolerance 恢复为 atol=1/rtol=0.1（团队约定物理公差）\n+# scale tolerance 保持 atol=0.05/rtol=0.1（历史更松，覆盖 non-64-aligned outDimy）\n \n-# int8 quantization output: atol=1 covers the rounding error (max_abs=1 in all cases)\n torch.testing.assert_close(output.cpu(), output_golden.cpu(), atol=1, rtol=0.1)\n-# Dynamic quant scale: relax tolerance to cover both aligned and non-64-aligned outDimy\n torch.testing.assert_close(output_scale.cpu(), output_scale_golden.cpu(), atol=0.05, rtol=0.1)\n-# ↑ L178 附近：原基准 int8 atol=1/rtol=0.1（团队约定）；scale atol=0.05（历史上更松）\n-# 且存在 _small_ops_dequant_swiglu_quant 未定义 → 调用处 NameError（gemini 也报过）",
+      "stats": "1 file changed, +4 lines, -11 lines",
+      "key_changes": [
+        "删除未定义的 workaround 函数调用",
+        "恢复 int8 公差为团队约定值 atol=1"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

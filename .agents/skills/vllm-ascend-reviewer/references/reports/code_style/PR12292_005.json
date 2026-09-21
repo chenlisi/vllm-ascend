@@ -1,0 +1,63 @@
+{
+  "report_id": "PR12292_005",
+  "pr_number": 12292,
+  "pr_title": "[Feature] DyntraLB: Dynamic Intra-decoder Data-parallel Load Balancing",
+  "pr_status": "merged",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "important",
+  "affected_files": [
+    "vllm_ascend/core/dyntra_lb_scheduler.py:96",
+    "vllm_ascend/patch/platform/patch_dyntra_lb_core.py:88"
+  ],
+  "landing_sha": "2a98206",
+  "source_quote": "Please use `logger.info` rather than print.\nditto, please use `logger.info` or `logger.debug`",
+  "correspondence": [
+    {
+      "review_quote": "wxsIcey: vllm_ascend/core/dyntra_lb_scheduler.py:96",
+      "patch_snippet": "评后sha 2a98206 体现修改",
+      "adoption_judgment": "✅ 落地"
+    },
+    {
+      "review_quote": "wxsIcey: vllm_ascend/patch/platform/patch_dyntra_lb_core.py:88",
+      "patch_snippet": "评后sha 2a98206 体现修改",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "2a98206",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在生产代码中，必须使用 Python `logging` 模块（`logger.info`/`logger.debug`/`logger.warning` 等）进行日志输出，而非 `print()`，以便控制日志级别、格式化和输出目标。",
+    "context": "",
+    "checkpoints": [
+      "检查代码中是否存在 `print()` 调用",
+      "将 `print()` 替换为适当级别的 `logger` 调用",
+      "信息性输出用 `logger.info`，调试信息用 `logger.debug`"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/core/dyntra_lb_scheduler.py",
+      "line": 85,
+      "code": "import logging\nfrom typing import Optional, Dict, List\n\nfrom vllm.core.scheduler import Scheduler\nfrom vllm.config import SchedulerConfig, CacheConfig\n\nlogger = logging.getLogger(__name__)\n\n\nclass DyntraLBScheduler(Scheduler):\n    \"\"\"Dynamic Intra-decoder Data-parallel Load Balancing Scheduler.\"\"\"\n\n    def __init__(self, scheduler_config, cache_config, ...):\n        super().__init__(scheduler_config=scheduler_config,\n                         cache_config=cache_config, ...)\n        self.dp_group = ...\n        self.dp_size = ...\n        self.lb_pending = False\n        # ← wxsIcey: Please use logger.info rather than print\n        print(f\"DyntraLB scheduler initialized with dp_size={self.dp_size}\")\n\n    def schedule(self) -> SchedulerOutputs:\n        \"\"\"Main scheduling entry point with LB support.\"\"\"\n        if self.lb_pending:\n            print(f\"LB in progress, skipping schedule on rank\")\n        # ... 调度逻辑 ...",
+      "context": "修改前代码 (python)"
+    },
+    "pattern": {
+      "file": "vllm_ascend/core/dyntra_lb_scheduler.py",
+      "line": 85,
+      "code": "import logging\nfrom typing import Optional, Dict, List\n\nfrom vllm.core.scheduler import Scheduler\nfrom vllm.config import SchedulerConfig, CacheConfig\n\nlogger = logging.getLogger(__name__)\n\n\nclass DyntraLBScheduler(Scheduler):\n    \"\"\"Dynamic Intra-decoder Data-parallel Load Balancing Scheduler.\"\"\"\n\n    def __init__(self, scheduler_config, cache_config, ...):\n        super().__init__(scheduler_config=scheduler_config,\n                         cache_config=cache_config, ...)\n        self.dp_group = ...\n        self.dp_size = ...\n        self.lb_pending = False\n        # ✅ 使用 logger 替代 print\n        logger.info(\"DyntraLB scheduler initialized with dp_size=%s\",\n                     self.dp_size)\n\n    def schedule(self) -> SchedulerOutputs:\n        \"\"\"Main scheduling entry point with LB support.\"\"\"\n        if self.lb_pending:\n            logger.debug(\"LB in progress, skipping schedule on rank\")\n        # ... 调度逻辑 ...",
+      "context": "修改后代码 (python)"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/core/dyntra_lb_scheduler.py\n+++ b/vllm_ascend/core/dyntra_lb_scheduler.py\n@@ -16,11 +16,12 @@\n         self.dp_group = ...\n         self.dp_size = ...\n         self.lb_pending = False\n-        # ← wxsIcey: Please use logger.info rather than print\n-        print(f\"DyntraLB scheduler initialized with dp_size={self.dp_size}\")\n+        # ✅ 使用 logger 替代 print\n+        logger.info(\"DyntraLB scheduler initialized with dp_size=%s\",\n+                     self.dp_size)\n \n     def schedule(self) -> SchedulerOutputs:\n         \"\"\"Main scheduling entry point with LB support.\"\"\"\n         if self.lb_pending:\n-            print(f\"LB in progress, skipping schedule on rank\")\n+            logger.debug(\"LB in progress, skipping schedule on rank\")\n         # ... 调度逻辑 ...",
+      "stats": "1 file changed, +4 lines, -3 lines",
+      "key_changes": [
+        "重命名标识符"
+      ]
+    },
+    "language": "python",
+    "_status": "pending_llm_extract"
+  }
+}

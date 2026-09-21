@@ -1,0 +1,61 @@
+{
+  "report_id": "PR5238_001",
+  "pr_number": 5238,
+  "pr_title": "[Doc] Update the weight download URL.",
+  "pr_status": "merged",
+  "merged_at": "",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/DeepSeek-V3.2.md:22"
+  ],
+  "landing_sha": "e7de370",
+  "source_quote": "all name in this file should be updated",
+  "correspondence": [
+    {
+      "review_quote": "wangxiyuan 指出文件中所有模型名称都应更新以匹配新的下载 URL。作者通过 commit `e7de370` 更新了文件中所有模型名称，1/1 建议落地。",
+      "patch_snippet": "commit `e7de370`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "e7de370",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "更新文档中的下载 URL 时，必须同步更新文档中所有引用该资源的名称/路径，确保 URL、模型名称、示例命令三者一致。",
+    "context": "",
+    "checkpoints": [
+      "下载 URL 更新后，文档中的模型名称是否同步更新",
+      "示例命令中的路径是否与实际下载的模型名称一致",
+      "文件中所有相关引用是否全部更新，无遗漏"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/DeepSeek-V3.2.md",
+      "line": 22,
+      "code": "# 下载 URL 已更新，但文档中的模型名称仍使用旧名称\n# 示例命令中引用 DeepSeek-V3.2-w8a8-QuaRot（旧名称）\n\n## Quick Start\n\nDownload the model weights:",
+      "context": "all name in this file should be updated"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/DeepSeek-V3.2.md",
+      "line": 22,
+      "code": "# 所有模型名称统一更新为新名称\n# 示例命令中引用 DeepSeek-V3.2-w8a8-mtp-QuaRot（新名称）\n\n## Quick Start\n\nDownload the model weights:",
+      "context": "all name in this file should be updated"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/DeepSeek-V3.2.md\n+++ b/docs/source/tutorials/DeepSeek-V3.2.md\n@@ -1,5 +1,5 @@\n-# 下载 URL 已更新，但文档中的模型名称仍使用旧名称\n-# 示例命令中引用 DeepSeek-V3.2-w8a8-QuaRot（旧名称）\n+# 所有模型名称统一更新为新名称\n+# 示例命令中引用 DeepSeek-V3.2-w8a8-mtp-QuaRot（新名称）\n \n ## Quick Start\n ",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "- # 下载 URL 已更新，但文档中的模型名称仍使用旧名称",
+        "- # 示例命令中引用 DeepSeek-V3.2-w8a8-QuaRot（旧名称）",
+        "+ # 所有模型名称统一更新为新名称",
+        "+ # 示例命令中引用 DeepSeek-V3.2-w8a8-mtp-QuaRot（新名称）"
+      ]
+    },
+    "language": "markdown",
+    "_status": "extracted"
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "report_id": "PR10518_001",
+  "pr_number": 10518,
+  "pr_title": "[Attention] [BugFix]Enable multistream_dsv4_dsa_overlap and remove redundant code",
+  "pr_status": "merged",
+  "merged_at": "2026-06-17T02:48:14Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ascend_config.py:143",
+    "vllm_ascend/attention/dsa_v1.py:1487",
+    "vllm_ascend/attention/dsa_v1.py:1758"
+  ],
+  "landing_sha": "17fade0",
+  "source_quote": "we should add instruction for these configs in https://docs.vllm.ai/projects/ascend/en/latest/user_guide/configuration/additional_config.html",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 提出 3 个问题：\n1. 要求在 additional_config 文档中添加新配置项的说明，作者确认会跟进\n2. 询问为什么之前需要 warmup 现在不需要了。作者解释 PTA 2.9.0 时代辅助 stream 需要 warmup，但 PTA 已升级，不再需要\n3. 确认现在是否只使用 multistream 不需要单独处理新 stream。作者确认默认使用 multistream，但设置 `multistream_dsv4_dsa_overlap=false` 可回退到串行逻辑",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "17fade0",
+    "approvals": 2
+  },
+  "rule": {
+    "description": "在 `ascend_config.py` 中新增的配置项，必须在 additional_config 文档中添加对应的说明，方便用户理解和使用。",
+    "context": "",
+    "checkpoints": [
+      "检查新增配置项是否在文档中有说明",
+      "确认配置项的默认值和可选值是否清晰"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/dsa_v1.py",
+      "line": 1785,
+      "code": "# gemini-code-assist[bot] 指出: qr_quant 和 qr_pertoken_scale 被解包为 _，导致它们保持 None\n# 这会阻止 cv_indexer_select_qli 复用量化后的 qr 表示\n\n    def _forward_prefill(self, hidden_states, cos, sin, swa_kv_cache,\n                         swa_prefill_metadata, ...):\n        \"\"\"DSA v1 prefill forward with multistream overlap.\"\"\"\n        qr_quant = None\n        qr_pertoken_scale = None\n\n        if self.multistream_dsv4_dsa_overlap:\n            # BUG: qr_quant 和 qr_pertoken_scale 被解包为 _（丢弃）\n            # 导致它们保持 None，cv_indexer_select_qli 无法使用量化后的 qr\n            q, qr, _, _ = self._mla_prolog_multistream(\n                hidden_states, cos, sin, swa_kv_cache,\n                swa_prefill_metadata.slot_mapping, is_prefill=True\n            )\n        else:\n            q, qr = self._mla_prolog(hidden_states, cos, sin, swa_kv_cache)\n\n        # qr_quant 仍为 None，传递给 cv_indexer_select_qli 会导致错误\n        output = self.cv_indexer_select_qli(q, qr, qr_quant, qr_pertoken_scale)\n        return output",
+      "context": "we should add instruction for these configs in https://docs.vllm.ai/projects/ascend/en/latest/user_guide/configuration/additional_config.html"
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/dsa_v1.py",
+      "line": 1785,
+      "code": "# FIX: 正确解包 qr_quant 和 qr_pertoken_scale，传递给 cv_indexer_select_qli\n\n    def _forward_prefill(self, hidden_states, cos, sin, swa_kv_cache,\n                         swa_prefill_metadata, ...):\n        \"\"\"DSA v1 prefill forward with multistream overlap.\"\"\"\n        qr_quant = None\n        qr_pertoken_scale = None\n\n        if self.multistream_dsv4_dsa_overlap:\n            # FIX: 正确解包所有返回值，包括 qr_quant 和 qr_pertoken_scale\n            q, qr, qr_quant, qr_pertoken_scale = self._mla_prolog_multistream(\n                hidden_states, cos, sin, swa_kv_cache,\n                swa_prefill_metadata.slot_mapping, is_prefill=True\n            )\n        else:\n            q, qr = self._mla_prolog(hidden_states, cos, sin, swa_kv_cache)\n\n        # qr_quant 和 qr_pertoken_scale 正确传递\n        output = self.cv_indexer_select_qli(q, qr, qr_quant, qr_pertoken_scale)\n        return output",
+      "context": "we should add instruction for these configs in https://docs.vllm.ai/projects/ascend/en/latest/user_guide/configuration/additional_config.html"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/dsa_v1.py\n+++ b/vllm_ascend/attention/dsa_v1.py\n@@ -1,5 +1,4 @@\n-# gemini-code-assist[bot] 指出: qr_quant 和 qr_pertoken_scale 被解包为 _，导致它们保持 None\n-# 这会阻止 cv_indexer_select_qli 复用量化后的 qr 表示\n+# FIX: 正确解包 qr_quant 和 qr_pertoken_scale，传递给 cv_indexer_select_qli\n \n     def _forward_prefill(self, hidden_states, cos, sin, swa_kv_cache,\n                          swa_prefill_metadata, ...):\n@@ -8,15 +7,14 @@\n         qr_pertoken_scale = None\n \n         if self.multistream_dsv4_dsa_overlap:\n-            # BUG: qr_quant 和 qr_pertoken_scale 被解包为 _（丢弃）\n-            # 导致它们保持 None，cv_indexer_select_qli 无法使用量化后的 qr\n-            q, qr, _, _ = self._mla_prolog_multistream(\n+            # FIX: 正确解包所有返回值，包括 qr_quant 和 qr_pertoken_scale\n+            q, qr, qr_quant, qr_pertoken_scale = self._mla_prolog_multistream(\n                 hidden_states, cos, sin, swa_kv_cache,\n                 swa_prefill_metadata.slot_mapping, is_prefill=True\n             )\n         else:\n             q, qr = self._mla_prolog(hidden_states, cos, sin, swa_kv_cache)\n \n-        # qr_quant 仍为 None，传递给 cv_indexer_select_qli 会导致错误\n+        # qr_quant 和 qr_pertoken_scale 正确传递\n         output = self.cv_indexer_select_qli(q, qr, qr_quant, qr_pertoken_scale)\n         return output",
+      "stats": "1 file changed, +4 lines, -6 lines",
+      "key_changes": [
+        "移除: # gemini-code-assist[bot] 指出: qr_quant 和 qr_pertoken_scale 被解包为 _，导致它们保持 None",
+        "移除: # 这会阻止 cv_indexer_select_qli 复用量化后的 qr 表示",
+        "新增: # FIX: 正确解包 qr_quant 和 qr_pertoken_scale，传递给 cv_indexer_select_qli",
+        "移除: # BUG: qr_quant 和 qr_pertoken_scale 被解包为 _（丢弃）",
+        "移除: # 导致它们保持 None，cv_indexer_select_qli 无法使用量化后的 qr",
+        "移除: q, qr, _, _ = self._mla_prolog_multistream(",
+        "新增: # FIX: 正确解包所有返回值，包括 qr_quant 和 qr_pertoken_scale",
+        "新增: q, qr, qr_quant, qr_pertoken_scale = self._mla_prolog_multistream(",
+        "移除: # qr_quant 仍为 None，传递给 cv_indexer_select_qli 会导致错误",
+        "新增: # qr_quant 和 qr_pertoken_scale 正确传递"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

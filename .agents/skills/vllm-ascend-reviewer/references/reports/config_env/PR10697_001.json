@@ -1,0 +1,63 @@
+{
+  "report_id": "PR10697_001",
+  "pr_number": 10697,
+  "pr_title": "[Feature] Support Step3P7/Step3P5 with Step3P5 MTP on Ascend",
+  "pr_status": "merged",
+  "merged_at": "2026-07-02T06:07:59Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/ops/fused_moe/moe_mlp.py:298",
+    "vllm_ascend/spec_decode/step3p5.py:247",
+    "vllm_ascend/spec_decode/step3p5.py:101"
+  ],
+  "landing_sha": "2145c99",
+  "source_quote": "在融合算子支持swiglu_limit的情况下，step最后两层是可以直接走融合算子而非小算子拼接的，可以不需要添加激活函数判断的",
+  "correspondence": [
+    {
+      "review_quote": "earthmanylf 指出在融合算子支持 swiglu_limit 时，step 最后两层可直接走融合算子而无需小算子拼接。slippersss 建议删除 pcp/dcp 未适配的冗余代码以降低维护成本，并指出独立 proposer 的 buffer 应统一管理而非强制兼容 llm_base_proposer。作者通过 commit `2145c99` 完成修改，3/3 建议全部落地。",
+      "patch_snippet": "commit `2145c99`",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "2145c99",
+    "approvals": 6
+  },
+  "rule": {
+    "description": "当融合算子已支持特定参数（如 swiglu_limit）时，应直接使用融合算子而非小算子拼接。独立模块（如独立 proposer）不应强制兼容不相关的基类逻辑，应简化代码降低维护成本。",
+    "context": "",
+    "checkpoints": [
+      "融合算子是否已支持所需参数，避免不必要的小算子拼接",
+      "独立模块是否保留了不必要的兼容代码",
+      "buffer 管理是否可以统一简化"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/ops/fused_moe/moe_mlp.py",
+      "line": 240,
+      "code": "# quant_apply_mlp 函数中 limit 参数硬编码为 7.0\n\n    def quant_apply_mlp(\n        self,\n        hidden_states: torch.Tensor,\n        activation: str,\n        swiglu_limit: Optional[float] = None,\n    ) -> torch.Tensor:\n        # ... 前面的逻辑 ...\n        if _is_swiglustep_activation(activation):\n            hidden_states = AscendSwigluStepAndMul.swiglustep_forward(\n                hidden_states, limit=7.0  # 硬编码，忽略了 swiglu_limit 参数\n            )\n        # ... 后续逻辑 ...\n        return hidden_states",
+      "context": "在融合算子支持swiglu_limit的情况下，step最后两层是可以直接走融合算子而非小算子拼接的，可以不需要添加激活函数判断的"
+    },
+    "pattern": {
+      "file": "vllm_ascend/ops/fused_moe/moe_mlp.py",
+      "line": 240,
+      "code": "# 使用 swiglu_limit or 7.0 替代硬编码的 7.0\n\n    def quant_apply_mlp(\n        self,\n        hidden_states: torch.Tensor,\n        activation: str,\n        swiglu_limit: Optional[float] = None,\n    ) -> torch.Tensor:\n        # ... 前面的逻辑 ...\n        if _is_swiglustep_activation(activation):\n            hidden_states = AscendSwigluStepAndMul.swiglustep_forward(\n                hidden_states, limit=swiglu_limit or 7.0\n            )\n        # ... 后续逻辑 ...\n        return hidden_states",
+      "context": "在融合算子支持swiglu_limit的情况下，step最后两层是可以直接走融合算子而非小算子拼接的，可以不需要添加激活函数判断的"
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/ops/fused_moe/moe_mlp.py\n+++ b/vllm_ascend/ops/fused_moe/moe_mlp.py\n@@ -1,4 +1,4 @@\n-# quant_apply_mlp 函数中 limit 参数硬编码为 7.0\n+# 使用 swiglu_limit or 7.0 替代硬编码的 7.0\n \n     def quant_apply_mlp(\n         self,\n@@ -9,7 +9,7 @@\n         # ... 前面的逻辑 ...\n         if _is_swiglustep_activation(activation):\n             hidden_states = AscendSwigluStepAndMul.swiglustep_forward(\n-                hidden_states, limit=7.0  # 硬编码，忽略了 swiglu_limit 参数\n+                hidden_states, limit=swiglu_limit or 7.0\n             )\n         # ... 后续逻辑 ...\n         return hidden_states",
+      "stats": "1 file changed, +2 lines, -2 lines",
+      "key_changes": [
+        "移除: # quant_apply_mlp 函数中 limit 参数硬编码为 7.0",
+        "新增: # 使用 swiglu_limit or 7.0 替代硬编码的 7.0",
+        "移除: hidden_states, limit=7.0  # 硬编码，忽略了 swiglu_limit 参数",
+        "新增: hidden_states, limit=swiglu_limit or 7.0"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

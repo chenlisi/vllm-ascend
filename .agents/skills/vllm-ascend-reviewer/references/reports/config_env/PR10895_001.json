@@ -1,0 +1,70 @@
+{
+  "report_id": "PR10895_001",
+  "pr_number": 10895,
+  "pr_title": "[BugFix][Attention] Fix stale KV lengths in hamming sparse attention under ACL graph replay",
+  "pr_status": "merged",
+  "merged_at": "2026-07-14T06:51:19Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/attention/attention_v1.py:646",
+    "vllm_ascend/attention/kvcomp_attn/attention_utils.py:150",
+    "vllm_ascend/attention/kvcomp_attn/attention_utils.py:160"
+  ],
+  "landing_sha": "901099a",
+  "source_quote": "Plz make sure that if c8 has same bug.",
+  "correspondence": [
+    {
+      "review_quote": "weijinqian0 要求确认 c8 是否有同样的 bug。kunpengW-code 指出 `attention_utils.py:150` 的修改与 bug 修复无关应删除，`attention_utils.py:160` 的修改仅保留此处、删除其他位置。作者通过 commit `901099a` 修复了 ACL 图重放模式下 hamming 稀疏注意力的 KV 长度过期问题。",
+      "patch_snippet": "commit `901099a`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "901099a",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 hamming 稀疏注意力模式下使用 ACL 全图重放时，必须按层覆盖 seq_lens 为缩减后的长度，确保重放行为与 eager 模式一致。同时应检查所有相关硬件配置（如 c8）是否存在相同问题。",
+    "context": "",
+    "checkpoints": [
+      "检查 ACL graph replay 路径是否正确刷新了 seq_lens",
+      "确认 `kvcomp_metadata` 是否为 None 的安全判断",
+      "验证 `hashk_caches` 索引是否有边界检查",
+      "检查其他硬件配置（c8 等）是否存在相同 bug"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 760,
+      "code": "                    for key in [\"decodes\", \"prefills\"]:\n                        if key not in attn_metadata:\n                            continue\n                        obj = attn_metadata[key]\n                        if hasattr(obj, 'kvcomp_metadata'):\n                            if (hasattr(obj, 'kvcomp_metadata')\n                                    and hasattr(obj.kvcomp_metadata,\n                                                'seq_lens_from_hamming')\n                                    and layer_count < len(\n                                        obj.kvcomp_metadata.hashk_caches)):\n                                seq_lens = \\\n                            obj.kvcomp_metadata.seq_lens_from_hamming\n                            elif not hasattr(\n                                    vllm_config.model_config.hf_text_config,\n                                    \"sliding_window\"):\n                                block_tables = attn_metadata[key].block_tables\n                    layer_count += 1",
+      "context": "Plz make sure that if c8 has same bug."
+    },
+    "pattern": {
+      "file": "vllm_ascend/attention/attention_v1.py",
+      "line": 760,
+      "code": "                    for key in [\"decodes\", \"prefills\"]:\n                        if key not in attn_metadata:\n                            continue\n                        obj = attn_metadata[key]\n                        if (obj.kvcomp_metadata is not None\n                                and hasattr(obj.kvcomp_metadata,\n                                            'seq_lens_from_hamming')\n                                and layer_count < len(\n                                    obj.kvcomp_metadata.hashk_caches)\n                                and obj.kvcomp_metadata.hashk_caches[\n                                    layer_count] is not None):\n                            seq_lens = \\\n                                obj.kvcomp_metadata.seq_lens_from_hamming\n                        elif not hasattr(\n                                vllm_config.model_config.hf_text_config,\n                                \"sliding_window\"):\n                            block_tables = attn_metadata[key].block_tables\n                    layer_count += 1",
+      "context": "Plz make sure that if c8 has same bug."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/attention/attention_v1.py\n+++ b/vllm_ascend/attention/attention_v1.py\n@@ -2,16 +2,17 @@\n                         if key not in attn_metadata:\n                             continue\n                         obj = attn_metadata[key]\n-                        if hasattr(obj, 'kvcomp_metadata'):\n-                            if (hasattr(obj, 'kvcomp_metadata')\n-                                    and hasattr(obj.kvcomp_metadata,\n-                                                'seq_lens_from_hamming')\n-                                    and layer_count < len(\n-                                        obj.kvcomp_metadata.hashk_caches)):\n-                                seq_lens = \\\n-                            obj.kvcomp_metadata.seq_lens_from_hamming\n-                            elif not hasattr(\n-                                    vllm_config.model_config.hf_text_config,\n-                                    \"sliding_window\"):\n-                                block_tables = attn_metadata[key].block_tables\n+                        if (obj.kvcomp_metadata is not None\n+                                and hasattr(obj.kvcomp_metadata,\n+                                            'seq_lens_from_hamming')\n+                                and layer_count < len(\n+                                    obj.kvcomp_metadata.hashk_caches)\n+                                and obj.kvcomp_metadata.hashk_caches[\n+                                    layer_count] is not None):\n+                            seq_lens = \\\n+                                obj.kvcomp_metadata.seq_lens_from_hamming\n+                        elif not hasattr(\n+                                vllm_config.model_config.hf_text_config,\n+                                \"sliding_window\"):\n+                            block_tables = attn_metadata[key].block_tables\n                     layer_count += 1",
+      "stats": "1 file changed, +13 lines, -12 lines",
+      "key_changes": [
+        "移除: if hasattr(obj, 'kvcomp_metadata'):",
+        "移除: if (hasattr(obj, 'kvcomp_metadata')",
+        "移除: and hasattr(obj.kvcomp_metadata,",
+        "移除: 'seq_lens_from_hamming')",
+        "移除: and layer_count < len(",
+        "移除: obj.kvcomp_metadata.hashk_caches)):",
+        "移除: seq_lens = \\",
+        "移除: obj.kvcomp_metadata.seq_lens_from_hamming",
+        "移除: elif not hasattr(",
+        "移除: vllm_config.model_config.hf_text_config,"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

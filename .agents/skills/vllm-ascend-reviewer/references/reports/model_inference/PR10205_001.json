@@ -1,0 +1,67 @@
+{
+  "report_id": "PR10205_001",
+  "pr_number": 10205,
+  "pr_title": "[BugFix][Performance] Fix MTP copy_valid_sampled_token_count sync",
+  "pr_status": "merged",
+  "merged_at": "2026-06-10T11:39:05Z",
+  "dimension": [
+    "performance"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "vllm_ascend/worker/model_runner_v1.py:1456"
+  ],
+  "landing_sha": "ada3c08",
+  "source_quote": "we can just redefine dtype of `self.valid_sampled_token_count_cpu` in init phase, not convert the dtype of valid_sampled_tokens_count in every decode phase.",
+  "correspondence": [
+    {
+      "review_quote": "Ronald1995 建议不要在每个 decode 阶段都转换 `valid_sampled_tokens_count` 的 dtype，而是在初始化阶段直接重新定义 `self.valid_sampled_token_count_cpu` 的 dtype。作者解释说 GPU 端使用 Triton 计算输出为 `torch.int32`，而 NPU 端使用 `torch.sum()` 输出为 `torch.int64`，因此选择在 init 阶段将 CPU tensor 的 dtype 改为 `torch.int64` 以匹配 NPU 输出，避免每次 decode 阶段的类型转换开销。",
+      "patch_snippet": "",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "ada3c08",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "当 CPU tensor 和设备 tensor 之间存在 dtype 不匹配时，不应在每次推理循环（decode phase）中进行类型转换，而应在初始化阶段统一 CPU tensor 的 dtype 以匹配设备端的输出格式。",
+    "context": "",
+    "checkpoints": [
+      "检查热路径（如 decode phase）中是否存在重复的 `.to(dtype)` 调用",
+      "确认 CPU tensor 的 dtype 是否与设备端输出一致",
+      "验证初始化阶段的 dtype 设置是否覆盖了所有使用场景"
+    ],
+    "antipattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 1456,
+      "code": "class AscendModelRunner:\n    def __init__(self, ...):\n        # ... 其他初始化代码 ...\n        self.max_num_seqs = max_num_seqs\n        # 初始化 CPU tensor 用于存储有效采样 token 数量\n        # 默认使用 torch.int32，与 GPU 端 Triton 输出格式一致\n        self.valid_sampled_token_count_cpu = torch.zeros(\n            self.max_num_seqs, dtype=torch.int32, device=\"cpu\")\n        # ... 其他初始化代码 ...\n\n    def _copy_valid_sampled_token_count(self, valid_sampled_tokens_count):\n        \"\"\"在每次 decode 阶段复制有效采样 token 数量到 CPU\"\"\"\n        # NPU 使用 torch.sum() 计算，输出为 torch.int64\n        # 每次 decode 都需要转换为 int32 以匹配 CPU tensor 的 dtype\n        valid_sampled_tokens_count = valid_sampled_tokens_count.to(torch.int32)\n        self.valid_sampled_token_count_cpu.copy_(\n            valid_sampled_tokens_count, non_blocking=True)",
+      "context": "we can just redefine dtype of `self.valid_sampled_token_count_cpu` in init phase, not convert the dtype of valid_sampled_tokens_count in every decode phase."
+    },
+    "pattern": {
+      "file": "vllm_ascend/worker/model_runner_v1.py",
+      "line": 1456,
+      "code": "class AscendModelRunner:\n    def __init__(self, ...):\n        # ... 其他初始化代码 ...\n        self.max_num_seqs = max_num_seqs\n        # 直接在 init 阶段将 CPU tensor 的 dtype 设为 torch.int64\n        # 匹配 NPU 端 torch.sum() 的输出格式，避免每次 decode 阶段的类型转换\n        self.valid_sampled_token_count_cpu = torch.zeros(\n            self.max_num_seqs, dtype=torch.int64, device=\"cpu\")\n        # ... 其他初始化代码 ...\n\n    def _copy_valid_sampled_token_count(self, valid_sampled_tokens_count):\n        \"\"\"在每次 decode 阶段复制有效采样 token 数量到 CPU\"\"\"\n        # NPU 端使用 torch operators + torch.sum() 计算 valid_sampled_token_count\n        # 输出格式为 torch.int64，与 CPU tensor dtype 一致，直接 copy 无需转换\n        self.valid_sampled_token_count_cpu.copy_(\n            valid_sampled_tokens_count, non_blocking=True)",
+      "context": "we can just redefine dtype of `self.valid_sampled_token_count_cpu` in init phase, not convert the dtype of valid_sampled_tokens_count in every decode phase."
+    },
+    "diff": {
+      "unified": "--- a/vllm_ascend/worker/model_runner_v1.py\n+++ b/vllm_ascend/worker/model_runner_v1.py\n@@ -2,16 +2,15 @@\n     def __init__(self, ...):\n         # ... 其他初始化代码 ...\n         self.max_num_seqs = max_num_seqs\n-        # 初始化 CPU tensor 用于存储有效采样 token 数量\n-        # 默认使用 torch.int32，与 GPU 端 Triton 输出格式一致\n+        # 直接在 init 阶段将 CPU tensor 的 dtype 设为 torch.int64\n+        # 匹配 NPU 端 torch.sum() 的输出格式，避免每次 decode 阶段的类型转换\n         self.valid_sampled_token_count_cpu = torch.zeros(\n-            self.max_num_seqs, dtype=torch.int32, device=\"cpu\")\n+            self.max_num_seqs, dtype=torch.int64, device=\"cpu\")\n         # ... 其他初始化代码 ...\n \n     def _copy_valid_sampled_token_count(self, valid_sampled_tokens_count):\n         \"\"\"在每次 decode 阶段复制有效采样 token 数量到 CPU\"\"\"\n-        # NPU 使用 torch.sum() 计算，输出为 torch.int64\n-        # 每次 decode 都需要转换为 int32 以匹配 CPU tensor 的 dtype\n-        valid_sampled_tokens_count = valid_sampled_tokens_count.to(torch.int32)\n+        # NPU 端使用 torch operators + torch.sum() 计算 valid_sampled_token_count\n+        # 输出格式为 torch.int64，与 CPU tensor dtype 一致，直接 copy 无需转换\n         self.valid_sampled_token_count_cpu.copy_(\n             valid_sampled_tokens_count, non_blocking=True)",
+      "stats": "1 file changed, +5 lines, -6 lines",
+      "key_changes": [
+        "移除: # 初始化 CPU tensor 用于存储有效采样 token 数量",
+        "移除: # 默认使用 torch.int32，与 GPU 端 Triton 输出格式一致",
+        "新增: # 直接在 init 阶段将 CPU tensor 的 dtype 设为 torch.int64",
+        "新增: # 匹配 NPU 端 torch.sum() 的输出格式，避免每次 decode 阶段的类型转换",
+        "移除: self.max_num_seqs, dtype=torch.int32, device=\"cpu\")",
+        "新增: self.max_num_seqs, dtype=torch.int64, device=\"cpu\")",
+        "移除: # NPU 使用 torch.sum() 计算，输出为 torch.int64",
+        "移除: # 每次 decode 都需要转换为 int32 以匹配 CPU tensor 的 dtype",
+        "移除: valid_sampled_tokens_count = valid_sampled_tokens_count.to(torch.int32)",
+        "新增: # NPU 端使用 torch operators + torch.sum() 计算 valid_sampled_token_count"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "report_id": "PR11085_001",
+  "pr_number": 11085,
+  "pr_title": "[Doc][Misc] Qwen3-Omni-Thinking doc update",
+  "pr_status": "merged",
+  "merged_at": "2026-06-30T02:31:52Z",
+  "dimension": [
+    "doc"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "docs/source/tutorials/models/Qwen3-Omni-30B-A3B-Thinking.md:19",
+    "docs/source/tutorials/models/Qwen3-Omni-30B-A3B-Thinking.md:98",
+    "docs/source/tutorials/models/Qwen3-Omni-30B-A3B-Thinking.md:204",
+    "docs/source/tutorials/models/Qwen3-Omni-30B-A3B-Thinking.md:224",
+    "docs/source/tutorials/models/Qwen3-Omni-30B-A3B-Thinking.md:322",
+    "docs/source/tutorials/models/Qwen3-Omni-30B-A3B-Thinking.md:363",
+    "docs/source/tutorials/models/Qwen3-Omni-30B-A3B-Thinking.md:586"
+  ],
+  "landing_sha": "8602113",
+  "source_quote": "Title missing number.",
+  "correspondence": [
+    {
+      "review_quote": "sunshine202600 指出文档中多处标题缺少编号、句子缺少标点、缺少关键字段描述、链接不规范、章节标题缺失、以及内容被误删等问题。MengqingCao 指出多处内容需要移除（L98-102, L148），同时强调 L57 处的驱动和 hccn 工具相关内容需要保留。作者通过 30 个 commit 持续迭代完成了所有修改。",
+      "patch_snippet": "30 commits",
+      "adoption_judgment": "全部采纳"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "8602113",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "文档中所有章节标题必须使用统一的编号格式（如 \"1. xxx\", \"2. xxx\"），确保文档结构清晰一致。",
+    "context": "sunshine202600 指出多处标题缺少编号",
+    "checkpoints": [
+      "所有标题是否有编号",
+      "编号是否连续",
+      "编号格式是否统一"
+    ],
+    "antipattern": {
+      "file": "docs/source/tutorials/models/Qwen3-Omni-30B-A3B-Thinking.md",
+      "line": 19,
+      "code": "# Qwen3-Omni-30B-A3B-Thinking\n\nThis tutorial describes how to deploy Qwen3-Omni-30B-A3B-Thinking on Ascend.\n\n## 环境准备\n\nBefore deployment, ensure the following requirements are met:\n\n## 模型推理\n\nRun the following command to start inference.",
+      "context": "sunshine202600: Title missing number"
+    },
+    "pattern": {
+      "file": "docs/source/tutorials/models/Qwen3-Omni-30B-A3B-Thinking.md",
+      "line": 19,
+      "code": "# Qwen3-Omni-30B-A3B-Thinking\n\nThis tutorial describes how to deploy Qwen3-Omni-30B-A3B-Thinking on Ascend.\n\n## 1. 环境准备\n\nBefore deployment, ensure the following requirements are met:\n\n## 2. 模型推理\n\nRun the following command to start inference.",
+      "context": "添加统一编号格式"
+    },
+    "diff": {
+      "unified": "--- a/docs/source/tutorials/models/Qwen3-Omni-30B-A3B-Thinking.md\n+++ b/docs/source/tutorials/models/Qwen3-Omni-30B-A3B-Thinking.md\n@@ -19,7 +19,7 @@\n-## 环境准备\n+## 1. 环境准备\n\n@@ -63,7 +63,7 @@\n-## 模型推理\n+## 2. 模型推理",
+      "stats": "1 file changed, 30 commits, multiple section titles numbered",
+      "key_changes": [
+        "修改: 所有章节标题添加编号",
+        "修改: 句子末尾补充标点",
+        "修改: 链接改为项目内部相对路径",
+        "移除: 多余的环境变量和配置说明",
+        "保留: 驱动和 hccn 工具检查内容"
+      ]
+    },
+    "language": "markdown",
+    "_status": "complete"
+  }
+}

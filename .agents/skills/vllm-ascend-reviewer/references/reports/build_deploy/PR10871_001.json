@@ -1,0 +1,66 @@
+{
+  "report_id": "PR10871_001",
+  "pr_number": 10871,
+  "pr_title": "[CI] Upgrade mooncake from 0.3.9 to 0.3.11.post1",
+  "pr_status": "merged",
+  "merged_at": "2026-07-03T09:54:40Z",
+  "dimension": [
+    "engineering"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "Dockerfile.a5:33"
+  ],
+  "landing_sha": "f6edd79",
+  "source_quote": "why not just add mooncake to the `requirements-dev.txt`?",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 质疑为什么不将 mooncake 添加到 `requirements-dev.txt` 中统一管理，同时 gemini bot 也建议使用 `python3 -m pip install --no-cache-dir` 替代直接使用 `pip install`。作者通过 commit `f6edd79` 将 `pip install` 改为 `python3 -m pip install`，优化了 Docker 镜像构建。",
+      "patch_snippet": "commit `f6edd79`",
+      "adoption_judgment": ""
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "f6edd79",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "在 Dockerfile 中安装 Python 包时，应使用 `python3 -m pip install --no-cache-dir` 而非直接使用 `pip install`，以确保安装到正确的 Python 环境并减少镜像体积。对于项目依赖，应优先考虑通过 `requirements-dev.txt` 统一管理。",
+    "context": "",
+    "checkpoints": [
+      "检查 Dockerfile 中是否直接使用 `pip install`",
+      "确认是否使用了 `--no-cache-dir` 参数",
+      "验证依赖是否应放入 `requirements-dev.txt` 统一管理"
+    ],
+    "antipattern": {
+      "file": "Dockerfile.a5",
+      "line": 33,
+      "code": "# Dockerfile.a5 - mooncake transfer engine 安装\n# 版本定义\nARG MOONCAKE_TAG=0.3.9\n\n# ... 其他构建步骤 ...\n\n# 安装 mooncake transfer engine\n# 直接从源码构建，使用 pip install\nRUN pip install mooncake-transfer-engine-npu==${MOONCAKE_TAG} \\\n    --extra-index-url https://mirrors.aliyun.com/pypi/web/simple\n\n# ... 后续构建步骤 ...\n# 安装其他系统依赖\nRUN apt-get install -y --no-install-recommends \\\n    libibverbs-dev \\\n    libhiredis-dev \\\n    && rm -rf /var/lib/apt/lists/*",
+      "context": "why not just add mooncake to the `requirements-dev.txt`?"
+    },
+    "pattern": {
+      "file": "Dockerfile.a5",
+      "line": 33,
+      "code": "# Dockerfile.a5 - mooncake transfer engine 安装\n# 版本定义 - 升级到 0.3.11.post1\nARG MOONCAKE_TAG=0.3.11.post1\n\n# ... 其他构建步骤 ...\n\n# 安装 mooncake transfer engine\n# 使用预编译 wheel 包安装，使用 python3 -m pip 并清理缓存\nRUN source /usr/local/Ascend/ascend-toolkit/set_env.sh && \\\n    python3 -m pip install --no-cache-dir mooncake-transfer-engine-npu==${MOONCAKE_TAG} \\\n    --extra-index-url https://mirrors.aliyun.com/pypi/web/simple\n\n# ... 后续构建步骤 ...\n# 安装其他系统依赖\nRUN apt-get install -y --no-install-recommends \\\n    libibverbs-dev \\\n    libhiredis-dev \\\n    && rm -rf /var/lib/apt/lists/*",
+      "context": "why not just add mooncake to the `requirements-dev.txt`?"
+    },
+    "diff": {
+      "unified": "--- a/Dockerfile.a5\n+++ b/Dockerfile.a5\n@@ -1,12 +1,13 @@\n # Dockerfile.a5 - mooncake transfer engine 安装\n-# 版本定义\n-ARG MOONCAKE_TAG=0.3.9\n+# 版本定义 - 升级到 0.3.11.post1\n+ARG MOONCAKE_TAG=0.3.11.post1\n \n # ... 其他构建步骤 ...\n \n # 安装 mooncake transfer engine\n-# 直接从源码构建，使用 pip install\n-RUN pip install mooncake-transfer-engine-npu==${MOONCAKE_TAG} \\\n+# 使用预编译 wheel 包安装，使用 python3 -m pip 并清理缓存\n+RUN source /usr/local/Ascend/ascend-toolkit/set_env.sh && \\\n+    python3 -m pip install --no-cache-dir mooncake-transfer-engine-npu==${MOONCAKE_TAG} \\\n     --extra-index-url https://mirrors.aliyun.com/pypi/web/simple\n \n # ... 后续构建步骤 ...",
+      "stats": "1 file changed, +5 lines, -4 lines",
+      "key_changes": [
+        "移除: # 版本定义",
+        "移除: ARG MOONCAKE_TAG=0.3.9",
+        "新增: # 版本定义 - 升级到 0.3.11.post1",
+        "新增: ARG MOONCAKE_TAG=0.3.11.post1",
+        "移除: # 直接从源码构建，使用 pip install",
+        "移除: RUN pip install mooncake-transfer-engine-npu==${MOONCAKE_TAG} \\",
+        "新增: # 使用预编译 wheel 包安装，使用 python3 -m pip 并清理缓存",
+        "新增: RUN source /usr/local/Ascend/ascend-toolkit/set_env.sh && \\",
+        "新增: python3 -m pip install --no-cache-dir mooncake-transfer-engine-npu==${MOONCAKE_T"
+      ]
+    },
+    "language": "dockerfile",
+    "_status": "extracted"
+  }
+}

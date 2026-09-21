@@ -1,0 +1,58 @@
+{
+  "report_id": "PR4608_001",
+  "pr_number": 4608,
+  "pr_title": "upgrade vLLM to main",
+  "pr_status": "merged",
+  "merged_at": "2025-12-02T14:10:52Z",
+  "dimension": [
+    "correctness"
+  ],
+  "severity": "suggestion",
+  "affected_files": [
+    "tests/ut/attention/test_mla_v1.py:444",
+    "vllm_ascend/spec_decode/eagle_proposer.py:187"
+  ],
+  "landing_sha": "af399e0",
+  "source_quote": "plz use english comment",
+  "correspondence": [
+    {
+      "review_quote": "MengqingCao 指出测试代码中应使用英文注释。gemini-code-assist[bot] 发现 eagle_proposer.py 中存在 bug，对所有 request 使用了相同的 token 长度（索引 [0]），应改为使用索引 [i]。作者通过多个 commits 修复，1/1 人工建议落地。",
+      "patch_snippet": "",
+      "adoption_judgment": "✅ 落地"
+    }
+  ],
+  "verification": {
+    "merged": true,
+    "modified_commit": "af399e0",
+    "approvals": 1
+  },
+  "rule": {
+    "description": "项目代码中的注释必须使用英文，以确保国际化可读性。",
+    "context": "",
+    "checkpoints": [
+      "注释是否全部使用英文",
+      "是否存在中文或其他非英文注释"
+    ],
+    "antipattern": {
+      "file": "tests/ut/attention/test_mla_v1.py",
+      "line": 430,
+      "code": "def test_mla_v1_forward_decode():\n    \"\"\"Test MLA v1 forward pass for decode phase.\"\"\"\n    model_config = ModelConfig(...)\n    vllm_config = VllmConfig(model_config=model_config)\n\n    attn_metadata = create_test_metadata(\n        num_decodes=4,\n        num_prefills=0,\n        vllm_config=vllm_config,\n    )\n\n    output = attention_forward(query, key, value, attn_metadata)\n    assert output.shape == expected_shape  # 验证输出",
+      "context": "MengqingCao: plz use english comment"
+    },
+    "pattern": {
+      "file": "tests/ut/attention/test_mla_v1.py",
+      "line": 430,
+      "code": "def test_mla_v1_forward_decode():\n    \"\"\"Test MLA v1 forward pass for decode phase.\"\"\"\n    model_config = ModelConfig(...)\n    vllm_config = VllmConfig(model_config=model_config)\n\n    attn_metadata = create_test_metadata(\n        num_decodes=4,\n        num_prefills=0,\n        vllm_config=vllm_config,\n    )\n\n    output = attention_forward(query, key, value, attn_metadata)\n    assert output.shape == expected_shape  # Verify output",
+      "context": "MengqingCao: plz use english comment"
+    },
+    "diff": {
+      "unified": "--- a/tests/ut/attention/test_mla_v1.py\n+++ b/tests/ut/attention/test_mla_v1.py\n@@ -430,13 +430,13 @@\n     )\n \n     output = attention_forward(query, key, value, attn_metadata)\n-    assert output.shape == expected_shape  # 验证输出\n+    assert output.shape == expected_shape  # Verify output",
+      "stats": "1 file changed, +1 lines, -1 lines",
+      "key_changes": [
+        "修改了第 13-13 行的代码"
+      ]
+    },
+    "language": "python",
+    "_status": "extracted"
+  }
+}
