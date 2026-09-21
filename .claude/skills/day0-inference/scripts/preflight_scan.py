@@ -13,6 +13,8 @@ import subprocess
 import sys
 from datetime import datetime
 
+PATH_PROBE_MARKER = "VLLM_DIR_PROBE:"
+
 TORCH_NPU_PROBES = [
     "npu_fused_infer_attention_score", "npu_mla_prolog_v3",
     "npu_sparse_flash_attention", "npu_swiglu", "npu_rotary_mul",
@@ -37,6 +39,24 @@ def run(cmd, timeout=30):
         return (r.stdout + r.stderr).strip() or "(无输出)"
     except Exception as e:
         return f"不可得（{type(e).__name__}: {e}）"
+
+
+def probe_path(probe):
+    """从子进程输出中提取标记行给出的绝对路径。
+
+    `import vllm` 会向 stdout 打插件加载横幅，torch_npu 又在解释器退出时向
+    stderr 打 LD_PRELOAD 告警；`run()` 把两股输出拼接，故路径既不是首行也不
+    保证是末行。改由 `PY_PATH_PROBE:` 标记行承载路径，与其余噪声解耦——
+    直接 `startswith("/")` 会把「vllm 正常可用」误判为「import vllm 失败」而
+    中止采集，静默产出错误结论。
+    """
+    for line in probe.splitlines():
+        line = line.strip()
+        if line.startswith(PATH_PROBE_MARKER):
+            path = line[len(PATH_PROBE_MARKER):].strip()
+            if path.startswith("/"):
+                return path
+    return None
 
 
 def load_json(path):
@@ -88,8 +108,12 @@ def main():
     # 环境自检：探不到 vllm 源码时 §3/§6/§8 会全部退化为空。这必须显式阻断——
     # 「空结果」与「真的什么都没有」在下游判定里含义完全相反（前者是环境问题，
     # 后者是「该架构上游未合入」），静默产出会让 G0 路径门禁判错。
-    vllm_dir_probe = run([sys.executable, "-c", "import vllm, os; print(os.path.dirname(vllm.__file__))"])
-    vllm_missing = not vllm_dir_probe.startswith("/")
+    vllm_dir_probe = run([
+        sys.executable, "-c",
+        f"import vllm, os; print('{PATH_PROBE_MARKER}' + os.path.dirname(vllm.__file__))",
+    ])
+    vllm_dir = probe_path(vllm_dir_probe)
+    vllm_missing = vllm_dir is None
     if vllm_missing:
         print(
             "ERROR: 无法定位 vllm 源码（import vllm 失败），§3/§6/§8 将不可用。\n"
@@ -105,7 +129,6 @@ def main():
 
     # §1 环境定位
     w("## §1 环境定位\n")
-    vllm_dir = vllm_dir_probe  # 复用启动自检的探测结果
     vllm_ver = run([sys.executable, "-c", "import vllm; print(vllm.__version__)"])
     w(f"- vllm 源码路径：`{vllm_dir}`（版本 {vllm_ver}）")
     w(f"- vllm-ascend 仓根（本脚本推定）：`{repo}`")
