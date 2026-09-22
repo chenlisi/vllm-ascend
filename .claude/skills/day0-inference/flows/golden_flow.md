@@ -51,8 +51,11 @@ Day0 的阻塞点历史上全部在外部依赖（上游合入状态、CANN/torc
 0. **采集原始证据（脚本化，最先做）**：
    ```bash
    mkdir -p <输出根目录字面路径>/preflight
+   # 前置探针：实测解释器实际加载哪两棵树（输出原文归档，禁止凭记录转述）
+   <venv-python> -c "import vllm, vllm_ascend; print(vllm.__file__); print(vllm_ascend.__file__)" | tee <输出根目录字面路径>/preflight/install_probe.txt
    <venv-python> .claude/skills/day0-inference/scripts/preflight_scan.py <模型路径> <输出根目录字面路径>/preflight/raw_evidence.md
    ```
+   **探针判定（先于一切扫描，漏做 = Phase 0 全部证据失真）**：先读 tracker 环境信息块的「环境安装记录」——四字段缺失或状态 ≠「已安装」→ 停止，回 SKILL.md 步骤 1 重跑立项脚本（含环境安装；**「环境信息块其他字段有值」不等于已安装**）；探针实测路径与安装校验输出原文不一致 → 环境漂移，停止上报用户裁决，不得继续采集。
    `<venv-python>` = tracker.md「环境信息」块的 venv 解释器路径（立项时确认，**必须指向装好 vllm/torch_npu 的推理环境**——解释器选错会使 §1/§10 采集全量「不可得」，下游判定全部失真；无 venv 时先停下向用户确认，不得用裸系统 python 跑采集）。脚本从 vllm-ascend 仓根运行，采集（**只产信号、不做判定**）：§1 环境定位（vLLM 源码路径 / 上游基线 commit / npu-smi / torch_npu 版本）、§2 config.json 关键信号与全量、§3 上游注册表 grep 原始结果、§4 量化格式、§5 权重名前缀、§6 modeling 类清单、§7 chat template 形态、§8 上游 parser 注册表可用项、§9 OOT 注册表粗比对、§10 torch_npu 符号探测、§11 魔法数字粗扫。**采集完成后核对 tracker 环境信息块**：§1 实测的「vllm 仓库根」与仓根路径须等于立项时填入的 `$VLLM` / `$VLLM_ASCEND`——不一致说明环境安装错位（解释器加载的不是立项安装的那棵树），回 SKILL.md 步骤 1 的环境安装段重装后重新采集，不得凭记忆或另查路径手工覆盖记录值；§1 标「仓库根不可得」时同样停下向用户确认。同时回填 **vLLM 版本锚点**（§1 的 `__version__`，下游各阶段复核环境一致性的依据）——**回填只是写入记录，环境变量要到下次会话启动才由 SessionStart hook 注入，本次会话仍须用字面路径**。**以下步骤全部基于 raw_evidence.md 做判定**；证据缺失项显式标「待环境实测」，禁止编造。本 Phase 所有产物落盘 `$ASCENDBOT_FILE_PATH/preflight/`，与 `raw_evidence.md` 同目录；**每条结论须引用证据章节号，可追溯**。
 1. **依赖结论表**（读证据文件做判定）：
    - 上游支持状态三态（证据 §3，`<arch>` = config.json architectures 首项）：registry grep 命中 → 「已合入」；未命中 → 用 `gh search prs --repo vllm-project/vllm <arch>` 或 WebSearch 查上游 PR/分支状态，按口径判定：**merged PR 存在 → 「已合入」**（附 PR 号，核对本地基线 commit 是否已包含）；**open 且近 3 个月有活动、非 draft → 「pre-release 分支」**（附 PR 号）；**其余（draft / 久未更新 / 全无）→ 「需自持」**。中间态的成熟度判断是你的裁决，但须按此口径给出理由，不是脚本结论。
@@ -73,6 +76,7 @@ Day0 的阻塞点历史上全部在外部依赖（上游合入状态、CANN/torc
 3. **服务层初判**（方法论见 `.claude/skills/day0-inference/reference/golden-service-knowledge.md`）：parser 三件套（`--tokenizer-mode` / `--tool-call-parser` / `--reasoning-parser`）候选名是否同名同代成套——证据 §8 是上游注册表可用项清单，候选名逐个比对；**「同名同代」是语义判定**（如 `kimi_k2` 对 K3 合法但全错），由你裁决；chat template 形态读证据 §7（有无 Jinja 模板 vs 仅程序化 prompt 编码——后者要求内置 tokenizer-mode，从可选变为强制）；`reasoning_effort` 档位与 checkpoint 代次的对应关系。
    - **产物落盘** `preflight/服务层初判.md`：三件套候选名与成套比对结论、chat template 形态（tokenizer-mode 是否强制）、effort 档位映射、显式标注的待设计项（移交 Phase 1 Designer）。
 4. **G0 路径门禁**：
+   - **环境安装核对（最先核对）**：tracker「环境安装记录」四字段齐全且状态为「已安装」+ `preflight/install_probe.txt` 实测路径与记录的校验输出原文一致——缺一不得进入后续任何判定（在错误环境上采集的证据全量失真）。
    - 依赖未就绪 → 启动并行预案（外挂算子包 / 基于上游 pre-release 分支 / Triton 过渡实现）并显式记录；**无回退路径 → 停止并输出 issue 草稿，不进入 Phase 1**。依赖阻塞不是实现缺陷，不进修复回路。
    - **硬件环境（证据 §1）**：npu-smi 不可得 → 硬件代次标「待环境实测」，**显式提示 Phase 3/4 必须在 NPU 机器执行**；若当前环境无 NPU，Phase 2 出口即停止并交接（设计/代码产物齐备），**不得本地强行拉起服务**。
    - 路径判定（模型级）：**P0 零代码**（五维 delta 全零）/ **P1 低代码胶水**（delta 仅在 config/registry 白名单、服务层或单一特性叠加）/ **P2 范式迁移**（delta 穿透到注意力类型或 cache 语义）。

@@ -1,11 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(open *)",
-      "Bash(python3 -)",
-      "Bash(grep -n \"^#\\\\{1,3\\\\} \\\\|模板 [A-Z]\" adapter-templates.md)",
-      "Bash(awk *)",
-      "Bash(grep -c '^```')"
+      "Bash(*)"
     ]
   }
 }

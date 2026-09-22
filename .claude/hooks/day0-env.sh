@@ -12,8 +12,8 @@
 # 真值只活在对话上下文里——上下文压缩或换会话即丢失。本 hook 把它落到文件上。
 #
 # 用法：由 .claude/settings.json 的 SessionStart 注册，无需手工调用。
-#   - 未立项（无 .day0/.current）→ 静默退出，不阻断会话
-#   - .current 指向不存在的 tracker → 按文件名兜底（无歧义 / 有 [1] 优先）
+#   - 未立项（.day0 下无任何 run）→ 静默退出，不阻断会话
+#   - 定位优先级：DAY0_DIR 显式钉住 > .current 指针 > tracker.md 最新修改的 run 兜底
 #   - 变量未回填（仍是模板占位 <path>）→ 该变量跳过，不注入垃圾值
 set -uo pipefail
 
@@ -22,13 +22,17 @@ set -uo pipefail
 root="${CLAUDE_PROJECT_DIR:-.}"
 state="$root/.day0/.current"
 
-# 第 1 跳：.day0/.current 存的是 `init_day0_dir.sh` 打印的绝对路径。
-# 第 2 跳：.current 不在（未立项，或目录被移动导致绝对路径失效）时按文件名兜底。
-#         `.day0/<name>_<name>_<num>/` 这种重复前缀来自变量为空的 shell 展开，
-#         属历史遗留，按目录名排序取 [1] 可复现，也视为唯一命中。
-# 多命中且无规律 → 不猜，静默退出。
+# 定位优先级：
+#   ① DAY0_DIR 环境变量显式钉住（恢复旧 run 时用，会话启动前 export）
+#   ② .day0/.current（init_day0_dir.sh / day0_use.sh 维护的指针）
+#   ③ 兜底：tracker.md 最新修改的 run 目录——配合「重新跑一律新目录」，
+#      最新 run 即活跃 run；指针失效时不再静默退出导致环境变量全空。
 locate_day0_dir() {
   local d
+  if [ -n "${DAY0_DIR:-}" ] && [ -f "${DAY0_DIR%/}/tracker.md" ]; then
+    printf '%s' "${DAY0_DIR%/}"
+    return 0
+  fi
   if [ -f "$state" ]; then
     d=$(head -n 1 "$state")
     [ -n "$d" ] && [ -f "$d/tracker.md" ] && {
@@ -36,24 +40,15 @@ locate_day0_dir() {
       return 0
     }
   fi
-  local -a cands=()
+  local latest="" newest=0 mt
   shopt -s nullglob
   for d in "$root"/.day0/*/tracker.md; do
-    cands+=("${d%/tracker.md}")
+    mt=$(stat -f %m "$d" 2>/dev/null || stat -c %Y "$d" 2>/dev/null || echo 0)
+    if [ "$mt" -gt "$newest" ]; then newest=$mt; latest=${d%/tracker.md}; fi
   done
   shopt -u nullglob
-  [ ${#cands[@]} -eq 0 ] && return 1
-  [ ${#cands[@]} -eq 1 ] && {
-    printf '%s' "${cands[0]}"
-    return 0
-  }
-  IFS=$'\n' read -r -d '' -a sorted < <(
-    printf '%s\n' "${cands[@]}" | LC_ALL=C sort
-  ) || true
-  case "${sorted[0]}" in
-    */*_*/*) printf '%s' "${sorted[0]}" ;; # 重复前缀的确定性选择
-    *) return 1 ;;
-  esac
+  [ -n "$latest" ] || return 1
+  printf '%s' "$latest"
 }
 
 DIR=$(locate_day0_dir) || exit 0

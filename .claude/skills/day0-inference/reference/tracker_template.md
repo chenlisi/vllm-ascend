@@ -20,8 +20,12 @@
   - $VLLM（上游 vLLM 仓库根，**立项参数**——缺省仓根同级 `../vllm`，立项环境安装的基准；preflight §1 实测「vllm 仓库根」须与此一致，不一致即安装错位，回 SKILL.md 步骤 1 重装）：<path>
   - vLLM 版本锚点（preflight §1 采集的 `__version__`；各阶段消费 $VLLM 前复核一致，漂移即上报主控）：<version>
   - $VLLM_ASCEND（vllm-ascend 仓根）：<path>
+  - **环境安装记录**（立项脚本 init_day0_dir.sh 落盘于 `install_record.md`，实例化本跟踪单时**逐字抄入**——**缺失一律视为未安装**，「其他字段有值」不构成已安装的证据）：
+    - 安装时间 / 安装时 $VLLM 的 commit（`git -C $VLLM rev-parse HEAD`）：<date> / <commit>
+    - 安装校验输出（`<venv>/bin/python -c "import vllm, vllm_ascend; print(vllm.__file__); print(vllm_ascend.__file__)"` 的**原文**，禁止凭记录转述）：<output>
+    - 状态：未安装 / 已安装
 - **当前阶段**：Stage 1
-- **当前步骤**：S1.1
+- **当前步骤**：S1.0
 
 ## Stage 1 Golden 基线（跑起来）— 状态：进行中
 
@@ -29,6 +33,7 @@
 
 | 步骤 | 执行 agent | 产出 | 门禁 | 状态 | 产物路径 | 备注 |
 |---|---|---|---|---|---|---|
+| S1.0 立项与环境安装（init_day0_dir.sh） | 主控（不调子代理） | `install_record.md` + `preflight/install_probe.txt` → 逐字抄入环境信息块「环境安装记录」 | G0 前置——缺记录禁止进 Phase 0 | 未开始 | `install_record.md` | — |
 | S1.1 依赖就绪与路径判定（Phase 0） | 主控（不调子代理） | raw_evidence.md + 依赖结论表 / 五维扫描报告 / 服务层初判 / 路径判定与排期 | G0 | 进行中 | `preflight/` | — |
 | S1.2 适配设计（Phase 1） | designer | 设计文档（按层组织：服务/调度/Worker/跨层，每层含适配点判定表） | 设计完整性检查 | 未开始 | `design/` | — |
 | S1.3 代码适配 + UT（Phase 2） | developer | 改动清单 + UT 结果 + OOT 自检证据 | G1 | 未开始 | `impl/` | — |

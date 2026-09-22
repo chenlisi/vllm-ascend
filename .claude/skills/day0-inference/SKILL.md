@@ -17,25 +17,16 @@ description: "Day0 推理四阶段流程控制：Stage 1 Golden 基线（跑起�
    - **模型本地路径**：指到含 `config.json` 的目录；用户只给 HF repo id 时，先确认是否下载、下载到哪；
    - **served-model-name**（缺省 = 路径末段）、**TP 大小**（缺省 = 1）、**硬件代次**、**checkpoint 代次**（同模型不同代次的 chat template / effort 映射可能不同）；
    - **推理环境 python 解释器路径**：装好 vllm / torch_npu 的 venv——解释器选错会使 preflight 采集全量「不可得」，下游判定全部失真；
-   - **vLLM 源码路径（$VLLM）**：缺省 = vllm-ascend 仓根同级 `../vllm`——需确认存在且为目标基线版本；它是下一步环境安装与 Phase 0 一致性校验的共同基准。
-0.5. **环境安装（先于 preflight，在装好 venv 的目标主机上执行；不涉及 NPU 硬件）**：preflight 采集的全部信号（基线 commit / 注册表 / torch_npu 符号 / OOT 比对）都取自环境里**实际安装的版本**——版本不对，Phase 0 证据与下游判定全部失真，故安装必须在立项时完成、先于一切采集：
+1. **立项脚本（环境清理 + 安装 + 建目录，一条命令；在装好 venv 的目标主机上执行，不涉及 NPU 硬件）**：从 vllm-ascend 仓根运行
    ```bash
-   # 先清理残留（残留 serve 进程持有旧代码、占用 8000 端口）
-   pkill -f "vllm serve.*<served-name>" || true
-   # 再安装正确版本（<venv> / $VLLM 均为立项参数；一律用 <venv> 的 pip，禁止裸 pip）
-   <venv>/bin/pip uninstall -y 'vllm*'
-   cd $VLLM && <venv>/bin/pip install setuptools-rust
-   VLLM_TARGET_DEVICE=empty <venv>/bin/pip install -v -e . --no-build-isolation --no-deps
-   cd $VLLM_ASCEND && <venv>/bin/pip install --no-build-isolation -v -e . --no-deps
-   # 校验 import 指向源码目录而非 site-packages
-   <venv>/bin/python -c "import vllm, vllm_ascend; print(vllm.__file__); print(vllm_ascend.__file__)"
+   .claude/skills/day0-inference/scripts/init_day0_dir.sh <模型路径> <venv根路径> <$VLLM> <served-model-name>
    ```
-   editable 安装后纯 Python 改动即时生效（Developer 的 UT 直接受益）；但 entry points / 插件注册 / 编译产物的改动未必生效，且开发后版本号可能不变——**Tester 在每段验证前仍会无条件重装一次（见其「环境与卫生」节）**，本段是立项时的基线安装，基线/版本变更时必须重跑。
-1. **建目录并记录输出根目录**：从 vllm-ascend 仓根运行 `.claude/skills/day0-inference/scripts/init_day0_dir.sh <模型输入路径>`——脚本创建输出根目录并打印**绝对路径**（脚本读模型 `config.json` 的 `architectures` 首项作目录名前缀，按 `<arch>_<yyyymmdd>_<num>` 命名，`num` 递增），同时把该路径写入 `.day0/.current`。**确认输出非空且为绝对路径，并记录**。该路径此后有三个载体，缺一不可：
+   脚本依次执行：**清理残留**（pkill 本模型残留 serve）→ **安装正确版本**（uninstall `'vllm*'` → vllm editable（`VLLM_TARGET_DEVICE=empty`）→ vllm-ascend editable，全程 `<venv>/bin/pip`，禁止裸 pip）→ **探针实测**（`import vllm, vllm_ascend` 打印 `__file__`，原文落 `preflight/install_probe.txt`）→ **建目录**（读模型 `config.json` 的 `architectures` 首项作前缀，按 `<arch>_<yyyymmdd>_<num>` 命名，`num` 递增）→ **落安装记录**（`<目录>/install_record.md`：安装时间 / $VLLM commit / 探针输出原文 / 状态）。**硬门禁语义：安装或探针失败 → 脚本非零退出、不建目录、不动 `.day0/.current`**——环境不对就立不了项，不存在「跳过安装先进 Phase 0」的路径。preflight 采集的全部信号（基线 commit / 注册表 / torch_npu 符号 / OOT 比对）都取自环境里**实际安装的版本**，这就是安装必须在立项完成、先于一切采集的原因。editable 安装后纯 Python 改动即时生效（Developer 的 UT 直接受益），但 entry points / 插件注册 / 编译产物的改动未必生效且版本号可能不变——**Tester 在每段验证前仍会无条件重装一次（见其「环境与卫生」节）**；基线/版本变更时必须重跑本脚本（重新跑一律新目录，见上方「入场判定」）。
+   脚本打印输出根目录的**绝对路径**。**确认输出非空且为绝对路径，并记录**。该路径此后有三个载体，缺一不可：
    - **stdout → 主控记录**：本文与各文档中的 `$ASCENDBOT_FILE_PATH` 均为该字面路径的记号；**主控的 shell 命令与所有 Task prompt 一律使用字面值**（子代理靠 prompt 传参，不继承环境变量）；
-   - **`.day0/.current` → 环境变量注入**：SessionStart hook（`.claude/hooks/day0-env.sh`）从该文件定位本次目录，把 `ASCENDBOT_FILE_PATH` / `VENV` / `VLLM_ASCEND` / `VLLM` 注入后续每条 Bash 命令。**hook 只在会话启动时运行**——本步骤发生在会话中途，故**当次会话内这四个变量仍为空，须用字面路径**；`/clear` 或新开会话后自动生效；
+   - **`.day0/.current` → 环境变量注入**：SessionStart hook（`.claude/hooks/day0-env.sh`）从该文件定位本次目录，把 `ASCENDBOT_FILE_PATH` / `VENV` / `VLLM_ASCEND` / `VLLM` 注入后续每条 Bash 命令。**hook 只在会话启动时运行**——本步骤发生在会话中途，故**当次会话内这四个变量仍为空，须用字面路径**；`/clear` 或新开会话后自动生效。定位优先级：`DAY0_DIR` 环境变量 > `.current` 指针 > tracker.md 最新修改的 run 兜底；恢复旧 run 或高频迭代时用 `scripts/day0_use.sh <目录|--latest>` 切换指针（切换后须 `/clear` 或新开会话才生效）；
    - **tracker 环境信息块 → 持久真值**：可跨会话恢复的唯一记录（见下一步）。
-2. **建跟踪单并填充环境信息块**：把 `.claude/skills/day0-inference/reference/tracker_template.md` 实例化为 `$ASCENDBOT_FILE_PATH/tracker.md`，「当前阶段」置为 Stage 1。**实例化时必须填充「输出根目录」行 + 「环境信息」块的已知项**（输出根目录 / work-dir / venv 解释器路径 / served-model-name / TP / 硬件代次 / max-model-len）——「输出根目录」是该变量的持久真值，缺它则会话中断后无从恢复；`$VLLM`（立项参数）与 `$VLLM_ASCEND`（仓根路径）实例化时填入——Phase 0 §1 只做一致性校验（实测安装指向 ≠ 记录值 → 环境安装错位，回步骤 0.5 重装），不再承担采集回填。跟踪单把每个阶段拆成**逐 agent 的步骤行**（步骤 / 执行 agent / 产出 / 门禁 / 状态 / 产物路径），是四阶段流程的**单一状态源**。
+2. **建跟踪单并填充环境信息块**：把 `.claude/skills/day0-inference/reference/tracker_template.md` 实例化为 `$ASCENDBOT_FILE_PATH/tracker.md`，「当前阶段」置为 Stage 1。**实例化时必须填充「输出根目录」行 + 「环境信息」块的已知项**（输出根目录 / work-dir / venv 解释器路径 / served-model-name / TP / 硬件代次 / max-model-len / $VLLM / $VLLM_ASCEND），并从 `$ASCENDBOT_FILE_PATH/install_record.md` **逐字抄入「环境安装记录」四字段**——缺失一律视为未安装，「其他字段有值」不构成已安装的证据——「输出根目录」是该变量的持久真值，缺它则会话中断后无从恢复；Phase 0 §1 只做一致性校验（实测安装指向 ≠ 记录值 → 环境安装错位，回步骤 1 重跑立项脚本），不再承担采集回填。跟踪单把每个阶段拆成**逐 agent 的步骤行**（步骤 / 执行 agent / 产出 / 门禁 / 状态 / 产物路径），是四阶段流程的**单一状态源**。
 3. **产物约束（全局）**：全部产物统一存放 `$ASCENDBOT_FILE_PATH` 下——跟踪单、阶段签收单、各 Phase/Stage 产物子目录（`preflight/` `design/` `impl/` `smoke/` `accuracy/` `review/`，及 Stage 2-4 的 `parallel/` `feature/` `acceptance/`）。各文档中 `./.day0/<model>/` 的 `<model>` 占位即指 `$ASCENDBOT_FILE_PATH`。
 
 **每个 Stage 的执行动作（固定四步）**：
@@ -95,6 +86,7 @@ Stage 1 出口：eager+bf16 精度基线（golden 基线）
 ## 关键管理纪律
 
 - **子代理一律在共享工作树内执行，禁止任何形式的目录隔离**：调用任何子代理（designer / developer / tester / reviewer）时不得使用 worktree / 副本克隆 / 独立目录隔离（在共享树内新建分支可以，隔离副本不行）——代码与产物必须落在 `$VLLM_ASCEND` 工作树与 `$ASCENDBOT_FILE_PATH` 内。**理由**：下游阶段全部跨子代理复用同一棵树的物理状态——Tester 的 `vllm serve` 起在 `$VLLM_ASCEND`，UT/E2E collect 基于该树文件，Reviewer 核对该树的 `git log`；隔离副本会让改动落在下游不可见的路径上，且**失败不自报**——Developer 自述「完成、UT 全绿」，Phase 3 拿到的却是零改动的树。**反面告警**：子代理完成报告或产物路径中出现「worktree / 隔离副本 / 独立克隆」时，门禁一律不签收，先核对代码是否落在共享工作树；已在隔离副本中产出的改动，合法动作是先落地到 `$VLLM_ASCEND` 工作树并验证，再执行门禁。
+- **一个 run 一本账**：**重新跑一律新建目录**（立项脚本自动封存旧 run、切换 `.current`，主控无需手工处置），不同次执行的证据禁止混入同一 tracker——旧 run 一律退为只读历史证据源（唯一例外：同一 run 的中断恢复且环境锚点一致；判定流程见步骤 1「入场判定」）。
 - **入口证据优先于推进意愿**：用户要求"直接上特性叠加"时，仍须先核对 Stage 1/2 出口证据；证据缺失则先补前置阶段（或显式向用户确认接受降级风险）。
 - **回退按阶段路由**：Stage N 暴露的问题若根因在 Stage N-1 的产物（如并行量化阶段发现 golden 的算子精度缺陷），回退到对应阶段修复后**重走其后的所有阶段出口判据**——叠加层级的变更会使下游全部证据失效。
 - **升级机制**：同一阶段出口判据连续失败 2 轮，显式向用户上报卡点类型（实现缺陷 / 依赖阻塞 / 设计误判）。
