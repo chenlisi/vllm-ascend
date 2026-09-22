@@ -16,12 +16,26 @@ description: "Day0 推理四阶段流程控制：Stage 1 Golden 基线（跑起�
 0. **参数确认（先于一切，未给齐不得运行 init 脚本）**：向用户索取并写死以下立项参数——
    - **模型本地路径**：指到含 `config.json` 的目录；用户只给 HF repo id 时，先确认是否下载、下载到哪；
    - **served-model-name**（缺省 = 路径末段）、**TP 大小**（缺省 = 1）、**硬件代次**、**checkpoint 代次**（同模型不同代次的 chat template / effort 映射可能不同）；
-   - **推理环境 python 解释器路径**：装好 vllm / torch_npu 的 venv——解释器选错会使 preflight 采集全量「不可得」，下游判定全部失真。
+   - **推理环境 python 解释器路径**：装好 vllm / torch_npu 的 venv——解释器选错会使 preflight 采集全量「不可得」，下游判定全部失真；
+   - **vLLM 源码路径（$VLLM）**：缺省 = vllm-ascend 仓根同级 `../vllm`——需确认存在且为目标基线版本；它是下一步环境安装与 Phase 0 一致性校验的共同基准。
+0.5. **环境安装（先于 preflight，在装好 venv 的目标主机上执行；不涉及 NPU 硬件）**：preflight 采集的全部信号（基线 commit / 注册表 / torch_npu 符号 / OOT 比对）都取自环境里**实际安装的版本**——版本不对，Phase 0 证据与下游判定全部失真，故安装必须在立项时完成、先于一切采集：
+   ```bash
+   # 先清理残留（残留 serve 进程持有旧代码、占用 8000 端口）
+   pkill -f "vllm serve.*<served-name>" || true
+   # 再安装正确版本（<venv> / $VLLM 均为立项参数；一律用 <venv> 的 pip，禁止裸 pip）
+   <venv>/bin/pip uninstall -y 'vllm*'
+   cd $VLLM && <venv>/bin/pip install setuptools-rust
+   VLLM_TARGET_DEVICE=empty <venv>/bin/pip install -v -e . --no-build-isolation --no-deps
+   cd $VLLM_ASCEND && <venv>/bin/pip install --no-build-isolation -v -e . --no-deps
+   # 校验 import 指向源码目录而非 site-packages
+   <venv>/bin/python -c "import vllm, vllm_ascend; print(vllm.__file__); print(vllm_ascend.__file__)"
+   ```
+   editable 安装后纯 Python 改动即时生效（Developer 的 UT 直接受益）；但 entry points / 插件注册 / 编译产物的改动未必生效，且开发后版本号可能不变——**Tester 在每段验证前仍会无条件重装一次（见其「环境与卫生」节）**，本段是立项时的基线安装，基线/版本变更时必须重跑。
 1. **建目录并记录输出根目录**：从 vllm-ascend 仓根运行 `.claude/skills/day0-inference/scripts/init_day0_dir.sh <模型输入路径>`——脚本创建输出根目录并打印**绝对路径**（脚本读模型 `config.json` 的 `architectures` 首项作目录名前缀，按 `<arch>_<yyyymmdd>_<num>` 命名，`num` 递增），同时把该路径写入 `.day0/.current`。**确认输出非空且为绝对路径，并记录**。该路径此后有三个载体，缺一不可：
    - **stdout → 主控记录**：本文与各文档中的 `$ASCENDBOT_FILE_PATH` 均为该字面路径的记号；**主控的 shell 命令与所有 Task prompt 一律使用字面值**（子代理靠 prompt 传参，不继承环境变量）；
-   - **`.day0/.current` → 环境变量注入**：SessionStart hook（`.claude/hooks/day0-env.sh`）从该文件定位本次目录，把 `ASCENDBOT_FILE_PATH` / `VLLM_ASCEND` / `VLLM` 注入后续每条 Bash 命令。**hook 只在会话启动时运行**——本步骤发生在会话中途，故**当次会话内这三个变量仍为空，须用字面路径**；`/clear` 或新开会话后自动生效；
+   - **`.day0/.current` → 环境变量注入**：SessionStart hook（`.claude/hooks/day0-env.sh`）从该文件定位本次目录，把 `ASCENDBOT_FILE_PATH` / `VENV` / `VLLM_ASCEND` / `VLLM` 注入后续每条 Bash 命令。**hook 只在会话启动时运行**——本步骤发生在会话中途，故**当次会话内这四个变量仍为空，须用字面路径**；`/clear` 或新开会话后自动生效；
    - **tracker 环境信息块 → 持久真值**：可跨会话恢复的唯一记录（见下一步）。
-2. **建跟踪单并填充环境信息块**：把 `.claude/skills/day0-inference/reference/tracker_template.md` 实例化为 `$ASCENDBOT_FILE_PATH/tracker.md`，「当前阶段」置为 Stage 1。**实例化时必须填充「输出根目录」行 + 「环境信息」块的已知项**（输出根目录 / work-dir / venv 解释器路径 / served-model-name / TP / 硬件代次 / max-model-len）——「输出根目录」是该变量的持久真值，缺它则会话中断后无从恢复；`$VLLM` / `$VLLM_ASCEND` 待 Phase 0 §1 采集后由 golden_flow 回填。跟踪单把每个阶段拆成**逐 agent 的步骤行**（步骤 / 执行 agent / 产出 / 门禁 / 状态 / 产物路径），是四阶段流程的**单一状态源**。
+2. **建跟踪单并填充环境信息块**：把 `.claude/skills/day0-inference/reference/tracker_template.md` 实例化为 `$ASCENDBOT_FILE_PATH/tracker.md`，「当前阶段」置为 Stage 1。**实例化时必须填充「输出根目录」行 + 「环境信息」块的已知项**（输出根目录 / work-dir / venv 解释器路径 / served-model-name / TP / 硬件代次 / max-model-len）——「输出根目录」是该变量的持久真值，缺它则会话中断后无从恢复；`$VLLM`（立项参数）与 `$VLLM_ASCEND`（仓根路径）实例化时填入——Phase 0 §1 只做一致性校验（实测安装指向 ≠ 记录值 → 环境安装错位，回步骤 0.5 重装），不再承担采集回填。跟踪单把每个阶段拆成**逐 agent 的步骤行**（步骤 / 执行 agent / 产出 / 门禁 / 状态 / 产物路径），是四阶段流程的**单一状态源**。
 3. **产物约束（全局）**：全部产物统一存放 `$ASCENDBOT_FILE_PATH` 下——跟踪单、阶段签收单、各 Phase/Stage 产物子目录（`preflight/` `design/` `impl/` `smoke/` `accuracy/` `review/`，及 Stage 2-4 的 `parallel/` `feature/` `acceptance/`）。各文档中 `./.day0/<model>/` 的 `<model>` 占位即指 `$ASCENDBOT_FILE_PATH`。
 
 **每个 Stage 的执行动作（固定四步）**：

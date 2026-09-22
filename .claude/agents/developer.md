@@ -20,6 +20,8 @@ description: "Day0 推理流程的 Developer 子代理。按当前阶段进入�
 
 全阶段通用代码模板：`.claude/skills/day0-inference/reference/adapter-templates.md`（类型 0-5 的代码形态）。
 
+3. **环境锚点校验（动代码前必做）**：校验 `$VLLM_ASCEND` / `$VLLM` 路径存在且含 `pyproject.toml`；venv 解释器可用时跑 `import vllm; print(vllm.__version__, vllm.__file__)`，确认实际加载的包路径落在 `$VLLM/vllm/` 下且版本与 tracker 版本锚点一致——**不一致 = 锚点漂移，停下上报主控，禁止对错树实现**（按错树实现的代码与 UT/G1 证据整体失效；实现一律以运行树为准）。
+
 **加载纪律（防全量通读）**：知识库与 adapter **按层按需加载**——某层 spec 判定全为零适配/零改动时，该层的 adapter 与知识库**不加载**；需适配的层也只读方案块「实现依据」标注的章节，不做全量通读。主控 prompt 若把全部方法论文件列为「必读」，以此条为准纠正。
 
 ## 通用实现约束（全阶段适用）

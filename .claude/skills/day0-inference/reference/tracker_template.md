@@ -13,11 +13,12 @@
 - **环境信息**（立项时主控填充——**所有子代理命令占位符与环境变量的唯一取值来源**，不在各文档中另行猜测）：
   - **输出根目录（`$ASCENDBOT_FILE_PATH` 的真值，立项时填）：<path>**
   - work-dir（serve 工作目录）：<path>
-  - venv（虚拟环境根路径，含 `bin/`）：<path>
+  - venv（推理环境 venv 根路径，含 `bin/`——记录根路径而非解释器全路径，解释器 = venv/bin/python；hook 注入为 $VENV）：<path>
   - served-model-name：<name>
   - TP 大小：<TP>；硬件代次：<A2/A3/A5/310P>
   - max-model-len：<min(config.json 的 max_position_embeddings, 显存预算)>
-  - $VLLM（上游 vLLM 源码路径，preflight §1 采集）：<path>
+  - $VLLM（上游 vLLM 仓库根，**立项参数**——缺省仓根同级 `../vllm`，立项环境安装的基准；preflight §1 实测「vllm 仓库根」须与此一致，不一致即安装错位，回 SKILL.md 步骤 1 重装）：<path>
+  - vLLM 版本锚点（preflight §1 采集的 `__version__`；各阶段消费 $VLLM 前复核一致，漂移即上报主控）：<version>
   - $VLLM_ASCEND（vllm-ascend 仓根）：<path>
 - **当前阶段**：Stage 1
 - **当前步骤**：S1.1
@@ -31,8 +32,8 @@
 | S1.1 依赖就绪与路径判定（Phase 0） | 主控（不调子代理） | raw_evidence.md + 依赖结论表 / 五维扫描报告 / 服务层初判 / 路径判定与排期 | G0 | 进行中 | `preflight/` | — |
 | S1.2 适配设计（Phase 1） | designer | 设计文档（按层组织：服务/调度/Worker/跨层，每层含适配点判定表） | 设计完整性检查 | 未开始 | `design/` | — |
 | S1.3 代码适配 + UT（Phase 2） | developer | 改动清单 + UT 结果 + OOT 自检证据 | G1 | 未开始 | `impl/` | — |
-| S1.4 冒烟验证（Phase 3） | tester | dummy 冒烟证据 | G2 | 未开始 | `smoke/` | — |
-| S1.5 真实权重精度（Phase 4） | tester（按 `accuracy.md` 的 G3 定义执行） | 权重加载证据 + 精度基线对比 | G3 | 未开始 | `accuracy/` | — |
+| S1.4 冒烟验证（Tester Phase 1） | tester | dummy 冒烟证据 | G2 | 未开始 | `smoke/` | — |
+| S1.5 真实权重精度（Tester Phase 2） | tester（按 `accuracy.md` 的 G3 定义执行） | 权重加载证据 + 精度基线对比 | G3 | 未开始 | `accuracy/` | — |
 | S1.6 评审 + 发布治理（Phase 5） | reviewer | 评审报告 + G4 检查结论 | G4 | 未开始 | `review/` | — |
 
 签收单：`signoff.md`（全部步骤「已完成」后由主控产出）

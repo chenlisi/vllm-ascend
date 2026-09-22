@@ -59,6 +59,24 @@ def probe_path(probe):
     return None
 
 
+def find_repo_root(pkg_dir):
+    """从 vllm 包目录向上找上游仓库根（标记：pyproject.toml）。
+
+    $VLLM 的语义是仓库根（tester 从它 editable 安装、developer 在它下面改模型
+    文件），而 vllm.__file__ 给的是包目录（.../vllm/vllm）。§1 若只记包路径，
+    主控回填 $VLLM 需自行推算或凭记忆补路径——手工补正是环境锚点漂移的已知
+    入口（实测踩坑：tracker 记了另一棵 checkout 的路径，运行时才暴露）。
+    """
+    d = pkg_dir
+    while True:
+        if os.path.isfile(os.path.join(d, "pyproject.toml")):
+            return d
+        parent = os.path.dirname(d)
+        if parent == d:
+            return None
+        d = parent
+
+
 def load_json(path):
     try:
         with open(path) as f:
@@ -130,7 +148,13 @@ def main():
     # §1 环境定位
     w("## §1 环境定位\n")
     vllm_ver = run([sys.executable, "-c", "import vllm; print(vllm.__version__)"])
-    w(f"- vllm 源码路径：`{vllm_dir}`（版本 {vllm_ver}）")
+    vllm_repo = find_repo_root(vllm_dir)
+    w(f"- vllm 包路径（`import vllm` 实际加载）：`{vllm_dir}`（版本 {vllm_ver}）")
+    if vllm_repo:
+        w(f"- vllm 仓库根（tracker 的 $VLLM 回填此值，不是包路径）：`{vllm_repo}`")
+    else:
+        w("- vllm 仓库根：**不可得**（包目录上层无 pyproject.toml——当前为 site-packages 安装而非 editable 源码树；回填 $VLLM 前须由主控与用户确认源码树位置，禁止凭记忆另填）")
+    w(f"- vllm 版本锚点（下游各阶段复核环境一致性以此为准）：`{vllm_ver}`")
     w(f"- vllm-ascend 仓根（本脚本推定）：`{repo}`")
     w(f"- 上游对齐基线：`{run(['cat', '.github/vllm-main-verified.commit'])}`")
     w(f"- npu-smi info（前 5 行）：```\n{chr(10).join(run(['npu-smi', 'info']).splitlines()[:5]) or '不可得'}\n```")

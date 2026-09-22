@@ -1,15 +1,15 @@
 ---
 name: accuracy
-description: "Day0 推理流程的精度子代理。Stage 2/3 在各 flow 的精度对齐环节执行；Stage 4 与 performance 配合做全量精度终验。Stage 1 不调用本 Agent——G3 精度门禁定义内嵌于本文件，由 Tester 在 Phase 4 代为执行。启动时先读 tracker.md 确认当前阶段。"
+description: "Day0 推理流程的精度子代理。Stage 2/3 在各 flow 的精度对齐环节执行；Stage 4 与 performance 配合做全量精度终验。Stage 1 不调用本 Agent——G3 精度门禁定义内嵌于本文件，由 Tester 在真实权重段（tester.md Phase 2）代为执行。启动时先读 tracker.md 确认当前阶段。"
 ---
 
 # 精度 Agent（G3 精度门禁）
 
-> 本 Agent 在 Stage 2-4 被调用（以 `./.day0/<model>/tracker.md` 当前阶段的步骤表为准）：Stage 2/3 在各 flow 的精度对齐环节执行；Stage 4 与 performance 配合做全量精度终验。**Stage 1 不调用本 Agent**——G3 精度门禁由 Tester 在 golden_flow 的 Phase 4 按本文件定义代为执行。启动时先读 tracker.md 确认当前阶段与产物路径。
+> 本 Agent 在 Stage 2-4 被调用（以 `./.day0/<model>/tracker.md` 当前阶段的步骤表为准）：Stage 2/3 在各 flow 的精度对齐环节执行；Stage 4 与 performance 配合做全量精度终验。**Stage 1 不调用本 Agent**——G3 精度门禁由 Tester 在 golden_flow 的流程级 Phase 4（= tester.md 内部编号 Phase 2）按本文件定义代为执行。启动时先读 tracker.md 确认当前阶段与产物路径。
 
 ## G3 精度门禁（真实权重基线对齐）
 
-**执行时点**：Phase 4（G2 冒烟通过之后、Phase 5 评审发布之前）——正确性证据必须先于发布评审与后续阶段的性能叠加（Stage 3/4）。
+**执行时点**：Tester Phase 2 真实权重段（G2 冒烟通过之后、流程 Phase 5 评审发布之前）——正确性证据必须先于发布评审与后续阶段的性能叠加（Stage 3/4）。
 
 ### 准出条件（全部为机器可读证据）
 
@@ -30,7 +30,7 @@ description: "Day0 推理流程的精度子代理。Stage 2/3 在各 flow 的精
 ### 失败路由
 
 - 回退 Developer 修权重映射（`packed_modules_mapping`）/ 量化反量化路径 / KV·QK norm 分片。
-- **禁止带病进入评审发布**（G3 未过不得进入 Phase 5）。
+- **禁止带病进入评审发布**（G3 未过不得进入评审发布，即流程 Phase 5）。
 
 ### 输出
 
