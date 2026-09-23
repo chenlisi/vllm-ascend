@@ -65,9 +65,10 @@ Worker 层适配场景的全集 = **知识库 `golden-worker-knowledge.md` 的�
 3. **逐 module 判定表**：`| module | 枚举来源 | 类型(0-5) | 加载期差异 | 工作量 | 备注 |`——覆盖全部枚举 module，**不含 P 级列**；
 4. **逐 module 方案块**：类型 1-5 的 module 每个一个方案小节（选型与理由 / 实现方式 / 落点 / **实现依据：golden-worker-knowledge.md 章节号** / 代码模板编号 / 验收方式）——**「实现依据」是 Developer 选择性执行的索引，缺此字段视同方案不完整**；
 5. **权重映射 missing/unexpected 清单**：逐 module 两组 + 四类差异定型 + loader 处理动作；
-6. **魔法数字审计结论**：平台代码中对本模型维度/头数/rope/expert 数的硬编码扫描结果与参数化建议。
+6. **魔法数字审计结论**：平台代码中对本模型维度/头数/rope/expert 数的硬编码扫描结果与参数化建议；
+7. **dummy 减层方案**（供 Tester Phase 1 冒烟）：每种层类型的最小保留数与分类型裁剪键清单（如 `kda_layers` / `full_attn_layers` 须同步改且恰好划分层栈）、跨层机制的最小层数（如 `attn_res_block_size = N` → ≥ N+1，低于阈值的机制显式声明不覆盖）、TP 整除代入结果、按层类型分开的显存估算、`--hf-overrides` 嵌套穿透结论（不能穿透时给派生 config 目录方案）。**模型小到无需减层时显式声明「全层拉起」**。
 
-**打回条件**：判定表缺 module 或带 P 级标注；「类型 0」无理由；枚举两源交叉未做；missing/unexpected 清单缺失或凭「名字看起来对」未实际验证；新场景未显式声明——任一命中即由主控打回 Designer 补齐。
+**打回条件**：判定表缺 module 或带 P 级标注；「类型 0」无理由；枚举两源交叉未做；missing/unexpected 清单缺失或凭「名字看起来对」未实际验证；新场景未显式声明；缺 dummy 减层方案且未声明「全层拉起」——任一命中即由主控打回 Designer 补齐。
 
 ## 交接链
 
@@ -79,5 +80,5 @@ golden-designer.md 步骤 3（加载本文件）
       以 spec 逐 module 判定表为过滤条件，类型 0 不动，只实现类型 1-5；
       覆写点机制按方案块「实现依据」查阅 golden-worker-knowledge.md 对应章节，
       代码模板查 reference/adapter-templates.md
-  → Phase 4 / G3：按知识库 §1.5.3 自检口径取加载证据
+  → Phase 3 / G3：按知识库 §1.5.3 自检口径取加载证据
 ```

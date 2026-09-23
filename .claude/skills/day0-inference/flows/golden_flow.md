@@ -31,18 +31,17 @@
 | Tester | `tester` | 两段式服务验证：Tester Phase 1 冒烟（dummy）→ Tester Phase 2 真实权重（按 accuracy.md 的 G3 定义执行） |
 | Reviewer | `reviewer` | 对照设计评审代码 + 复核验证结论 + G4 发布门禁检查 |
 
-## 流水线（Phase 0-5 + 五道门禁）
+## 流水线（Phase 0-4 + 五道门禁）
 
 ```
 Phase 0  依赖就绪与路径判定（编排者直接执行） ── G0 路径门禁
 Phase 1  Designer 设计                        ── 设计完整性检查
 Phase 2  Developer 实现 + UT                  ── G1 实现门禁
-Phase 3  Tester 冒烟（dummy）                 ── G2 冒烟门禁
-Phase 4  Tester 真实权重                      ── G3 精度门禁
-Phase 5  Reviewer 评审 + 发布治理             ── G4 发布门禁
+Phase 3  Tester 服务验证（冒烟 → 真实权重）   ── G2 冒烟门禁 → G3 精度门禁
+Phase 4  Reviewer 评审 + 发布治理             ── G4 发布门禁
 ```
 
-> **编号口径**：本表 Phase 0-5 为**流程级编号**（主控 / tracker 视角）；tester.md 内部另用 **Tester 执行分段编号**（其 Phase 0 环境卫生 / Phase 1 冒烟 / Phase 2 真实权重，其中 Phase 1/2 即本文流程级 Phase 3/4）——调用 tester 的 prompt 一律使用 Tester 侧编号。
+> **编号口径**：本表 Phase 0-4 为**流程级编号**（主控 / tracker 视角）；tester.md 内部另用 **Tester 执行分段编号**（其 Phase 0 环境卫生 / Phase 1 冒烟 / Phase 2 真实权重，即本文流程级 Phase 3 的三段）——调用 tester 的 prompt 一律使用 Tester 侧编号。
 
 ### Phase 0 — 依赖就绪与路径判定（编排者直接执行，不调用子代理）
 
@@ -78,7 +77,7 @@ Day0 的阻塞点历史上全部在外部依赖（上游合入状态、CANN/torc
 4. **G0 路径门禁**：
    - **环境安装核对（最先核对）**：tracker「环境安装记录」四字段齐全且状态为「已安装」+ `preflight/install_probe.txt` 实测路径与记录的校验输出原文一致——缺一不得进入后续任何判定（在错误环境上采集的证据全量失真）。
    - 依赖未就绪 → 启动并行预案（外挂算子包 / 基于上游 pre-release 分支 / Triton 过渡实现）并显式记录；**无回退路径 → 停止并输出 issue 草稿，不进入 Phase 1**。依赖阻塞不是实现缺陷，不进修复回路。
-   - **硬件环境（证据 §1）**：npu-smi 不可得 → 硬件代次标「待环境实测」，**显式提示 Phase 3/4 必须在 NPU 机器执行**；若当前环境无 NPU，Phase 2 出口即停止并交接（设计/代码产物齐备），**不得本地强行拉起服务**。
+   - **硬件环境（证据 §1）**：npu-smi 不可得 → 硬件代次标「待环境实测」，**显式提示 Phase 3（Tester 服务验证）必须在 NPU 机器执行**；若当前环境无 NPU，Phase 2 出口即停止并交接（设计/代码产物齐备），**不得本地强行拉起服务**。
    - 路径判定（模型级）：**P0 零代码**（五维 delta 全零）/ **P1 低代码胶水**（delta 仅在 config/registry 白名单、服务层或单一特性叠加）/ **P2 范式迁移**（delta 穿透到注意力类型或 cache 语义）。
    - 排期模板：P0 按天、P1 按周、P2 按「RFC 立项 + 壳 1 周 / attention+算子 2–4 周 / 组合长尾按季度预留」三段式，**禁止按模型参数量估算**。P2 判定须向用户显式确认后再继续。
    - **产物落盘** `preflight/路径判定与排期.md`：路径等级 + 判定依据（哪几维有 delta，引用五维扫描报告行）+ 排期模板套用结果 + 并行预案/issue 草稿（如有）。
@@ -109,7 +108,7 @@ Day0 的阻塞点历史上全部在外部依赖（上游合入状态、CANN/torc
    方法论按层按需加载：只读需适配层对应的 adapter/知识库章节（以方案块「实现依据」为索引），零适配层不加载。
    """)
    ```
-   **执行位置约束**：调用 developer **不得使用目录隔离**（worktree / 副本克隆）——代码必须落在 `$VLLM_ASCEND` 共享工作树内并提交（树内新分支可以）。Tester（Phase 3/4）的 `vllm serve` 与 Reviewer（Phase 5）核对的 `git log` 读的都是该工作树的物理状态；改动落在隔离副本中会使本阶段「完成」而下游拿到零改动，且此失败不自报。
+   **执行位置约束**：调用 developer **不得使用目录隔离**（worktree / 副本克隆）——代码必须落在 `$VLLM_ASCEND` 共享工作树内并提交（树内新分支可以）。Tester（Phase 3）的 `vllm serve` 与 Reviewer（Phase 4）核对的 `git log` 读的都是该工作树的物理状态；改动落在隔离副本中会使本阶段「完成」而下游拿到零改动，且此失败不自报。
 2. 子代理产出：改动清单 + UT 运行结果 + OOT 注册自检证据 + 待真实权重验证 todo + **G4 交付物草稿**（E2E 回归配置 `tests/e2e/models/configs/<Model>.yaml` + 教程 `docs/source/tutorials/models/<Model>.md` + 支持矩阵更新——格式抄同目录既有文件，组合矩阵按 Designer 清单显式纳入）。
 3. 收集到 `./.day0/<model>/impl/`。
 4. **G1 实现门禁**（Phase 2 是唯一产出代码的阶段，其放行物直接进 Tester，准出证据必须齐全）。**P0 零代码路径例外**：Phase 0 判定为 P0 时无代码可测，G1 以「Designer 判定表确认全部 module 为类型 0 + Developer 显式声明零改动」替代下列全部证据，直接放行进 Phase 3：
@@ -120,26 +119,23 @@ Day0 的阻塞点历史上全部在外部依赖（上游合入状态、CANN/torc
    - 有新自定义算子时：**meta 实现已注册**的证据（Stage 3 开图的前置条件——Stage 1 不验图，但缺失会使 Stage 3 返工）。
 5. G1 失败 → 回退 Developer 补齐；缺证据视同未通过，不得「先跑起来再说」。
 
-### Phase 3 — Tester 冒烟（G2）
+### Phase 3 — Tester 服务验证（冒烟 → 真实权重；G2 → G3 两道门禁，一次调用两段执行）
 1. 用 Task 工具调用 tester 子代理，**prompt 必须携带当前阶段信息**：
    ```
    Task(subagent_type="tester", prompt="""
-   当前的阶段是：Stage 1 Golden 基线（跑起来），当前 Tester Phase 1（冒烟，dummy 快通道）
+   当前的阶段是：Stage 1 Golden 基线（跑起来）
    输出根目录：$ASCENDBOT_FILE_PATH
-   输入：Developer 交接（$ASCENDBOT_FILE_PATH/impl/）+ Designer 的模型全景 + preflight 服务层初判
+   输入：Developer 交接（$ASCENDBOT_FILE_PATH/impl/）+ Designer 的模型全景与 Golden 基线说明 + preflight 服务层初判
+   按 tester.md 依次执行三段：Phase 0 环境与卫生 → Phase 1 冒烟（dummy，G2）→ Phase 2 真实权重（G3）
    """)
    ```
-2. 子代理执行 dummy 快通道（`--load-format dummy`）+ readiness + 文本冒烟，产出落 `./.day0/<model>/smoke/`。
+   不支持命名子代理的环境，把 `.claude/agents/tester.md` 全文注入子代理首条消息，前缀同样的阶段信息。
+2. 子代理一次介入、两段执行（步骤以 tester.md 为唯一权威）：**Phase 0 环境与卫生**（清理残留 → 环境锚点复核 → 无条件重装 → import 校验，只检查不拉服务）→ **Phase 1 冒烟**（`--load-format dummy` 拉起——可选减层加速，层数按 Designer 的 dummy 减层方案 / tester.md 推导五条执行，**禁止拍固定数字**；+ readiness + 文本冒烟，产出落 `./.day0/<model>/smoke/`）→ **Phase 2 真实权重**（去掉 dummy 重新拉起 + 加载期检查 + 精度基线对比，产出落 `./.day0/<model>/accuracy/`）。**G2 未过 tester 停在原地置「打回」，不得自带缺口进 Phase 2**；上下文不足时主控新开会话续派（prompt 附 tester.md 路径与前段产物路径）。
 3. **G2 冒烟门禁**：能加载能跑——readiness 真通过（非仅 startup complete）+ 文本冒烟 HTTP 200 且输出非空 + false-ready 排除（首个请求崩溃按运行时失败根因隔离）。OOT 替换是否生效，以 Developer 的 G1 自检证据为准核对。图模式不在 Stage 1 验证范围（服务基线已 `--enforce-eager`）；捕获计数等图模式验收素材见 `.claude/agents/performance.md`（Stage 3 接入）。
-4. 失败动作：回退 Developer 定位，按 fallback ladder 逐级定界（复现 → `TORCHDYNAMO_DISABLE=1` → 关多模态；服务基线已 `--enforce-eager`），而不是直接进 Phase 4。
+4. **G3 精度门禁**（验收定义与执行方法见 `.claude/agents/accuracy.md`，Stage 1 由 Tester 代为执行——accuracy Agent 从 Stage 2 起接入）：真实权重加载日志 grep `not initialized|size mismatch|shape mismatch` 无命中（匹配文案随 vLLM 版本变化——先 `grep -rn "not initialized" $VLLM/vllm/model_executor/models/` 校准当前安装版的实际提示字符串再 grep，证据归档；`Unexpected extra config keys` 属配置项校验，不作阻断项）；HTTP 200 且输出非空；**sanity 请求输出内容正常（预期关键词命中 + 无重复循环 / 乱码，输出原文归档——「200 且非空」挡不住胡话）**；eager + bf16 精度基线达标（对齐 Designer 的 Golden 基线说明）。**仅凭 dummy 证据签收属流程违规。**
+5. 失败动作：G2 失败 → 回退 Developer 定位，按 fallback ladder 逐级定界（复现 → `TORCHDYNAMO_DISABLE=1` → 关多模态；服务基线已 `--enforce-eager`）；G3 失败 → 回退 Developer 修权重映射 / 量化路径 / KV·QK norm 分片，**禁止带病进入 Phase 4 评审发布**。
 
-### Phase 4 — Tester 真实权重（G3）
-1. 用 Task 工具调用 tester 子代理继续真实权重阶段（**prompt 必须携带当前阶段信息**：「当前的阶段是：Stage 1 Golden 基线，当前 Tester Phase 2（真实权重）」；上下文不足时新开会话，prompt 中附 tester 角色文件路径与冒烟产物路径（smoke/）），**输入 += Designer 的 Golden 基线说明**：去掉 `--load-format dummy` 重新拉起，加载日志 grep `not initialized|size mismatch|shape mismatch`（匹配文案随 vLLM 版本变化——**校准动作**：先 `grep -rn "not initialized" $VLLM/vllm/model_executor/models/` 确认当前安装版的实际提示字符串，当前版本实测为 "Following weights were not initialized from"；`Unexpected extra config keys` 属配置项校验，与权重缺失无关，不作阻断项）。
-2. **G3 精度门禁**（验收定义与执行方法见 `.claude/agents/accuracy.md`，本阶段由 Tester 代为执行——accuracy Agent 从 Stage 2 起接入）：真实权重加载无缺失/尺寸不匹配（上述 grep 证据归档）；HTTP 200 且输出非空；eager + bf16 精度基线达标。**仅凭 dummy 证据签收属流程违规。**
-3. 产出落 `./.day0/<model>/accuracy/`（权重加载证据 + 精度基线对比 + 失败项根因分析）。
-4. 失败动作：回退 Developer 修权重映射 / 量化路径 / KV·QK norm 分片，**禁止带病进入 Phase 5 评审发布**。
-
-### Phase 5 — Reviewer 评审 + G4 发布门禁
+### Phase 4 — Reviewer 评审 + G4 发布门禁
 1. 用 Task 工具调用 reviewer 子代理，**prompt 必须携带当前阶段信息**：
    ```
    Task(subagent_type="reviewer", prompt="""
@@ -163,15 +159,15 @@ Day0 的阻塞点历史上全部在外部依赖（上游合入状态、CANN/torc
 - **精度口径**：G3 由 Tester 按 `accuracy.md` 定义代为执行（accuracy Agent 自 Stage 2 起独立接入）。你需**显式提示**【benchmark、服务矩阵与图模式验证不在 Stage 1 范围——图模式与特性叠加属 Stage 3，服务矩阵与性能验收属 Stage 4】；若验证中定位到算子瓶颈，提示**转交算子团队**优化。
 
 ## 关键管理纪律
-- **子代理在共享工作树内执行，禁止目录隔离**：调用任何子代理不得使用 worktree / 副本克隆（树内新分支可以）。Phase 3/4 的 `vllm serve` 起在 `$VLLM_ASCEND` 工作树，Phase 5 核对该树的 `git log`——改动落在隔离副本 = 下游验证的是零改动的树，且此失败不自报（Developer 的「完成」报告在隔离副本内同样成立）。发现子代理已在隔离副本中产出时，先把改动落地到 `$VLLM_ASCEND` 工作树并验证，再走门禁。
+- **子代理在共享工作树内执行，禁止目录隔离**：调用任何子代理不得使用 worktree / 副本克隆（树内新分支可以）。Phase 3 的 `vllm serve` 起在 `$VLLM_ASCEND` 工作树，Phase 4 核对该树的 `git log`——改动落在隔离副本 = 下游验证的是零改动的树，且此失败不自报（Developer 的「完成」报告在隔离副本内同样成立）。发现子代理已在隔离副本中产出时，先把改动落地到 `$VLLM_ASCEND` 工作树并验证，再走门禁。
 - **交接必须完整**：每阶段给下一阶段的输入文件要齐全、路径明确；缺失就停下来要，不要带着不完整上下文硬往下走。
 - **环境锚点以运行树为准（消费 `$VLLM` 前必复核）**：tracker 的 `$VLLM` + 版本锚点必须等于推理解释器实际加载的树（探针：`<venv>/bin/python -c "import vllm; print(vllm.__version__, vllm.__file__)"`）。任何阶段发现锚点漂移（记录 vs 实测不一致）→ 停下订正 tracker 并上报，**禁止带偏差继续**；漂移纠正后须用正确解释器**重采**上游源码派生的证据（§3/§6/§8/§9）并复核受影响的下游判定（五维扫描 / 依赖结论 / 服务层初判 / 设计文档）——**只改路径不重锚证据 = 把按错版本树得出的判定洗白**（实测踩坑：design 按 v0.26.1 树判定，运行树实际是 0.23.1）。
 - **子代理完成即回写 tracker**：每个子代理执行结束（无论成败），立即把 `$ASCENDBOT_FILE_PATH/tracker.md` 中自己步骤行的状态更新为「待签收」（成功）或「打回」（失败），备注列填结果摘要 + 产物/证据路径，进度日志追加一行——主控随后按门禁裁决翻转「已完成」。
 - **反馈回路按门禁路由**：
-  - G1/G2/G3 失败 → 回 Developer（实现/权重映射修复）→ 重新 Phase 2/3/4；
-  - G4 失败 → 回 Phase 4 补验证或 Phase 5 补看护项；
+  - G1/G2/G3 失败 → 回 Developer（实现/权重映射修复）→ 重新 Phase 2/3；
+  - G4 失败 → 回 Phase 3 补验证或 Phase 4 补看护项；
   - Phase 0 依赖阻塞 → **不进回路**，启动并行预案或停止上报；
-  - Reviewer 退回 → 按其标注的路由目标回退：**回 Developer 的修复须重走 G1→G2→G3 再进 Phase 5；回 Phase 0 的重判须重走 Phase 1 起的全部下游**。
+  - Reviewer 退回 → 按其标注的路由目标回退：**回 Developer 的修复须重走 G1→G2→G3 再进 Phase 4；回 Phase 0 的重判须重走 Phase 1 起的全部下游**。
 - **升级机制**：同一门禁连续失败 2 轮（**轮次按门禁独立计数**），显式向用户上报卡点类型（实现缺陷 / 依赖阻塞 / 设计误判）；单门禁反馈轮次上限默认 3 轮，超过上限把卡点显式上报给用户。
 - **不要越权**：编排者角色做流程编排、门禁裁决与状态管理，不替 Designer 判定、不替 Developer 写代码、不替 Tester 起服务。Phase 0 的扫描比对是编排者职责，但其结论（尤其 P2 路径判定）须向用户确认。
 - 每个子代理调用用独立上下文（Agent 工具），一次干干净一件事；产物落盘到 `./.day0/<model>/`（目录：`preflight/`、`design/`、`impl/`、`smoke/`、`accuracy/`、`review/`）便于追溯。

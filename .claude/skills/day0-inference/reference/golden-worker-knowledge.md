@@ -117,7 +117,7 @@ EOF
 vllm serve <model> --load-format safetensors 2>&1 | grep -E "not initialized|size mismatch|shape mismatch"
 ```
 
-出现任一项都是阻断项，回 Developer 修复 loader 再放行。匹配文案随 vLLM 版本变化（当前版本实测缺失输出为 `Following weights were not initialized from`），**以当前安装版本实测校准**；`Unexpected extra config keys` 属配置项校验，与权重缺失无关，**不作阻断项**。该口径即 golden_flow.md Phase 4 / G3 精度门禁的加载证据要求（见第三章）。
+出现任一项都是阻断项，回 Developer 修复 loader 再放行。匹配文案随 vLLM 版本变化（当前版本实测缺失输出为 `Following weights were not initialized from`），**以当前安装版本实测校准**；`Unexpected extra config keys` 属配置项校验，与权重缺失无关，**不作阻断项**。该口径即 golden_flow.md Phase 3 / G3 精度门禁的加载证据要求（见第三章）。
 
 #### 1.5.4 vLLM 侧映射实现要点
 
@@ -457,7 +457,7 @@ ACLGraph 是捕获+回放机制。以下六类操作**不可入图**，构成新
 |---|---|---|
 | Phase 1 场景判定 | 本文每一章即一类适配场景：控制面（§1.1-1.5）+ 数据面判定流水线（§2.1-2.4）逐章判定，产出逐 module 判定表（§2.1.6，含加载期 missing/unexpected 两组与枚举来源列）；**§2.5 属 Stage 3，本阶段不判定** | Worker 层 design spec（`./.day0/<model>/design/worker-design-spec.md`） |
 | Phase 2 落地实现 | 按 spec 判定表回查机制：类型 0-5 的实现动作（§2.1.2）与覆写点机制（§2.1.5）；代码骨架见 `.claude/skills/day0-inference/reference/adapter-templates.md` 模板 A-F | 实现产物落 `./.day0/<model>/impl/` |
-| Phase 4 / G3 精度门禁 | 权重加载自检（§1.5.3 的 grep 口径） | 加载证据 |
+| Phase 3 / G3 精度门禁 | 权重加载自检（§1.5.3 的 grep 口径） | 加载证据 |
 | Stage 3 特性叠加 | 图模式兼容（§2.5：六类清单、meta 实现、逐级开图） | `.claude/agents/performance.md` 为权威详述；Stage 1 不做图模式验证 |
 | 跨层联动 | MoE 通信分发表（§2.4.1）、cache spec 注册联动（§2.2）是调度层知识库 E8 / E4（`.claude/skills/day0-inference/reference/golden-schedule-knowledge.md`）的详述出处 | 调度层 design spec 的引用 |
 

@@ -37,9 +37,8 @@
 | S1.1 依赖就绪与路径判定（Phase 0） | 主控（不调子代理） | raw_evidence.md + 依赖结论表 / 五维扫描报告 / 服务层初判 / 路径判定与排期 | G0 | 进行中 | `preflight/` | — |
 | S1.2 适配设计（Phase 1） | designer | 设计文档（按层组织：服务/调度/Worker/跨层，每层含适配点判定表） | 设计完整性检查 | 未开始 | `design/` | — |
 | S1.3 代码适配 + UT（Phase 2） | developer | 改动清单 + UT 结果 + OOT 自检证据 | G1 | 未开始 | `impl/` | — |
-| S1.4 冒烟验证（Tester Phase 1） | tester | dummy 冒烟证据 | G2 | 未开始 | `smoke/` | — |
-| S1.5 真实权重精度（Tester Phase 2） | tester（按 `accuracy.md` 的 G3 定义执行） | 权重加载证据 + 精度基线对比 | G3 | 未开始 | `accuracy/` | — |
-| S1.6 评审 + 发布治理（Phase 5） | reviewer | 评审报告 + G4 检查结论 | G4 | 未开始 | `review/` | — |
+| S1.4 服务验证（Tester Phase 1 冒烟 → Phase 2 真实权重，一次调用两段执行） | tester（真实权重段按 `accuracy.md` 的 G3 定义执行） | dummy 冒烟证据 + 权重加载证据 + 精度基线对比 | G2 → G3（顺序门禁，G2 不过不进真实权重段） | 未开始 | `smoke/`、`accuracy/` | — |
+| S1.5 评审 + 发布治理（Phase 4） | reviewer | 评审报告 + G4 检查结论 | G4 | 未开始 | `review/` | — |
 
 签收单：`signoff.md`（全部步骤「已完成」后由主控产出）
 
