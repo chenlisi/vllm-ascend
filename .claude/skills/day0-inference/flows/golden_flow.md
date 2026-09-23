@@ -10,6 +10,7 @@
 
 - **信号优先于判断**：每道门禁的准出条件绑定机器可读证据（日志计数、注册表比对、HTTP 响应、文件存在性），不凭感觉放行。
 - **门禁不可跳过**：任一门禁失败时，合法动作是按路由回退到对应阶段、或停止上报，而不是放宽标准继续推进。**仅凭 dummy 权重证据签收是流程违规，不是技术失误。**
+- **暂缓 ≠ 跳过**：环境未 ready（权重不可用 / 显存不足以全层加载 / NPU 未就绪）时，主控可裁决把某段验证延期执行（典型：Tester Phase 2 真实权重段），但对应门禁状态保持「未过」，tracker 与签收单显式标注原因与恢复条件，环境就绪后必须补验——延期不得洗白成通过。
 
 术语约定：**P0/P1/P2 只用于模型级路径判定**（Phase 0 产出），不得标注在 module 行上；module 级只用**类型 0-5**。一个模型级 P2 内部可以有大量类型 0 的 module，两者不冲突。
 
@@ -127,6 +128,7 @@ Day0 的阻塞点历史上全部在外部依赖（上游合入状态、CANN/torc
    输出根目录：$ASCENDBOT_FILE_PATH
    输入：Developer 交接（$ASCENDBOT_FILE_PATH/impl/）+ Designer 的模型全景与 Golden 基线说明 + preflight 服务层初判
    按 tester.md 依次执行三段：Phase 0 环境与卫生 → Phase 1 冒烟（dummy，G2）→ Phase 2 真实权重（G3）
+   （机器未 ready 时本行替换为：Phase 2 暂缓——原因：<原因>；只执行 Phase 0/1，Phase 2 段按 tester.md 暂缓分支交接）
    """)
    ```
    不支持命名子代理的环境，把 `.claude/agents/tester.md` 全文注入子代理首条消息，前缀同样的阶段信息。
@@ -134,6 +136,7 @@ Day0 的阻塞点历史上全部在外部依赖（上游合入状态、CANN/torc
 3. **G2 冒烟门禁**：能加载能跑——readiness 真通过（非仅 startup complete）+ 文本冒烟 HTTP 200 且输出非空 + false-ready 排除（首个请求崩溃按运行时失败根因隔离）。OOT 替换是否生效，以 Developer 的 G1 自检证据为准核对。图模式不在 Stage 1 验证范围（服务基线已 `--enforce-eager`）；捕获计数等图模式验收素材见 `.claude/agents/performance.md`（Stage 3 接入）。
 4. **G3 精度门禁**（验收定义与执行方法见 `.claude/agents/accuracy.md`，Stage 1 由 Tester 代为执行——accuracy Agent 从 Stage 2 起接入）：真实权重加载日志 grep `not initialized|size mismatch|shape mismatch` 无命中（匹配文案随 vLLM 版本变化——先 `grep -rn "not initialized" $VLLM/vllm/model_executor/models/` 校准当前安装版的实际提示字符串再 grep，证据归档；`Unexpected extra config keys` 属配置项校验，不作阻断项）；HTTP 200 且输出非空；**sanity 请求输出内容正常（预期关键词命中 + 无重复循环 / 乱码，输出原文归档——「200 且非空」挡不住胡话）**；eager + bf16 精度基线达标（对齐 Designer 的 Golden 基线说明）。**仅凭 dummy 证据签收属流程违规。**
 5. 失败动作：G2 失败 → 回退 Developer 定位，按 fallback ladder 逐级定界（复现 → `TORCHDYNAMO_DISABLE=1` → 关多模态；服务基线已 `--enforce-eager`）；G3 失败 → 回退 Developer 修权重映射 / 量化路径 / KV·QK norm 分片，**禁止带病进入 Phase 4 评审发布**。
+6. **Phase 2 暂缓路径（机器未 ready 时由你裁决，tester 无权自行跳过）**：权重不可用 / 显存不足 / NPU 环境未就绪时，在调用 prompt 与 tracker S1.4 备注显式标注「Phase 2 暂缓 + 原因 + 恢复条件」，S1.4 状态置「暂缓」；G2 照常签收，**G3 状态保持未过**——流程可进 Phase 4 做代码评审，但签收单必须显式标注「精度未验证（Phase 2 暂缓）」，**Stage 1 不得置「已完成」**；环境就绪后重新调用 tester 从 Phase 0 起补验（环境可能已变，不得只补 Phase 2 一段）。
 
 ### Phase 4 — Reviewer 评审 + G4 发布门禁
 1. 用 Task 工具调用 reviewer 子代理，**prompt 必须携带当前阶段信息**：

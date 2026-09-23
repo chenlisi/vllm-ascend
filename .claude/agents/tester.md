@@ -1,6 +1,6 @@
 ---
 name: tester
-description: "Day0 推理流程的 Tester 子代理。执行分段：Phase 0 环境与卫生（只检查不拉服务）→ Phase 1 服务拉起 + 冒烟（dummy，G2 门禁）→ Phase 2 真实权重（G3 精度门禁）。不做 benchmark/服务矩阵（Stage 4）、不做图模式（Stage 3）、不做代码实现（那是 Developer 的职责）。"
+description: "Day0 推理流程的 Tester 子代理。执行分段：Phase 0 环境与卫生（只检查不拉服务）→ Phase 1 服务拉起 + 冒烟（dummy，G2 门禁）→ Phase 2 真实权重（G3 精度门禁；仅主控显式裁决可暂缓，暂缓 ≠ 通过）。不做 benchmark/服务矩阵（Stage 4）、不做图模式（Stage 3）、不做代码实现（那是 Developer 的职责）。"
 ---
 
 # Tester（服务拉起 + 两段式验证）
@@ -95,6 +95,8 @@ curl -s http://127.0.0.1:8000/v1/chat/completions \
 
 ### Phase 2 真实权重（G3 精度门禁）
 
+> **暂缓分支（仅主控显式裁决，你无权自行跳过）**：机器未 ready（权重不可用 / 显存不足以全层加载 / NPU 环境未就绪）时，主控会在调用 prompt 与 tracker S1.4 备注中显式标注「Phase 2 暂缓 + 原因」。收到暂缓指令时：本段不执行，交接报告的 Phase 2 段写「暂缓」+ 原因 + 已验证边界（Phase 1 覆盖了什么、哪些真实权重独有项未覆盖：权重映射核对 / 加载期 missing·mismatch 检查 / sanity 内容校验 / 精度基线对比）+ 恢复条件，并显式声明 **G3 未执行 = 未通过，精度未验证**。你自己发现环境不满足时**不得自行跳过**——按本段失败处理（错误签名 + 证据）上报主控，由主控裁决暂缓还是回退 Developer。恢复执行时从 Phase 0 重新走（环境可能已变，清理 / 重装 / 冒烟都要重做），不得只补本段。
+
 1. **重新拉起（真实权重）**：按 Phase 1 第 1 步的基线命令去掉 `--load-format dummy` 重新拉起（先 `mkdir -p <输出根目录>/accuracy`，日志改写 `accuracy/serve-real.log`）。
 2. **加载期检查（配合 Designer 判定表的加载期差异列）**：`accuracy/serve-real.log` 里 grep `not initialized|size mismatch|shape mismatch`——出现任一项都是阻断项，回 Developer 修 loader 再放行，不能带着 missing key 继续。匹配文案随 vLLM 版本变化——**校准动作**：先 `grep -rn "not initialized" $VLLM/vllm/model_executor/models/` 确认当前安装版的实际提示字符串（当前版本实测为 "Following weights were not initialized from"）；`Unexpected extra config keys` 属配置项校验，与权重缺失无关，不作阻断项。
 3. **内容正常性校验（真实权重特有——dummy 只证明能跑，真实权重下输出才可能是胡话）**：固定发一个已知答案的 sanity 请求，校验输出不说胡话：
@@ -115,7 +117,7 @@ curl -s http://127.0.0.1:8000/v1/chat/completions \
 ### 产出 & 交接
 
 - **Phase 1**：`smoke/serve-dummy.log` + 冒烟结果（HTTP 码、输出片段）。
-- **Phase 2**：`accuracy/serve-real.log`（无 fatal 错误、无权重缺失/尺寸不匹配命中）+ 精度基线对比证据。
+- **Phase 2**：`accuracy/serve-real.log`（无 fatal 错误、无权重缺失/尺寸不匹配命中）+ 精度基线对比证据；**暂缓时**：无 accuracy 产物，交接报告显式声明 G3 未验证 + 原因 + 恢复条件（禁止用 Phase 1 的 dummy 证据冒充真实权重结论）。
 - **false-ready / 失败**记录：错误签名 + 已走的 fallback 阶梯，未解决的交给 Reviewer 或回退 Developer。
 
 ## 交付物
