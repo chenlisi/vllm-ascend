@@ -33,6 +33,19 @@ class AscendMLAAttentionSpec(MLAAttentionSpec):
 
     @property
     def page_size_bytes(self) -> int:
+        # `page_size_padded` is set by the Ascend model runner to raise this
+        # layer's page up to the (larger) padded mamba page, so that a hybrid
+        # MLA + linear-attention model exposes a single uniform page size. It
+        # must therefore take precedence over the computed size -- upstream's
+        # `AttentionSpec.page_size_bytes` does the same. Ignoring it makes the
+        # field a silent no-op and KV-cache unification fails with
+        # "page size is not divisible by the maximum page size".
+        if self.page_size_padded is not None:
+            return self.page_size_padded
+        return self._unpadded_page_size_bytes
+
+    @property
+    def _unpadded_page_size_bytes(self) -> int:
         return (
             self.block_size
             * self.num_kv_heads
@@ -66,6 +79,12 @@ class AscendMLAAttentionSpec(MLAAttentionSpec):
         assert len(cache_sparse_c8_set) == 1, (
             "All attention layers in the same KV cache group must use the same sparse C8 setting."
         )
+        # Forward the padding: without this, merging a group of MLA layers drops
+        # the value set by the model runner, the group's page size falls back to
+        # the unpadded value, and it no longer matches the mamba group's page --
+        # the uniform-page-size assertion then fails. Sibling spec classes
+        # (`AscendSlidingWindowMLASpec`) and upstream `MLAAttentionSpec.merge`
+        # both forward it; this class was the outlier.
         return cls(
             block_size=specs[0].block_size,
             num_kv_heads=specs[0].num_kv_heads,
@@ -75,6 +94,7 @@ class AscendMLAAttentionSpec(MLAAttentionSpec):
             dtype=specs[0].dtype,
             cache_dtype_str=cache_dtype_str_set.pop(),
             cache_sparse_c8=specs[0].cache_sparse_c8,
+            page_size_padded=specs[0].page_size_padded,
         )
 
     def max_memory_usage_bytes(self, vllm_config: VllmConfig) -> int:

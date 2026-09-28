@@ -25,6 +25,12 @@ from vllm.model_executor.layers.activation import (
     SwigluStepAndMul,
 )
 
+# SiTU lives in the model package so its numerics are unit-testable without
+# building a model; re-exported here so every Ascend activation is still
+# discoverable from one module (and so `register_ascend_customop` keeps a
+# single import site). See models/kimi_k3/activation.py for the rationale.
+from vllm_ascend.models.kimi_k3.activation import AscendSituAndMul  # noqa: F401
+
 
 class AscendQuickGELU(QuickGELU):
     def forward_oot(self, x: torch.tensor) -> torch.Tensor:

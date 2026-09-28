@@ -78,6 +78,23 @@ def register_model():
     from .models import register_model
 
     register_model()
+    register_config()
+
+
+def register_config():
+    """Register model configs that upstream vLLM does not know about.
+
+    Runs from the `register_model` general plugin, i.e. at vLLM import time,
+    which is necessarily before `get_config()` resolves a checkpoint config.
+
+    The Kimi-K3 checkpoint's own `auto_map` cannot be used here: its
+    `modeling_kimi*.py` imports `transformers.utils.generic.OutputRecorder`,
+    which no longer exists in the installed transformers (5.x), so the dynamic
+    module fails to import and config resolution would raise.
+    """
+    from vllm_ascend.models.kimi_k3.config import register_kimi_k3_config
+
+    register_kimi_k3_config()
 
 
 import vllm_ascend.logger  # noqa: E402, F401

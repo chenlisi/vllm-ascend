@@ -1,0 +1,31 @@
+# E2E regression config for Kimi-K3.
+#
+# NOTE: this checkpoint ships git-LFS pointer files in place of weights, so this
+# config is written for the eventual full-weight run. Until weights are
+# materialised, only `--load-format dummy` runs are possible (which validate
+# that the model runs, not that the output is correct).
+model_name: "Kimi-K3"
+model_type: "vllm"
+hardware: "Atlas A3 Series"
+
+serve:
+  tensor_parallel_size: 8
+  dtype: bfloat16
+  max_model_len: 32768
+  gpu_memory_utilization: 0.85
+  trust_remote_code: true
+  tokenizer_mode: "kimi_k3"
+
+tasks:
+- name: "gsm8k"
+  metrics:
+  # TODO(day0): the accuracy threshold must be filled in once real weights are
+  # available. 0.0 is a placeholder, not a measured baseline -- the checkpoint's
+  # weights are git-LFS pointers today, so no accuracy run has been possible.
+  - name: "exact_match,flexible-extract"
+    value: 0.0
+
+num_fewshot: 5
+apply_chat_template: true
+fewshot_as_multiturn: true
+batch_size: "auto"

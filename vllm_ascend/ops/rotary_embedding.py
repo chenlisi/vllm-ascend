@@ -65,6 +65,8 @@ def set_cos_and_sin(vllm_config, max_num_reqs, decode_token_per_req, dtype, devi
     global _sin_mla
     global _cos
     global _sin
+    global _cos_cache
+    global _sin_cache
 
     if _cos_mla is not None or _sin_mla is not None or _cos is not None or _sin is not None:
         return
@@ -76,6 +78,18 @@ def set_cos_and_sin(vllm_config, max_num_reqs, decode_token_per_req, dtype, devi
         rope_dim = model_config.hf_text_config.qk_rope_head_dim
         _cos_mla = torch.ones(max_num_batched_tokens, 1, 1, rope_dim, dtype=dtype, device=device)
         _sin_mla = torch.zeros(max_num_batched_tokens, 1, 1, rope_dim, dtype=dtype, device=device)
+        # NoPE models (mla_use_nope=True, e.g. Kimi-K3) never construct a
+        # RotaryEmbedding module, so `_cos_cache`/`_sin_cache` -- which the MLA
+        # attention metadata builder indexes directly -- would stay None and the
+        # first request would die with "'NoneType' object is not subscriptable".
+        # Under NoPE the rotation is the identity, so install cos==1 / sin==0
+        # tables: passing them through `npu_interleave_rope` is a no-op, which is
+        # exactly the vendor's semantics. Indexed by absolute position, so they
+        # must span max_model_len, not just the batched-token budget.
+        if getattr(model_config.hf_text_config, "mla_use_nope", False):
+            table_len = model_config.max_model_len
+            _cos_cache = torch.ones(table_len, rope_dim, dtype=dtype, device=device)
+            _sin_cache = torch.zeros(table_len, rope_dim, dtype=dtype, device=device)
     elif not is_vl_model(vllm_config) and has_rope(vllm_config):
         rope_dim = model_config.get_head_size()
         # For models using partial rope like Qwen3-Next.
@@ -90,6 +104,13 @@ def set_cos_and_sin(vllm_config, max_num_reqs, decode_token_per_req, dtype, devi
 def get_cos_and_sin_mla(positions, use_cache=False):
     global _cos_cache
     global _sin_cache
+    if _cos_cache is None or _sin_cache is None:
+        raise RuntimeError(
+            "RoPE cos/sin cache is not initialised. For MLA models this is set "
+            "up by set_cos_and_sin() during model-runner init; for NoPE models "
+            "it is installed there as an identity table. Reaching this point "
+            "means the attention metadata was built before that ran."
+        )
     cos = _cos_cache[positions].unsqueeze(1).unsqueeze(2)
     sin = _sin_cache[positions].unsqueeze(1).unsqueeze(2)
     if not use_cache:

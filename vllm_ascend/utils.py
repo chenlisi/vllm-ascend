@@ -672,6 +672,7 @@ def register_ascend_customop(vllm_config: VllmConfig | None = None):
         AscendQuickGELU,
         AscendSiluAndMul,
         AscendSiluAndMulWithClamp,
+        AscendSituAndMul,
     )
     from vllm_ascend.ops.bailing_moe_linear_attn import AscendBailingMoELinearAttention
     from vllm_ascend.ops.conv import AscendConv3dLayer
@@ -706,6 +707,11 @@ def register_ascend_customop(vllm_config: VllmConfig | None = None):
         "QuickGELU": AscendQuickGELU,
         "SiluAndMul": AscendSiluAndMul,
         "SiluAndMulClamp": AscendSiluAndMulWithClamp,
+        # Kimi-K3 SiTU activation. Registered under the class name that the
+        # vendor implementation uses (`ACT2FN["situ"] -> SituAndMul`), so the
+        # model-side construction site can instantiate the Ascend variant
+        # without the vendor math being silently swapped for SwiGLU.
+        "SituAndMul": AscendSituAndMul,
         "RotaryEmbedding": AscendRotaryEmbedding,
         "MRotaryEmbedding": AscendMRotaryEmbedding,
         "ColumnParallelLinear": AscendColumnParallelLinear,
