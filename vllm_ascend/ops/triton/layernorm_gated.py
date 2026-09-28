@@ -33,6 +33,10 @@ def _layer_norm_fwd_1pass_kernel_npu(
     HAS_Z: tl.constexpr,
     NORM_BEFORE_GATE: tl.constexpr,
     IS_RMS_NORM: tl.constexpr,
+    # "swish"/"silu" -> z * sigmoid(z); "sigmoid" -> sigmoid(z).
+    # Kept as a constexpr so the non-gated default path compiles to exactly the
+    # same code as before this switch existed.
+    ACTIVATION: tl.constexpr,
 ):
     # Map the program id to the row of X and Y it should compute.
     pid_m = tl.program_id(0)
@@ -66,7 +70,10 @@ def _layer_norm_fwd_1pass_kernel_npu(
         z_ptrs = Z + rows[:, None] * stride_z_row + cols[None, :] + group * N
         z = tl.load(z_ptrs, mask=row_mask[:, None] & col_mask[None, :]).to(tl.float32)
         if not NORM_BEFORE_GATE:
-            x *= z * tl.sigmoid(z)
+            if ACTIVATION == "sigmoid":
+                x *= tl.sigmoid(z)
+            else:
+                x *= z * tl.sigmoid(z)
 
     # Compute statistics per row
     if not IS_RMS_NORM:
@@ -93,7 +100,10 @@ def _layer_norm_fwd_1pass_kernel_npu(
 
     # Post-gate
     if HAS_Z and NORM_BEFORE_GATE:
-        y *= z * tl.sigmoid(z)
+        if ACTIVATION == "sigmoid":
+            y *= tl.sigmoid(z)
+        else:
+            y *= z * tl.sigmoid(z)
 
     # Store output
     y_ptrs = Y + rows[:, None] * stride_y_row + cols[None, :] + group * N
@@ -110,12 +120,15 @@ def layer_norm_fwd_npu(
     group_size=None,
     norm_before_gate=True,
     is_rms_norm=False,
+    activation: str = "swish",
 ):
     M, N = x.shape
     if group_size is None:
         group_size = N
     assert N % group_size == 0
     ngroups = N // group_size
+
+    assert activation in ("swish", "silu", "sigmoid"), f"layer_norm_fwd_npu: unsupported activation {activation!r}"
 
     assert x.stride(-1) == 1
     if z is not None:
@@ -163,6 +176,7 @@ def layer_norm_fwd_npu(
         BLOCK_N=BLOCK_N,
         NORM_BEFORE_GATE=norm_before_gate,
         IS_RMS_NORM=is_rms_norm,
+        ACTIVATION=activation,
         # Remove multibuffer if not needed
     )
     return out, mean, rstd

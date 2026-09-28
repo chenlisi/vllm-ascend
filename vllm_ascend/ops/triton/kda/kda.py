@@ -1229,6 +1229,7 @@ def kda_gate_fwd_kernel(
     A,
     y,
     g_bias,
+    lower_bound,
     beta: tl.constexpr,
     threshold: tl.constexpr,
     T,
@@ -1237,12 +1238,15 @@ def kda_gate_fwd_kernel(
     BT: tl.constexpr,
     BD: tl.constexpr,
     HAS_BIAS: tl.constexpr,
+    USE_LOWER_BOUND: tl.constexpr,
 ):
     i_t, i_h = tl.program_id(0), tl.program_id(1)
     n_t = i_t * BT
 
     b_a = tl.load(A + i_h).to(tl.float32)
-    b_a = -tl.exp(b_a)
+
+    if not USE_LOWER_BOUND:
+        b_a = -tl.exp(b_a)
 
     stride_row = H * D
     stride_col = 1
@@ -1276,10 +1280,24 @@ def kda_gate_fwd_kernel(
     # softplus(x, beta) = (1/beta) * log(1 + exp(beta * x))
     # When beta * x > threshold, use linear approximation x
     # Use threshold to switch to linear when beta*x > threshold
-    g_scaled = b_g * beta
-    use_linear = g_scaled > threshold
-    sp = tl.where(use_linear, b_g, (1.0 / beta) * tl.log(1.0 + tl.exp(g_scaled)))
-    b_y = b_a * sp
+    #
+    # Safe gate (USE_LOWER_BOUND) replaces the whole activation rather than
+    # clamping its result. Ascend's `npu_causal_conv1d` sibling operators treat
+    # safe_gate as the native form (lower_bound defaults to -5.0 there), so this
+    # branch reproduces the platform-native formula:
+    #     g = lower_bound * sigmoid(exp(A_log) * (g + dt_bias))
+    # versus the default (non-safe) form:
+    #     g = -exp(A_log) * softplus(g + dt_bias)
+    # The two are NOT interchangeable: clamping the non-safe result to
+    # lower_bound diverges from the safe form across the whole mid/positive
+    # gate range (verified numerically, see tests/ut/ops/test_kda_gate_safe.py).
+    if USE_LOWER_BOUND:
+        b_y = lower_bound * tl.sigmoid(tl.exp(b_a) * b_g)
+    else:
+        g_scaled = b_g * beta
+        use_linear = g_scaled > threshold
+        sp = tl.where(use_linear, b_g, (1.0 / beta) * tl.log(1.0 + tl.exp(g_scaled)))
+        b_y = b_a * sp
 
     tl.store(y_ptr, b_y.to(y.dtype.element_ty), boundary_check=(0, 1))
 
@@ -1291,6 +1309,7 @@ def fused_kda_gate(
     g_bias: torch.Tensor | None = None,
     beta: float = 1.0,
     threshold: float = 20.0,
+    lower_bound: float | None = None,
 ) -> torch.Tensor:
     """
     Forward pass for KDA gate:
@@ -1298,7 +1317,16 @@ def fused_kda_gate(
       param A: [H] or [1, 1, H, 1]
       beta: softplus beta parameter
       threshold: softplus threshold parameter
+      lower_bound: when set, use the bounded "safe gate" activation
+          `lower_bound * sigmoid(exp(A) * g)` instead of the default
+          `-exp(A) * softplus(g)`. The caller (e.g. Kimi-K3, whose config sets
+          `gate_lower_bound = -5.0`) supplies this; leaving it None keeps the
+          default activation byte-for-byte unchanged for existing models.
       return  : [..., H, D]
+
+    NOTE: this kernel applies the gate activation ONLY. It must not perform the
+    chunk-local cumulative sum -- `chunk_kda` does that internally. Feeding an
+    already-cumsummed gate here would double-accumulate silently.
     """
     orig_shape = g.shape[:-1]
 
@@ -1307,6 +1335,13 @@ def fused_kda_gate(
     HD = g.shape[1]
     H = A.numel()
     assert H * head_k_dim == HD
+
+    use_lower_bound = lower_bound is not None
+    if use_lower_bound:
+        # Mirrors the platform-side validation on the AscendC KDA operators.
+        assert -5.0 <= lower_bound < 0.0, (
+            f"fused_kda_gate: lower_bound must be in [-5, 0) for the safe gate, got {lower_bound}."
+        )
 
     y = torch.empty_like(g, dtype=torch.float32)
 
@@ -1318,6 +1353,7 @@ def fused_kda_gate(
         A,
         y,
         g_bias,
+        lower_bound,
         beta,
         threshold,
         T,
@@ -1325,6 +1361,7 @@ def fused_kda_gate(
         head_k_dim,
         BD=next_power_of_2(head_k_dim),
         HAS_BIAS=g_bias is not None,
+        USE_LOWER_BOUND=use_lower_bound,
     )
 
     y = y.view(*orig_shape, H, head_k_dim)

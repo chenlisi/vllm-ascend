@@ -20,7 +20,10 @@ from einops import rearrange
 from vllm.distributed import get_pcp_group
 from vllm.forward_context import get_forward_context
 from vllm.model_executor.layers.mamba.gdn.base import GatedDeltaNetAttention
-from vllm.model_executor.layers.mamba.mamba_utils import MambaStateShapeCalculator
+from vllm.model_executor.layers.mamba.gdn.kimi_gdn_linear_attn import (
+    KimiGatedDeltaNetAttention,
+)
+from vllm.model_executor.layers.mamba.mamba_utils import MambaStateShapeCalculator, is_conv_state_dim_first
 from vllm.triton_utils import triton
 from vllm.v1.attention.backend import AttentionBackend, AttentionMetadata  # type: ignore
 from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata
@@ -32,6 +35,7 @@ from vllm_ascend.ops.gdn_attn_builder import AscendGDNAttentionBackend
 from vllm_ascend.ops.triton.fla.chunk import chunk_gated_delta_rule
 from vllm_ascend.ops.triton.fla.fused_qkvzba_split_reshape import fused_qkvzba_split_reshape_cat
 from vllm_ascend.ops.triton.fla.utils import clear_ssm_states
+from vllm_ascend.ops.triton.kda.kda import chunk_kda, fused_kda_gate, fused_recurrent_kda
 from vllm_ascend.ops.triton.mamba.causal_conv1d import extract_last_width
 from vllm_ascend.utils import vllm_version_is
 
@@ -460,3 +464,312 @@ class AscendGatedDeltaNetAttention(GatedDeltaNetAttention):
         else:
             core_attn_out[:num_actual_tokens] = core_attn_out_non_spec.squeeze(0)
         maybe_save_kv_layer_to_connector("", [])
+
+
+class AscendKimiGatedDeltaNetAttention(KimiGatedDeltaNetAttention):
+    """Ascend OOT replacement for the Kimi-K3 KDA layer.
+
+    The upstream class is a `PluggableLayer` registered under the name
+    ``KimiGatedDeltaNetAttention``. Ascend had a registration only for the
+    *base* ``GatedDeltaNetAttention`` key, so KDA layers fell through to the
+    unpatched upstream implementation -- whose prefill path calls the upstream
+    Triton ``causal_conv1d_fn`` (never replaced on this platform) and the
+    upstream ``chunk_kda_with_fused_gate``, which has no Ascend counterpart.
+
+    Only the platform-specific kernel call sites are overridden here; the
+    projections, weight shapes and the `forward` skeleton are inherited
+    unchanged, so the checkpoint's weight names and TP sharding are untouched.
+
+    Two deliberate substitutions, both verified against the upstream semantics:
+
+    1. **conv1d** -> CANN ``npu_causal_conv1d_custom`` (``run_mode=0`` prefill,
+       ``run_mode=1`` decode). The layout differs from upstream's
+       ``causal_conv1d_fn`` in three ways, all established by direct probe on
+       A3 and by reading the operator's tiling validation:
+         * ``x`` is ``(T, dim)`` for varlen prefill -- *not* upstream's
+           ``(dim, T)``. Passing the upstream layout fails tiling outright
+           ("dim must satisfy dim % 16 == 0 ... got dim=<T>"), since the
+           operator reads the last axis as ``dim``;
+         * ``weight`` must be ``(width, dim)``, i.e. the *transpose* of the
+           ``(dim, width)`` view upstream uses;
+         * ``convStates`` must be ``(num_cache_lines, state_len, dim)``. The
+           SD layout this model allocates is ``(num_blocks, state_len,
+           conv_dim)`` with the three q/k/v segments concatenated along
+           ``conv_dim``, so the state is transposed to put dim last, split into
+           three, and each piece transposed back -- matching upstream's
+           "SD layout needs a transpose" comment.
+       One tap ordering was confirmed one-hot: slot 0 is the *oldest* history
+       entry and the final tap is the current token, so the semantics agree
+       with the vendor convolution.
+    2. **gate + chunk attention** -> the extern-gate two-step:
+       ``fused_kda_gate`` (softplus / safe-gate activation ONLY) followed by
+       ``chunk_kda`` (which performs its own chunk-local cumsum internally).
+       The upstream ``chunk_kda_with_fused_gate`` folds the cumsum into the gate
+       kernel; Ascend's copy of that symbol does not exist, so the split form is
+       used instead. See `_kda_gate_activation` for the doubling hazard.
+
+    `gate_lower_bound` comes from the checkpoint's
+    ``text_config.linear_attn_config`` (``-5.0`` for Kimi-K3). The upstream
+    implementation has no such parameter at all -- its ``**kwargs`` silently
+    swallows it -- so the safe-gate activation is genuinely absent on that path.
+    """
+
+    def _gate_lower_bound(self) -> float | None:
+        """Kimi-K3's `gate_lower_bound`, or None when the config omits it.
+
+        Read through `hf_text_config` for the same reason the model-side state
+        hooks do: the K3 checkpoint nests `linear_attn_config` under
+        `text_config`, and the top-level config has no such field.
+        """
+        hf_text_config = getattr(self.model_config, "hf_text_config", None)
+        kda_config = getattr(hf_text_config, "linear_attn_config", None) or {}
+        return kda_config.get("gate_lower_bound", None)
+
+    def _kda_gate_activation(self, g1: torch.Tensor) -> torch.Tensor:
+        """Apply the KDA gate activation to the raw gate logits.
+
+        IMPORTANT (double-cumsum hazard): `fused_kda_gate` performs the gate
+        activation **only**. The chunk-local cumulative sum happens inside
+        `chunk_kda` -> `chunk_kda_fwd`. Feeding an already-cumsummed gate into
+        `chunk_kda` would accumulate twice -- silently, with no error, and with
+        badly wrong numerics. Do not add a cumsum here.
+        """
+        return fused_kda_gate(
+            rearrange(g1, "1 n h d -> n (h d)"),
+            self.A_log,
+            self.head_dim,
+            g_bias=self.dt_bias,
+            lower_bound=self._gate_lower_bound(),
+        ).unsqueeze(0)
+
+    def _conv_weight_for_op(self, weight: torch.Tensor, x_dtype: torch.dtype) -> torch.Tensor:
+        """`(dim, 1, width)` -> `(width, dim)`, cast to the activation dtype.
+
+        Two conversions in one place because both are properties of the CANN
+        operator's contract rather than of the weights:
+          * layout -- the operator takes `(width, dim)`, the transpose of the
+            `(dim, width)` view its own kernels use upstream;
+          * dtype -- the parameter is fp32 while the activations are bf16, and
+            the operator rejects mixed dtypes.
+        """
+        w = weight.reshape(weight.size(0), weight.size(2)).transpose(0, 1)
+        w = w.contiguous()
+        return w if w.dtype == x_dtype else w.to(x_dtype)
+
+    def _conv1d_prefill(
+        self,
+        x: torch.Tensor,
+        weight: torch.Tensor,
+        bias: torch.Tensor | None,
+        conv_state: torch.Tensor,
+        has_initial_state: torch.Tensor | None,
+        cache_indices: torch.Tensor | None,
+        query_start_loc: torch.Tensor | None,
+    ) -> torch.Tensor:
+        """Causal conv over a varlen prefill batch via the CANN fused operator.
+
+        `x` must be `(T, dim)` -- the *opposite* of upstream's
+        `causal_conv1d_fn`, which takes `(dim, T)` varlen input. Probing the
+        operator with the upstream layout fails tiling with
+        "dim must satisfy dim % 16 == 0 ... got dim=<T>", i.e. it reads the last
+        dimension as `dim`. The caller therefore must not apply upstream's
+        `transpose(0, 1)` for this path.
+        """
+        # `initial_state_mode` tells the operator whether each sequence has a
+        # valid incoming conv state; sequences without one must not consume the
+        # (stale) block content. Upstream passes `has_initial_state` for exactly
+        # this purpose.
+        initial_state_mode = None
+        if has_initial_state is not None:
+            initial_state_mode = has_initial_state.to(torch.int32)
+
+        out = torch.empty_like(x)
+        torch.ops._C_ascend.npu_causal_conv1d_custom(
+            out,
+            x,
+            weight,
+            conv_state=conv_state,
+            bias_opt=bias,
+            query_start_loc_opt=query_start_loc,
+            cache_indices_opt=cache_indices,
+            initial_state_mode_opt=initial_state_mode,
+            num_accepted_tokens_opt=None,
+            activation_mode=1,  # silu, matching the upstream `activation="silu"`
+            pad_slot_id=PAD_SLOT_ID,
+            run_mode=0,
+        )
+        return out
+
+    def _conv1d_decode(
+        self,
+        x: torch.Tensor,
+        weight: torch.Tensor,
+        bias: torch.Tensor | None,
+        conv_state: torch.Tensor,
+        conv_state_indices: torch.Tensor | None,
+    ) -> torch.Tensor:
+        """Single-token causal conv via the CANN fused operator (`run_mode=1`).
+
+        The operator updates `conv_state` in place for the rows named by
+        `conv_state_indices`, matching `causal_conv1d_update`'s contract.
+        """
+        out = torch.empty_like(x)
+        torch.ops._C_ascend.npu_causal_conv1d_custom(
+            out,
+            x,
+            weight,
+            conv_state=conv_state,
+            bias_opt=bias,
+            query_start_loc_opt=None,
+            cache_indices_opt=conv_state_indices,
+            initial_state_mode_opt=None,
+            num_accepted_tokens_opt=None,
+            activation_mode=1,  # silu
+            pad_slot_id=PAD_SLOT_ID,
+            run_mode=1,
+        )
+        return out
+
+    def _forward(
+        self,
+        q_proj_states: torch.Tensor,
+        k_proj_states: torch.Tensor,
+        v_proj_states: torch.Tensor,
+        g1: torch.Tensor,
+        beta: torch.Tensor,
+        core_attn_out: torch.Tensor,
+    ) -> None:
+        forward_context = get_forward_context()
+        attn_metadata_raw = forward_context.attn_metadata
+        if attn_metadata_raw is None:
+            # V1 profile run
+            return
+
+        assert isinstance(attn_metadata_raw, dict)
+        attn_metadata_narrowed = attn_metadata_raw[self.prefix]
+        assert isinstance(attn_metadata_narrowed, GDNAttentionMetadata)
+        has_initial_state = attn_metadata_narrowed.has_initial_state
+        non_spec_query_start_loc = attn_metadata_narrowed.non_spec_query_start_loc
+        non_spec_state_indices_tensor = attn_metadata_narrowed.non_spec_state_indices_tensor
+        num_actual_tokens = attn_metadata_narrowed.num_actual_tokens
+        constant_caches = self.kv_cache
+
+        q_proj_states = q_proj_states[:num_actual_tokens]
+        k_proj_states = k_proj_states[:num_actual_tokens]
+        v_proj_states = v_proj_states[:num_actual_tokens]
+        g1 = g1[:, :num_actual_tokens]
+        beta = beta[:, :num_actual_tokens]
+
+        (conv_state, recurrent_state) = constant_caches
+        # Conv state layout, mirroring upstream's comment verbatim:
+        #   "conv_state must be (..., dim, width-1) for the conv kernels.
+        #    DS layout stores it that way directly; SD layout needs a transpose."
+        # The default here is SD, i.e. (num_blocks, state_len, conv_dim); the CANN
+        # operator takes (num_cache_lines, state_len, dim) with dim as the *last*
+        # axis, which is the same convention as the (..., dim, state_len) form
+        # after the segment split -- so transpose first, then chunk the dim axis
+        # into q/k/v, then transpose each piece back.
+        if not is_conv_state_dim_first():
+            conv_state = conv_state.transpose(-1, -2)
+
+        conv_state_q, conv_state_k, conv_state_v = (
+            c.transpose(-1, -2).contiguous() for c in conv_state.chunk(3, dim=-2)
+        )
+
+        # The conv weights are stored unsqueezed as (dim, 1, width). Upstream
+        # reshapes to (dim, width) for its own kernel; the CANN operator wants
+        # the transpose, (width, dim), so the weight is transposed here rather
+        # than merely viewed. The values are also cast because the parameter is
+        # declared `params_dtype=torch.float32` while the operator requires a
+        # single dtype across x / weight / convStates (a mismatch is rejected
+        # with EZ1009). Casting at the call site rather than at construction
+        # keeps the parameter dtype -- and hence weight loading -- unchanged.
+        q_conv_weights = self._conv_weight_for_op(self.q_conv1d.weight, x_dtype=q_proj_states.dtype)
+        k_conv_weights = self._conv_weight_for_op(self.k_conv1d.weight, x_dtype=k_proj_states.dtype)
+        v_conv_weights = self._conv_weight_for_op(self.v_conv1d.weight, x_dtype=v_proj_states.dtype)
+
+        if attn_metadata_narrowed.num_prefills > 0:
+            # Unlike upstream, do NOT transpose to (dim, T) here: the CANN
+            # operator's varlen prefill mode takes (T, dim), and passing the
+            # upstream layout fails tiling outright. The projections are
+            # already (T, dim), so they are passed through unchanged and the
+            # results feed straight into the rearrange below.
+            q = self._conv1d_prefill(
+                q_proj_states,
+                q_conv_weights,
+                self.q_conv1d.bias,
+                conv_state_q,
+                has_initial_state,
+                non_spec_state_indices_tensor,
+                non_spec_query_start_loc,
+            )
+            k = self._conv1d_prefill(
+                k_proj_states,
+                k_conv_weights,
+                self.k_conv1d.bias,
+                conv_state_k,
+                has_initial_state,
+                non_spec_state_indices_tensor,
+                non_spec_query_start_loc,
+            )
+            v = self._conv1d_prefill(
+                v_proj_states,
+                v_conv_weights,
+                self.v_conv1d.bias,
+                conv_state_v,
+                has_initial_state,
+                non_spec_state_indices_tensor,
+                non_spec_query_start_loc,
+            )
+        else:
+            assert non_spec_state_indices_tensor is not None
+            decode_conv_indices = non_spec_state_indices_tensor[: attn_metadata_narrowed.num_actual_tokens]
+            q = self._conv1d_decode(q_proj_states, q_conv_weights, self.q_conv1d.bias, conv_state_q, decode_conv_indices)
+            k = self._conv1d_decode(k_proj_states, k_conv_weights, self.k_conv1d.bias, conv_state_k, decode_conv_indices)
+            v = self._conv1d_decode(v_proj_states, v_conv_weights, self.v_conv1d.bias, conv_state_v, decode_conv_indices)
+
+        q, k, v = map(lambda x: rearrange(x, "n (h d) -> 1 n h d", d=self.head_dim), (q, k, v))
+
+        if attn_metadata_narrowed.num_prefills > 0:
+            assert non_spec_state_indices_tensor is not None
+            assert has_initial_state is not None
+            zero_idx = non_spec_state_indices_tensor[~has_initial_state]
+            recurrent_state[zero_idx] = 0
+            initial_state = recurrent_state[non_spec_state_indices_tensor].contiguous()
+            # extern-gate equivalent of `chunk_kda_with_fused_gate`: see
+            # `_kda_gate_activation` for why the cumsum must NOT happen here.
+            g = self._kda_gate_activation(g1)
+            (
+                core_attn_out_non_spec,
+                last_recurrent_state,
+            ) = chunk_kda(
+                q=q,
+                k=k,
+                v=v,
+                g=g,
+                beta=beta,
+                initial_state=initial_state,
+                output_final_state=True,
+                use_qk_l2norm_in_kernel=True,
+                cu_seqlens=non_spec_query_start_loc,
+            )
+            # Init cache
+            recurrent_state[non_spec_state_indices_tensor] = last_recurrent_state
+        else:
+            assert non_spec_query_start_loc is not None
+            g1 = self._kda_gate_activation(g1)
+            (
+                core_attn_out_non_spec,
+                last_recurrent_state,
+            ) = fused_recurrent_kda(
+                q=q,
+                k=k,
+                v=v,
+                g=g1,
+                beta=beta,
+                initial_state=recurrent_state,
+                use_qk_l2norm_in_kernel=True,
+                cu_seqlens=non_spec_query_start_loc[: attn_metadata_narrowed.num_decodes + 1],
+                ssm_state_indices=non_spec_state_indices_tensor,
+            )
+        core_attn_out[0, :num_actual_tokens] = core_attn_out_non_spec[0, :num_actual_tokens]

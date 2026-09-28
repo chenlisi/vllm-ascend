@@ -147,6 +147,7 @@ class LayerNormFn(torch.autograd.Function):
             group_size=group_size,
             norm_before_gate=norm_before_gate,
             is_rms_norm=is_rms_norm,
+            activation=activation,
         )
         ctx.save_for_backward(x, weight, bias, mean, rstd, z)
         ctx.x_shape_og = x_shape_og
@@ -154,6 +155,7 @@ class LayerNormFn(torch.autograd.Function):
         ctx.group_size = group_size
         ctx.norm_before_gate = norm_before_gate
         ctx.is_rms_norm = is_rms_norm
+        ctx.activation = activation
         return y.reshape(x_shape_og)
 
 
@@ -195,5 +197,23 @@ class AscendRMSNormGated(RMSNormGated):
         torch.nn.init.ones_(self.weight)
 
     def forward_oot(self, x, z=None):
-        """If z is not None, we do norm(x) * silu(z) if norm_before_gate, else norm(x * silu(z))"""
-        return LayerNormFn.apply(x, self.weight, self.bias, z, self.eps, self.group_size, self.norm_before_gate, True)
+        """If z is not None, we do norm(x) * act(z) if norm_before_gate, else
+        norm(x * act(z)); `act` is `sigmoid` when this norm was built with
+        ``activation="sigmoid"`` (Kimi-K3's KDA ``o_norm``), otherwise SiLU.
+
+        The activation used to be dropped here -- the kernel had it hard-wired
+        to ``z * sigmoid(z)`` (= SiLU), so a model asking for ``sigmoid`` was
+        silently served SiLU. Pass it through instead; the default stays
+        ``swish`` (SiLU) so existing models are unaffected.
+        """
+        return LayerNormFn.apply(
+            x,
+            self.weight,
+            self.bias,
+            z,
+            self.eps,
+            self.group_size,
+            self.norm_before_gate,
+            True,
+            getattr(self, "activation", "swish"),
+        )
