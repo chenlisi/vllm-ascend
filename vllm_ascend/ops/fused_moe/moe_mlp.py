@@ -53,7 +53,9 @@ def _is_situ(activation) -> bool:
     return getattr(activation, "value", activation) == "situ"
 
 
-def _situ_betas(swiglu_alpha: float = 1.0, swiglu_beta: float = 0.0) -> tuple[float, float | None]:
+def _situ_betas(
+    swiglu_alpha: float = 1.0, swiglu_beta: float = 0.0, activation=None
+) -> tuple[float, float | None]:
     """Kimi-K3's SiTU betas, carried in on the per-layer activation scalars.
 
     NOT read from the live vLLM config: this runs inside the model forward, and
@@ -76,10 +78,43 @@ def _situ_betas(swiglu_alpha: float = 1.0, swiglu_beta: float = 0.0) -> tuple[fl
     its default, which is how the vendor distinguishes "unset" from a value and
     is what makes ``situ_and_mul`` skip the ``up`` rescaling. ``beta`` follows
     the vendor's ``beta or 1.0`` so a stored 0.0 cannot divide by zero.
+
+    ``activation`` is optional and used only for the borrow-conflict assertion
+    below; callers that already know they are in the SiTU branch may omit it.
     """
+    _assert_borrowed_slots_unambiguous(activation)
     beta = swiglu_alpha or 1.0
     linear_beta = swiglu_beta if swiglu_beta else None
     return beta, linear_beta
+
+
+def _assert_borrowed_slots_unambiguous(activation) -> None:
+    """Make the ``swiglu_alpha`` / ``swiglu_beta`` sharing an enforced invariant.
+
+    Those two slots have two readers: ``glu_alpha`` / ``glu_bias`` on the
+    ``swigluoai_uninterleave`` branch, and SiTU's ``beta`` / ``linear_beta``
+    here. Reusing one slot-set for two meanings is only sound while no layer can
+    satisfy both branches at once -- and that is currently a consequence of
+    *assignment order* in the model (``swigluoai_uninterleave`` is set first,
+    ``situ`` overwrites it), not of anything checked. Reading either consumer in
+    isolation cannot detect the collision: each branch only sees the values it
+    expects.
+
+    This is the place that can. Every SiTU entry point passes the activation
+    through, so if the two branches ever became simultaneously satisfiable --
+    a config that sets both markers, a layer that keeps the OAI flag while
+    acquiring the SiTU one -- the borrowed values would be interpreted as both
+    ``glu_*`` and SiTU's betas, and the model would silently compute a third
+    function with no error. Stopping here converts that into a startup failure.
+    """
+    act_name = getattr(activation, "value", activation)
+    if act_name is not None and act_name == "swigluoai_uninterleave":
+        raise AssertionError(
+            "activation is 'swigluoai_uninterleave' but SiTU's betas were "
+            "requested: the swiglu_alpha/swiglu_beta slots are being read as "
+            "both glu_alpha/glu_bias and SiTU beta/linear_beta. The two "
+            "branches must be mutually exclusive."
+        )
 
 
 def _custom_gmm_swiglu_enabled(fusion, dynamic_eplb, activation=None):
@@ -100,6 +135,23 @@ def _gmm_swiglu_quant_fusion_enabled(use_mxfp_quant, fusion, dynamic_eplb, activ
         # Same reason as _custom_gmm_swiglu_enabled: this gate feeds the fused
         # SwiGLU+quant kernels, which have no SiTU variant.
         and not _is_situ(activation)
+    )
+
+
+def _mc2_head_block_applies(w1_scale_bias, w1_offset, is_mc2, is_gelu_activation, is_situ) -> bool:
+    """Whether the fused MC2 head block above may handle this layer.
+
+    Named rather than inlined so the SiTU guard inside the block's `else` arm
+    can be reached from a UT: that guard exists to catch a *future* relaxation of
+    this condition, so reproducing it requires being able to relax this
+    condition, which an inline expression does not allow.
+    """
+    return (
+        w1_scale_bias is None
+        and w1_offset is None
+        and is_mc2
+        and not is_gelu_activation
+        and not is_situ
     )
 
 
@@ -222,7 +274,17 @@ def quant_apply_mlp(
     _output_dtype = w2_scale[0].dtype if isinstance(w2_scale, list) else w2_scale.dtype
 
     is_mc2 = _EXTRA_CTX.moe_comm_type == MoECommType.MC2
-    if w1_scale_bias is None and w1_offset is None and is_mc2 and not is_gelu_activation:
+    # SiTU must stay out of this whole head block, not just out of the two
+    # predicates inside it. The `else` arm below ends in
+    # `npu_dequant_swiglu_quant`, which bakes SwiGLU into the kernel and has no
+    # SiTU mode (`swiglu_mode=1` is the *clamped* variant -- clamp / alpha /
+    # bias -- not a tanh-based gate). Gating only on the inner predicates would
+    # therefore route SiTU into that arm and silently compute SwiGLU: the same
+    # defect the predicates were added to fix, one layer further in.
+    # Excluding SiTU here drops it through to the general path at the bottom of
+    # this function, whose `is_situ` branch (see its own comment) applies the
+    # real activation and requantizes for gmm2.
+    if _mc2_head_block_applies(w1_scale_bias, w1_offset, is_mc2, is_gelu_activation, is_situ):
         if _custom_gmm_swiglu_enabled(fusion, dynamic_eplb, activation) and not use_mxfp_quant:
             # gmm1: gate_up_proj & act_fn: swiglu
             hidden_states, swiglu_out_scale, _ = torch.ops._C_ascend.grouped_matmul_swiglu_quant_weight_nz_tensor_list(
@@ -276,6 +338,22 @@ def quant_apply_mlp(
                 hidden_states, act_quant_type=act_quant_type, use_mxfp_quant=use_mxfp_quant
             )
         else:
+            # Depth guard for the invariant the head-block condition above relies
+            # on. The condition already excludes SiTU, so in the current tree
+            # SiTU cannot arrive here -- but that is enforced *only* by the outer
+            # `if`, and this arm is a SwiGLU op end to end: `npu_dequant_swiglu_quant`
+            # has no SiTU mode, so a relaxed condition (or a new caller entering
+            # with MC2 + SiTU) would silently compute silu(gate)*up again, with no
+            # runtime signal. That is the exact failure this whole dispatch was
+            # fixed for, so it is worth an explicit stop rather than a comment.
+            # Other activations are untouched: this branch fires for SiTU only.
+            if is_situ:
+                raise NotImplementedError(
+                    "SiTU is not supported on the MC2 fused-experts path: "
+                    "npu_dequant_swiglu_quant implements SwiGLU (and its clamped "
+                    "variant), not SiTU. This branch must be unreachable for SiTU "
+                    "-- reaching it means the head-block exclusion was relaxed."
+                )
             if w1_scale[0].dtype != torch.float32:
                 w1_scale[0] = w1_scale[0].to(torch.float32)
             # gmm1: gate_up_proj
@@ -364,7 +442,7 @@ def quant_apply_mlp(
         elif is_situ:
             # Kimi-K3 gate. NOT SwiGLU: this is the branch whose absence made the
             # routed experts silently compute silu(gate)*up.
-            situ_beta, situ_linear_beta = _situ_betas(swiglu_alpha, swiglu_beta)
+            situ_beta, situ_linear_beta = _situ_betas(swiglu_alpha, swiglu_beta, activation)
             hidden_states = situ_and_mul(hidden_states, situ_beta, situ_linear_beta)
         else:
             hidden_states = torch_npu.npu_swiglu(hidden_states)
@@ -498,7 +576,7 @@ def quant_apply_mlp(
                 # interleave branch above. Must precede the HAS_TRITON branch:
                 # `swiglu_quant` bakes in SwiGLU, so falling through would
                 # silently compute the wrong activation.
-                situ_beta, situ_linear_beta = _situ_betas(swiglu_alpha, swiglu_beta)
+                situ_beta, situ_linear_beta = _situ_betas(swiglu_alpha, swiglu_beta, activation)
                 hidden_states = situ_and_mul(hidden_states, situ_beta, situ_linear_beta)
                 hidden_states, swiglu_out_scale = DeviceOperator.npu_dynamic_quant(
                     hidden_states, act_quant_type=act_quant_type, use_mxfp_quant=use_mxfp_quant
@@ -629,7 +707,7 @@ def unquant_apply_mlp(
         # Kimi-K3's routed-expert gate. This is the site that matters most for
         # this model: without it the `else` branch below silently computed
         # silu(gate)*up, i.e. SwiGLU, with no runtime signal.
-        situ_beta, situ_linear_beta = _situ_betas(swiglu_alpha, swiglu_beta)
+        situ_beta, situ_linear_beta = _situ_betas(swiglu_alpha, swiglu_beta, activation)
         gate_up_out = situ_and_mul(gate_up_out, situ_beta, situ_linear_beta)
     else:
         if swiglu_limit > 0:

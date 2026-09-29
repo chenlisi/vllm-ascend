@@ -56,6 +56,7 @@ from vllm_ascend.ops.fused_moe.moe_mlp import (
     _custom_gmm_swiglu_enabled,
     _gmm_swiglu_quant_fusion_enabled,
     _is_situ,
+    _situ_betas,
     quant_apply_mlp,
     unified_apply_mlp,
     unquant_apply_mlp,
@@ -371,6 +372,344 @@ class TestSiTUNotSwallowedByFusion(unittest.TestCase):
         mock_nz.assert_not_called()
         mock_dequant.assert_not_called()
         mock_swiglu.assert_not_called()
+
+    def test_situ_under_mc2_does_not_reach_the_dequant_swiglu_kernel(self):
+        """The MC2 variant of the case above (rework round 3, R2-2).
+
+        The test above pins `moe_comm_type=-1`, i.e. the non-MC2 path. Under MC2
+        the same class of bug reappeared through a *different* kernel:
+        `npu_dequant_swiglu_quant`, whose name contains no `swiglu_*` predicate
+        call and so was missed when the fusion predicates were fixed. SiTU is
+        excluded at the head-block condition *and* guarded inside the arm; this
+        asserts the outcome rather than the mechanism.
+
+        Both directions are asserted, because either alone is passable by a
+        wrong implementation: "the kernel was not called" would also hold if
+        SiTU silently took some third path, and a numeric match alone would not
+        distinguish the fused kernel from the split path.
+        """
+        gate_up = torch.tensor(
+            [
+                [0.5, -1.25, 2.0, 0.75, -0.5, 1.5, -2.0, 0.25],
+                [1.0, 0.5, -0.75, 1.25, 2.0, -1.0, 0.125, -0.875],
+            ],
+            dtype=torch.bfloat16,
+        )
+        captured = []
+
+        with (
+            patch(f"{MOE_MLP}._EXTRA_CTX") as mock_ctx,
+            patch(f"{MOE_MLP}.HAS_TRITON", False),
+            patch("torch.npu.current_stream") as mock_stream,
+            patch(
+                "torch_npu.npu_grouped_matmul",
+                side_effect=lambda *a, **k: [gate_up],
+                create=True,
+            ),
+            # Identity-ish quant so the value reaching gmm2 is the activation
+            # output itself, comparable against the vendor reference below.
+            patch(
+                "torch_npu.npu_dynamic_quant",
+                side_effect=lambda x, *a, **k: (x, torch.ones(x.shape[0])),
+                create=True,
+            ),
+            patch.object(
+                DeviceOperator,
+                "npu_grouped_matmul_gmm2",
+                side_effect=lambda **kwargs: (
+                    captured.append(kwargs["hidden_states"]) or torch.zeros(2, 4)
+                ),
+            ),
+            patch(f"{MOE_MLP}.dispose_tensor"),
+            patch(
+                "vllm_ascend.ops.fused_moe.moe_mlp.DeviceOperator.npu_grouped_matmul_swiglu_quant"
+            ) as mock_fused,
+            patch(
+                "torch.ops._C_ascend.grouped_matmul_swiglu_quant_weight_nz_tensor_list",
+                create=True,
+            ) as mock_nz,
+            patch(
+                "torch.ops._C_ascend.npu_dequant_swiglu_quant", create=True
+            ) as mock_dequant,
+            patch("torch_npu.npu_swiglu", create=True) as mock_swiglu,
+        ):
+            mock_stream.return_value.record_event.return_value = MagicMock()
+            mock_ctx.moe_comm_type = MoECommType.MC2
+            quant_apply_mlp(
+                hidden_states=torch.randn(2, 4),
+                w1=torch.randn(1, 8, 4),
+                w1_scale=[torch.randn(1, 8)],
+                w2=torch.randn(1, 4, 1),
+                w2_scale=[torch.randn(1, 4)],
+                group_list=torch.tensor([2], dtype=torch.int64),
+                group_list_type=1,
+                dynamic_scale=torch.randn(2, 1),
+                w1_scale_bias=None,
+                w2_scale_bias=None,
+                w1_offset=None,
+                w2_offset=None,
+                fusion=True,
+                dynamic_eplb=True,
+                use_mxfp_quant=False,
+                mxfp_quant_dtype=None,
+                act_quant_type=torch.int8,
+                weight_quant_type=torch.float8_e4m3fn,
+                use_bf16=True,
+                activation="situ",
+                swiglu_limit=0.0,
+                swiglu_alpha=SITU_BETA,
+                swiglu_beta=SITU_LINEAR_BETA,
+                use_w4a8_per_channel_gmm_swiglu=False,
+            )
+
+        # (1) No SwiGLU-baking kernel ran.
+        mock_dequant.assert_not_called()
+        mock_fused.assert_not_called()
+        mock_nz.assert_not_called()
+        mock_swiglu.assert_not_called()
+        # (2) ...and the math actually performed was SiTU.
+        assert captured, "gmm2 was never reached; the MLP did not complete"
+        assert torch.allclose(
+            captured[-1].to(torch.bfloat16),
+            vendor_situ_reference(gate_up),
+            atol=1e-2,
+            rtol=1e-2,
+        ), (
+            "under MC2 the activation is not SiTU -- the fused dequant+swiglu "
+            "path was taken or some other branch replaced it"
+        )
+
+
+class TestBorrowedSlotMutualExclusion(unittest.TestCase):
+    """R2-5: `swiglu_alpha` / `swiglu_beta` must never feed both readers.
+
+    These slots are read as `glu_alpha` / `glu_bias` by the
+    `swigluoai_uninterleave` branch and as SiTU's `beta` / `linear_beta` by the
+    SiTU branches. Nothing currently *checks* that a layer cannot be both; it
+    only happens to be impossible because of assignment order in the model.
+    """
+
+    GATE_UP = torch.tensor(
+        [
+            [0.5, -1.25, 2.0, 0.75, -0.5, 1.5, -2.0, 0.25],
+            [1.0, 0.5, -0.75, 1.25, 2.0, -1.0, 0.125, -0.875],
+        ],
+        dtype=torch.bfloat16,
+    )
+
+    def test_situ_betas_rejects_the_oai_activation(self):
+        # The distinguishing case: the same call is fine for SiTU, and must
+        # raise when the values would have to mean `glu_alpha`/`glu_bias`.
+        assert _situ_betas(SITU_BETA, SITU_LINEAR_BETA, "situ") == (
+            SITU_BETA,
+            SITU_LINEAR_BETA,
+        )
+        with pytest.raises(AssertionError):
+            _situ_betas(SITU_BETA, SITU_LINEAR_BETA, "swigluoai_uninterleave")
+
+    def test_both_markers_resolve_to_situ_not_a_third_state(self):
+        """Construct the state the invariant forbids and pin the outcome.
+
+        A layer that somehow carried both markers (`swigluoai_uninterleave=True`
+        *and* the SiTU marker) must resolve to exactly one reader. The `apply()`
+        precedence settles it -- the OAI assignment runs first, the SiTU one
+        overwrites it -- so the slots end up read as SiTU's betas only.
+
+        Driven through the real `apply()` rather than asserted on the helper,
+        because that is where the precedence lives: a change to the two
+        assignments' order is what would break the invariant, and only this
+        entry point observes their order.
+        """
+        from vllm_ascend.ops.fused_moe.fused_moe import AscendUnquantizedFusedMoEMethod
+        from vllm_ascend.ops.fused_moe import fused_moe as fm_mod
+
+        captured = {}
+
+        def _capture(**kwargs):
+            captured.update(kwargs)
+            return MagicMock(name="fused_experts_input")
+
+        method = AscendUnquantizedFusedMoEMethod.__new__(AscendUnquantizedFusedMoEMethod)
+        method.dynamic_eplb = False
+        method.tid2eid = None
+        method.moe = MagicMock(has_bias=False)
+
+        layer = MagicMock()
+        # Both markers on: the forbidden state.
+        layer.moe_activation = "situ"
+        layer.swigluoai_uninterleave = True
+        layer.zero_expert_num = 0
+        layer.zero_expert_type = None
+        layer.n_shared_experts = 0
+        layer.swiglu_limit = 0.0
+        layer.w13_weight = torch.zeros(1, 1, 1)
+        layer.w2_weight = torch.zeros(1, 1, 1)
+
+        comm = MagicMock()
+        comm.fused_experts.return_value = MagicMock()
+
+        with (
+            patch.object(
+                fm_mod,
+                "select_experts",
+                return_value=(torch.ones(2, 1), torch.zeros(2, 1, dtype=torch.int64)),
+            ),
+            patch.object(fm_mod, "get_moe_num_logical_experts", return_value=1),
+            patch.object(fm_mod, "build_fused_experts_input", side_effect=_capture),
+            patch.object(fm_mod, "_EXTRA_CTX") as mock_ctx,
+            patch.object(fm_mod, "get_forward_context") as mock_fwd,
+        ):
+            mock_ctx.moe_comm_method = comm
+            mock_ctx.moe_comm_type = -1
+            mock_fwd.return_value.input_ids = None
+            AscendUnquantizedFusedMoEMethod.apply(
+                method,
+                layer=layer,
+                x=torch.randn(2, 4),
+                use_grouped_topk=False,
+                top_k=1,
+                router_logits=torch.randn(2, 1),
+                renormalize=True,
+                num_experts=1,
+                activation=MoEActivation.SILU,
+            )
+
+        assert captured["activation"] == "situ", (
+            "a layer carrying both markers resolved to "
+            f"{captured['activation']!r}; the swiglu_alpha/swiglu_beta slots "
+            "would then be read as glu_alpha/glu_bias while SiTU consumes them"
+        )
+
+
+class TestMC2HeadBlockGuard(unittest.TestCase):
+    """R2-1 depth guard: the MC2 head block must refuse SiTU loudly.
+
+    The head-block condition already excludes SiTU, so in the current tree the
+    guard cannot fire -- which is the point: it exists for the case where that
+    condition is later relaxed (or a new caller enters with MC2 + SiTU), where
+    the arm would otherwise silently compute SwiGLU through
+    `npu_dequant_swiglu_quant`. Reproducing that future state requires being
+    able to relax the condition, which is why it is factored into
+    `_mc2_head_block_applies`.
+    """
+
+    def test_relaxed_condition_makes_the_guard_fire(self):
+        """Simulate the relaxation and require NotImplementedError.
+
+        This is deliberately *not* an ordinary happy-path test: it asserts that
+        the guard converts a silent-wrong-answer into a stop, under exactly the
+        condition the guard was written for.
+        """
+        with (
+            patch(f"{MOE_MLP}._EXTRA_CTX") as mock_ctx,
+            patch(f"{MOE_MLP}.HAS_TRITON", False),
+            patch("torch.npu.current_stream") as mock_stream,
+            patch(
+                "torch_npu.npu_grouped_matmul",
+                side_effect=lambda *a, **k: [torch.randn(2, 8)],
+                create=True,
+            ),
+            patch(
+                "torch_npu.npu_dynamic_quant",
+                side_effect=lambda x, *a, **k: (x, torch.ones(2)),
+                create=True,
+            ),
+            patch.object(
+                DeviceOperator, "npu_grouped_matmul_gmm2", return_value=torch.zeros(2, 4)
+            ),
+            patch(f"{MOE_MLP}.dispose_tensor"),
+            patch(
+                "torch.ops._C_ascend.npu_dequant_swiglu_quant", create=True
+            ) as mock_dequant,
+            # The relaxation under test: the head block now admits SiTU.
+            patch(f"{MOE_MLP}._mc2_head_block_applies", return_value=True),
+        ):
+            mock_stream.return_value.record_event.return_value = MagicMock()
+            mock_ctx.moe_comm_type = MoECommType.MC2
+            with pytest.raises(NotImplementedError, match="SiTU is not supported on the MC2"):
+                quant_apply_mlp(
+                    hidden_states=torch.randn(2, 4),
+                    w1=torch.randn(1, 8, 4),
+                    w1_scale=[torch.randn(1, 8)],
+                    w2=torch.randn(1, 4, 1),
+                    w2_scale=[torch.randn(1, 4)],
+                    group_list=torch.tensor([2], dtype=torch.int64),
+                    group_list_type=1,
+                    dynamic_scale=torch.randn(2, 1),
+                    w1_scale_bias=None,
+                    w2_scale_bias=None,
+                    w1_offset=None,
+                    w2_offset=None,
+                    fusion=True,
+                    dynamic_eplb=True,
+                    use_mxfp_quant=False,
+                    mxfp_quant_dtype=None,
+                    act_quant_type=torch.int8,
+                    weight_quant_type=torch.float8_e4m3fn,
+                    use_bf16=True,
+                    activation="situ",
+                    swiglu_limit=0.0,
+                    swiglu_alpha=SITU_BETA,
+                    swiglu_beta=SITU_LINEAR_BETA,
+                    use_w4a8_per_channel_gmm_swiglu=False,
+                )
+        # The guard fired *before* the SwiGLU kernel, not after.
+        mock_dequant.assert_not_called()
+
+    def test_guard_leaves_other_activations_alone(self):
+        """Control: the guard is SiTU-only, so `silu` still takes the arm.
+
+        Without this, a guard that fired for every activation would pass the
+        test above while breaking every other model on the MC2 path.
+        """
+        with (
+            patch(f"{MOE_MLP}._EXTRA_CTX") as mock_ctx,
+            patch(f"{MOE_MLP}.HAS_TRITON", False),
+            patch("torch.npu.current_stream") as mock_stream,
+            patch(
+                "torch_npu.npu_grouped_matmul",
+                side_effect=lambda *a, **k: [torch.randn(2, 8)],
+                create=True,
+            ),
+            patch.object(
+                DeviceOperator, "npu_grouped_matmul_gmm2", return_value=torch.zeros(2, 4)
+            ),
+            patch(f"{MOE_MLP}.dispose_tensor"),
+            patch(
+                "torch.ops._C_ascend.npu_dequant_swiglu_quant",
+                return_value=(torch.randn(2, 4), torch.ones(2)),
+                create=True,
+            ) as mock_dequant,
+        ):
+            mock_stream.return_value.record_event.return_value = MagicMock()
+            mock_ctx.moe_comm_type = MoECommType.MC2
+            quant_apply_mlp(
+                hidden_states=torch.randn(2, 4),
+                w1=torch.randn(1, 8, 4),
+                w1_scale=[torch.randn(1, 8)],
+                w2=torch.randn(1, 4, 1),
+                w2_scale=[torch.randn(1, 4)],
+                group_list=torch.tensor([2], dtype=torch.int64),
+                group_list_type=1,
+                dynamic_scale=torch.randn(2, 1),
+                w1_scale_bias=None,
+                w2_scale_bias=None,
+                w1_offset=None,
+                w2_offset=None,
+                fusion=False,
+                dynamic_eplb=False,
+                use_mxfp_quant=False,
+                mxfp_quant_dtype=None,
+                act_quant_type=torch.int8,
+                weight_quant_type=torch.float8_e4m3fn,
+                use_bf16=True,
+                activation="silu",
+                swiglu_limit=0.0,
+                swiglu_alpha=1.0,
+                swiglu_beta=0.0,
+                use_w4a8_per_channel_gmm_swiglu=False,
+            )
+        mock_dequant.assert_called()
 
 
 # --------------------------------------------------------------------------

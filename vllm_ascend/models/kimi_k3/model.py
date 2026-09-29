@@ -45,6 +45,7 @@ The five things that make this model different
    on ``layer_idx`` (layer 93 is an extra MLA breaking the every-4th pattern).
 """
 
+import os
 from collections.abc import Iterable
 
 import torch
@@ -99,6 +100,63 @@ from vllm_ascend.models.kimi_k3.activation import (
 from vllm_ascend.ops.mla import AscendMultiHeadLatentAttention
 
 logger = init_logger(__name__)
+
+#: Opt-in escape hatch for the chunked-prefill guard below. Only needed to run
+#: experiments that deliberately accept the cross-chunk discontinuity.
+_CHUNKED_PREFILL_OVERRIDE_ENV = "VLLM_ASCEND_KIMI_K3_ALLOW_CHUNKED_PREFILL"
+
+
+def _check_chunked_prefill_compat(vllm_config: VllmConfig, config) -> None:
+    """Refuse to start Kimi-K3 with chunked prefill while attn-res is active.
+
+    ``attn_res_block_size`` turns the backbone into a cross-layer residual chain:
+    each layer folds its own output into a running ``block_residual`` that every
+    later layer mixes back in (``_apply_attn_res``). That state is carried in the
+    forward call, not in a cache, so it is per-*request* -- but chunked prefill
+    splits one request's prompt across several forward passes, and each pass
+    starts a fresh chain. The result is not a crash: the later chunks are mixed
+    against a residual accumulator that is missing the earlier chunks' history,
+    so the model runs and produces plausible-looking wrong numbers.
+
+    Upstream defaults ``enable_chunked_prefill`` to True, so the *default* launch
+    hits this. Stage 1 avoids it by passing ``--no-enable-chunked-prefill``, but
+    that is a launch-flag convention with nothing enforcing it, and the failure
+    is silent -- so it is checked here instead.
+
+    Scope: the check is keyed on ``attn_res_block_size``, the marker that makes
+    the chain exist at all. A checkpoint without it (the plain residual path) is
+    left alone, as is every other architecture, since this only runs for
+    Kimi-K3's own config class.
+    """
+    if getattr(config, "attn_res_block_size", None) is None:
+        return
+
+    scheduler_config = getattr(vllm_config, "scheduler_config", None)
+    if scheduler_config is None or not getattr(
+        scheduler_config, "enable_chunked_prefill", False
+    ):
+        return
+
+    if os.environ.get(_CHUNKED_PREFILL_OVERRIDE_ENV):
+        logger.warning(
+            "Kimi-K3: chunked prefill is enabled with a cross-layer "
+            "attention-residual chain (attn_res_block_size=%s). Output will be "
+            "silently incorrect for prompts spanning more than one chunk. "
+            "Continuing because %s is set.",
+            config.attn_res_block_size,
+            _CHUNKED_PREFILL_OVERRIDE_ENV,
+        )
+        return
+
+    raise ValueError(
+        "Kimi-K3 with attn_res_block_size="
+        f"{config.attn_res_block_size} maintains a cross-layer residual chain "
+        "that is per-request state: chunked prefill restarts it on every chunk, "
+        "silently mixing later chunks against an incomplete accumulator. "
+        "Start the server with --no-enable-chunked-prefill (the Stage 1 "
+        f"configuration), or set {_CHUNKED_PREFILL_OVERRIDE_ENV}=1 to proceed "
+        "anyway."
+    )
 
 
 class KimiMLP(nn.Module):
@@ -926,6 +984,8 @@ class KimiK3ForConditionalGeneration(
         config = vllm_config.model_config.hf_text_config
         self.config = config
         self.vllm_config = vllm_config
+
+        _check_chunked_prefill_compat(vllm_config, config)
 
         self.model = KimiLinearModel(
             vllm_config=vllm_config, prefix=maybe_prefix(prefix, "model")

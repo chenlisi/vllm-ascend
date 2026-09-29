@@ -57,14 +57,17 @@ Stage 1 status for this model:
 vllm serve <MODEL_PATH> \
   --served-model-name Kimi-K3 \
   --trust-remote-code \
+  --tokenizer-mode kimi_k3 \
   --dtype bfloat16 \
   --tensor-parallel-size 8 \
+  --no-enable-chunked-prefill \
   --max-model-len 32768
 ```
 
-Two model-specific details:
+Three model-specific details:
 
 - **`--tokenizer-mode kimi_k3` is required.** The checkpoint ships no Jinja chat template; its chat encoding is programmatic (Python, via `encoding_k3.py`). vLLM-Ascend provides the `kimi_k3` tokenizer mode and renderer so this encoder is used. Without it, chat requests fail with HTTP 400 (`default chat template is no longer allowed`).
+- **`--no-enable-chunked-prefill` is required.** Chunked prefill is enabled by default upstream, but this model keeps a cross-layer attention-residual chain (`attn_res_block_size`) as per-request forward-pass state. Chunked prefill restarts that chain on every chunk, so later chunks are mixed against an incomplete accumulator — the model runs and produces plausible but wrong output, with no error. Starting with chunked prefill enabled now fails fast in `KimiK3ForConditionalGeneration.__init__` rather than degrading silently; set `VLLM_ASCEND_KIMI_K3_ALLOW_CHUNKED_PREFILL=1` only if you deliberately want the old behaviour.
 - **`--trust-remote-code` is required.** The checkpoint tokenizer overrides `encode` with a different signature than the base class, so the generic tokenizer cannot substitute for it.
 
 For a first-run smoke test with random weights, add `--load-format dummy`. Note that a dummy run with the full 93 layers and 896 experts needs roughly `93 × 59 GB / TP` of expert memory, which exceeds a single die — reduce layers and experts via a derived config (see §6).
