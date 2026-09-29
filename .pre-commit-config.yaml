@@ -131,6 +131,15 @@ repos:
     entry: python3 tools/check_symbolic_meta.py
     language: system
     pass_filenames: false
+  # Deterministic subset of the review rule table; the full review (cross-file
+  # semantics, design intent, governance) runs in the Reviewer agent at
+  # pre-push / CI time. See DESIGN.md 6.7 and
+  # .claude/skills/reviewer/reference/review-rules.md
+  - id: review-gate
+    name: Review rules (deterministic subset)
+    entry: python tools/check_review_rules.py
+    language: system
+    types: [python]
   # Keep `suggestion` last
   - id: suggestion
     name: Suggestion

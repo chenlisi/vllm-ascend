@@ -147,14 +147,21 @@ Day0 的阻塞点历史上全部在外部依赖（上游合入状态、CANN/torc
    输入：设计文档（design/）+ Developer diff/UT（impl/）+ Tester 两段报告（smoke/、accuracy/）
    """)
    ```
-2. 子代理产出评审报告（通过 / 有条件通过 / 退回 + 问题清单），**退回结论必须标注路由目标**（回 Developer 修实现 / 回 Tester 补验证 / 回 Phase 0 重新判定路径）。
-3. **G4 发布门禁**（生成责任在 Developer——Phase 2 产出；Reviewer 逐项核对，缺项回 Developer 补）：
+2. 子代理按 `.claude/agents/reviewer.md` 的 Phase 4 工作流执行（步骤 0-4：定位 tracker → **① 跑脚本 A/B 收窄范围** → **② 读源码直接出意见**（不先对照规则清单）→ **③ 用规则表复查补漏** → **④ 脚本 C 回填行号**），三个只读脚本位于 `.claude/skills/reviewer/scripts/`，产出**四个产物**落 `./.day0/<model>/review/`：
+   - `scope.json`：改动集 + 保留/排除清单（每条排除带枚举理由）+ 每文件适用的规则组（**供步骤 3 复查用**）；
+   - `impact.json`：受影响面 + 缺失测试清单 + 可解释的风险排序（深审顺序的依据）；
+   - `findings.json`：问题清单（严重度 / 规则编号 / 锚点原文 / **由脚本回填的行号**）；步骤 2 读源码所得 `rule_ids` 可为空，步骤 3 补漏项须带规则编号；
+   - 评审报告（通过 / 有条件通过 / 退回 + 问题清单），**退回结论必须标注路由目标**（回 Developer 修实现 / 回 Tester 补验证 / 回 Phase 0 重新判定路径）。
+   判定顺序：**先读源码出意见、再用规则表复查**——步骤 2 用评审思路 `.claude/skills/reviewer/reference/review-heuristics.md` 作提问参考，步骤 3 用规则表 `.claude/skills/reviewer/reference/review-rules.md` 逐条复查；脚本与源码冲突时以源码为准。
+3. **主控核对三件事**（缺一不签收）：① **覆盖矩阵**——`scope.json` 的改动文件数 = 已评审 + 已排除 + 未覆盖，「未覆盖」须为 0 或有显式说明（这是防漏审唯一可机器核对的证据）；② **未定位项**——`findings.json` 里 `locate_status != unique` 的条目必须在报告中显式标注「定位失败（待人工回定位）」，阻断级不得凭印象补行号；③ **行号口径**——报告与 `findings.json` 的行号必须来自脚本回填，不得由子代理手写。
+4. **G4 发布门禁**（生成责任在 Developer——Phase 2 产出；Reviewer 逐项核对，缺项回 Developer 补）：
    - E2E 回归配置：核对 `tests/e2e/models/configs/<Model>.yaml` 已生成——**格式抄同目录既有配置**（如 `Llama-3.2-3B-Instruct.yaml`），组合矩阵（量化 × 图 × 投机 × CP/PD）按 Designer 清单显式纳入——历史已知问题几乎全部位于叠加组合而非基线；
    - 所有新增 monkey patch 完成四段式登记（Why / How / Related PR / Future Plan）且附移除条件；
    - 提交规范：Developer 已在交付前以 **signed-off commit**（`git commit -s`，AGENTS.md 的 Conventional Commits 格式）提交全部改动，Reviewer 核对 `git log` 即可、不代提交；
    - 教程与支持矩阵：核对 `docs/source/tutorials/models/<Model>.md` 教程已生成（格式参考同目录既有教程）且支持矩阵 `docs/source/user_guide/support_matrix/supported_models.md` 已更新（与官方 model-adapter skill 的交付标准对齐）；
-   - 交付物归档：设计文档、改动清单、UT 与服务验证报告。
-4. G4 失败 → 禁止发布，缺口项回对应阶段补齐。
+   - 交付物归档：设计文档、改动清单、UT 与服务验证报告；
+   - 确定性层（辅助，不替代 G4）：提交时 pre-commit 的 `review-gate` 会拦规则表中可静态判定的子集（裸 `except: pass`、`os.environ` 赋非字符串、常量假条件、厂商分支硬编码）——该层失败即拦，但它只是规则表的子集，**不能替代 G4 裁决**。
+5. G4 失败 → 禁止发布，缺口项回对应阶段补齐。
 
 ## 收尾（Stage 1 签收单）
 - 汇总各阶段产物为 **Stage 1 签收单**（即最终交付摘要，两个概念同一物），落盘 `./.day0/<model>/signoff.md`，内容：路径判定（P0/P1/P2）、判定结果、改动文件、UT 结果、G0-G4 门禁证据、精度结论、评审结论，以及 **state manifest**（已过门禁清单、产物路径、Stage 2 入口条件核对结果）——manifest 供四阶段主控签收与长程任务中断后恢复使用。

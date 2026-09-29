@@ -237,3 +237,6 @@ csrc/third_party/
 
 # local build cache
 .vllm_ascend/
+
+# Day0 inference pipeline runtime output (tracker and artifacts under ./.day0/<model>/)
+.day0/

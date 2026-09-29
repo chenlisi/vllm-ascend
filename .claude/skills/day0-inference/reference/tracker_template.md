@@ -38,7 +38,7 @@
 | S1.2 适配设计（Phase 1） | designer | 设计文档（按层组织：服务/调度/Worker/跨层，每层含适配点判定表） | 设计完整性检查 | 未开始 | `design/` | — |
 | S1.3 代码适配 + UT（Phase 2） | developer | 改动清单 + UT 结果 + OOT 自检证据 | G1 | 未开始 | `impl/` | — |
 | S1.4 服务验证（Tester Phase 1 冒烟 → Phase 2 真实权重，一次调用两段执行） | tester（真实权重段按 `accuracy.md` 的 G3 定义执行） | dummy 冒烟证据 + 权重加载证据 + 精度基线对比 | G2 → G3（顺序门禁，G2 不过不进真实权重段；G3 可经主控裁决暂缓——机器未 ready，暂缓期间本行状态 = 暂缓） | 未开始 | `smoke/`、`accuracy/` | — |
-| S1.5 评审 + 发布治理（Phase 4） | reviewer | 评审报告 + G4 检查结论 | G4 | 未开始 | `review/` | — |
+| S1.5 评审 + 发布治理（Phase 4） | reviewer | 评审报告 + G4 检查结论 + `scope.json` / `impact.json` / `findings.json` | G4 | 未开始 | `review/` | — |
 
 签收单：`signoff.md`（全部步骤「已完成」后由主控产出）
 
@@ -52,7 +52,7 @@
 | S2.2 方案实现 | developer | 改动清单 + UT | 未开始 | `parallel/` | — |
 | S2.3 部署运行验证 | tester | 目标并行配置拉起 + 冒烟 | 未开始 | `parallel/` | — |
 | S2.4 量化精度对齐 golden 基线 | accuracy | 精度对比报告 | 未开始 | `parallel/` | — |
-| S2.5 评审签收 | reviewer | 评审报告 | 未开始 | `parallel/` | — |
+| S2.5 评审签收 | reviewer | 评审报告 + `scope.json` / `impact.json` / `findings.json` | 未开始 | `parallel/` | — |
 
 签收单：`parallel/signoff.md`
 
@@ -66,7 +66,7 @@
 | S3.2 特性实现 | developer | 改动清单 + UT | 未开始 | `feature/` | — |
 | S3.3 逐项叠加验证（含组合矩阵） | tester | 特性叠加矩阵 + benchmark | 未开始 | `feature/` | — |
 | S3.4 叠加精度回归 | accuracy | 精度回归报告（对齐上一配置） | 未开始 | `feature/` | — |
-| S3.5 评审签收 | reviewer | 评审报告 | 未开始 | `feature/` | — |
+| S3.5 评审签收 | reviewer | 评审报告 + `scope.json` / `impact.json` / `findings.json` | 未开始 | `feature/` | — |
 
 签收单：`feature/signoff.md`
 
