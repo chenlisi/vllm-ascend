@@ -105,6 +105,30 @@ logger = init_logger(__name__)
 #: experiments that deliberately accept the cross-chunk discontinuity.
 _CHUNKED_PREFILL_OVERRIDE_ENV = "VLLM_ASCEND_KIMI_K3_ALLOW_CHUNKED_PREFILL"
 
+#: The only values that enable the override. Deliberately an allow-list of "on"
+#: spellings rather than a truthiness test: ``os.environ.get`` returns a string,
+#: so a plain ``if os.environ.get(...)`` treats ``"0"`` -- and even ``""`` is the
+#: one exception, but ``"false"``/``"no"`` are not -- as "enabled". A user
+#: setting ``=0`` to *switch the guard off* would then switch it *on*, which is
+#: the opposite of what the value says and of what the error message promises.
+_CHUNKED_PREFILL_OVERRIDE_ON = frozenset({"1", "true", "yes"})
+
+
+def _chunked_prefill_override_enabled() -> bool:
+    """Whether the escape hatch is *explicitly* switched on.
+
+    Only the spellings in ``_CHUNKED_PREFILL_OVERRIDE_ON`` count. Everything
+    else -- unset, ``""``, ``"0"``, ``"false"``, ``"no"``, or any typo -- leaves
+    the guard active. Values are case-folded and stripped so ``"TRUE"`` works,
+    but there is no permissive "any non-empty string" fallback: the failure mode
+    that would reintroduce is a user writing ``=0`` to disable the override and
+    getting it enabled instead.
+    """
+    raw = os.environ.get(_CHUNKED_PREFILL_OVERRIDE_ENV)
+    if raw is None:
+        return False
+    return raw.strip().lower() in _CHUNKED_PREFILL_OVERRIDE_ON
+
 
 def _check_chunked_prefill_compat(vllm_config: VllmConfig, config) -> None:
     """Refuse to start Kimi-K3 with chunked prefill while attn-res is active.
@@ -137,12 +161,12 @@ def _check_chunked_prefill_compat(vllm_config: VllmConfig, config) -> None:
     ):
         return
 
-    if os.environ.get(_CHUNKED_PREFILL_OVERRIDE_ENV):
+    if _chunked_prefill_override_enabled():
         logger.warning(
             "Kimi-K3: chunked prefill is enabled with a cross-layer "
             "attention-residual chain (attn_res_block_size=%s). Output will be "
             "silently incorrect for prompts spanning more than one chunk. "
-            "Continuing because %s is set.",
+            "Continuing because %s is set to an explicit enabling value.",
             config.attn_res_block_size,
             _CHUNKED_PREFILL_OVERRIDE_ENV,
         )

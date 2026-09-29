@@ -500,12 +500,32 @@ class TestBorrowedSlotMutualExclusion(unittest.TestCase):
     def test_situ_betas_rejects_the_oai_activation(self):
         # The distinguishing case: the same call is fine for SiTU, and must
         # raise when the values would have to mean `glu_alpha`/`glu_bias`.
-        assert _situ_betas(SITU_BETA, SITU_LINEAR_BETA, "situ") == (
+        assert _situ_betas("situ", swiglu_alpha=SITU_BETA, swiglu_beta=SITU_LINEAR_BETA) == (
             SITU_BETA,
             SITU_LINEAR_BETA,
         )
         with pytest.raises(AssertionError):
-            _situ_betas(SITU_BETA, SITU_LINEAR_BETA, "swigluoai_uninterleave")
+            _situ_betas(
+                "swigluoai_uninterleave",
+                swiglu_alpha=SITU_BETA,
+                swiglu_beta=SITU_LINEAR_BETA,
+            )
+
+    def test_situ_betas_requires_the_activation(self):
+        """The borrow check cannot be skipped by omitting the argument.
+
+        ``activation`` used to be an optional trailing parameter, so a future
+        caller that forgot it would silently drop the mutual-exclusion
+        protection below -- the assertion would never run, with no symptom.
+        Requiring it (and making the betas keyword-only) turns that into a
+        TypeError at the call site.
+        """
+        with pytest.raises(TypeError):
+            _situ_betas()
+        with pytest.raises(TypeError):
+            # The old positional order must not silently bind the beta as the
+            # activation: keyword-only betas make this a hard error.
+            _situ_betas(SITU_BETA, SITU_LINEAR_BETA)
 
     def test_both_markers_resolve_to_situ_not_a_third_state(self):
         """Construct the state the invariant forbids and pin the outcome.

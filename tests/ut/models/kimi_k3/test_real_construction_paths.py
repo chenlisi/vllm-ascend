@@ -151,10 +151,16 @@ def test_real_moe_block_carries_the_situ_marker(_initialized_dist):
         )
         assert getattr(routed_experts, "swiglu_beta", None) == 25.0
 
-        # And it really is what the branch will unpack.
+        # And it really is what the branch will unpack. The activation is passed
+        # explicitly: it is a required argument, so a caller cannot skip the
+        # borrow-conflict check by omitting it.
         from vllm_ascend.ops.fused_moe.moe_mlp import _situ_betas
 
-        assert _situ_betas(routed_experts.swiglu_alpha, routed_experts.swiglu_beta) == (4.0, 25.0)
+        assert _situ_betas(
+            "situ",
+            swiglu_alpha=routed_experts.swiglu_alpha,
+            swiglu_beta=routed_experts.swiglu_beta,
+        ) == (4.0, 25.0)
 
         # The constructor argument stays the safe default -- SiTU is not a
         # MoEActivation member, so it cannot be passed there without raising.

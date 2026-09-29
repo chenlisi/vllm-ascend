@@ -54,9 +54,21 @@ def _is_situ(activation) -> bool:
 
 
 def _situ_betas(
-    swiglu_alpha: float = 1.0, swiglu_beta: float = 0.0, activation=None
+    activation, *, swiglu_alpha: float = 1.0, swiglu_beta: float = 0.0
 ) -> tuple[float, float | None]:
     """Kimi-K3's SiTU betas, carried in on the per-layer activation scalars.
+
+    ``activation`` is the first positional parameter and is **required**, while
+    the two betas keep their defaults and are keyword-only. That asymmetry is
+    deliberate: the betas defaulting is harmless (a caller that omits them gets
+    a plain SiTU), but a caller that omitted ``activation`` would silently skip
+    the borrow-conflict check below -- the assertion would never run and the
+    protection would be gone with no symptom. A required argument turns that
+    into a TypeError at the call site. Keyword-only betas close the same hole
+    from the other side: with ``(activation, swiglu_alpha=..., swiglu_beta=...)``
+    a caller writing ``_situ_betas(4.0, 25.0)`` binds ``4.0`` as ``activation``
+    and passes the conflict check vacuously. The three in-tree callers pass all
+    three by keyword.
 
     NOT read from the live vLLM config: this runs inside the model forward, and
     ``profile_run``'s ``_dummy_run`` executes outside any
@@ -78,9 +90,6 @@ def _situ_betas(
     its default, which is how the vendor distinguishes "unset" from a value and
     is what makes ``situ_and_mul`` skip the ``up`` rescaling. ``beta`` follows
     the vendor's ``beta or 1.0`` so a stored 0.0 cannot divide by zero.
-
-    ``activation`` is optional and used only for the borrow-conflict assertion
-    below; callers that already know they are in the SiTU branch may omit it.
     """
     _assert_borrowed_slots_unambiguous(activation)
     beta = swiglu_alpha or 1.0
@@ -442,7 +451,7 @@ def quant_apply_mlp(
         elif is_situ:
             # Kimi-K3 gate. NOT SwiGLU: this is the branch whose absence made the
             # routed experts silently compute silu(gate)*up.
-            situ_beta, situ_linear_beta = _situ_betas(swiglu_alpha, swiglu_beta, activation)
+            situ_beta, situ_linear_beta = _situ_betas(activation, swiglu_alpha=swiglu_alpha, swiglu_beta=swiglu_beta)
             hidden_states = situ_and_mul(hidden_states, situ_beta, situ_linear_beta)
         else:
             hidden_states = torch_npu.npu_swiglu(hidden_states)
@@ -576,7 +585,7 @@ def quant_apply_mlp(
                 # interleave branch above. Must precede the HAS_TRITON branch:
                 # `swiglu_quant` bakes in SwiGLU, so falling through would
                 # silently compute the wrong activation.
-                situ_beta, situ_linear_beta = _situ_betas(swiglu_alpha, swiglu_beta, activation)
+                situ_beta, situ_linear_beta = _situ_betas(activation, swiglu_alpha=swiglu_alpha, swiglu_beta=swiglu_beta)
                 hidden_states = situ_and_mul(hidden_states, situ_beta, situ_linear_beta)
                 hidden_states, swiglu_out_scale = DeviceOperator.npu_dynamic_quant(
                     hidden_states, act_quant_type=act_quant_type, use_mxfp_quant=use_mxfp_quant
@@ -707,7 +716,7 @@ def unquant_apply_mlp(
         # Kimi-K3's routed-expert gate. This is the site that matters most for
         # this model: without it the `else` branch below silently computed
         # silu(gate)*up, i.e. SwiGLU, with no runtime signal.
-        situ_beta, situ_linear_beta = _situ_betas(swiglu_alpha, swiglu_beta, activation)
+        situ_beta, situ_linear_beta = _situ_betas(activation, swiglu_alpha=swiglu_alpha, swiglu_beta=swiglu_beta)
         gate_up_out = situ_and_mul(gate_up_out, situ_beta, situ_linear_beta)
     else:
         if swiglu_limit > 0:

@@ -21,21 +21,46 @@ restarts the per-request ``block_residual`` accumulator on every chunk -- so the
 default launch silently mixes later chunks against an incomplete chain. The
 guard turns that into a startup error.
 
-Scope matters as much here as the check itself: a guard keyed too broadly would
-reject configurations that are perfectly fine. These tests therefore pin both
-directions -- fires for the offending combination, silent for every other one.
+Two things this file is careful about, both learned from defects in this run:
+
+1. **Real config fields, not stand-ins.** An earlier version drove every case
+   through ``MagicMock``, which cannot fail when a field is *renamed* upstream --
+   ``mock.any_field_name`` always exists. The guard could have silently become
+   dead code while the tests stayed green. ``TestAgainstRealVllmConfig`` below
+   resolves a real ``VllmConfig`` through ``EngineArgs`` so the field names are
+   the ones the engine actually uses.
+2. **The override is an allow-list, not a truthiness test.** ``os.environ.get``
+   returns a string, so ``if os.environ.get(NAME)`` treats ``"0"`` as enabled.
+   A user writing ``=0`` to *switch the guard off* would switch it *on*.
+   ``TestOverrideEnvValues`` pins every spelling.
 """
 
+import os
 import unittest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from vllm_ascend.models.kimi_k3.model import (
     _CHUNKED_PREFILL_OVERRIDE_ENV,
     _check_chunked_prefill_compat,
+    _chunked_prefill_override_enabled,
+)
+
+CONFIG_PATH = (
+    "/home/c00618179/vllm-ascend/.day0/KimiK3ForConditionalGeneration_20260928_1"
+    "/impl/dummy_config"
 )
 
 
 def _cfg(attn_res_block_size=12):
+    """Deliberately still a stand-in for the *HF* config.
+
+    The point of the guard is that it reads ``attn_res_block_size`` off the HF
+    text config; ``TestAgainstRealVllmConfig`` exercises the real object for
+    that field, so this helper only serves the negative cases where a mock is
+    the clearest way to say "this field is absent".
+    """
     cfg = MagicMock()
     cfg.attn_res_block_size = attn_res_block_size
     return cfg
@@ -45,6 +70,35 @@ def _vllm_cfg(chunked_prefill):
     vc = MagicMock()
     vc.scheduler_config.enable_chunked_prefill = chunked_prefill
     return vc
+
+
+class TestOverrideEnvValues(unittest.TestCase):
+    """B-2: only explicit "on" spellings may enable the escape hatch."""
+
+    def _enabled(self, value):
+        env = {} if value is _UNSET else {_CHUNKED_PREFILL_OVERRIDE_ENV: value}
+        with patch.dict(os.environ, env, clear=False):
+            if value is _UNSET:
+                os.environ.pop(_CHUNKED_PREFILL_OVERRIDE_ENV, None)
+            return _chunked_prefill_override_enabled()
+
+    def test_only_explicit_on_values_enable(self):
+        for v in ("1", "true", "TRUE", "yes", " 1 "):
+            assert self._enabled(v) is True, f"{v!r} should enable the override"
+
+    def test_off_values_do_not_enable(self):
+        r"""The defect this pins: `=0` must not turn the guard *on*.
+
+        With the original truthiness test every one of these was truthy
+        (they are non-empty strings), so a user setting `=0` to proceed past
+        the error got the override engaged -- the opposite of the value's meaning
+        and of what the error message promises.
+        """
+        for v in ("0", "false", "FALSE", "no", "", "2", "off", "disabled"):
+            assert self._enabled(v) is False, f"{v!r} must NOT enable the override"
+
+    def test_unset_does_not_enable(self):
+        assert self._enabled(_UNSET) is False
 
 
 class TestChunkedPrefillGuard(unittest.TestCase):
@@ -88,6 +142,82 @@ class TestChunkedPrefillGuard(unittest.TestCase):
         ):
             _check_chunked_prefill_compat(_vllm_cfg(True), _cfg())
         mock_logger.warning.assert_called()
+
+    def test_override_set_to_zero_still_raises(self):
+        """B-2 control: `=0` must leave the guard *active*, not open it.
+
+        Paired with the case above so the suite distinguishes the two spellings
+        rather than merely asserting "some override value is handled".
+        """
+        with patch.dict("os.environ", {_CHUNKED_PREFILL_OVERRIDE_ENV: "0"}):
+            with self.assertRaises(ValueError):
+                _check_chunked_prefill_compat(_vllm_cfg(True), _cfg())
+
+
+class TestAgainstRealVllmConfig(unittest.TestCase):
+    """B-3: drive the guard with a real ``VllmConfig``, not a mock.
+
+    Field-name drift is the failure mode mocks cannot catch: if upstream renamed
+    ``scheduler_config.enable_chunked_prefill`` or the HF config dropped
+    ``attn_res_block_size``, the ``MagicMock`` cases above would still pass while
+    the guard quietly stopped protecting anything. Resolving through
+    ``EngineArgs.create_engine_config()`` uses the same parse path the engine
+    does, so a rename shows up as a failure here.
+    """
+
+    def _real_config(self, chunked_prefill):
+        if not os.path.isdir(CONFIG_PATH):
+            pytest.skip("run config not present (run-scoped artifact)")
+
+        from vllm.engine.arg_utils import EngineArgs
+
+        from vllm_ascend import register_model
+
+        register_model()
+        return EngineArgs(
+            model=CONFIG_PATH,
+            load_format="dummy",
+            tensor_parallel_size=8,
+            max_model_len=4096,
+            enforce_eager=True,
+            trust_remote_code=True,
+            dtype="bfloat16",
+            tokenizer_mode="kimi_k3",
+            enable_chunked_prefill=chunked_prefill,
+        ).create_engine_config()
+
+    def test_real_config_default_reaches_the_guard_and_raises(self):
+        """The default launch (chunked prefill on) must be refused."""
+        vc = self._real_config(True)
+        hf = vc.model_config.hf_text_config
+
+        # Assert the field names the guard depends on, so a rename fails loudly
+        # here rather than turning the guard into dead code.
+        assert getattr(hf, "attn_res_block_size", None) == 12, (
+            "the HF config no longer exposes attn_res_block_size=12; the guard's "
+            "key has moved and it would silently stop protecting anything"
+        )
+        assert vc.scheduler_config.enable_chunked_prefill is True
+
+        with self.assertRaises(ValueError):
+            _check_chunked_prefill_compat(vc, hf)
+
+    def test_real_config_with_flag_off_is_silent(self):
+        """The Stage 1 command (--no-enable-chunked-prefill) must pass."""
+        vc = self._real_config(False)
+        hf = vc.model_config.hf_text_config
+
+        assert vc.scheduler_config.enable_chunked_prefill is False
+        # No exception is the assertion.
+        _check_chunked_prefill_compat(vc, hf)
+
+
+class _Unset:
+    def __repr__(self):
+        return "<unset>"
+
+
+_UNSET = _Unset()
 
 
 if __name__ == "__main__":
