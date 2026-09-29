@@ -64,6 +64,16 @@ def get_compressed_expert_map(expert_map: torch.Tensor) -> str:
     )
 
 
+def _is_situ_activation(layer) -> bool:
+    """True when this MoE layer was marked as using Kimi-K3's SiTU activation.
+
+    Defined locally rather than imported from ``moe_mlp`` to keep the import
+    direction one-way (``moe_comm_method`` -> ``moe_mlp``); the two copies are
+    a single two-line predicate, not shared logic worth a cycle for.
+    """
+    return getattr(layer, "moe_activation", None) == "situ"
+
+
 @dataclass
 class FusedMoEResult:
     routed_out: torch.Tensor
@@ -238,6 +248,17 @@ class AscendUnquantizedFusedMoEMethod(UnquantizedFusedMoEMethod):
 
         if getattr(layer, "swigluoai_uninterleave", False):
             activation = "swigluoai_uninterleave"
+
+        # Kimi-K3's SiTU, carried as a plain string for the same reason as
+        # `swigluoai_uninterleave` above: the upstream `MoEActivation` enum has no
+        # SiTU member, and adding one would mean patching the enum body plus the
+        # `_CUSTOM_OP_NAMES` / `_WITHOUT_MUL` tables in the vLLM core. The
+        # constructor is given `"silu"` instead, which is safe because SiTU and
+        # SwiGLU are both *gated* activations -- the derived `is_act_and_mul`
+        # shape metadata is identical -- and the real activation is selected
+        # here, downstream of that derivation.
+        if _is_situ_activation(layer):
+            activation = "situ"
 
         moe_comm_method = _EXTRA_CTX.moe_comm_method
         # NOTE: In the MoECommType.FUSED_MC2 branch, we wrap weights (w1, w2) into lists

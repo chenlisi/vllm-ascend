@@ -19,6 +19,7 @@ import torch
 from einops import rearrange
 from vllm.distributed import get_pcp_group
 from vllm.forward_context import get_forward_context
+from vllm.model_executor.layers.linear import ColumnParallelLinear
 from vllm.model_executor.layers.mamba.gdn.base import GatedDeltaNetAttention
 from vllm.model_executor.layers.mamba.gdn.kimi_gdn_linear_attn import (
     KimiGatedDeltaNetAttention,
@@ -513,6 +514,131 @@ class AscendKimiGatedDeltaNetAttention(KimiGatedDeltaNetAttention):
     implementation has no such parameter at all -- its ``**kwargs`` silently
     swallows it -- so the safe-gate activation is genuinely absent on that path.
     """
+
+    def __init__(
+        self,
+        config,
+        vllm_config,
+        prefix: str = "",
+    ) -> None:
+        """Build the output-gate projection in the form the checkpoint uses.
+
+        The upstream ``KimiGatedDeltaNetAttention.__init__`` always builds the
+        **low-rank, two-stage** gate (``g_a_proj`` -> ``g_b_proj``). The vendor
+        implementation switches on ``linear_attn_config.use_full_rank_gate``:
+        when set, the gate is a **single full-rank** ``g_proj``
+        (``hidden_size -> projection_size``) and the two low-rank modules do not
+        exist at all (vendor ``modeling_kimi.KimiDeltaAttention.__init__``).
+
+        This checkpoint sets ``use_full_rank_gate=true``, so the inherited
+        two-stage form is simply the wrong parameterisation -- it would consume
+        the wrong weights and produce a wrong gate. The shapes differ outright
+        (``head_dim``-wide bottleneck vs. ``projection_size``-wide output), so
+        this is not a naming detail that could resolve itself at load time.
+
+        Why the low-rank modules are **deleted** rather than left in place: the
+        loader hard-fails when a registered parameter is absent from the
+        checkpoint
+        (``default_loader.track_weights_loading``: "Following weights were not
+        initialized from checkpoint"). Leaving ``g_a_proj``/``g_b_proj``
+        registered would therefore fail the load for a full-rank checkpoint, and
+        leaving ``g_proj`` registered would fail it for a low-rank one. The two
+        forms are mutually exclusive in ``named_parameters()`` by construction,
+        which is exactly the invariant the loader requires.
+
+        NOTE (evidence strength): which module names the *real* checkpoint
+        carries is 【推导】-- the authoritative weights are LFS pointers on this
+        machine, so the load path cannot be exercised end to end here. The
+        module names chosen below are those the vendor reference builds
+        (``g_proj`` for full-rank; ``g_a_proj``/``g_b_proj`` for low-rank), and
+        the low-rank branch is unchanged from upstream, so existing models are
+        unaffected either way. Verifying the full-rank name against real weights
+        is a G3 item.
+        """
+        super().__init__(config, vllm_config, prefix)
+
+        kda_config = config.linear_attn_config  # type: ignore[attr-defined]
+        use_full_rank_gate = bool(kda_config.get("use_full_rank_gate", False))
+        self.use_full_rank_gate = use_full_rank_gate
+
+        if not use_full_rank_gate:
+            # Upstream already built the two-stage form; keep it verbatim so
+            # every existing model keeps its exact behaviour and parameter set.
+            return
+
+        # Full-rank form: mirror the vendor construction exactly, including the
+        # TensorParallel placement. The gate feeds `o_norm`'s per-head gate
+        # along the head axis, so it shards like the other column-wise
+        # projections in this layer (`g_b_proj`, `q/k/v_proj`) on the output.
+        projection_size = self.head_dim * self.num_heads
+        self.g_proj = ColumnParallelLinear(
+            self.hidden_size,
+            projection_size,
+            bias=False,
+            quant_config=self.quant_config,
+            prefix=f"{prefix}.g_proj",
+        )
+
+        # Remove the unused low-rank modules so they are neither expected by the
+        # loader nor able to silently shadow the full-rank gate.
+        del self.g_a_proj
+        del self.g_b_proj
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        positions: torch.Tensor,
+        output: torch.Tensor,
+    ) -> None:
+        """Upstream's skeleton, with the output-gate projection selected by config.
+
+        Upstream hardcodes the two-stage low-rank gate (``g_b_proj(g_a_proj(x))``).
+        The only difference here is which module computes ``g2``: for
+        ``use_full_rank_gate=true`` it is the single ``g_proj``. Everything else
+        -- the projections, the ``kda_attention`` custom-op call, the ``o_norm``
+        application and the output write -- is reproduced verbatim so the two
+        forms cannot drift apart in any other respect.
+
+        NOTE the vendor's own ordering: the gate is computed from
+        ``hidden_states`` **independently** of the ``g1`` gate. Both are second
+        projections of the same input, not a reuse of one tensor -- the vendor
+        calls ``self.g_proj(hidden_states)`` separately after the attention
+        block. Keeping that independent evaluation here matters: folding it into
+        ``g1`` would change the numerics for no reason.
+        """
+        num_tokens = hidden_states.size(0)
+        q = self.q_proj(hidden_states)[0]
+        k = self.k_proj(hidden_states)[0]
+        v = self.v_proj(hidden_states)[0]
+
+        beta = self.b_proj(hidden_states)[0].float().sigmoid()
+        g1 = self.f_b_proj(self.f_a_proj(hidden_states)[0])[0]
+        beta = beta.unsqueeze(0)
+        g1 = rearrange(g1, "n (h d) -> 1 n h d", d=self.head_dim)
+
+        if self.use_full_rank_gate:
+            gate_states = self.g_proj(hidden_states)[0]
+        else:
+            gate_states = self.g_b_proj(self.g_a_proj(hidden_states)[0])[0]
+        g2 = rearrange(gate_states, "... (h d) -> ... h d", d=self.head_dim)
+
+        core_attn_out = torch.zeros(
+            (1, num_tokens, self.local_num_heads, self.head_dim),
+            dtype=hidden_states.dtype,
+            device=hidden_states.device,
+        )
+        torch.ops.vllm.kda_attention(
+            q,
+            k,
+            v,
+            g1,
+            beta,
+            core_attn_out,
+            self.prefix,
+        )
+        core_attn_out = self.o_norm(core_attn_out, g2)
+        core_attn_out = rearrange(core_attn_out, "1 n h d -> n (h d)")
+        output[:] = self.o_proj(core_attn_out)[0]
 
     def _gate_lower_bound(self) -> float | None:
         """Kimi-K3's `gate_lower_bound`, or None when the config omits it.

@@ -56,13 +56,7 @@ class AscendSituAndMul(CustomOp):
         self.linear_beta = linear_beta
 
     def forward_native(self, x: torch.Tensor) -> torch.Tensor:
-        d = x.shape[-1] // 2
-        gate = x[..., :d].to(torch.float32)
-        up = x[..., d:].to(torch.float32)
-        situ_a = self.beta * torch.tanh(gate / self.beta) * torch.sigmoid(gate)
-        if self.linear_beta is not None:
-            up = self.linear_beta * torch.tanh(up / self.linear_beta)
-        return (situ_a * up).to(x.dtype)
+        return situ_and_mul(x, self.beta, self.linear_beta)
 
     def forward_oot(self, x: torch.Tensor) -> torch.Tensor:
         # Stage 1 (golden baseline) deliberately runs the non-fused path:
@@ -70,6 +64,33 @@ class AscendSituAndMul(CustomOp):
         # swiglu-family activations by default, so routing SiTU through them
         # would silently substitute SwiGLU -- an accuracy gap, not an error.
         return self.forward_native(x)
+
+
+def situ_and_mul(
+    x: torch.Tensor,
+    beta: float = 1.0,
+    linear_beta: float | None = None,
+) -> torch.Tensor:
+    """The SiTU gate itself, as a free function.
+
+    Split out of ``AscendSituAndMul`` so the MoE routed-expert path can apply
+    exactly the same math without constructing a ``CustomOp`` (whose
+    ``__init__`` requires a vLLM config context, which is not available where
+    the grouped-GEMM activation is applied). One implementation, two callers --
+    the dense/shared-expert path and the routed-expert path cannot drift.
+
+    ``float32`` promotion of the intermediates is load-bearing, not stylistic:
+    tanh and sigmoid both amplify rounding in the exponent, so computing the
+    gate in bf16 end to end is the most common source of accuracy loss on this
+    activation. The result is cast back to the input dtype.
+    """
+    d = x.shape[-1] // 2
+    gate = x[..., :d].to(torch.float32)
+    up = x[..., d:].to(torch.float32)
+    situ_a = beta * torch.tanh(gate / beta) * torch.sigmoid(gate)
+    if linear_beta is not None:
+        up = linear_beta * torch.tanh(up / linear_beta)
+    return (situ_a * up).to(x.dtype)
 
 
 def situ_params(config) -> tuple[float, float | None]:

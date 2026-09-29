@@ -86,13 +86,20 @@ def test_kda_oot_class_is_a_subclass_of_upstream():
     assert ascend_cls is not Upstream
 
 
-def test_kda_oot_overrides_forward_only():
-    """`_forward` is the override point; `forward` must stay upstream's.
+def test_kda_oot_overrides_forward_and_forward_core():
+    """Both override points are required, for different reasons.
 
-    Upstream dispatches the core computation through
-    `torch.ops.vllm.kda_attention`, which resolves `self._forward` off the
-    instance. Overriding `forward` instead would duplicate the projection
-    logic and risk drifting from upstream's weight layout.
+    `_forward` is where the platform kernel call sites are swapped: upstream
+    dispatches the core computation through `torch.ops.vllm.kda_attention`,
+    which resolves `self._forward` off the instance.
+
+    `forward` is *also* overridden, because it is where the output-gate
+    projection is selected. Upstream hardcodes the two-stage low-rank form
+    (`g_b_proj(g_a_proj(x))`); this checkpoint sets
+    `linear_attn_config.use_full_rank_gate=true`, which requires the single
+    full-rank `g_proj` instead. There is no narrower hook -- the choice is made
+    inline in `forward`, so leaving it inherited would silently compute the gate
+    from the wrong parameterisation.
     """
     registry = _register()
     from vllm.model_executor.layers.mamba.gdn.kimi_gdn_linear_attn import (
@@ -101,9 +108,13 @@ def test_kda_oot_overrides_forward_only():
 
     ascend_cls = registry["KimiGatedDeltaNetAttention"]
     assert "_forward" in ascend_cls.__dict__, "_forward is not overridden"
-    assert "forward" not in ascend_cls.__dict__, (
-        "forward should be inherited from upstream; overriding it duplicates "
-        "the projection layout instead of only swapping kernels"
+    assert "forward" in ascend_cls.__dict__, (
+        "forward must be overridden to select the output-gate projection form "
+        "(full-rank g_proj vs. low-rank g_a_proj/g_b_proj)"
+    )
+    assert "__init__" in ascend_cls.__dict__, (
+        "__init__ must be overridden to build the projection form the "
+        "checkpoint actually uses"
     )
 
 

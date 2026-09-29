@@ -228,6 +228,21 @@ class KimiSparseMoeBlock(nn.Module):
         else:
             self.shared_experts = None
 
+        # `FusedMoE` is constructed with the default `activation="silu"` on
+        # purpose. SiTU is not a member of the upstream `MoEActivation` enum, so
+        # passing it here would raise in `MoEActivation.from_str` -- and passing
+        # nothing would leave the routed experts silently computing SwiGLU.
+        # Instead the activation is selected downstream, in the Ascend MoE
+        # dispatch (`vllm_ascend/ops/fused_moe/fused_moe.py`), which reads the
+        # `moe_activation` marker set below. `"silu"` is the correct constructor
+        # argument because SiTU and SwiGLU are both gated activations, so the
+        # `is_act_and_mul` shape metadata the constructor derives from it is the
+        # same for both; only the elementwise math differs, and that is chosen
+        # by the marker.
+        #
+        # The marker goes on `self.experts.routed_experts` rather than on the
+        # runner: `AscendMoERunner` forwards `layer=self.routed_experts` into
+        # `apply()`, and that object is what the dispatch inspects.
         self.experts = FusedMoE(
             shared_experts=None,
             num_experts=num_experts,
@@ -244,6 +259,24 @@ class KimiSparseMoeBlock(nn.Module):
             e_score_correction_bias=self.gate.e_score_correction_bias,
             routed_scaling_factor=config.routed_scaling_factor,
         )
+        self.experts.routed_experts.moe_activation = "situ"
+        # SiTU's two betas ride the existing per-layer activation-scalar channel
+        # (`swiglu_alpha` / `swiglu_beta`), which `apply()` already forwards all
+        # the way into the MLP stage -- the same values arrive at the SiTU branch
+        # as `swiglu_alpha` / `swiglu_beta`. They cannot be read from the config
+        # at the point of use: that code runs inside the model forward,
+        # `profile_run` included, and `profile_run` executes outside any
+        # `set_current_vllm_config` context (the smoke run failed exactly there).
+        #
+        # Safe because those two slots are consumed as `glu_alpha` / `glu_bias`
+        # only on the `swigluoai_uninterleave` branch, which a SiTU-marked layer
+        # never takes (`_is_situ` excludes it) -- see `_situ_betas` in
+        # `ops/fused_moe/moe_mlp.py`. The explicit aliases alongside them keep
+        # the meaning readable from the model side.
+        self.experts.routed_experts.swiglu_alpha = self.situ_beta
+        self.experts.routed_experts.swiglu_beta = self.situ_linear_beta or 0.0
+        self.experts.routed_experts.moe_situ_beta = self.situ_beta
+        self.experts.routed_experts.moe_situ_linear_beta = self.situ_linear_beta
 
         if self.use_latent_moe:
             self.routed_expert_down_proj = ReplicatedLinear(

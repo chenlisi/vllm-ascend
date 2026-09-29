@@ -27,6 +27,7 @@ from vllm_ascend.device.mxfp_compat import (
     FLOAT8_E8M0FNU_DTYPE,
     ensure_mxfp8_moe_available,
 )
+from vllm_ascend.models.kimi_k3.activation import situ_and_mul
 from vllm_ascend.ops.activation import AscendSwigluOAIAndMul, AscendSwigluStepAndMul
 from vllm_ascend.ops.fused_moe.moe_runtime_args import MoEMlpComputeInput
 from vllm_ascend.quantization.quant_type import QuantType
@@ -39,11 +40,56 @@ from vllm_ascend.utils import (
 ASCEND_DEVICE_TYPE = get_ascend_device_type()
 
 
+def _is_situ(activation) -> bool:
+    """True when the activation is Kimi-K3's SiTU.
+
+    SiTU is carried as a plain string (``"situ"``) rather than as a
+    ``MoEActivation`` member: the upstream enum has no such member and extending
+    it would mean patching three module-level tables
+    (``_CUSTOM_OP_NAMES`` / ``_WITHOUT_MUL`` / the enum body) in the vLLM core
+    for one model's activation. The Ascend MoE path already dispatches on the
+    string for ``swigluoai_uninterleave``, so SiTU follows that precedent.
+    """
+    return getattr(activation, "value", activation) == "situ"
+
+
+def _situ_betas(swiglu_alpha: float = 1.0, swiglu_beta: float = 0.0) -> tuple[float, float | None]:
+    """Kimi-K3's SiTU betas, carried in on the per-layer activation scalars.
+
+    NOT read from the live vLLM config: this runs inside the model forward, and
+    ``profile_run``'s ``_dummy_run`` executes outside any
+    ``set_current_vllm_config`` context, so a config lookup here raises at
+    startup. (That failure is what the dummy smoke caught -- the branch is
+    reachable long before any real request.) The values therefore have to
+    arrive as arguments, like every other per-layer activation scalar.
+
+    The transport is ``swiglu_alpha`` / ``swiglu_beta``, which is the existing,
+    already-plumbed channel for per-layer activation parameters:
+    ``apply()`` -> ``MoEFusedExpertsInput`` -> ``MoEMlpComputeInput`` ->
+    here. Borrowing them is safe because those two slots are consumed as
+    ``glu_alpha`` / ``glu_bias`` only on the ``swigluoai_uninterleave`` branch,
+    which ``_is_situ`` excludes -- the two can never both apply to one layer.
+    The model-side attribute names stay explicit (``moe_situ_beta`` /
+    ``moe_situ_linear_beta``) so the meaning is not lost at the source.
+
+    ``linear_beta`` is returned as ``None`` when the caller left the slot at
+    its default, which is how the vendor distinguishes "unset" from a value and
+    is what makes ``situ_and_mul`` skip the ``up`` rescaling. ``beta`` follows
+    the vendor's ``beta or 1.0`` so a stored 0.0 cannot divide by zero.
+    """
+    beta = swiglu_alpha or 1.0
+    linear_beta = swiglu_beta if swiglu_beta else None
+    return beta, linear_beta
+
+
 def _custom_gmm_swiglu_enabled(fusion, dynamic_eplb, activation=None):
     return (
         fusion
         and dynamic_eplb
         and getattr(activation, "value", activation) != "swigluoai_uninterleave"
+        # SiTU is not SwiGLU: the fused op applies npu_swiglu unconditionally, so
+        # admitting SiTU here would silently compute the wrong activation.
+        and not _is_situ(activation)
         and enable_custom_op()
     )
 
@@ -51,6 +97,9 @@ def _custom_gmm_swiglu_enabled(fusion, dynamic_eplb, activation=None):
 def _gmm_swiglu_quant_fusion_enabled(use_mxfp_quant, fusion, dynamic_eplb, activation=None):
     return (use_mxfp_quant or (fusion and not dynamic_eplb)) and (
         getattr(activation, "value", activation) != "swigluoai_uninterleave"
+        # Same reason as _custom_gmm_swiglu_enabled: this gate feeds the fused
+        # SwiGLU+quant kernels, which have no SiTU variant.
+        and not _is_situ(activation)
     )
 
 
@@ -136,6 +185,7 @@ def quant_apply_mlp(
     # non-fused GMM -> GELU -> (re)quant -> GMM2 path for GELU activations.
     is_gelu_activation = activation in (MoEActivation.GELU, MoEActivation.GELU_TANH)
     is_swigluoai_uninterleave = act_name == "swigluoai_uninterleave"
+    is_situ = _is_situ(activation)
 
     if use_mxfp_quant:
         ensure_mxfp8_moe_available("MXFP MoE MLP path")
@@ -311,6 +361,11 @@ def quant_apply_mlp(
                 limit=swiglu_limit,
                 bias=swiglu_beta,
             )
+        elif is_situ:
+            # Kimi-K3 gate. NOT SwiGLU: this is the branch whose absence made the
+            # routed experts silently compute silu(gate)*up.
+            situ_beta, situ_linear_beta = _situ_betas(swiglu_alpha, swiglu_beta)
+            hidden_states = situ_and_mul(hidden_states, situ_beta, situ_linear_beta)
         else:
             hidden_states = torch_npu.npu_swiglu(hidden_states)
         before_gmm2_evt = torch.npu.current_stream().record_event()
@@ -342,6 +397,7 @@ def quant_apply_mlp(
             and activation != MoEActivation.SWIGLUSTEP
             and not is_gelu_activation
             and not is_swigluoai_uninterleave
+            and not is_situ
         ):
             hidden_states, swiglu_out_scale = torch.ops._C_ascend.grouped_matmul_swiglu_quant_v2(
                 x=hidden_states,
@@ -369,7 +425,12 @@ def quant_apply_mlp(
                 bias=bias1,
                 swiglu_limit=swiglu_limit,
             )
-        elif use_gmm_swiglu_quant_fusion and activation != MoEActivation.SWIGLUSTEP and not is_gelu_activation:
+        elif (
+            use_gmm_swiglu_quant_fusion
+            and activation != MoEActivation.SWIGLUSTEP
+            and not is_gelu_activation
+            and not is_situ
+        ):
             hidden_states, swiglu_out_scale, _ = DeviceOperator.npu_grouped_matmul_swiglu_quant(
                 x=hidden_states,
                 weight=_require_single_tensor_for_swiglu_quant(w1, name="w1"),
@@ -429,6 +490,16 @@ def quant_apply_mlp(
                     limit=swiglu_limit,
                     bias=swiglu_beta,
                 )
+                hidden_states, swiglu_out_scale = DeviceOperator.npu_dynamic_quant(
+                    hidden_states, act_quant_type=act_quant_type, use_mxfp_quant=use_mxfp_quant
+                )
+            elif is_situ:
+                # SiTU, then requantize for gmm2 -- same shape of step as the
+                # interleave branch above. Must precede the HAS_TRITON branch:
+                # `swiglu_quant` bakes in SwiGLU, so falling through would
+                # silently compute the wrong activation.
+                situ_beta, situ_linear_beta = _situ_betas(swiglu_alpha, swiglu_beta)
+                hidden_states = situ_and_mul(hidden_states, situ_beta, situ_linear_beta)
                 hidden_states, swiglu_out_scale = DeviceOperator.npu_dynamic_quant(
                     hidden_states, act_quant_type=act_quant_type, use_mxfp_quant=use_mxfp_quant
                 )
@@ -554,6 +625,12 @@ def unquant_apply_mlp(
     elif activation == MoEActivation.GELU_TANH:
         gate, up = gate_up_out.chunk(2, dim=-1)
         gate_up_out = torch.nn.functional.gelu(gate, approximate="tanh") * up
+    elif _is_situ(activation):
+        # Kimi-K3's routed-expert gate. This is the site that matters most for
+        # this model: without it the `else` branch below silently computed
+        # silu(gate)*up, i.e. SwiGLU, with no runtime signal.
+        situ_beta, situ_linear_beta = _situ_betas(swiglu_alpha, swiglu_beta)
+        gate_up_out = situ_and_mul(gate_up_out, situ_beta, situ_linear_beta)
     else:
         if swiglu_limit > 0:
             gate, up = gate_up_out.chunk(2, dim=-1)
