@@ -1007,6 +1007,43 @@ def _page_rows(tensor: torch.Tensor, cache: torch.Tensor) -> torch.Tensor:
     return tensor.reshape(tensor.shape[0], *cache.shape[2:])
 
 
+def _scatter_page_rows(
+    cache: torch.Tensor,
+    block_ids: torch.Tensor,
+    offsets: torch.Tensor,
+    rows: torch.Tensor,
+) -> None:
+    """Write ``rows`` into ``cache`` at ``(block_ids, offsets)`` page cells.
+
+    ``cache`` is a block-strided view of the shared KV pool, so the obvious
+    ``cache[block_ids, offsets] = rows`` is a whole-tensor advanced-index
+    assignment: torch materializes a temporary the size of the *destination*
+    view before scattering, which on the real pool is half the cache (measured
+    6.26 GiB for a 57-token request) and OOMs at default utilization.
+
+    ``index_copy_`` writes in place, and since a step's slots are unique it is
+    the exact same operation. Rows are grouped per block so the scatter touches
+    each page once; the only temporaries are O(rows in that block).
+    """
+    if rows.shape[0] == 0:
+        return
+    num_blocks = int(block_ids.max().item()) + 1
+    if num_blocks <= 0:
+        return
+    counts = torch.bincount(block_ids, minlength=num_blocks)
+    order = torch.argsort(block_ids, stable=True)
+    start = 0
+    ordered_offsets = offsets[order]
+    ordered_rows = rows[order]
+    for block in range(num_blocks):
+        count = int(counts[block].item())
+        if count == 0:
+            continue
+        end = start + count
+        cache[block].index_copy_(0, ordered_offsets[start:end], ordered_rows[start:end])
+        start = end
+
+
 def _sparse_gqa_torch(
     query: torch.Tensor,
     key_cache: torch.Tensor,
@@ -1095,8 +1132,10 @@ class AscendQwen4ExpQSAAttnImpl:
         slot_values = slots[valid]
         block_ids = torch.div(slot_values, key_cache.shape[1], rounding_mode="floor")
         offsets = torch.remainder(slot_values, key_cache.shape[1])
-        key_cache[block_ids, offsets] = _page_rows(key[valid], key_cache)
-        value_cache[block_ids, offsets] = _page_rows(value[valid], value_cache)
+        _scatter_page_rows(key_cache, block_ids, offsets, _page_rows(key[valid], key_cache))
+        _scatter_page_rows(
+            value_cache, block_ids, offsets, _page_rows(value[valid], value_cache)
+        )
 
     @torch.no_grad()
     def forward_qsa(

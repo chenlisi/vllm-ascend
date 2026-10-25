@@ -23,6 +23,8 @@ import torch.nn.functional as F
 import pytest
 from unittest.mock import MagicMock
 
+from torch.utils._python_dispatch import TorchDispatchMode
+
 from vllm_ascend.models.qwen4_exp.hyperconnection import (
     AscendGatedResidual,
     AscendGroupedGemmaRMSNorm,
@@ -30,6 +32,8 @@ from vllm_ascend.models.qwen4_exp.hyperconnection import (
 )
 from vllm_ascend.models.qwen4_exp.ple import ple_gate_torch
 from vllm_ascend.models.qwen4_exp.qsa import (
+    AscendQwen4ExpQSAAttnImpl,
+    _scatter_page_rows,
     expand_qsa_indices_torch,
     gemma_rmsnorm_torch,
     qsa_compress_groups_torch,
@@ -286,6 +290,35 @@ def test_ple_gate_rejects_mismatched_dtypes():
 # ---------------------------------------------------------------------------
 # QSA eager kernels
 # ---------------------------------------------------------------------------
+class _TorchDispatchRecorder(TorchDispatchMode):
+    """Record the name and output size of every dispatched aten op.
+
+    Used to bound *allocation* rather than just values: a value-equality test
+    cannot see that ``cache[ids, offs] = rows`` builds a destination-sized
+    temporary, which is what made a 57-token request OOM against a 12 GiB pool.
+    """
+
+    def __init__(self, sizes):
+        self.sizes = sizes
+        self.op_names = []
+
+    def __torch_dispatch__(self, func, types, args=(), kwargs=None):
+        out = func(*args, **(kwargs or {}))
+        name = str(func)
+        self.op_names.append(name)
+        for t in out if isinstance(out, (tuple, list)) else (out,):
+            if isinstance(t, torch.Tensor):
+                self.sizes.append(t.numel() * t.element_size())
+        return out
+
+    def __enter__(self):
+        super().__enter__()
+        return self
+
+    def __exit__(self, *exc):
+        return super().__exit__(*exc)
+
+
 def test_qsa_store_rows_skips_padding_slots():
     """PAD slots address the null block and must never be written."""
     pages, page_size, width = 3, 4, 5
@@ -302,6 +335,120 @@ def test_qsa_store_rows_rejects_bad_shape():
     cache = torch.zeros(2, 2, 1, 3)
     with pytest.raises(ValueError, match="incompatible shapes"):
         qsa_store_rows_torch(cache, torch.tensor([0]), torch.zeros(1, 1, 4))
+
+
+def test_scatter_page_rows_matches_advanced_indexing():
+    """Per-block ``index_copy_`` must land rows exactly where the obvious
+    ``cache[block_ids, offsets] = rows`` would, including repeated blocks."""
+    pages, page_size, heads, width = 5, 4, 2, 3
+    torch.manual_seed(0)
+    block_ids = torch.tensor([3, 1, 3, 0, 3])
+    offsets = torch.tensor([2, 0, 0, 3, 1])
+    rows = torch.randn(block_ids.numel(), heads, width, dtype=torch.bfloat16)
+
+    expected = torch.zeros(pages, page_size, heads, width, dtype=torch.bfloat16)
+    expected[block_ids, offsets] = rows
+    got = torch.zeros_like(expected)
+    _scatter_page_rows(got, block_ids, offsets, rows)
+
+    assert torch.equal(got, expected)
+
+
+def test_scatter_page_rows_is_in_place_and_empty_safe():
+    """No temporary the size of the view: the destination is written in place,
+    and an empty row set is a no-op rather than an error."""
+    cache = torch.zeros(2, 3, 1, 2, dtype=torch.bfloat16)
+    ident = cache.data_ptr()
+    _scatter_page_rows(
+        cache,
+        torch.tensor([1]),
+        torch.tensor([2]),
+        torch.ones(1, 1, 2, dtype=torch.bfloat16),
+    )
+    assert cache.data_ptr() == ident
+    assert torch.equal(cache[1, 2], torch.ones(1, 2, dtype=torch.bfloat16))
+    _scatter_page_rows(
+        cache, torch.zeros(0, dtype=torch.long), torch.zeros(0, dtype=torch.long),
+        torch.zeros(0, 1, 2, dtype=torch.bfloat16),
+    )
+
+
+def test_do_kv_cache_update_scales_with_tokens_not_pool():
+    """A request writes only its own page cells: untouched blocks stay zero.
+
+    This pins the defect behind the default-utilization OOM -- the old
+    advanced-index write materialized a destination-sized temporary, so a
+    57-token request could not complete against a 12 GiB pool.
+    """
+    pages, page_size, heads, width = 64, 4, 1, 8
+    kv = (
+        torch.zeros(pages, page_size, heads, width, dtype=torch.bfloat16),
+        torch.zeros(pages, page_size, heads, width, dtype=torch.bfloat16),
+    )
+    impl = AscendQwen4ExpQSAAttnImpl(
+        num_heads=2, head_size=width, scale=width**-0.5, num_kv_heads=1
+    )
+    num_tokens = 6
+    key = torch.randn(num_tokens, heads, width, dtype=torch.bfloat16)
+    value = torch.randn(num_tokens, heads, width, dtype=torch.bfloat16)
+    slots = torch.tensor([0, 1, 2, 3, 4, -1])  # 4 spans blocks 0 and 1
+    impl.do_kv_cache_update(key, value, kv, slots)
+
+    k_cache, v_cache = kv
+    assert torch.equal(k_cache[0, 0], key[0])
+    assert torch.equal(k_cache[1, 0], key[4])
+    assert torch.equal(v_cache[1, 0], value[4])
+    # Blocks the request never addressed are untouched (the -1 slot wrote
+    # nothing, and no destination-sized temporary was scattered over them).
+    assert torch.count_nonzero(k_cache[2:]) == 0
+    assert torch.count_nonzero(v_cache[2:]) == 0
+
+
+def test_do_kv_cache_update_never_allocates_a_pool_sized_temporary():
+    """Peak temporary allocation must be bounded by the token count, not the
+    pool.
+
+    This is the discriminating check for the default-utilization OOM: the
+    previous advanced-index write produced one temporary the size of the whole
+    destination view (half the KV pool -- 6.26 GiB at 12.53 GiB KV), so a
+    57-token request failed. Here the pool is deliberately much larger than the
+    write, and any op emitting a pool-sized tensor fails the assertion.
+    """
+    pages, page_size, heads, width = 512, 8, 1, 16
+    pool_elems = pages * page_size * heads * width
+    kv = (
+        torch.zeros(pages, page_size, heads, width, dtype=torch.bfloat16),
+        torch.zeros(pages, page_size, heads, width, dtype=torch.bfloat16),
+    )
+    impl = AscendQwen4ExpQSAAttnImpl(
+        num_heads=2, head_size=width, scale=width**-0.5, num_kv_heads=1
+    )
+    num_tokens = 5
+    key = torch.randn(num_tokens, heads, width, dtype=torch.bfloat16)
+    value = torch.randn(num_tokens, heads, width, dtype=torch.bfloat16)
+    slots = torch.arange(num_tokens)
+
+    sizes = []
+    with _TorchDispatchRecorder(sizes) as rec:
+        impl.do_kv_cache_update(key, value, kv, slots)
+
+    assert sizes, "the recorder saw no dispatches; the probe is not wired up"
+    biggest = max(sizes)
+    row_bytes = heads * width * 2
+    assert biggest < pool_elems * 2 / 8, (
+        "do_kv_cache_update allocated a pool-sized temporary "
+        f"({biggest} bytes for a {pool_elems * 2}-byte pool); a 57-token "
+        "request would OOM at default utilization"
+    )
+    assert biggest < num_tokens * row_bytes * 8, (
+        f"largest temporary {biggest} B exceeds a token-bounded budget "
+        f"({num_tokens * row_bytes * 8} B)"
+    )
+    assert rec.op_names, "no aten ops recorded"
+    assert not any("index_put" in n for n in rec.op_names), (
+        "advanced-index write is back; it materializes the destination: "
+        f"{sorted(set(rec.op_names))}"
+    )
 
 
 def test_gemma_rmsnorm_matches_reference():
