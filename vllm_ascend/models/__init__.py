@@ -101,3 +101,15 @@ def register_model():
     ModelRegistry.register_model(
         "LlamaForCausalLMEagle3", "vllm_ascend.models.llama_eagle3:AscendEagle3LlamaForCausalLM"
     )
+    # Ascend Qwen4Exp: indexed sparse attention (QSA) + HyperConnection + PLE.
+    # Registering under the upstream architecture names replaces the upstream
+    # package's `else` dispatch to the NVIDIA implementation, so $VLLM is not
+    # modified (same pattern as the other Ascend model families above).
+    ModelRegistry.register_model(
+        "Qwen4ExpForConditionalGeneration",
+        "vllm_ascend.models.qwen4_exp.model:AscendQwen4ExpForConditionalGeneration",
+    )
+    ModelRegistry.register_model(
+        "Qwen4ExpForCausalLM",
+        "vllm_ascend.models.qwen4_exp.model:AscendQwen4ExpForCausalLM",
+    )

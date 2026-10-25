@@ -1699,6 +1699,25 @@ def _get_dyntra_lb_scheduler_cls(*, async_scheduling: bool) -> str:
     return "vllm_ascend.core.dyntra_lb_scheduler.DyntraLBScheduler"
 
 
+# Architectures whose Engram (n-gram PLE) layers this platform can serve.
+# ``DeepseekV41ForCausalLM`` was the only one until Qwen4Exp, whose PLE layer
+# uses the same short-conv state contract but has no ``engram_layer_ids``
+# field (it selects layers through ``ple_layer_ids``).
+_ENGRAM_ARCHITECTURES = ("DeepseekV41ForCausalLM", "Qwen4ExpForCausalLM", "Qwen4ExpForConditionalGeneration")
+
+
+def _is_engram_capable_architecture(model_config) -> bool:
+    """Whether this model owns an Engram/PLE layer stack."""
+    architecture = getattr(model_config, "architecture", None)
+    if architecture not in _ENGRAM_ARCHITECTURES:
+        return False
+    text_config = getattr(model_config, "hf_text_config", None)
+    return bool(
+        getattr(text_config, "engram_layer_ids", None)
+        or getattr(text_config, "ple_layer_ids", None)
+    )
+
+
 def _validate_engram_config(vllm_config: VllmConfig) -> None:
     engram_config = getattr(vllm_config, "engram_config", None)
     model_config = vllm_config.model_config
@@ -1706,11 +1725,11 @@ def _validate_engram_config(vllm_config: VllmConfig) -> None:
     if spec is not None and model_config is spec.draft_model_config:
         model_config = spec.target_model_config
     if engram_config is None:
-        if (
-            model_config is None
-            or model_config.architecture != "DeepseekV41ForCausalLM"
-            or not getattr(model_config.hf_text_config, "engram_layer_ids", None)
-        ):
+        if model_config is None or not _is_engram_capable_architecture(model_config):
+            return
+        if getattr(model_config, "architecture", None) != "DeepseekV41ForCausalLM":
+            # Qwen4Exp supplies its own PLE defaults through the model config;
+            # the DeepSeek V4.1 resolver would rewrite unrelated fields.
             return
         # Upstream skips automatic Engram defaults on non-CUDA platforms.
         # Supply its native config here and reuse its resolver and validation.
@@ -1719,8 +1738,11 @@ def _validate_engram_config(vllm_config: VllmConfig) -> None:
         vllm_config.engram_config = engram_config = EngramConfig()
         VllmConfig._resolve_and_verify_engram_config(vllm_config)
 
-    if model_config is None or model_config.architecture != "DeepseekV41ForCausalLM":
-        raise ValueError("Ascend Engram requires DeepSeek V4.1.")
+    if model_config is None or not _is_engram_capable_architecture(model_config):
+        raise ValueError(
+            "Ascend Engram requires a model with an Engram/PLE layer stack "
+            f"(supported: {', '.join(_ENGRAM_ARCHITECTURES)})."
+        )
     if engram_config.embedding_across_dp:
         raise ValueError("Ascend Engram does not support embedding_across_dp")
     parallel_config = vllm_config.parallel_config

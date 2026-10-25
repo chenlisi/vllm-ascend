@@ -82,6 +82,7 @@ from vllm_ascend.core.kv_cache_interface import (
     AscendSlidingWindowMLASpec,
     get_kv_cache_compression_ratio,
     get_storage_block_size,
+    is_circular_kv_cache_spec,
     supports_component_major_mla_pd,
 )
 from vllm_ascend.device.hardware_profile import HardwareCapability, get_current_hardware_profile
@@ -1486,6 +1487,31 @@ def _reshape_kv_cache_v2(
                 continue
 
             kv_cache_spec = layer_kv_cache_spec[layer_name]
+
+            if is_circular_kv_cache_spec(kv_cache_spec):
+                # A circular state page holds keys only, so it has no K/V pair
+                # to split and cannot fill the combined-attention geometry
+                # below. Its backend publishes the full state view instead,
+                # which ``bind_kv_cache`` consumes directly.
+                if not isinstance(raw_cache := kv_cache_raw_tensors[layer_name], torch.Tensor):
+                    raise ValueError(f"Circular state cache for {layer_name} must use one raw tensor.")
+                page_bytes = (
+                    kv_cache_spec.page_size_padded
+                    if kv_cache_spec.page_size_padded is not None
+                    else kv_cache_spec.page_size_bytes
+                )
+                if raw_cache.numel() % page_bytes:
+                    raise ValueError(f"KV cache for {layer_name} is not a whole number of pages.")
+                state_blocks = raw_cache.numel() // page_bytes
+                state_shape = group.backend.get_kv_cache_shape(
+                    state_blocks,
+                    kv_cache_spec.block_size,
+                    kv_cache_spec.num_kv_heads,
+                    kv_cache_spec.head_size,
+                    kv_cache_spec.dtype,
+                )
+                kv_caches[layer_name] = (raw_cache.view(kv_cache_spec.dtype).view(state_shape),)
+                continue
 
             if type(kv_cache_spec) is FullAttentionSpec and is_c8_mxfp_kv_quant(vllm_config):
                 raw_cache = kv_cache_raw_tensors[layer_name]
