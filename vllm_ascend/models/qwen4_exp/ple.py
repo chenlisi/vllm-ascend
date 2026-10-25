@@ -41,6 +41,7 @@ from vllm.config import VllmConfig, get_current_vllm_config
 from vllm.model_executor.layers.mamba.mamba_utils import (
     MambaStateDtypeCalculator,
     MambaStateShapeCalculator,
+    is_conv_state_dim_first,
 )
 from vllm.models.qwen4_exp.nvidia.ngram_embedding import Qwen4ExpNGramEmbedding
 from vllm.models.qwen4_exp.nvidia.ple_layer import (
@@ -171,18 +172,43 @@ class AscendQwen4ExpPLELayer(Qwen4ExpPLELayer):
 
     # -- eager short convolution ------------------------------------------
     def _window_from_state(self, conv_state: torch.Tensor, state_capacity: int) -> torch.Tensor:
-        """Return the trailing ``state_capacity`` taps of one slot's window.
+        """Return one slot's window as token-major ``[state_capacity, C]``.
 
-        ``conv_state`` arrives as ``[slots, channels, window]`` (already
-        canonicalized by the caller). Only the newest ``conv_state_len`` taps
-        are meaningful; anything older is graph padding.
+        ``conv_state`` arrives as ``[slots, *, *]``. Which axis is the window
+        depends on the SSM conv-state layout: ``SD`` (the default) is
+        ``[slots, state_len, C]``, ``DS`` is ``[slots, C, state_len]``. The
+        dilated convolution reads taps along time, so normalize to ``SD``
+        here. Only the newest ``state_capacity`` taps are meaningful; older
+        slots are graph padding.
         """
-        if conv_state.shape[-1] < state_capacity:
+        slot = conv_state[0]
+        window_axis = 1 if is_conv_state_dim_first() else 0
+        if slot.shape[window_axis] < state_capacity:
             raise RuntimeError(
                 "PLE short-conv cache is smaller than expected for dilated "
-                f"convolution: got {conv_state.shape[-1]}, expect at least {state_capacity}"
+                f"convolution: got {slot.shape[window_axis]}, expect at least {state_capacity}"
             )
-        return conv_state[..., -state_capacity:]
+        window = slot.narrow(window_axis, slot.shape[window_axis] - state_capacity, state_capacity)
+        return window if window_axis == 0 else window.transpose(0, 1)
+
+    def _store_window(
+        self,
+        conv_state: torch.Tensor,
+        slot: int,
+        window: torch.Tensor,
+        writeback_capacity: int,
+    ) -> None:
+        """Write back the newest ``writeback_capacity`` taps of ``window``.
+
+        ``window`` is token-major ``[state_len, C]``; the cache keeps its own
+        layout, so transpose when the state is ``DS``.
+        """
+        newest = window[-writeback_capacity:]
+        target = conv_state[slot]
+        if is_conv_state_dim_first():
+            target[:, target.shape[-1] - writeback_capacity :] = newest.t()
+        else:
+            target[target.shape[0] - writeback_capacity :, :] = newest
 
     def _dilated_conv(
         self,
@@ -215,7 +241,8 @@ class AscendQwen4ExpPLELayer(Qwen4ExpPLELayer):
         state_index: int,
         state_capacity: int,
     ) -> torch.Tensor:
-        return self._window_from_state(conv_state[state_index : state_index + 1], state_capacity)[0]
+        """Token-major ``[state_capacity, C]`` window of one state slot."""
+        return self._window_from_state(conv_state[state_index : state_index + 1], state_capacity)
 
     def _short_conv_eager(
         self,
@@ -281,8 +308,8 @@ class AscendQwen4ExpPLELayer(Qwen4ExpPLELayer):
                     history,
                 )
                 # Decode advances the window by one token and appends the input.
-                new_window = torch.cat((history[:, 1:], inputs[req : req + 1].to(dtype)), dim=-1)
-                conv_state[slot, :, :writeback_capacity] = new_window[:, -writeback_capacity:]
+                new_window = torch.cat((history[1:], inputs[req : req + 1].to(dtype)), dim=0)
+                self._store_window(conv_state, slot, new_window, writeback_capacity)
 
         if num_prefills:
             prefill_states = state_indices[num_decodes : num_decodes + num_prefills]
@@ -312,8 +339,8 @@ class AscendQwen4ExpPLELayer(Qwen4ExpPLELayer):
                 # Every token of the chunk reads the pre-chunk window; the new
                 # window is the tail of ``history + chunk``.
                 chunk = inputs[begin:end].to(dtype)
-                new_window = torch.cat((history, chunk), dim=-1)
-                conv_state[slot, :, :writeback_capacity] = new_window[:, -writeback_capacity:]
+                new_window = torch.cat((history, chunk), dim=0)
+                self._store_window(conv_state, slot, new_window, writeback_capacity)
 
     def _short_conv(
         self,

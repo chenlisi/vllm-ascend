@@ -443,3 +443,56 @@ def test_expand_indices_width_guard():
             2048,
             torch.zeros((1, 8), dtype=torch.int32),
         )
+
+
+def _ple_layout_harness():
+    """Bind the layer's conv-window helpers onto a bare object.
+
+    ``_window_from_state``/``_store_window`` only depend on the SSM conv-state
+    layout, so they can be driven without constructing a layer (which needs a
+    full VllmConfig). Both layouts are exercised by patching the layout
+    helper, so an implementation that hardcodes one orientation fails.
+    """
+    from vllm_ascend.models.qwen4_exp.ple import AscendQwen4ExpPLELayer
+
+    class Harness:
+        pass
+
+    for name in ("_window_from_state", "_store_window"):
+        setattr(Harness, name, getattr(AscendQwen4ExpPLELayer, name))
+    return Harness()
+
+
+@pytest.mark.parametrize("dim_first", [False, True])
+def test_conv_window_layout_roundtrip(monkeypatch, dim_first):
+    """Cache layout SD ([slot, len, C]) and DS ([slot, C, len]) both work."""
+    import vllm_ascend.models.qwen4_exp.ple as ple_mod
+
+    monkeypatch.setattr(ple_mod, "is_conv_state_dim_first", lambda: dim_first)
+
+    # Two slots, four taps, three channels; slot 1 is the one under test.
+    window = torch.arange(24, dtype=torch.float32).reshape(2, 4, 3)
+    conv_state = window.transpose(-1, -2).contiguous() if dim_first else window.clone()
+    expected = window[1]
+
+    harness = _ple_layout_harness()
+    got = harness._window_from_state(conv_state[1:2], 4)
+    assert torch.equal(got, expected), f"read mismatch for dim_first={dim_first}"
+
+    # A prefill chunk of two tokens shifts the window by two and keeps the tail.
+    chunk = torch.full((2, 3), -1.0)
+    rolled = torch.cat((got, chunk), dim=0)
+    harness._store_window(conv_state, 1, rolled, 4)
+    roundtrip = harness._window_from_state(conv_state[1:2], 4)
+    assert torch.equal(roundtrip, rolled[-4:]), f"write mismatch for dim_first={dim_first}"
+    # Slot 0 must be untouched by a write to slot 1.
+    assert torch.equal(harness._window_from_state(conv_state[0:1], 4), window[0])
+
+
+def test_conv_window_rejects_short_cache(monkeypatch):
+    import vllm_ascend.models.qwen4_exp.ple as ple_mod
+
+    monkeypatch.setattr(ple_mod, "is_conv_state_dim_first", lambda: False)
+    harness = _ple_layout_harness()
+    with pytest.raises(RuntimeError, match="smaller than expected"):
+        harness._window_from_state(torch.zeros(1, 2, 3), 4)
