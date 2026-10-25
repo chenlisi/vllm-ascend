@@ -890,6 +890,13 @@ def expand_qsa_indices_torch(
         raise ValueError(
             f"QSA packed buffer must be {output_width + 1} wide, got {out.shape[1]}"
         )
+    block_topk = token_topk // compress_ratio
+    if block_indices.shape[1] != block_topk:
+        raise ValueError(
+            f"QSA block-index buffer must be {block_topk} wide "
+            f"({token_topk} token top-k / {compress_ratio}), "
+            f"got {block_indices.shape[1]}"
+        )
     num_rows = block_indices.shape[0]
     for row in range(num_rows):
         position = int(positions[row].item())
@@ -898,10 +905,16 @@ def expand_qsa_indices_torch(
             out[row].fill_(PAD)
             out[row, -1] = 0
             continue
-        complete = min(visible, token_topk)
+        # ``visible_blocks`` counts compressed keys, so for sequences longer
+        # than ``token_topk`` tokens it outgrows the block-index columns. The
+        # scan is bounded by BLOCK_TOPK (the column count), matching the
+        # reference kernel's ``complete_blocks = min(visible, BLOCK_TOPK)``.
+        complete = min(visible, block_topk)
         expanded_count = complete * compress_ratio
         tail_start = ((position + 1) // compress_ratio) * compress_ratio
-        tail_count = min((position + 1) - tail_start, compress_ratio - 1)
+        # The open group after ``tail_start`` holds (position + 1) % ratio
+        # tokens, already < ratio, so no clamp is needed here either.
+        tail_count = (position + 1) - tail_start
 
         tokens: list[int] = []
         for rank in range(complete):

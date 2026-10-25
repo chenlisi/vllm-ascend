@@ -408,7 +408,9 @@ def test_compress_groups_skips_incomplete_groups():
 
 def test_expand_indices_packs_blocks_tail_and_count():
     """Expansion writes key-span tokens, then the causal tail, then the count."""
-    block_indices = torch.tensor([[2, -1]], dtype=torch.int32)
+    # Real geometry: token_topk=2048 / ratio=4 -> 512 block-index columns.
+    block_indices = torch.full((1, 512), -1, dtype=torch.int32)
+    block_indices[0, 0] = 2
     positions = torch.tensor([9], dtype=torch.int64)  # tail = 10 - 8 = 2 tokens
     visible = torch.tensor([1], dtype=torch.int32)
     out = torch.full((1, 2048 + 4), -1, dtype=torch.int32)
@@ -423,7 +425,7 @@ def test_expand_indices_packs_blocks_tail_and_count():
 
 def test_expand_indices_rejects_inert_rows():
     """A row without a position reports zero valid entries, not padding ones."""
-    block_indices = torch.tensor([[0, -1]], dtype=torch.int32)
+    block_indices = torch.zeros((1, 512), dtype=torch.int32)
     out = torch.zeros((1, 2048 + 4), dtype=torch.int32)
     expand_qsa_indices_torch(
         block_indices, torch.tensor([-1]), torch.tensor([0], dtype=torch.int32), 4, 2048, out
@@ -432,8 +434,26 @@ def test_expand_indices_rejects_inert_rows():
     assert (out[0, :-1] == -1).all()
 
 
+def test_expand_indices_rejects_missized_block_buffer():
+    """The block buffer must be exactly ``token_topk // ratio`` columns wide.
+
+    Upstream asserts the same shape; a narrower buffer would silently drop
+    candidates, a wider one would mean the caller and the expander disagree on
+    the geometry.
+    """
+    with pytest.raises(ValueError, match="block-index buffer must be 512 wide"):
+        expand_qsa_indices_torch(
+            torch.zeros((1, 2), dtype=torch.int32),
+            torch.tensor([9]),
+            torch.tensor([1], dtype=torch.int32),
+            4,
+            2048,
+            torch.full((1, 2048 + 4), -1, dtype=torch.int32),
+        )
+
+
 def test_expand_indices_width_guard():
-    block_indices = torch.zeros((1, 2), dtype=torch.int32)
+    block_indices = torch.zeros((1, 512), dtype=torch.int32)
     with pytest.raises(ValueError, match="packed buffer must be"):
         expand_qsa_indices_torch(
             block_indices,
@@ -443,6 +463,44 @@ def test_expand_indices_width_guard():
             2048,
             torch.zeros((1, 8), dtype=torch.int32),
         )
+
+
+@pytest.mark.parametrize("visible_blocks_count", [512, 1024, 3000])
+def test_expand_indices_saturates_block_columns_long_sequence(visible_blocks_count):
+    """A long sequence must clamp the block scan to the block-index width.
+
+    Real geometry: ``token_topk=2048`` with ``compress_ratio=4`` gives
+    ``block_indices`` 512 columns (``token_topk // compress_ratio``), while
+    ``visible_blocks`` counts *compressed keys* and grows past that once the
+    sequence exceeds 2048 tokens (``visible = seq_len // 4``). Upstream clamps
+    with ``tl.minimum(visible_blocks, BLOCK_TOPK)`` where ``BLOCK_TOPK`` is the
+    block-index column count (``qsa_indexer.py:240-241``), so the expansion
+    must stop at the last available column instead of reading past it.
+
+    ``visible_blocks_count=1024`` is the smallest value that overran the
+    column axis under the previous ``min(visible, token_topk)`` bound.
+    """
+    block_topk = 2048 // 4
+    ratio = 4
+    block_indices = torch.arange(block_topk, dtype=torch.int32).unsqueeze(0)
+    visible = torch.tensor([visible_blocks_count], dtype=torch.int32)
+    # Position beyond 2048 tokens; the open group holds exactly one token
+    # (4096 % 4 == 0), so the tail contributes nothing and the count is the
+    # expanded span alone.
+    positions = torch.tensor([4095], dtype=torch.int64)
+    out = torch.full((1, 2048 + ratio), -1, dtype=torch.int32)
+
+    expand_qsa_indices_torch(block_indices, positions, visible, ratio, 2048, out)
+
+    tokens = out[0, :-1]
+    complete = min(visible_blocks_count, block_topk)
+    expected_count = complete * ratio
+    assert int(out[0, -1].item()) == expected_count
+    assert (tokens[:expected_count] >= 0).all()
+    # Every expanded slot is the selected key's own span, in rank order.
+    assert tokens[0].item() == 0
+    assert tokens[expected_count - 1].item() == (complete - 1) * ratio + (ratio - 1)
+    assert (tokens[expected_count:] == -1).all()
 
 
 def _ple_layout_harness():

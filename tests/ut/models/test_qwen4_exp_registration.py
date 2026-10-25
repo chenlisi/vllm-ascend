@@ -85,16 +85,27 @@ def test_engram_whitelist_allows_qwen4_exp(engine_config):
         _validate_engram_config(broken)
 
 
-def test_block_size_derivation_matches_design(engine_config):
-    """``block_size`` is derived from the state pages, not hard-coded.
+def test_block_size_derivation_matches_runtime(engine_config):
+    """``block_size`` follows the backend alignment, not a hard-coded value.
 
     With TP=8 the GDN state page is 400896 B and one attention token costs
-    1024 B, so the scheduler block is 512 tokens (128-aligned). This is the
-    value E6 must end up with, and the design's 512 is asserted against the
-    derivation rather than trusted.
+    1024 B, so the derivation floor is 391 tokens. The rounding granularity is
+    the QSA backend's own ``get_supported_kernel_block_sizes()`` (``MultipleOf
+    (16)``), which is read from the backend here rather than assumed: this
+    stack has no MLA layer, so upstream's MLA-only 128 floor does not apply and
+    400 is the size the scheduler actually ends up with. The expected value is
+    produced by the *real* derivation helper the worker calls, so a formula
+    change upstream or a backend alignment change here fails the test instead
+    of drifting silently.
     """
+    from vllm.platforms import current_platform
+    from vllm.v1.attention.backend import MultipleOf
+
+    from vllm_ascend.models.qwen4_exp.qsa import AscendQwen4ExpQSABackend
+
     model_config = engine_config.model_config
     parallel_config = engine_config.parallel_config
+    cache_config = engine_config.cache_config
     cls, _ = ModelRegistry.resolve_model_cls(model_config.architecture, model_config)
 
     mamba_page = max(
@@ -108,13 +119,44 @@ def test_block_size_derivation_matches_design(engine_config):
     )
     assert mamba_page == 400896
     assert attn_1tok == 1024
-    raw = mamba_page / attn_1tok
-    expected = 128 * math.ceil(raw / 128)
-    assert expected == 512, f"design block_size drifted: raw={raw}"
 
-    attn_page = expected * attn_1tok
-    padding_pct = 100 * (attn_page - mamba_page) / attn_page
-    assert round(padding_pct, 2) == 23.54
+    # Alignment granularity comes from the backend under test.
+    supported = AscendQwen4ExpQSABackend.get_supported_kernel_block_sizes()
+    alignment = max(
+        min(s.base if isinstance(s, MultipleOf) else s for s in supported),
+        cache_config.block_size,
+    )
+    assert alignment == 16, f"kernel block alignment drifted: {supported}"
+
+    expected = alignment * math.ceil(mamba_page / (alignment * attn_1tok))
+    assert expected == 400, f"block_size drifted: alignment={alignment}"
+
+    # Drive the same helper the worker uses; it mutates cache_config in place,
+    # so restore the shared fixture afterwards to keep test order irrelevant.
+    saved = (
+        cache_config.block_size,
+        cache_config.mamba_block_size,
+        cache_config.mamba_page_size_padded,
+    )
+    try:
+        current_platform._align_hybrid_block_size(
+            engine_config, AscendQwen4ExpQSABackend
+        )
+        assert cache_config.block_size == expected
+        attn_page = cache_config.block_size * attn_1tok
+        # Same formula and denominator as the upstream logger
+        # (interface.py: "Padding mamba page size by %.2f%%").
+        padding_pct = 100 * (attn_page - mamba_page) / mamba_page
+        # 2.17% is the figure the running service logs (smoke/serve-dummy.log).
+        assert round(padding_pct, 2) == 2.17
+        assert cache_config.mamba_page_size_padded == attn_page == 409600
+    finally:
+        (
+            cache_config.block_size,
+            cache_config.mamba_block_size,
+            cache_config.mamba_page_size_padded,
+        ) = saved
+
     # The ring capacity must divide the scheduler block (E4 assertion).
     assert expected % 4 == 0
 
