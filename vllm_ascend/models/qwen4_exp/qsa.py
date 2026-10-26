@@ -12,7 +12,7 @@ pieces:
 ================================  ==============================  ==========================
 upstream (nvidia)                  here (Ascend)                  why
 ================================  ==============================  ==========================
-``Qwen4ExpQSAFlashAttentionImpl``  ``AscendQwen4ExpQSAAttnImpl``  ``npu_sparse_flash_attention``
+``Qwen4ExpQSAFlashAttentionImpl``  ``AscendQwen4ExpQSAAttnImpl``  SFA op unusable here
 ``ops/qsa_indexer.py`` Triton       eager torch select             small-operator composition
 ``ops/qsa.py`` compress/store       eager torch                    small-operator composition
 ``CircularBufferSpec``              ``AscendCircularBufferSpec``   Ascend KV zeroing semantics
@@ -34,11 +34,14 @@ valid-entry count. Each selected compressed key ``b`` covers the token span
 ``[b*ratio, b*ratio + ratio)`` and the causal tail covers the tokens after the
 last complete group.
 
-``npu_sparse_flash_attention`` indexes the logical token axis of the paged
+``npu_sparse_flash_attention`` would index the logical token axis of the paged
 cache (``sparse_block_size=1`` makes every block one token), so a compressed
-index is expanded to its token span before the call. That reading is the
-handoff S-2 risk and is asserted by a standalone operator case in the unit
-tests rather than assumed.
+index would have to be expanded to its token span before the call. That reading
+is the handoff S-2 risk and is **unverified**: CANN 9.1.0 implements only the
+operator's MLA tiling (qk head width 512) while QSA's main cache is 256-wide,
+so the operator is never reached in this configuration and no test drives it.
+The production path is the torch fallback below; the operator branch exists for
+a future wide-head variant and raises until its index semantics are validated.
 """
 
 from __future__ import annotations
@@ -109,8 +112,10 @@ __all__ = [
 
 PAD = -1
 # The sparse-attention operator's only implemented tiling mode is MLA, whose
-# qk head width must be 512. QSA's main cache is narrower, so that path is
-# reserved for the exact-width case and scored in torch otherwise.
+# qk head width must be 512. QSA's main cache is 256-wide on every shipped
+# checkpoint, so the operator branch below is dead code kept for the documented
+# wide-head case; ``AscendQwen4ExpQSAAttnImpl`` refuses to construct when the
+# head has that width because the branch's index semantics were never validated.
 _MLA_HEAD_SIZE = 512
 
 
@@ -1009,7 +1014,7 @@ def _page_rows(tensor: torch.Tensor, cache: torch.Tensor) -> torch.Tensor:
 
 
 def _page_groups(
-    block_ids: torch.Tensor, offsets: torch.Tensor
+    block_ids: torch.Tensor,
 ) -> tuple[torch.Tensor, list[int], list[tuple[int, int]]]:
     """Group ``(block, offset)`` pairs by page, preserving within-page order.
 
@@ -1051,7 +1056,7 @@ def _scatter_page_rows(
     """
     if rows.shape[0] == 0:
         return
-    order, pages, spans = _page_groups(block_ids, offsets)
+    order, pages, spans = _page_groups(block_ids)
     ordered_offsets = offsets[order]
     ordered_rows = rows[order]
     for page, (start, end) in zip(pages, spans):
@@ -1076,7 +1081,7 @@ def _gather_page_rows(
     out = cache.new_empty((count, *cache.shape[2:]))
     if count == 0:
         return out
-    order, pages, spans = _page_groups(block_ids, offsets)
+    order, pages, spans = _page_groups(block_ids)
     ordered_offsets = offsets[order]
     for page, (start, end) in zip(pages, spans):
         out.index_copy_(
@@ -1149,6 +1154,22 @@ class AscendQwen4ExpQSAAttnImpl:
     """
 
     def __init__(self, num_heads: int, head_size: int, scale: float, num_kv_heads: int) -> None:
+        # QSA only ever runs the torch fallback. A 512-wide head would select
+        # the ``npu_sparse_flash_attention`` branch in ``forward_qsa``, whose
+        # ``sparse_indices`` contract for QSA's packed block indices was never
+        # validated: CANN 9.1.0 implements only the operator's MLA tiling, so
+        # the branch cannot be exercised at all here. Refuse at construction
+        # instead of letting a future wide-head variant reach it silently.
+        if head_size == _MLA_HEAD_SIZE:
+            raise NotImplementedError(
+                f"QSA head width {head_size} selects the npu_sparse_flash_attention "
+                "branch, whose sparse_indices semantics for QSA's packed block "
+                "indices are UNVERIFIED (CANN 9.1.0 implements only the operator's "
+                "MLA tiling, so the path is not executable). Validate the index "
+                "contract on a CANN build that registers the operator before "
+                "enabling this width; QSA currently supports the 256-wide GQA cache "
+                "via the torch fallback only."
+            )
         self.num_heads = num_heads
         self.head_size = head_size
         self.scale = float(scale)
@@ -1219,39 +1240,29 @@ class AscendQwen4ExpQSAAttnImpl:
         # singleton head axis.
         token_indices = selection[:num_tokens, :-1].contiguous()
 
-        if key_cache.shape[-1] == _MLA_HEAD_SIZE:
-            result = torch.ops._C_ascend.npu_sparse_flash_attention(
-                query=query[:num_tokens].contiguous(),
-                key=key_cache,
-                value=value_cache,
-                sparse_indices=token_indices.unsqueeze(1),
-                scale_value=self.scale,
-                sparse_block_size=1,
-                block_table=attn_metadata.block_table,
-                actual_seq_lengths_query=attn_metadata.query_start_loc[1:].to(torch.int32),
-                actual_seq_lengths_kv=attn_metadata.seq_lens.to(torch.int32),
-                query_rope=None,
-                key_rope=None,
-                layout_query="TND",
-                layout_kv="PA_BSND",
-                sparse_mode=3,
-                attention_mode=2,
-                return_softmax_lse=False,
+        cache_head_size = key_cache.shape[-1]
+        if cache_head_size == _MLA_HEAD_SIZE:
+            # Guarded at construction too; repeated here because the cache is
+            # bound after the impl is built, so this is the width that would
+            # actually reach the operator. See the __init__ predicate.
+            raise NotImplementedError(
+                f"QSA main cache is {cache_head_size}-wide, which selects the "
+                "npu_sparse_flash_attention branch. Its sparse_indices semantics "
+                "for QSA's packed block indices are UNVERIFIED, and CANN 9.1.0 "
+                "implements only the operator's MLA tiling, so this path is not "
+                "executable. Use the 256-wide GQA configuration (torch fallback)."
             )
-            attn = result[0] if isinstance(result, tuple) else result
-        else:
-            # The operator's tiling only implements its MLA mode, which
-            # hard-requires 512-wide heads; QSA's main cache is 256-wide GQA,
-            # so select the same token set and score it directly.
-            attn = _sparse_gqa_torch(
-                query[:num_tokens],
-                key_cache,
-                value_cache,
-                token_indices,
-                attn_metadata.block_table,
-                attn_metadata.token_to_req,
-                self.scale,
-            )
+        # Small-operator composition: select the same token set and score it
+        # directly in torch.
+        attn = _sparse_gqa_torch(
+            query[:num_tokens],
+            key_cache,
+            value_cache,
+            token_indices,
+            attn_metadata.block_table,
+            attn_metadata.token_to_req,
+            self.scale,
+        )
         num_tokens_output_heads = attn.shape[1]
         head_dim = attn.shape[2]
         if output_gate.shape[-1] != num_tokens_output_heads * head_dim:

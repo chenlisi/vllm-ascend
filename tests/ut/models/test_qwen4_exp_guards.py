@@ -174,6 +174,69 @@ def test_gqa_head_guard():
 
 
 # ---------------------------------------------------------------------------
+# operator branch: the 512-wide MLA path is not reachable on this CANN
+# ---------------------------------------------------------------------------
+#
+# ``forward_qsa`` keeps an ``npu_sparse_flash_attention`` path for a 512-wide
+# MLA-shaped cache. QSA's main cache is 256-wide, so that branch never runs in
+# this configuration, and CANN 9.1.0 only implements the operator's MLA tiling
+# for real weights (the op symbol is not even registered here). A future
+# 512-wide QSA variant would therefore reach an operator whose
+# ``sparse_indices`` semantics were never validated for QSA's packed
+# block-index contract -- silently. The guard turns that into a hard failure;
+# the control case proves the guard is scoped to the 512-wide head, not a
+# blanket refusal of the whole attention path.
+
+MLA_HEAD_SIZE = 512
+
+
+def _wide_caches(head_dim):
+    torch.manual_seed(0)
+    key = torch.randn(BLOCKS, PAGE, KV_HEADS, head_dim)
+    return key, torch.randn_like(key)
+
+
+def test_mla_width_path_raises_before_the_operator():
+    """A 512-wide cache must fail on the guard, not inside the operator call."""
+    impl = _impl()
+    key, value = _wide_caches(MLA_HEAD_SIZE)
+    query = torch.randn(1, NUM_HEADS, MLA_HEAD_SIZE)
+    out = torch.zeros(1, NUM_HEADS, MLA_HEAD_SIZE)
+
+    with pytest.raises(NotImplementedError, match="sparse_indices") as excinfo:
+        impl.forward_qsa(
+            _layer(), query, (key, value), _metadata(), out, _selection(),
+            torch.zeros(1, NUM_HEADS * MLA_HEAD_SIZE),
+        )
+    message = str(excinfo.value)
+    # The message has to say *what* is unverified, otherwise the next person
+    # re-enables the branch without knowing what to validate.
+    assert "MLA" in message.upper()
+    assert "unverified" in message.lower()
+
+
+def test_mla_width_is_refused_at_construction():
+    """The same width is rejected before a cache is ever bound."""
+    with pytest.raises(NotImplementedError, match="UNVERIFIED"):
+        AscendQwen4ExpQSAAttnImpl(
+            num_heads=NUM_HEADS, head_size=MLA_HEAD_SIZE, scale=0.5, num_kv_heads=KV_HEADS
+        )
+
+
+def test_default_width_still_reaches_the_torch_fallback():
+    """Control: the production 256-wide head keeps its default path."""
+    impl = _impl()
+    key, value = _caches()
+    query = torch.randn(1, NUM_HEADS, HEAD_DIM)
+    out = torch.zeros(1, NUM_HEADS, HEAD_DIM)
+    result = impl.forward_qsa(
+        _layer(), query, (key, value), _metadata(), out, _selection(),
+        torch.zeros(1, NUM_HEADS * HEAD_DIM),
+    )
+    assert torch.isfinite(result).all()
+
+
+# ---------------------------------------------------------------------------
 # norm family: the Gemma variant has no mean subtraction
 # ---------------------------------------------------------------------------
 def test_gemma_norm_matches_reference_and_differs_from_layernorm():
