@@ -350,9 +350,11 @@ class AscendQwen4ExpPLELayer(Qwen4ExpPLELayer):
     ) -> None:
         """Route the current request layout into the eager short convolution.
 
-        Mirrors the upstream entry point: profiling runs (no metadata) and
-        layers without their own metadata entry only contribute the outer
-        residual.
+        Profiling runs carry no attention metadata at all and only contribute
+        the outer residual. Once metadata exists every other branch is a hard
+        error: a missing entry or an unbound state slot means the layer can no
+        longer produce its conv term, and pretending otherwise silently
+        corrupts the output.
         """
         from vllm.forward_context import get_forward_context
 
@@ -367,8 +369,13 @@ class AscendQwen4ExpPLELayer(Qwen4ExpPLELayer):
             )
         layer_attn_metadata = attn_metadata.get(self.prefix)
         if layer_attn_metadata is None:
-            residual.add_(outer_residual)
-            return
+            # A populated metadata dict without this layer's entry can only be
+            # a registration/key mismatch; silently dropping the conv term
+            # would corrupt the PLE output without a trace.
+            raise RuntimeError(
+                f"PLE layer '{self.prefix}' is missing from attention "
+                f"metadata; available keys: {list(attn_metadata.keys())[:5]}"
+            )
         if not isinstance(layer_attn_metadata, PleShortConvAttentionMetadata):
             raise TypeError(
                 "Expected PleShortConvAttentionMetadata for layer "
@@ -381,8 +388,11 @@ class AscendQwen4ExpPLELayer(Qwen4ExpPLELayer):
 
         conv_state = self.kv_cache[0]
         if conv_state.numel() == 0:
-            residual.add_(outer_residual)
-            return
+            # ``bind_kv_cache`` runs before any inference forward, so an empty
+            # conv-state slot here means the state cache never got bound.
+            raise RuntimeError(
+                f"PLE layer '{self.prefix}' has an unbound (empty) conv state"
+            )
         self._short_conv_eager(
             inputs=inputs,
             residual=residual,

@@ -1441,13 +1441,19 @@ class AscendQwen4ExpQSAAttention(Qwen3NextAttention, AttentionLayerBase):
         if isinstance(metadata, list):
             metadata = metadata[0]
         if not isinstance(metadata, dict):
+            # Profiling / memory-sizing runs carry no attention metadata at
+            # all (``_dummy_run`` leaves it ``None`` unless it is forced).
             output.zero_()
             return
         main_metadata = metadata.get(self.layer_name)
         if main_metadata is None:
-            # Profiling runs have no per-layer entry; nothing to attend over.
-            output.zero_()
-            return
+            # A populated metadata dict without this layer's entry can only be
+            # a registration/key mismatch. Failing loudly here beats zeroing
+            # twelve QSA layers and emitting fluent nonsense.
+            raise RuntimeError(
+                f"QSA layer '{self.layer_name}' is missing from attention "
+                f"metadata; available keys: {list(metadata.keys())[:5]}"
+            )
         if self.kv_cache[0].numel() == 0:
             raise RuntimeError("QSA main K/V cache is not bound")
 

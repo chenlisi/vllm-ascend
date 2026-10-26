@@ -193,3 +193,153 @@ def test_gemma_norm_matches_reference_and_differs_from_layernorm():
 
     layernorm = torch.nn.functional.layer_norm(x, (8,), eps=1e-6) * (1.0 + w)
     assert not torch.allclose(got, layernorm, atol=1e-3)
+
+
+# ---------------------------------------------------------------------------
+# metadata assembly: a populated dict must carry this layer's entry
+# ---------------------------------------------------------------------------
+#
+# Both fallbacks below used to emit plausible output when the per-layer entry
+# was missing (a zeroed QSA output, a PLE result without its conv term), which
+# turns a naming/registration mismatch into silent numerical garbage. These
+# guards are what makes such a mismatch show up at the first forward.
+
+MODEL_PREFIX = "model.layers.0"
+
+
+def _forward_context(metadata):
+    return SimpleNamespace(attn_metadata=metadata)
+
+
+def _patch_forward_context(monkeypatch, metadata):
+    """Point every consumer at a fake forward context.
+
+    ``qsa`` binds ``get_forward_context`` at import time while ``ple`` imports
+    it lazily inside the call, so both the shared module and its importer are
+    patched here.
+    """
+    import vllm.forward_context as ctx_mod
+    import vllm_ascend.models.qwen4_exp.qsa as qsa_mod
+
+    fake = lambda: _forward_context(metadata)  # noqa: E731
+    monkeypatch.setattr(ctx_mod, "get_forward_context", fake)
+    monkeypatch.setattr(qsa_mod, "get_forward_context", fake)
+
+
+def _ple_metadata():
+    """A real ``PleShortConvAttentionMetadata`` with the required fields set."""
+    import dataclasses
+
+    from vllm.v1.attention.backends.short_conv_attn import (
+        PleShortConvAttentionMetadata,
+    )
+
+    kwargs = {}
+    for field in dataclasses.fields(PleShortConvAttentionMetadata):
+        if (
+            field.default is not dataclasses.MISSING
+            or field.default_factory is not dataclasses.MISSING
+        ):
+            continue
+        kwargs[field.name] = torch.zeros(1, dtype=torch.int32)
+    return PleShortConvAttentionMetadata(**kwargs)
+
+
+def _ple_layer_stub(conv_state):
+    return SimpleNamespace(prefix=f"{MODEL_PREFIX}.ple", kv_cache=(conv_state,))
+
+
+def test_qsa_missing_layer_metadata_raises(monkeypatch):
+    """A non-empty metadata dict without this layer's key is a defect."""
+    from vllm_ascend.models.qwen4_exp.qsa import AscendQwen4ExpQSAAttention
+
+    layer_name = f"{MODEL_PREFIX}.self_attn.attn"
+    metadata = {f"{MODEL_PREFIX}.linear_attn": object()}
+    _patch_forward_context(monkeypatch, metadata)
+
+    layer = SimpleNamespace(layer_name=layer_name)
+    out = torch.zeros(1, NUM_HEADS, HEAD_DIM)
+    with pytest.raises(RuntimeError, match="missing from attention metadata") as excinfo:
+        AscendQwen4ExpQSAAttention._run_qsa(
+            layer,
+            torch.zeros(1, HEAD_DIM),
+            torch.zeros(1, dtype=torch.int64),
+            torch.zeros(1, NUM_HEADS, HEAD_DIM),
+            torch.zeros(1, KV_HEADS, HEAD_DIM),
+            torch.zeros(1, KV_HEADS, HEAD_DIM),
+            out,
+            torch.zeros(1, NUM_HEADS * HEAD_DIM),
+        )
+    # The message must name the layer and expose the actual keys, otherwise it
+    # cannot distinguish a prefix mismatch from a builder omission.
+    message = str(excinfo.value)
+    assert layer_name in message
+    assert "linear_attn" in message
+    # The raise must not half-write the buffer.
+    assert torch.equal(out, torch.zeros(1, NUM_HEADS, HEAD_DIM))
+
+
+def test_qsa_profiling_without_metadata_still_zeroes(monkeypatch):
+    """Control: profiling passes no metadata at all and must keep working."""
+    from vllm_ascend.models.qwen4_exp.qsa import AscendQwen4ExpQSAAttention
+
+    _patch_forward_context(monkeypatch, None)
+    layer = SimpleNamespace(layer_name=f"{MODEL_PREFIX}.self_attn.attn")
+    out = torch.ones(1, NUM_HEADS, HEAD_DIM)
+    AscendQwen4ExpQSAAttention._run_qsa(
+        layer,
+        torch.zeros(1, HEAD_DIM),
+        torch.zeros(1, dtype=torch.int64),
+        torch.zeros(1, NUM_HEADS, HEAD_DIM),
+        torch.zeros(1, KV_HEADS, HEAD_DIM),
+        torch.zeros(1, KV_HEADS, HEAD_DIM),
+        out,
+        torch.zeros(1, NUM_HEADS * HEAD_DIM),
+    )
+    assert torch.equal(out, torch.zeros(1, NUM_HEADS, HEAD_DIM))
+
+
+def test_ple_missing_layer_metadata_raises(monkeypatch):
+    """A non-empty metadata dict without this layer's key is a defect."""
+    from vllm_ascend.models.qwen4_exp.ple import AscendQwen4ExpPLELayer
+
+    metadata = {f"{MODEL_PREFIX}.self_attn.attn": _ple_metadata()}
+    _patch_forward_context(monkeypatch, metadata)
+
+    layer = _ple_layer_stub(torch.zeros(2, 3, 4))
+    residual = torch.full((1, 4), 2.0)
+    with pytest.raises(RuntimeError, match="missing from attention metadata") as excinfo:
+        AscendQwen4ExpPLELayer._short_conv(layer, torch.zeros(1, 4), residual, torch.ones(1, 4))
+    assert f"{MODEL_PREFIX}.ple" in str(excinfo.value)
+    assert "self_attn" in str(excinfo.value)
+    # Dropping the conv term must not happen silently: residual stays untouched.
+    assert torch.equal(residual, torch.full((1, 4), 2.0))
+
+
+def test_ple_unbound_conv_state_raises(monkeypatch):
+    """Metadata is present but the state slot was never bound."""
+    from vllm_ascend.models.qwen4_exp.ple import AscendQwen4ExpPLELayer
+
+    prefix = f"{MODEL_PREFIX}.ple"
+    _patch_forward_context(monkeypatch, {prefix: _ple_metadata()})
+
+    layer = _ple_layer_stub(torch.empty(0))
+    residual = torch.full((1, 4), 2.0)
+    with pytest.raises(RuntimeError, match=r"unbound \(empty\) conv state") as excinfo:
+        AscendQwen4ExpPLELayer._short_conv(
+            layer, torch.zeros(1, 4), residual, torch.ones(1, 4)
+        )
+    assert prefix in str(excinfo.value)
+    assert torch.equal(residual, torch.full((1, 4), 2.0))
+
+
+def test_ple_profiling_without_metadata_adds_outer_residual(monkeypatch):
+    """Control: with no metadata the layer contributes only the outer residual."""
+    from vllm_ascend.models.qwen4_exp.ple import AscendQwen4ExpPLELayer
+
+    _patch_forward_context(monkeypatch, None)
+    layer = _ple_layer_stub(torch.empty(0))
+    residual = torch.zeros(1, 4)
+    outer = torch.ones(1, 4)
+    AscendQwen4ExpPLELayer._short_conv(layer, torch.zeros(1, 4), residual, outer)
+    assert torch.equal(residual, outer)
