@@ -1,14 +1,43 @@
-model_name: "Eco-Tech/Qwen3.8-Flash-Next-w8a8-mtp"
+# Stage 1 *golden baseline* e2e config for Qwen3.8-Flash-Next.
+# NOT a production config and NOT an RFC config: it records what the Stage 1
+# run (`.day0/Qwen4ExpForConditionalGeneration_20261025_1`) actually deployed,
+# so that a later Stage 4 accuracy run can be reproduced from this file.
+#
+# Every run-affecting field is tagged with its evidence status:
+#   [measured]  the value this run really used (backed by serve/probe logs)
+#   [target]    an intended value that was NOT verified in this run
+#
+# `metrics.value` entries are pass/fail thresholds, not numbers measured here.
+#
+# Known gap: `language_model_only` is not read by `build_model_args()` in
+# tests/e2e/models/test_lm_eval_correctness.py, so setting it here has no
+# effect on an lm_eval run. The Stage 1 serve did use `--language-model-only`.
+
+# [target] Not verified. This run loaded the local bf16 checkpoint
+# `/mnt/weight/Qwen3.8-Flash-Next`; no hub id was ever resolved here, and a
+# local path cannot be committed as a reproducer. The `-w8a8-mtp` suffix that
+# used to sit on this name described a w8a8 quantization and an MTP setup that
+# this run did not use, so it is dropped rather than kept as a claim about the
+# weights. `Eco-Tech/Qwen3.8-Flash-Next` is therefore an intended hub id, not
+# an observed one.
+model_name: "Eco-Tech/Qwen3.8-Flash-Next"
 model_type: "vllm"
-hardware: "Atlas A3 Series"
+# [measured] IT22HMDA_4_S, 16 x 64 GB per node.
+hardware: "Atlas A2 Series"
 
 serve:
+  # [measured] single node, pure TP=8.
   tensor_parallel_size: 8
-  dtype: auto
-  max_model_len: 262144
-  gpu_memory_utilization: 0.9
+  # [measured] bf16 checkpoint, no quantization config.
+  dtype: bfloat16
+  # [measured] Stage 1 ruling (design/kv-alloc-dryrun.md §4); 262144 is the
+  # config upper bound and does not fit the Stage 1 KV budget.
+  max_model_len: 32768
+  # [measured] serve log: "Desired GPU memory utilization is (0.92, ...)".
+  gpu_memory_utilization: 0.92
   trust_remote_code: true
-  enable_expert_parallel: true
+  # [measured] no expert parallelism in this run; TP=8 only.
+  enable_expert_parallel: false
   enforce_eager: true
   language_model_only: true
 
@@ -16,6 +45,8 @@ tasks:
 - name: "ceval-valid_accountant"
   metrics:
   - name: "acc,none"
+    # Threshold, NOT measured: no lm_eval run of this task was executed at
+    # Stage 1. Backfill from the first Stage 4 measurement.
     value: 0.98
 
 num_fewshot: 5
