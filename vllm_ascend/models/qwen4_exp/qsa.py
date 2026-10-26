@@ -702,10 +702,11 @@ def qsa_store_rows_torch(
         return
     slots = slot_mapping[valid].long()
     # Pages are block-strided views, so address them by block and offset
-    # instead of flattening a non-contiguous tensor.
+    # instead of flattening a non-contiguous tensor, and write in place: the
+    # assignment form would materialize a temporary the size of the page plane.
     block_ids = torch.div(slots, cache.shape[1], rounding_mode="floor")
     offsets = torch.remainder(slots, cache.shape[1])
-    cache[block_ids, offsets] = rows[valid].to(cache.dtype).unsqueeze(1)
+    _scatter_page_rows(cache, block_ids, offsets, rows[valid].to(cache.dtype).unsqueeze(1))
 
 
 @torch.no_grad()
@@ -1007,6 +1008,28 @@ def _page_rows(tensor: torch.Tensor, cache: torch.Tensor) -> torch.Tensor:
     return tensor.reshape(tensor.shape[0], *cache.shape[2:])
 
 
+def _page_groups(
+    block_ids: torch.Tensor, offsets: torch.Tensor
+) -> tuple[torch.Tensor, list[int], list[tuple[int, int]]]:
+    """Group ``(block, offset)`` pairs by page, preserving within-page order.
+
+    Returns the permutation that sorts the pairs by page, the distinct page
+    ids in ascending order, and one ``(start, end)`` span of that permutation
+    per page. Only the pages actually touched are visited, so the work is
+    O(pages addressed) rather than O(pages in the pool).
+    """
+    order = torch.argsort(block_ids, stable=True)
+    pages, counts = torch.unique_consecutive(block_ids[order], return_counts=True)
+    pages_list = pages.tolist()
+    counts_list = counts.tolist()
+    spans: list[tuple[int, int]] = []
+    start = 0
+    for count in counts_list:
+        spans.append((start, start + count))
+        start += count
+    return order, pages_list, spans
+
+
 def _scatter_page_rows(
     cache: torch.Tensor,
     block_ids: torch.Tensor,
@@ -1018,30 +1041,50 @@ def _scatter_page_rows(
     ``cache`` is a block-strided view of the shared KV pool, so the obvious
     ``cache[block_ids, offsets] = rows`` is a whole-tensor advanced-index
     assignment: torch materializes a temporary the size of the *destination*
-    view before scattering, which on the real pool is half the cache (measured
-    6.26 GiB for a 57-token request) and OOMs at default utilization.
+    view before scattering, which on the real pool is one whole layer plane
+    (measured 6.26 GiB, independent of the number of rows selected) and OOMs at
+    default utilization.
 
     ``index_copy_`` writes in place, and since a step's slots are unique it is
-    the exact same operation. Rows are grouped per block so the scatter touches
-    each page once; the only temporaries are O(rows in that block).
+    the exact same operation. Rows are grouped per page so the scatter touches
+    each page once; the only temporaries are O(rows in that page).
     """
     if rows.shape[0] == 0:
         return
-    num_blocks = int(block_ids.max().item()) + 1
-    if num_blocks <= 0:
-        return
-    counts = torch.bincount(block_ids, minlength=num_blocks)
-    order = torch.argsort(block_ids, stable=True)
-    start = 0
+    order, pages, spans = _page_groups(block_ids, offsets)
     ordered_offsets = offsets[order]
     ordered_rows = rows[order]
-    for block in range(num_blocks):
-        count = int(counts[block].item())
-        if count == 0:
-            continue
-        end = start + count
-        cache[block].index_copy_(0, ordered_offsets[start:end], ordered_rows[start:end])
-        start = end
+    for page, (start, end) in zip(pages, spans):
+        cache[page].index_copy_(0, ordered_offsets[start:end], ordered_rows[start:end])
+
+
+def _gather_page_rows(
+    cache: torch.Tensor,
+    block_ids: torch.Tensor,
+    offsets: torch.Tensor,
+) -> torch.Tensor:
+    """Read ``cache`` at ``(block_ids, offsets)`` into ``[rows, *cell]``.
+
+    The read-side twin of :func:`_scatter_page_rows`, and for the same reason:
+    ``cache[block_ids, offsets]`` on a block-strided view materializes one
+    whole layer plane regardless of how few rows are selected (measured 2.441
+    GiB for a 6400-page pool at sel=8 and sel=57 alike), which OOMs the first
+    real request at default utilization. Gathering one page at a time bounds
+    the temporaries to the rows addressed in that page.
+    """
+    count = block_ids.numel()
+    out = cache.new_empty((count, *cache.shape[2:]))
+    if count == 0:
+        return out
+    order, pages, spans = _page_groups(block_ids, offsets)
+    ordered_offsets = offsets[order]
+    for page, (start, end) in zip(pages, spans):
+        out.index_copy_(
+            0,
+            order[start:end],
+            cache[page].index_select(0, ordered_offsets[start:end]),
+        )
+    return out
 
 
 def _sparse_gqa_torch(
@@ -1081,9 +1124,12 @@ def _sparse_gqa_torch(
             continue
         pages = block_table[request, torch.div(selected, page_size, rounding_mode="floor").long()]
         offsets = torch.remainder(selected, page_size)
-        # One gathered cell is a whole page slot (all KV heads).
-        keys = key_cache[pages, offsets].reshape(-1, num_kv_heads, head_dim).float()
-        values = value_cache[pages, offsets].reshape(-1, num_kv_heads, head_dim).float()
+        # One gathered cell is a whole page slot (all KV heads). The caches are
+        # block-strided views, so the rows are gathered page by page: a single
+        # ``key_cache[pages, offsets]`` here would materialize one whole layer
+        # plane no matter how few tokens were selected.
+        keys = _gather_page_rows(key_cache, pages, offsets).float()
+        values = _gather_page_rows(value_cache, pages, offsets).float()
         if repeat != 1:
             keys = keys.repeat_interleave(repeat, dim=1)
             values = values.repeat_interleave(repeat, dim=1)

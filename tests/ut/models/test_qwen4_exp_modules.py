@@ -33,7 +33,9 @@ from vllm_ascend.models.qwen4_exp.hyperconnection import (
 from vllm_ascend.models.qwen4_exp.ple import ple_gate_torch
 from vllm_ascend.models.qwen4_exp.qsa import (
     AscendQwen4ExpQSAAttnImpl,
+    _gather_page_rows,
     _scatter_page_rows,
+    _sparse_gqa_torch,
     expand_qsa_indices_torch,
     gemma_rmsnorm_torch,
     qsa_compress_groups_torch,
@@ -301,8 +303,15 @@ class _TorchDispatchRecorder(TorchDispatchMode):
     def __init__(self, sizes):
         self.sizes = sizes
         self.op_names = []
+        # ``(shape, dim)`` of every tensor fed to an advanced-index read. On
+        # CPU the read itself is cheap; the NPU backend is what materializes a
+        # destination-sized temporary, so the op's presence on a multi-dim
+        # source -- not its measured cost -- is the portable defect signature.
+        self.index_sources = []
 
     def __torch_dispatch__(self, func, types, args=(), kwargs=None):
+        if str(func) == "aten.index.Tensor" and args and isinstance(args[0], torch.Tensor):
+            self.index_sources.append((tuple(args[0].shape), args[0].dim()))
         out = func(*args, **(kwargs or {}))
         name = str(func)
         self.op_names.append(name)
@@ -371,6 +380,184 @@ def test_scatter_page_rows_is_in_place_and_empty_safe():
         cache, torch.zeros(0, dtype=torch.long), torch.zeros(0, dtype=torch.long),
         torch.zeros(0, 1, 2, dtype=torch.bfloat16),
     )
+
+
+def _block_strided_cache(pages, page_size, heads, width, pad_heads=3):
+    """A page view whose rows are strided, like the real QSA pool binding.
+
+    ``attn_utils.py`` builds the QSA page with ``torch.as_strided`` over a
+    packed allocation, so the head axis is padded and the whole view is
+    non-contiguous. Advanced indexing on exactly this shape materializes one
+    whole layer plane, so every test that claims to cover the OOM must run on
+    it -- on a contiguous tensor the same call is cheap and the defect is
+    invisible.
+    """
+    base = torch.zeros(pages, page_size, heads + pad_heads, width, dtype=torch.bfloat16)
+    view = base[:, :, :heads, :]
+    assert not view.is_contiguous()
+    return base, view
+
+
+def test_gather_page_rows_matches_advanced_indexing():
+    """The paged gather must equal the obvious ``cache[ids, offs]`` exactly,
+    including repeated pages and an unsorted selection."""
+    pages, page_size, heads, width = 8, 4, 2, 5
+    torch.manual_seed(3)
+    base, cache = _block_strided_cache(pages, page_size, heads, width)
+    base.normal_()
+
+    block_ids = torch.tensor([5, 1, 5, 3, 0, 5])
+    offsets = torch.tensor([2, 0, 1, 3, 0, 0])
+
+    expected = cache[block_ids, offsets]
+    got = _gather_page_rows(cache, block_ids, offsets)
+
+    assert got.shape == expected.shape == (block_ids.numel(), heads, width)
+    assert torch.equal(got, expected), "paged gather diverged from advanced indexing"
+
+
+def test_gather_page_rows_handles_empty_selection():
+    pages, page_size, heads, width = 4, 2, 1, 3
+    _, cache = _block_strided_cache(pages, page_size, heads, width)
+    got = _gather_page_rows(
+        cache, torch.zeros(0, dtype=torch.long), torch.zeros(0, dtype=torch.long)
+    )
+    assert got.shape == (0, heads, width)
+
+
+def test_gather_page_rows_never_allocates_a_pool_sized_temporary():
+    """Peak temporary must scale with the selected rows, not with the pool.
+
+    Measured on the real pool: the advanced-index read cost 2.441 GiB for both
+    sel=8 and sel=57 on a 6400-page layer -- independent of the selection, i.e.
+    one whole plane (6.26 GiB at 16410 pages), which is why the first 57-token
+    request at default utilization OOMed on the read path after the write path
+    was fixed.
+    """
+    pages, page_size, heads, width = 512, 8, 2, 16
+    _, cache = _block_strided_cache(pages, page_size, heads, width)
+    pool_bytes = cache.numel() * cache.element_size()
+
+    block_ids = torch.tensor([7, 200, 7, 511, 3])
+    offsets = torch.tensor([1, 0, 6, 7, 2])
+
+    sizes = []
+    with _TorchDispatchRecorder(sizes) as rec:
+        _gather_page_rows(cache, block_ids, offsets)
+
+    assert sizes, "the recorder saw no dispatches; the probe is not wired up"
+    biggest = max(sizes)
+    row_bytes = heads * width * 2
+    assert biggest < pool_bytes / 8, (
+        f"the paged gather allocated {biggest} B against a {pool_bytes} B plane; "
+        "a pool-sized temporary is back and the first request will OOM"
+    )
+    assert biggest <= block_ids.numel() * row_bytes * 2, (
+        f"largest temporary {biggest} B exceeds a row-bounded budget"
+    )
+    # ``block_ids[order]`` legitimately dispatches ``index.Tensor``, but on a
+    # row-sized 1-D tensor; the defect signature is an advanced-index *read of
+    # the 4-D pool view*, which the NPU backend expands to a whole plane.
+    assert not any(dim >= 2 for _, dim in rec.index_sources), (
+        "advanced-index read is back on a block-strided pool view: "
+        f"{rec.index_sources}"
+    )
+
+
+def test_sparse_gqa_reads_a_block_strided_cache_correctly():
+    """End-to-end read path on the non-contiguous pool view, against a
+    brute-force loop over the logical pages."""
+    pages, page_size, kv_heads, head_dim = 6, 4, 2, 3
+    num_heads = 4  # two query heads per KV head
+    _, key_cache = _block_strided_cache(pages, page_size, kv_heads, head_dim)
+    _, value_cache = _block_strided_cache(pages, page_size, kv_heads, head_dim)
+    torch.manual_seed(11)
+    key_cache.normal_()
+    value_cache.normal_()
+
+    block_table = torch.tensor([[3, 1, 5, 0]])
+    token_indices = torch.tensor([[0, 2, 5, 7, -1]])
+    query = torch.randn(1, num_heads, head_dim)
+    scale = head_dim**-0.5
+
+    out = _sparse_gqa_torch(
+        query, key_cache, value_cache, token_indices, block_table,
+        torch.zeros(1, dtype=torch.int32), scale,
+    )
+
+    # Independent reference: walk the logical tokens one at a time.
+    selected = [t for t in token_indices[0].tolist() if t >= 0]
+    keys = torch.stack([key_cache[block_table[0, t // page_size], t % page_size]
+                        for t in selected]).float()
+    values = torch.stack([value_cache[block_table[0, t // page_size], t % page_size]
+                          for t in selected]).float()
+    keys = keys.repeat_interleave(num_heads // kv_heads, dim=1)
+    values = values.repeat_interleave(num_heads // kv_heads, dim=1)
+    scores = torch.einsum("hd,nhd->hn", query[0].float(), keys) * scale
+    weights = torch.softmax(scores, dim=-1)
+    expected = torch.einsum("hn,nhd->hd", weights, values)
+
+    torch.testing.assert_close(out[0].float(), expected, atol=1e-5, rtol=1e-4)
+
+
+def test_sparse_gqa_read_never_allocates_a_pool_sized_temporary():
+    """The blocking check for the S1.3 OOM: a 57-token-class selection against
+    a large pool must not materialize the plane."""
+    pages, page_size, kv_heads, head_dim = 512, 8, 2, 16
+    _, key_cache = _block_strided_cache(pages, page_size, kv_heads, head_dim)
+    _, value_cache = _block_strided_cache(pages, page_size, kv_heads, head_dim)
+    plane_bytes = key_cache.numel() * key_cache.element_size()
+
+    block_table = torch.arange(pages, dtype=torch.int32).reshape(1, -1)
+    token_indices = torch.arange(57, dtype=torch.int32).reshape(1, -1)
+    query = torch.randn(1, 4, head_dim)
+
+    sizes = []
+    with _TorchDispatchRecorder(sizes) as rec:
+        _sparse_gqa_torch(
+            query, key_cache, value_cache, token_indices, block_table,
+            torch.zeros(1, dtype=torch.int32), head_dim**-0.5,
+        )
+
+    assert sizes, "the recorder saw no dispatches; the probe is not wired up"
+    biggest = max(sizes)
+    assert biggest < plane_bytes / 8, (
+        f"_sparse_gqa_torch allocated {biggest} B against a {plane_bytes} B plane; "
+        "the read path still materializes the whole layer and will OOM"
+    )
+    assert not any(dim >= 2 for _, dim in rec.index_sources), (
+        "advanced-index read is back on a block-strided pool view: "
+        f"{rec.index_sources}"
+    )
+
+
+def test_qsa_store_rows_never_allocates_a_pool_sized_temporary():
+    """The side-cache write (``qsa.py:708``) had the same advanced-index shape
+    as the main KV write; it must stay in place on a strided view too."""
+    pages, page_size, width = 1024, 8, 16
+    base = torch.zeros(pages, page_size, 1, width + 8, dtype=torch.bfloat16)
+    cache = base[:, :, :, :width]
+    assert not cache.is_contiguous()
+
+    rows = torch.randn(3, width, dtype=torch.bfloat16)
+    slots = torch.tensor([5, -1, 4001])
+    pool_bytes = cache.numel() * cache.element_size()
+
+    sizes = []
+    with _TorchDispatchRecorder(sizes) as rec:
+        qsa_store_rows_torch(cache, slots, rows)
+
+    assert sizes, "the recorder saw no dispatches; the probe is not wired up"
+    assert max(sizes) < pool_bytes / 8, (
+        f"qsa_store_rows_torch allocated {max(sizes)} B against a {pool_bytes} B plane"
+    )
+    assert not any("index_put" in n for n in rec.op_names), (
+        f"advanced-index write is back: {sorted(set(rec.op_names))}"
+    )
+    expected = torch.zeros(pages, page_size, 1, width, dtype=torch.bfloat16)
+    expected[0, 5] = rows[0]
+    expected[500, 1] = rows[2]  # slot 4001 -> block 500, offset 1
+    assert torch.equal(cache, expected)
 
 
 def test_do_kv_cache_update_scales_with_tokens_not_pool():
