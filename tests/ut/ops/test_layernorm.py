@@ -187,3 +187,78 @@ def test_norm_bias_lookup_handles_empty_description(clean_norm_bias_cache):
     assert ascend_layernorm._quant_description_has_norm_bias({}) is False
     assert ascend_layernorm._quant_description_has_norm_bias(None) is False
     assert not ascend_layernorm._NORM_BIAS_IN_QUANT_DESCRIPTION
+
+
+# ---------------------------------------------------------------------------
+# Gated norm activation: the fused NPU kernel can only express a SiLU gate
+# ---------------------------------------------------------------------------
+#
+# Qwen4Exp's GDN layers gate with ``sigmoid`` (``output_gate_type: sigmoid``).
+# ``LayerNormFn`` hard-codes ``z * sigmoid(z)`` (SiLU) in its kernel, so routing
+# a sigmoid-gated layer through it silently multiplies the block output by
+# silu(z) instead -- measured 3.1x too large on real layer-0 tensors. These
+# tests pin the dispatch: non-SiLU activations must use the activation-aware
+# path, and SiLU must keep the fused kernel.
+
+
+def _gated_layer(activation):
+    from vllm_ascend.ops.layernorm import AscendRMSNormGated
+
+    return AscendRMSNormGated(
+        hidden_size=8,
+        eps=1e-6,
+        group_size=None,
+        norm_before_gate=True,
+        activation=activation,
+    ).float()
+
+
+@pytest.mark.parametrize("activation", ["sigmoid", "swish_unsupported"])
+def test_gated_norm_non_silu_activation_uses_upstream_path(default_vllm_config, activation):
+    """Only silu/swish may take the fused kernel."""
+    layer = _gated_layer(activation)
+    x = torch.randn(4, 8)
+    z = torch.randn(4, 8)
+
+    with patch.object(type(layer), "forward_native", autospec=True) as native, patch(
+        "vllm_ascend.ops.layernorm.LayerNormFn.apply", autospec=True
+    ) as fused:
+        native.return_value = torch.zeros(4, 8)
+        out = type(layer).forward_oot(layer, x, z)
+
+    native.assert_called_once()
+    fused.assert_not_called()
+    assert out.shape == x.shape
+
+
+@pytest.mark.parametrize("activation", ["silu", "swish"])
+def test_gated_norm_silu_activation_keeps_fused_kernel(default_vllm_config, activation):
+    """Control: the fused kernel still serves the activations it implements."""
+    layer = _gated_layer(activation)
+    x = torch.randn(4, 8)
+    z = torch.randn(4, 8)
+
+    with patch.object(type(layer), "forward_native", autospec=True) as native, patch(
+        "vllm_ascend.ops.layernorm.LayerNormFn.apply", autospec=True
+    ) as fused:
+        fused.return_value = torch.ones(4, 8)
+        out = type(layer).forward_oot(layer, x, z)
+
+    fused.assert_called_once()
+    native.assert_not_called()
+    assert torch.equal(out, torch.ones(4, 8))
+
+
+def test_gated_norm_sigmoid_gate_differs_from_silu(default_vllm_config):
+    """The numerical difference the dispatch above exists to prevent."""
+    layer = _gated_layer("sigmoid")
+    x = torch.randn(4, 8) * 0.01
+    z = torch.randn(4, 8) * 2.3
+
+    got = type(layer).forward_oot(layer, x, z)
+    manual = layer.forward_native(x, z)
+    silu_path = manual / torch.sigmoid(z) * torch.nn.functional.silu(z)
+
+    assert torch.allclose(got, manual, atol=1e-6)
+    # A SiLU gate is not a rounding-level difference from a sigmoid gate.
+    assert not torch.allclose(got, silu_path, atol=1e-3)

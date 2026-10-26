@@ -209,7 +209,16 @@ class AscendRMSNormGated(RMSNormGated):
         torch.nn.init.ones_(self.weight)
 
     def forward_oot(self, x, z=None):
-        """If z is not None, we do norm(x) * silu(z) if norm_before_gate, else norm(x * silu(z))"""
+        """Normalize and gate.
+
+        ``LayerNormFn`` fuses the SiLU gate into the NPU kernel and has no way
+        to express another activation, so a checkpoint that gates with
+        ``sigmoid`` (Qwen4Exp GDN) must not be routed through it: doing so
+        multiplies by ``silu(z)`` instead and silently inflates the block
+        output by roughly 3x. Fall back to the activation-aware path instead.
+        """
+        if z is not None and self.activation not in ("silu", "swish"):
+            return self.forward_native(x, z)
         return LayerNormFn.apply(x, self.weight, self.bias, z, self.eps, self.group_size, self.norm_before_gate, True)
 
 
