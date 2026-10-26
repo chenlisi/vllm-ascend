@@ -105,7 +105,7 @@ def ple_gate_torch(
     q_n = grouped_norm(hidden[..., : hc * h], norm_query_w).to(dtype)
     products = (k_n.float() * q_n.float()).to(dtype)
     dot = products.float().sum(dim=-1, keepdim=True).to(dtype).float()
-    d = (dot / torch.sqrt(torch.tensor(float(h), device=dot.device, dtype=dot.dtype))).to(dtype).float()
+    d = (dot / float(h) ** 0.5).to(dtype).float()
     sign = torch.sign(d)
     magnitude = torch.sqrt(torch.maximum(d.abs(), torch.full_like(d, 1e-6))).to(dtype)
     g = torch.sigmoid(sign * magnitude).to(dtype).float()

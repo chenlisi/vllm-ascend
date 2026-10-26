@@ -280,6 +280,41 @@ def test_ple_gate_matches_reference(dtype):
     torch.testing.assert_close(normed.float(), ref_normed.float(), **tol)
 
 
+def test_ple_gate_scale_is_a_host_scalar_without_a_device_copy():
+    """The 1/sqrt(H) scale must not become a host->device memcpy in the graph.
+
+    ``torch.tensor(float(h), device=...)`` builds a *device* constant from a
+    Python float, so Dynamo lifts it into the FX graph as a module attribute
+    and emits ``lift_fresh_copy`` + ``_to_copy(device=npu)``. Under ACL graph
+    capture that H2D copy is illegal and the whole TP world dies with
+    ``aclrtMemcpy ... 107030``. A plain Python scalar folds to a constant and
+    dispatches nothing.
+
+    This pins the *dispatch shape*, not the value: the value check above
+    cannot see the extra ops, so a regression here would be invisible to it.
+    """
+    hc, channel = 4, 8
+    key = torch.randn(TOKENS, hc * channel, dtype=torch.float32)
+    value = torch.randn(TOKENS, channel, dtype=torch.float32)
+    hidden = torch.randn(TOKENS, hc * channel, dtype=torch.float32)
+    w = torch.zeros(hc * channel)
+
+    sizes: list[int] = []
+    with _TorchDispatchRecorder(sizes) as rec:
+        ple_gate_torch(key, value, hidden, w, w, w, 1e-6)
+
+    lifted = [op for op in rec.op_names if op == "aten.lift_fresh.default"]
+    to_copy = [op for op in rec.op_names if op.startswith("aten._to_copy")]
+    assert not lifted, (
+        "ple_gate_torch materialized a scalar tensor (aten.lift_fresh); a "
+        "host-side constant in the forward path breaks ACL graph capture"
+    )
+    assert not to_copy, (
+        "ple_gate_torch emitted a dtype/device copy; the 1/sqrt(H) scale must "
+        "stay a Python float"
+    )
+
+
 def test_ple_gate_rejects_mismatched_dtypes():
     key = torch.randn(2, 8, dtype=torch.bfloat16)
     value = torch.randn(2, 4, dtype=torch.float32)
