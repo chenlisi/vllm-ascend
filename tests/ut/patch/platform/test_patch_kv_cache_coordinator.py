@@ -38,6 +38,7 @@ from types import SimpleNamespace
 import pytest
 import torch
 from vllm.v1.core.kv_cache_coordinator import SpecGroup
+from vllm.v1.core.single_type_kv_cache_manager import MambaManager
 from vllm.v1.kv_cache_interface import (
     FullAttentionSpec,
     KVCacheConfig,
@@ -82,9 +83,14 @@ class _FakeFAManager:
         self.block_size = kwargs["kv_cache_spec"].block_size
 
 
-class _FakeMambaManager:
+class _FakeMambaManager(MambaManager):
+    # Subclasses the real manager so the write-path ``isinstance(manager,
+    # MambaManager)`` guard is exercised for real; the heavy upstream
+    # ``__init__`` is bypassed.
     def __init__(self, **kwargs):
         self.use_eagle = False
+        # Mirrors MambaManager.__init__ (single_type_kv_cache_manager.py:1475).
+        self.drop_eagle_checkpoint_block = False
         self.block_size = kwargs["kv_cache_spec"].block_size
 
 
@@ -153,6 +159,110 @@ def test_explicit_eagle_group_marker_takes_precedence(monkeypatch):
     # even when it is the mamba group (fallback must not overwrite it).
     coordinator = _make_coordinator(monkeypatch, use_eagle=True, mamba_eagle=True)
     assert coordinator.eagle_group_ids == {1}
+
+
+# ---------------------------------------------------------------------------
+# Fix ④: the WRITE path (drop_eagle_checkpoint_block on mamba managers) must
+# obey the same role suppression as the read paths. Before the fix the guard
+# was ``if use_eagle`` alone and the role bit was resolved further down
+# ``__init__``, so on a standalone MTP run (``use_eagle`` is true for
+# ``mtp``) the mamba group kept the drop, its partial-tail entry was never
+# cached, and the hybrid hit collapsed to the mamba block size.
+# ---------------------------------------------------------------------------
+
+
+def test_write_path_skips_mamba_drop_on_standalone(monkeypatch):
+    coordinator = _make_coordinator(monkeypatch, use_eagle=True, mamba_eagle=True)
+    assert coordinator.skips_eagle_block_drop is True
+    assert coordinator.eagle_group_ids == {1}
+    assert coordinator.single_type_managers[1].drop_eagle_checkpoint_block is False
+
+
+def test_write_path_skips_mamba_drop_on_pd_producer(monkeypatch):
+    coordinator = _make_coordinator(
+        monkeypatch,
+        use_eagle=True,
+        mamba_eagle=True,
+        kv_transfer_config=_kv_transfer_config(is_kv_producer=True, is_kv_consumer=False),
+    )
+    assert coordinator.skips_eagle_block_drop is True
+    assert coordinator.single_type_managers[1].drop_eagle_checkpoint_block is False
+
+
+def test_write_path_keeps_mamba_drop_on_pd_consumer(monkeypatch):
+    # Upstream behavior must survive for consumers / kv_both: they receive
+    # external loads whose verifier window the drop protects.
+    coordinator = _make_coordinator(
+        monkeypatch,
+        use_eagle=True,
+        mamba_eagle=True,
+        kv_transfer_config=_kv_transfer_config(is_kv_producer=False, is_kv_consumer=True),
+    )
+    assert coordinator.skips_eagle_block_drop is False
+    assert coordinator.eagle_group_ids == {1}
+    assert coordinator.single_type_managers[1].drop_eagle_checkpoint_block is True
+
+
+def test_write_path_keeps_mamba_drop_on_kv_both(monkeypatch):
+    coordinator = _make_coordinator(
+        monkeypatch,
+        use_eagle=True,
+        mamba_eagle=True,
+        kv_transfer_config=_kv_transfer_config(is_kv_producer=True, is_kv_consumer=True),
+    )
+    assert coordinator.skips_eagle_block_drop is False
+    assert coordinator.single_type_managers[1].drop_eagle_checkpoint_block is True
+
+
+def test_write_path_no_drop_when_eagle_disabled(monkeypatch):
+    # No speculative decoding: nothing is flagged regardless of role.
+    coordinator = _make_coordinator(
+        monkeypatch,
+        use_eagle=False,
+        mamba_eagle=True,
+        kv_transfer_config=_kv_transfer_config(is_kv_producer=False, is_kv_consumer=True),
+    )
+    assert coordinator.single_type_managers[1].drop_eagle_checkpoint_block is False
+
+
+def test_role_resolved_before_write_path(monkeypatch):
+    # Single source of truth, ordered: the role bit must be resolved before
+    # the managers are built (the write-path guard reads it right after).
+    # Record both events and assert the ordering rather than the value alone.
+    events: list[str] = []
+
+    class _RoleProbe:
+        is_kv_consumer = False
+
+        @property
+        def is_kv_producer(self):
+            events.append("role")
+            return True
+
+    original = _fake_manager_factory
+
+    def _probing_factory(**kwargs):
+        events.append("manager")
+        return original(**kwargs)
+
+    monkeypatch.setattr(mod, "BlockPool", _FakeBlockPool)
+    monkeypatch.setattr(mod, "get_manager_for_kv_cache_spec", _probing_factory)
+    kv_cache_config = _hybrid_config(mamba_eagle=True)
+    kv_cache_config.kv_transfer_config = _RoleProbe()
+
+    coordinator = AscendHybridKVCacheCoordinator(
+        kv_cache_config=kv_cache_config,
+        max_model_len=4096,
+        use_eagle=True,
+        enable_caching=True,
+        enable_kv_cache_events=False,
+        dcp_world_size=1,
+        pcp_world_size=1,
+        hash_block_size=HASH_BLOCK_SIZE,
+    )
+    assert events[0] == "role"
+    assert coordinator.skips_eagle_block_drop is True
+    assert coordinator.single_type_managers[1].drop_eagle_checkpoint_block is False
 
 
 # ---------------------------------------------------------------------------

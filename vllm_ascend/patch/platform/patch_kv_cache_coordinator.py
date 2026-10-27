@@ -157,6 +157,34 @@ class AscendHybridKVCacheCoordinator(HybridKVCacheCoordinator):
             metrics_collector=metrics_collector,
         )
 
+        # Roles are derived here, before both the write path (the
+        # ``drop_eagle_checkpoint_block`` flag set on mamba managers below)
+        # and the read paths, from the kv-transfer config attached by the
+        # ``get_kv_cache_config_from_groups`` builder in
+        # ``patch_kv_cache_utils`` (``KVCacheConfig`` has no native field;
+        # the attach survives the scheduler-side deepcopy and is dropped by
+        # worker pickle IPC, which never reads it). Configs built without it
+        # (e.g. unit tests) read as standalone (``kv_transfer_config is
+        # None``).
+        #
+        # A PD prefill producer only schedules fresh-request prefills;
+        # every content-hash block it can match is a verified prompt block
+        # (draft/lookahead tokens live in the request-private tail, whose
+        # hash can never match another request). The EAGLE last-block drop
+        # is therefore never needed on the producer, and with hybrid
+        # mamba-align pages (1536 tokens) it erases the whole shared prefix
+        # of typical ~2K prompts, pinning P-side prefix hits to 0.
+        #
+        # Resolved before the EAGLE group selection on purpose: the WRITE
+        # path must obey the same suppression as the read paths
+        # (``find_longest_cache_hit`` / ``find_longest_cache_hit_per_group``
+        # gate on this bit too). A standalone MTP run is the case that
+        # matters - ``use_eagle`` is true for ``mtp``, so an ungated write
+        # flags the mamba group, its partial-tail entry is never cached, and
+        # a fine ``prefix_match_unit`` hybrid hit collapses to 0.
+        kv_transfer_config = getattr(kv_cache_config, "kv_transfer_config", None)
+        self.skips_eagle_block_drop = _skips_eagle_block_drop(kv_transfer_config)
+
         # KV cache group indices that get the EAGLE last-block drop.
         self.eagle_group_ids: set[int] = {  # type: ignore[no-redef]
             i for i, g in enumerate(kv_cache_config.kv_cache_groups) if g.is_eagle_group
@@ -189,7 +217,12 @@ class AscendHybridKVCacheCoordinator(HybridKVCacheCoordinator):
             for i, kv_cache_group in enumerate(self.kv_cache_config.kv_cache_groups)
         )
         # vLLM #53614 aligns exported Mamba checkpoints with EAGLE replay.
-        if use_eagle:
+        # Suppressed where the read paths suppress it
+        # (``self.skips_eagle_block_drop``): on a standalone instance or a
+        # pure PD producer the drop only erases hit length. Keeping the write
+        # and read gates in sync is what preserves fine-grained hybrid hits
+        # under MTP, which makes ``use_eagle`` true.
+        if use_eagle and not self.skips_eagle_block_drop:
             for group_id, manager in enumerate(self.single_type_managers):
                 if isinstance(manager, MambaManager) and group_id in self.eagle_group_ids:
                     manager.drop_eagle_checkpoint_block = True
@@ -233,23 +266,6 @@ class AscendHybridKVCacheCoordinator(HybridKVCacheCoordinator):
             mgr.cache_hit_alignment_tokens = self._cache_hit_alignment_tokens
 
         self.use_eagle = use_eagle
-        # Roles are derived here, where they are used, from the kv-transfer
-        # config attached by the ``get_kv_cache_config_from_groups`` builder
-        # in ``patch_kv_cache_utils`` (``KVCacheConfig`` has no native field;
-        # the attach survives the scheduler-side deepcopy and is dropped by
-        # worker pickle IPC, which never reads it). Configs built without it
-        # (e.g. unit tests) read as standalone (``kv_transfer_config is
-        # None``).
-        #
-        # A PD prefill producer only schedules fresh-request prefills;
-        # every content-hash block it can match is a verified prompt block
-        # (draft/lookahead tokens live in the request-private tail, whose
-        # hash can never match another request). The EAGLE last-block drop
-        # is therefore never needed on the producer, and with hybrid
-        # mamba-align pages (1536 tokens) it erases the whole shared prefix
-        # of typical ~2K prompts, pinning P-side prefix hits to 0.
-        kv_transfer_config = getattr(kv_cache_config, "kv_transfer_config", None)
-        self.skips_eagle_block_drop = _skips_eagle_block_drop(kv_transfer_config)
 
     @property
     def _cache_hit_alignment_tokens(self) -> int:
