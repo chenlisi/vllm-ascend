@@ -448,12 +448,23 @@ class AscendAutoRegressiveSpeculator(LmheadTPDraftSamplingMixin, AutoRegressiveS
             # Use the first executable draft attention layer as the architecture
             # discriminator and cache it for ACL graph parameter updates.
             self.attn_backend = _get_graph_update_backend(self.attn_groups)
+        # Imported lazily: the Qwen4Exp model package pulls in the worker-side
+        # model state, which imports this module's package.
+        from vllm_ascend.models.qwen4_exp.qsa import AscendQwen4ExpQSABackend
+
         if issubclass(self.attn_backend, AscendDSABackend):
             self.attn_architecture = "DSA"
         elif issubclass(self.attn_backend, AscendMLABackend):
             self.attn_architecture = "MLA"
         elif issubclass(self.attn_backend, (AscendSFABackend, AscendSFAIndexerBackend)):
             self.attn_architecture = "SFA"
+        elif issubclass(self.attn_backend, AscendQwen4ExpQSABackend):
+            # QSA owns its sparse selection in the layer itself (indexer +
+            # torch kernels) and its metadata builder already derives every
+            # per-step shape from ``num_speculative_tokens``; it therefore
+            # follows the dense/sparse split of DSA and SFA rather than the
+            # generic GQA metadata rewrite below.
+            self.attn_architecture = "QSA"
         elif issubclass(self.attn_backend, AscendAttentionBackend):
             self.attn_architecture = "GQA"
         else:

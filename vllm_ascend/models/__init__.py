@@ -113,3 +113,10 @@ def register_model():
         "Qwen4ExpForCausalLM",
         "vllm_ascend.models.qwen4_exp.model:AscendQwen4ExpForCausalLM",
     )
+    # Qwen4Exp's native MTP drafter. The checkpoint ships the ``mtp.*`` tensors
+    # and the upstream class exists, but its draft layer builds the NVIDIA QSA
+    # implementation, which raises "requires FlashAttention" on NPU.
+    ModelRegistry.register_model(
+        "Qwen4ExpMTP",
+        "vllm_ascend.models.qwen4_exp.mtp:AscendQwen4ExpMTP",
+    )

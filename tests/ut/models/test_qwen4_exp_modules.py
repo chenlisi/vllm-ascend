@@ -218,12 +218,25 @@ def test_combine_without_injection_is_unit_weight():
     torch.testing.assert_close(combined, expected, atol=0, rtol=0)
 
 
-def test_combine_requires_injection_when_mixing():
+def test_combine_without_injection_is_unit_weight_when_mixing():
+    """A missing injection applies the block output to every stream.
+
+    This mirrors the upstream fused ``hc_combine_norm``, which takes the
+    ``injection_logits is None`` branch and adds the block output with unit
+    weight instead of raising. The MTP drafter depends on it: its first step
+    always arrives with a pending combine and no injection.
+    """
     module, _ = _hyperconnection()
-    with pytest.raises(ValueError, match="requires its injection"):
-        module.combine(
-            torch.randn(TOKENS, HC_COUNT * HIDDEN), torch.randn(TOKENS, HIDDEN), None
-        )
+    hidden = torch.randn(TOKENS, HC_COUNT * HIDDEN)
+    block_output = torch.randn(TOKENS, HIDDEN)
+    combined = module.combine(hidden, block_output, None)
+    expected = (
+        hidden.unflatten(-1, (HC_COUNT, HIDDEN)) + block_output.unsqueeze(-2)
+    ).flatten(-2)
+    torch.testing.assert_close(combined, expected, atol=0, rtol=0)
+    # ... and the module still owns its injection projection, so the branch is
+    # a runtime condition, not a property of the module.
+    assert hasattr(module, "input_mix_weight_down_block_inject")
 
 
 def test_grouped_norm_matches_reference():

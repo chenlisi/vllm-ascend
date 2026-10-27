@@ -15,6 +15,7 @@ Layout:
 * ``ple.py``              -- n-gram PLE layer with an eager dilated short-conv
 * ``hyperconnection.py``  -- gated residual over the checkpoint's packed linear
 * ``model_state.py``      -- runner state carrying ``ngram_context``
+* ``mtp.py``              -- native MTP drafter (``Qwen4ExpMTP`` override)
 """
 
 from vllm_ascend.models.qwen4_exp.model import (
@@ -24,11 +25,17 @@ from vllm_ascend.models.qwen4_exp.model import (
     AscendQwen4ExpMixtureOfExperts,
     AscendQwen4ExpModel,
 )
+from vllm_ascend.models.qwen4_exp.mtp import (
+    AscendQwen4ExpMTP,
+    AscendQwen4ExpMultiTokenPredictor,
+)
 
 __all__ = [
     "AscendQwen4ExpDecoderLayer",
     "AscendQwen4ExpForCausalLM",
     "AscendQwen4ExpForConditionalGeneration",
+    "AscendQwen4ExpMTP",
     "AscendQwen4ExpMixtureOfExperts",
     "AscendQwen4ExpModel",
+    "AscendQwen4ExpMultiTokenPredictor",
 ]

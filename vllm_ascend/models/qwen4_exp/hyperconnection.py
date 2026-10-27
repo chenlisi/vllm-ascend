@@ -271,9 +271,16 @@ class AscendGatedResidual(nn.Module):
             )
         residual = hyper_input.unflatten(-1, (self.hc_count, self.hidden_size))
         if injection is None:
-            if not self.use_combine:
-                return (residual + block_output.unsqueeze(-2)).flatten(-2)
-            raise ValueError("a mixing hyper-connection requires its injection")
+            # A missing injection applies the block output to every stream
+            # with unit weight. That is not only the final mixer's contract:
+            # the MTP drafter starts its first step with a pending combine
+            # (``prev_block_output`` set, ``prev_injection`` None), and the
+            # upstream fused ``hc_combine_norm`` takes the same branch when
+            # ``injection_logits is None``. Raising here instead broke every
+            # drafter step.
+            return (residual + block_output.unsqueeze(-2)).flatten(-2).to(
+                hyper_input.dtype
+            )
         injection_weight = 2.0 * torch.sigmoid(injection.float() / self.hc_count)
         output = residual + block_output.unsqueeze(-2) * injection_weight.to(
             block_output.dtype
