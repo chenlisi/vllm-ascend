@@ -38,6 +38,7 @@ from torch import nn
 from transformers import Qwen4ExpTextConfig
 
 from vllm.config import VllmConfig, get_current_vllm_config
+from vllm.logger import init_logger
 from vllm.model_executor.layers.mamba.mamba_utils import (
     MambaStateDtypeCalculator,
     MambaStateShapeCalculator,
@@ -53,6 +54,8 @@ from vllm.v1.attention.backends.short_conv_attn import (
     PleShortConvAttentionBackend,
     PleShortConvAttentionMetadata,
 )
+
+logger = init_logger(__name__)
 
 __all__ = ["AscendQwen4ExpPLEGroupedNorm", "AscendQwen4ExpPLELayer", "ple_gate_torch"]
 
@@ -198,17 +201,19 @@ class AscendQwen4ExpPLELayer(Qwen4ExpPLELayer):
         window: torch.Tensor,
         writeback_capacity: int,
     ) -> None:
-        """Write back the newest ``writeback_capacity`` taps of ``window``.
+        """Write the newest ``writeback_capacity`` taps of ``window`` at offset 0.
 
-        ``window`` is token-major ``[state_len, C]``; the cache keeps its own
-        layout, so transpose when the state is ``DS``.
+        ``window`` is token-major and holds ``history + chunk``; the live state
+        is its tail, written to the start of the slot. The slot may be wider
+        than the window when speculative decode reserves extra taps, and those
+        taps are the stale draft tail, not the newest history.
         """
         newest = window[-writeback_capacity:]
         target = conv_state[slot]
         if is_conv_state_dim_first():
-            target[:, target.shape[-1] - writeback_capacity :] = newest.t()
+            target[:, :writeback_capacity] = newest.t()
         else:
-            target[target.shape[0] - writeback_capacity :, :] = newest
+            target[:writeback_capacity, :] = newest
 
     def _dilated_conv(
         self,
@@ -241,8 +246,149 @@ class AscendQwen4ExpPLELayer(Qwen4ExpPLELayer):
         state_index: int,
         state_capacity: int,
     ) -> torch.Tensor:
-        """Token-major ``[state_capacity, C]`` window of one state slot."""
+        """Token-major ``[state_capacity, C]`` window of one state slot.
+
+        The live window starts at offset 0. The plain decode/prefill caller
+        takes its leading ``conv_state_len`` taps; the spec caller slices a
+        rollback offset on top because the reserved ``num_spec_tokens`` taps
+        past ``conv_state_len`` belong to the draft chunk that is being
+        re-read, not to a second copy of the history.
+        """
         return self._window_from_state(conv_state[state_index : state_index + 1], state_capacity)
+
+    def _short_conv_spec(
+        self,
+        inputs: torch.Tensor,
+        residual: torch.Tensor,
+        outer_residual: torch.Tensor,
+        metadata: PleShortConvAttentionMetadata,
+        conv_state: torch.Tensor,
+        conv_weights: torch.Tensor,
+    ) -> None:
+        """Speculative-decode short convolution (``mode="spec"`` upstream).
+
+        Every one of the ``1 + K`` rows of a draft request reads the same
+        pre-chunk window, so draft rows get a PLE output too (they feed the
+        verifier). The state then advances by the *accepted* tokens only: the
+        write-back shifts the live window by one and appends the whole chunk,
+        and the next step re-reads it starting at ``num_accepted - 1``, so the
+        old state plus that chunk reproduces exactly the accepted prefix.
+
+        ``spec_token_indx`` maps logical spec rows back to the row order of
+        the full batch, so a mixed spec/non-spec batch never has to be
+        materialized into two groups.
+        """
+        num_spec_decodes = metadata.num_spec_decodes
+        if not num_spec_decodes:
+            return
+        state_indices = metadata.spec_state_indices_tensor
+        query_start_loc = metadata.spec_query_start_loc
+        num_accepted = metadata.num_accepted_tokens
+        if state_indices is None or query_start_loc is None or num_accepted is None:
+            raise RuntimeError(
+                "PLE spec short-conv requires spec_state_indices_tensor, "
+                "spec_query_start_loc and num_accepted_tokens"
+            )
+        # ``num_actual_tokens`` already includes graph padding; every real spec
+        # row lives below it.
+        inputs = inputs[: metadata.num_actual_tokens]
+        residual = residual[: metadata.num_actual_tokens]
+        outer_residual = outer_residual[: metadata.num_actual_tokens]
+
+        dtype = residual.dtype
+        state_capacity = self.conv_state_len + self.num_spec_tokens
+        spec_query_len = metadata.spec_query_len
+        if spec_query_len != self.num_spec_tokens + 1:
+            raise RuntimeError(
+                "PLE spec short-conv expects spec_query_len == num_speculative_tokens + 1, "
+                f"got {spec_query_len} for {self.num_spec_tokens} spec tokens"
+            )
+
+        rows = self._row_map(metadata, query_start_loc, num_spec_decodes)
+        # No device sync here: only host-side values, so this stays free on the
+        # hot path after the first emit.
+        logger.info_once(
+            "PLE spec short-conv active: %d spec requests, spec_query_len=%d, "
+            "state window %d+%d",
+            num_spec_decodes,
+            spec_query_len,
+            self.conv_state_len,
+            self.num_spec_tokens,
+        )
+
+        def apply_group(
+            group_inputs: torch.Tensor,
+            group_residual: torch.Tensor,
+            group_outer: torch.Tensor,
+            history: torch.Tensor,
+        ) -> torch.Tensor:
+            conv = self._dilated_conv(group_inputs, history, conv_weights).to(dtype).float()
+            y = conv * torch.sigmoid(conv)
+            conv_output = y.to(dtype)
+            ple_output = (group_residual + conv_output).to(dtype)
+            return (group_outer.float() + ple_output.float()).to(dtype)
+
+        for req in range(num_spec_decodes):
+            q_begin = int(query_start_loc[req].item())
+            q_end = int(query_start_loc[req + 1].item())
+            qlen = q_end - q_begin
+            if qlen <= 0:
+                # Graph padding row: no slot, nothing to read or write.
+                continue
+            if qlen > spec_query_len:
+                raise RuntimeError(
+                    f"PLE spec chunk exceeds spec_query_len: {qlen} > {spec_query_len}"
+                )
+            accepted = int(num_accepted[req].item())
+            # Roll the read window back to the last accepted token; a padded
+            # or fully-rejected chunk still reads the newest live state.
+            slot_off = min(max(accepted - 1, 0), spec_query_len - 1)
+            slot = int(state_indices[req].item())
+
+            begin = int(rows[q_begin].item())
+            end = int(rows[q_end - 1].item()) + 1
+            chunk = inputs[begin:end]
+            if chunk.shape[0] != qlen:
+                raise RuntimeError(
+                    "PLE spec short-conv row map is not contiguous: "
+                    f"{qlen} logical rows expand to {chunk.shape[0]} batch rows"
+                )
+
+            # ``history`` is only the accepted window: taps beyond it read the
+            # chunk's own tokens, exactly as if the chunk followed the state.
+            window = self._slice_history(conv_state, slot, state_capacity).to(dtype)
+            history = window[slot_off : slot_off + self.conv_state_len]
+            residual[begin:end] = apply_group(
+                chunk,
+                residual[begin:end],
+                outer_residual[begin:end],
+                history,
+            )
+
+            # Write-back: shift the live window by one, then append the chunk,
+            # stopping before the state tail that this chunk never used.
+            # Tap ``m = 1 + i`` comes from the state while ``m <= conv_state_len
+            # - 1`` (independent of the rollback offset) and from the chunk
+            # afterwards, so the state part is ``conv_state_len - 1`` taps and
+            # the chunk contributes exactly ``qlen``.
+            new_state = torch.zeros_like(window)
+            do_write = min(self.conv_state_len + qlen - 1, state_capacity)
+            old_len = min(self.conv_state_len - 1, do_write)
+            new_state[:old_len] = window[slot_off + 1 : slot_off + 1 + old_len]
+            new_state[old_len:do_write] = chunk[: do_write - old_len]
+            self._store_window(conv_state, slot, new_state[:do_write], do_write)
+
+    def _row_map(
+        self,
+        metadata: PleShortConvAttentionMetadata,
+        query_start_loc: torch.Tensor,
+        num_spec_decodes: int,
+    ) -> torch.Tensor:
+        """Logical spec row -> row in the batch token order."""
+        if metadata.spec_token_indx is not None:
+            return metadata.spec_token_indx
+        total = int(query_start_loc[num_spec_decodes].item())
+        return torch.arange(total, device=query_start_loc.device)
 
     def _short_conv_eager(
         self,
@@ -278,6 +424,16 @@ class AscendQwen4ExpPLELayer(Qwen4ExpPLELayer):
         state_capacity = self.conv_state_len + self.num_spec_tokens
         writeback_capacity = self.conv_state_len
 
+        # With spec-decode this group starts after the spec rows, so the
+        # non-spec rows are addressed through ``non_spec_token_indx`` instead
+        # of a fixed offset.
+        non_spec_rows = metadata.non_spec_token_indx
+
+        def non_spec_row(index: int) -> int:
+            if non_spec_rows is None:
+                return index
+            return int(non_spec_rows[index].item())
+
         def apply_group(
             group_inputs: torch.Tensor,
             group_residual: torch.Tensor,
@@ -291,24 +447,29 @@ class AscendQwen4ExpPLELayer(Qwen4ExpPLELayer):
             return (group_outer.float() + ple_output.float()).to(dtype)
 
         if num_decodes:
-            rows = num_decode_tokens // num_decodes if num_decodes else 0
-            if rows != 1:
-                raise NotImplementedError(
-                    "Stage 1 PLE short-conv handles one token per decode row, "
-                    f"got {rows} (speculative decode belongs to Stage 3)"
+            # Non-spec decodes carry exactly one token each by construction
+            # (``num_decodes`` counts requests with ``query_len == 1``); the
+            # multi-token spec rows are handled by ``_short_conv_spec``.
+            if num_decode_tokens != num_decodes:
+                raise RuntimeError(
+                    "PLE short-conv non-spec decode rows must hold one token each, "
+                    f"got {num_decode_tokens} tokens for {num_decodes} decodes"
                 )
             decode_states = state_indices[:num_decodes]
             for req in range(num_decodes):
+                row = non_spec_row(req)
                 slot = int(decode_states[req].item())
-                history = self._slice_history(conv_state, slot, state_capacity).to(dtype)
-                residual[:num_decodes][req:req + 1] = apply_group(
-                    inputs[req : req + 1],
-                    residual[req : req + 1],
-                    outer_residual[req : req + 1],
+                history = self._slice_history(conv_state, slot, state_capacity)[
+                    : self.conv_state_len
+                ].to(dtype)
+                residual[row : row + 1] = apply_group(
+                    inputs[row : row + 1],
+                    residual[row : row + 1],
+                    outer_residual[row : row + 1],
                     history,
                 )
                 # Decode advances the window by one token and appends the input.
-                new_window = torch.cat((history[1:], inputs[req : req + 1].to(dtype)), dim=0)
+                new_window = torch.cat((history[1:], inputs[row : row + 1].to(dtype)), dim=0)
                 self._store_window(conv_state, slot, new_window, writeback_capacity)
 
         if num_prefills:
@@ -321,12 +482,14 @@ class AscendQwen4ExpPLELayer(Qwen4ExpPLELayer):
                 )
             base = num_decode_tokens
             for req in range(num_prefills):
-                begin = int(query_start_loc[req].item()) + base
-                end = int(query_start_loc[req + 1].item()) + base
+                begin = non_spec_row(int(query_start_loc[req].item()) + base)
+                end = non_spec_row(int(query_start_loc[req + 1].item()) + base - 1) + 1
                 if end <= begin:
                     continue
                 slot = int(prefill_states[req].item())
-                history = self._slice_history(conv_state, slot, state_capacity).to(dtype)
+                history = self._slice_history(conv_state, slot, state_capacity)[
+                    : self.conv_state_len
+                ].to(dtype)
                 has_init = bool(has_initial_states[req].item())
                 if not has_init:
                     history = torch.zeros_like(history)
@@ -381,17 +544,24 @@ class AscendQwen4ExpPLELayer(Qwen4ExpPLELayer):
                 "Expected PleShortConvAttentionMetadata for layer "
                 f"'{self.prefix}', got {type(layer_attn_metadata).__name__}"
             )
-        if layer_attn_metadata.spec_sequence_masks is not None:
-            raise NotImplementedError(
-                "PLE dilated short-conv with speculative decode is a Stage 3 feature"
-            )
-
         conv_state = self.kv_cache[0]
         if conv_state.numel() == 0:
             # ``bind_kv_cache`` runs before any inference forward, so an empty
             # conv-state slot here means the state cache never got bound.
             raise RuntimeError(
                 f"PLE layer '{self.prefix}' has an unbound (empty) conv state"
+            )
+        # Spec rows are handled first and the non-spec group keeps batch row
+        # order through ``non_spec_token_indx``, so a mixed batch needs no
+        # regrouping of inputs or residuals.
+        if layer_attn_metadata.spec_sequence_masks is not None:
+            self._short_conv_spec(
+                inputs=inputs,
+                residual=residual,
+                outer_residual=outer_residual,
+                metadata=layer_attn_metadata,
+                conv_state=conv_state,
+                conv_weights=self._conv_weight_2d,
             )
         self._short_conv_eager(
             inputs=inputs,
