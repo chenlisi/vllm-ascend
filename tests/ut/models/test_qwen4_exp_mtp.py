@@ -259,13 +259,23 @@ def test_draft_rope_is_aligned_with_the_target(mtp_engine_config):
     assert AscendQSAKeyStateCache.align_kv_cache_with_mamba is False
 
 
-def test_draft_rope_strip_spares_a_genuine_mrope_target(mtp_engine_config):
-    """A target that does run MRoPE is left alone (no blanket downgrade)."""
+def test_draft_rope_strip_refuses_a_genuine_mrope_target(mtp_engine_config):
+    """A target that really runs MRoPE is refused, not silently downgraded.
+
+    Keeping MRoPE on the draft would put its QSA ring page at
+    ``capacity * (index_head_dim + 3 * axes) * dtype`` = ``8 * 140 * 2`` =
+    2240 bytes, which does not divide the unified page (409600), so
+    ``_reshape_kv_cache_v2`` fails at KV-cache initialization with a shape
+    error indistinguishable from the width-140 bug this function exists to
+    fix. VL + MTP has never been validated, so the branch is a hard refusal.
+    """
     from unittest.mock import patch
 
     from vllm_ascend.models.qwen4_exp.mtp import _align_draft_rope_with_target
 
     config = copy.deepcopy(mtp_engine_config)
+    draft_text_config = config.speculative_config.draft_model_config.hf_text_config
+    before = copy.deepcopy(draft_text_config.rope_parameters)
     # ``uses_mrope`` is derived from the rope parameters, so drive the reported
     # target mode directly: the guard reads ``target_model_config.uses_mrope``.
     with patch.object(
@@ -273,12 +283,17 @@ def test_draft_rope_strip_spares_a_genuine_mrope_target(mtp_engine_config):
         "uses_mrope",
         new_callable=lambda: property(lambda self: True),
     ):
-        before = copy.deepcopy(
-            config.speculative_config.draft_model_config.hf_text_config.rope_parameters
-        )
-        _align_draft_rope_with_target(config)
-        after = config.speculative_config.draft_model_config.hf_text_config.rope_parameters
-        assert after == before
+        with pytest.raises(NotImplementedError) as excinfo:
+            _align_draft_rope_with_target(config)
+        message = str(excinfo.value)
+        # The message is the only thing an operator sees at startup, so it has
+        # to name the incompatible geometry and the path that does work.
+        assert "incompatible with the unified KV page" in message
+        assert "409600" in message
+        assert "--language-model-only" in message
+        assert "unaffected" in message
+    # The refusal must not have half-applied the strip on its way out.
+    assert draft_text_config.rope_parameters == before
 
 
 def test_draft_rope_strip_refuses_silent_no_op(mtp_engine_config):

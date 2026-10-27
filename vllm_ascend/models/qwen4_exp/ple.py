@@ -305,8 +305,15 @@ class AscendQwen4ExpPLELayer(Qwen4ExpPLELayer):
             )
 
         rows = self._row_map(metadata, query_start_loc, num_spec_decodes)
-        # No device sync here: only host-side values, so this stays free on the
-        # hot path after the first emit.
+        # No device sync *here*: these are host-side ints from the metadata
+        # object, so the log itself costs nothing. The loop below does sync --
+        # every ``.item()`` on ``query_start_loc`` / ``num_accepted_tokens`` /
+        # ``spec_state_indices_tensor`` / ``rows`` is a per-request device->host
+        # read (up to six per request). That is accepted rather than
+        # accidental: the PLE layer appears once (``ple_layer_ids=[2]``), so the
+        # total is small next to the attention stack. If this ever shows up in a
+        # profile, batch the reads with one ``.tolist()`` per tensor instead of
+        # per request.
         logger.info_once(
             "PLE spec short-conv active: %d spec requests, spec_query_len=%d, "
             "state window %d+%d",

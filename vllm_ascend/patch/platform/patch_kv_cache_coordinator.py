@@ -349,6 +349,21 @@ class AscendHybridKVCacheCoordinator(HybridKVCacheCoordinator):
         # ``_annotate_eagle_groups_deepseek_v4`` flags only the single group
         # holding the MTP layer, so iterating ``eagle_group_ids`` alone would
         # miss its same-spec siblings.
+        # NOTE: this propagation is intentionally *not* gated on
+        # ``skips_eagle_block_drop``, unlike the write-path
+        # ``drop_eagle_checkpoint_block`` gate above. The two bits are the same
+        # semantic expressed at two layers but with different consumers:
+        # ``drop_eagle_checkpoint_block`` is read by ``_cache_partial_tail_block``
+        # on every group (Mamba included), so an ungated write there does change
+        # behaviour; ``manager.use_eagle`` is only consumed by the
+        # full-attention / SWA managers (``cache_blocks`` ->
+        # ``reachable_block_mask``, ``_cache_partial_tail_block``), and
+        # ``MambaManager.reachable_block_mask`` takes the flag as a parameter
+        # but never reads it ("draft models have no mamba layers, so no eagle
+        # shift"). So under standalone MTP the Mamba group does end up with
+        # ``use_eagle=True`` and nothing changes. Gate it here instead and the
+        # SWA siblings that *do* need the bit (see above) lose their retained
+        # tail, which is the 0%-hit regression this block exists to prevent.
         for group in self.attention_groups:
             if group.use_eagle:
                 for gid in group.group_ids:

@@ -99,8 +99,10 @@ def _align_draft_rope_with_target(vllm_config: VllmConfig) -> Qwen4ExpTextConfig
     ("draft ``rope_theta`` independent, but 1D because
     ``--language-model-only`` already stripped mrope").
 
-    A target that genuinely runs MRoPE (vision enabled) is left untouched, so
-    this is not a blanket downgrade.
+    This is not a blanket downgrade: a target that genuinely runs MRoPE
+    (vision enabled) is refused with ``NotImplementedError`` rather than
+    silently downgraded, because the draft would then keep width 140 and its
+    ring page would not divide the unified page. See the raise below.
 
     The draft config is taken from ``speculative_config.draft_model_config``,
     never from ``vllm_config.model_config``. The drafter is loaded through
@@ -121,7 +123,22 @@ def _align_draft_rope_with_target(vllm_config: VllmConfig) -> Qwen4ExpTextConfig
 
     target_model_config = vllm_config.speculative_config.target_model_config
     if target_model_config is not None and target_model_config.uses_mrope:
-        return draft_model_config.hf_text_config
+        # A genuinely multimodal target keeps MRoPE, and so would the draft.
+        # The draft ring page is then ``capacity * (index_head_dim + 3 * axes)
+        # * dtype`` = ``8 * 140 * 2`` = 2240 bytes, which does not divide the
+        # unified page (409600) that the shared KV pool rounds every page up
+        # to, so ``_reshape_kv_cache_v2`` fails at KV-cache initialization
+        # with a shape error that reads like the width-140 bug this function
+        # exists to fix. Refuse up front: VL + MTP has never been validated,
+        # and padding the draft ring up to the unified page is a separate
+        # design question, not something to guess at here.
+        raise NotImplementedError(
+            "Qwen4Exp MTP + multimodal target is not supported: a real VL "
+            "target's draft ring geometry (uses_mrope=True, page "
+            "8*140*2=2240) is incompatible with the unified KV page (409600) "
+            "and has not been verified. Run the drafter on the text path "
+            "(--language-model-only) instead; that path is unaffected."
+        )
 
     stripped = []
     for owner in (

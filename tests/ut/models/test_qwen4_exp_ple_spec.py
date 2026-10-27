@@ -419,8 +419,16 @@ def test_spec_mixed_batch_keeps_row_order(monkeypatch):
     assert torch.equal(residual[num_spec + 2 :], expected_prefill)
 
 
-def test_spec_null_slot_contributes_nothing():
-    """A null (padded) spec row has no slot: no output row, no write."""
+def test_spec_empty_chunk_contributes_nothing():
+    """A graph-padded spec row has an empty chunk: no output, no write.
+
+    This is *not* the null-slot case: ``_short_conv_spec`` has no
+    ``slot != NULL_STATE_ID`` check (upstream's ``sid != NULL_STATE_ID`` is
+    replaced by the ``range(num_spec_decodes)`` bound, see
+    ``test_spec_null_slots_past_num_spec_decodes_are_never_touched``). Here
+    the slot is real and the chunk is degenerate, so the ``qlen <= 0`` guard
+    is what keeps the write away.
+    """
     num_spec = 1
     capacity = STATE_LEN + num_spec
     conv_state = _fresh_state(2, num_spec)
@@ -449,6 +457,79 @@ def test_spec_null_slot_contributes_nothing():
     )
     assert torch.equal(residual, torch.zeros_like(residual))
     assert torch.equal(conv_state, before)
+
+
+def test_spec_null_slots_past_num_spec_decodes_are_never_touched():
+    """``NULL_BLOCK_ID`` entries beyond the spec requests stay unread.
+
+    The builder fills ``spec_state_indices_tensor[num_spec_decodes:]`` with
+    ``NULL_BLOCK_ID`` (``short_conv_attn.py:430``) so the graph-captured shape
+    is constant. The spec loop is bounded by ``num_spec_decodes``, so those
+    entries are never dereferenced -- that bound, not a ``sid`` check, is what
+    makes the padded tail safe. Pinning it here means shrinking the loop bound
+    to ``len(spec_state_indices)`` (an obvious refactor) fails loudly instead of
+    writing slot 0, which is a *real* slot.
+    """
+    from vllm.v1.attention.backends.utils import NULL_BLOCK_ID
+
+    # ``NULL_BLOCK_ID`` is 0, so the null row aliases the first real slot: a
+    # naive dereference of the padded tail would corrupt slot 0 silently.
+    assert NULL_BLOCK_ID == 0
+    num_spec = 1
+    slot = 1
+    conv_state = _fresh_state(2, num_spec)
+    harness = Harness(conv_state, num_spec)
+    # Slot 0 is reachable only if the null id is dereferenced; its distinct
+    # value shows up in the output if that happens.
+    conv_state[0].fill_(-POISON)
+    stream = torch.full((STATE_LEN, CHANNELS), 4.0)
+    _seed_accepted(conv_state, slot, num_spec, stream, accepted=num_spec + 1)
+    null_slot_before = conv_state[0].clone()
+    live_before = conv_state[slot].clone()
+
+    # The null rows below get *non-empty* spans on purpose. With an empty span
+    # the ``qlen <= 0`` guard would do the skipping and the loop bound would
+    # not be exercised at all, so a bound widened to
+    # ``len(spec_state_indices)`` would still pass.
+    chunk = torch.full((num_spec + 1, CHANNELS), 0.5)
+    null_rows = torch.ones(2 * (num_spec + 1), CHANNELS)
+    inputs = torch.cat((chunk, null_rows), dim=0)
+    residual = torch.zeros_like(inputs)
+    span = num_spec + 1
+    metadata = _metadata(
+        num_spec_decodes=1,
+        num_spec_decode_tokens=num_spec + 1,
+        num_actual_tokens=inputs.shape[0],
+        spec_query_len=num_spec + 1,
+        # One real request, two padded null rows in the graph-captured tail.
+        spec_state_indices_tensor=torch.tensor(
+            [slot, NULL_BLOCK_ID, NULL_BLOCK_ID], dtype=torch.int32
+        ),
+        spec_query_start_loc=torch.tensor(
+            [0, span, 2 * span, 3 * span], dtype=torch.int32
+        ),
+        num_accepted_tokens=torch.tensor([num_spec + 1, 1, 1], dtype=torch.int32),
+        spec_sequence_masks=torch.ones(1, dtype=torch.bool),
+    )
+    harness._short_conv_spec(
+        inputs=inputs,
+        residual=residual,
+        outer_residual=torch.zeros_like(inputs),
+        metadata=metadata,
+        conv_state=conv_state,
+        conv_weights=harness._conv_weight_2d,
+    )
+
+    expected = _reference_outputs(
+        stream, chunk, torch.zeros_like(chunk), torch.zeros_like(chunk)
+    )
+    assert torch.equal(residual[:span], expected)
+    assert torch.count_nonzero(residual[span:]) == 0, (
+        "null rows must not produce output; a non-zero tail means the null "
+        "slot (id 0) was dereferenced"
+    )
+    assert torch.equal(conv_state[0], null_slot_before), "null id leaked into slot 0"
+    assert not torch.equal(conv_state[slot], live_before), "the real slot must be written"
 
 
 def test_spec_query_len_mismatch_raises():
@@ -580,6 +661,183 @@ def test_spec_ignores_graph_padding_beyond_num_actual_tokens():
         torch.zeros(num_spec + 1, CHANNELS),
         torch.ones(num_spec + 1, CHANNELS),
     ))
+
+
+# ---------------------------------------------------------------------------
+# Real assembled layer (L-1)
+# ---------------------------------------------------------------------------
+MODEL = "/mnt/weight/Qwen3.8-Flash-Next"
+
+
+def _single_rank_groups():
+    """Stand-in ``GroupCoordinator``s so the layer's projections can build.
+
+    The merged PLE projection and the n-gram embedding read the TP / ETP
+    groups at construction time even for a single rank; without them
+    ``get_etp_group()`` asserts.
+    """
+    from unittest.mock import MagicMock
+
+    def group(size=1):
+        g = MagicMock()
+        g.world_size = size
+        g.rank_in_group = 0
+        g.is_first_rank = True
+        g.is_last_rank = True
+        g.size.return_value = size
+        device_group = MagicMock()
+        device_group.size.return_value = size
+        g.device_group = device_group
+        return g
+
+    return group
+
+
+@pytest.fixture(scope="module")
+def real_layer():
+    """The *real* ``AscendQwen4ExpPLELayer`` from the F3 engine config.
+
+    The geometry below (``conv_state_len``, ``num_spec_tokens``, the channel
+    count) is what the tests above hardcode, but here it comes from
+    ``get_state_shape()`` -- the same call the cache allocator uses -- so a
+    change to either side of the coupling fails instead of drifting silently.
+    Weights stay on the meta device; nothing is loaded.
+    """
+    import os
+
+    if not os.path.exists(MODEL):
+        pytest.skip(f"Qwen4Exp checkpoint not present at {MODEL}")
+
+    import vllm.distributed.parallel_state as ps
+    from vllm.config import set_current_vllm_config
+    from vllm.engine.arg_utils import EngineArgs
+
+    import vllm_ascend  # noqa: F401  (installs the Ascend platform plugin)
+    from vllm_ascend.models import register_model
+    from vllm_ascend.models.qwen4_exp.ple import AscendQwen4ExpPLELayer
+    from vllm_ascend.utils import register_ascend_customop
+
+    group = _single_rank_groups()
+    saved = {name: getattr(ps, name) for name in ("_TP", "_EP", "_DP", "_PP", "_PCP", "_DCP", "_ETP")}
+    for name in saved:
+        setattr(ps, name, group(1))
+    try:
+        register_model()
+        args = EngineArgs(
+            model=MODEL,
+            tensor_parallel_size=1,
+            dtype="bfloat16",
+            enforce_eager=True,
+            language_model_only=True,
+            max_model_len=32768,
+            max_num_seqs=4,
+            load_format="dummy",
+            engram_config={"cpu_offload": False},
+            # K=1, the F3 cumulative configuration: this is what makes the
+            # slot wider than the window the plain path reads.
+            speculative_config={"method": "mtp", "num_speculative_tokens": 1},
+        )
+        config = args.create_engine_config()
+        register_ascend_customop(config)
+        text_config = config.model_config.hf_text_config
+        with set_current_vllm_config(config), torch.device("meta"):
+            layer = AscendQwen4ExpPLELayer(
+                text_config,
+                config,
+                layer_idx=text_config.ple_layer_ids[0],
+                ple_dense_layer_id=text_config.ple_layer_ids[0],
+                prefix=f"{MODEL_PREFIX}.ple",
+            )
+    finally:
+        for name, value in saved.items():
+            setattr(ps, name, value)
+    return layer
+
+
+def _slot_axis(shape):
+    """Index of the token axis in an oriented ``(dim, len)`` conv-state shape."""
+    from vllm.model_executor.layers.mamba.mamba_utils import is_conv_state_dim_first
+
+    return 1 if is_conv_state_dim_first() else 0
+
+
+def test_real_layer_slot_width_is_the_state_shape(real_layer):
+    """``_window_from_state`` narrows to exactly the allocated slot width.
+
+    The slot is ``conv_kernel - 1 + num_spec`` taps wide (``get_state_shape``
+    -> ``short_conv_state_shape``), and the spec path hands ``_window_from_state``
+    ``conv_state_len + num_spec_tokens`` as its capacity. If either expression
+    drifts -- e.g. the spec path keeps using ``conv_state_len`` -- the
+    narrower window silently drops the reserved draft taps.
+    """
+    layer = real_layer
+    shape = layer.get_state_shape()[0]
+    token_axis = _slot_axis(shape)
+    slot_width = shape[token_axis]
+    assert layer.num_spec_tokens == 1, "the F3 config must reserve a spec tap"
+    assert slot_width == layer.conv_state_len + layer.num_spec_tokens
+    assert shape[1 - token_axis] == layer.hc_hidden_size
+
+    # A cache whose slot is wider than the window (extra graph padding) must
+    # still narrow to the newest ``slot_width`` taps.
+    padding = 3
+    slots = 2
+    channels = 3
+    width = slot_width + padding
+    window = torch.arange(slots * width * channels, dtype=torch.float32).reshape(
+        slots, width, channels
+    )
+    from vllm.model_executor.layers.mamba.mamba_utils import is_conv_state_dim_first
+
+    conv_state = window.transpose(-1, -2).contiguous() if is_conv_state_dim_first() else window
+    got = layer._window_from_state(conv_state[1:2], slot_width)
+    assert got.shape == (slot_width, channels)
+    assert torch.equal(got, window[1, padding:])
+
+
+def test_real_layer_geometry_drives_a_spec_step(real_layer):
+    """The assembled layer's geometry is what the spec step writes back.
+
+    ``test_real_layer_slot_width_is_the_state_shape`` proves the allocator and
+    the read window agree; this one feeds that same width into the spec step,
+    so the reserved draft tap is written and preserved rather than merely
+    allocated.
+    """
+    layer = real_layer
+    shape = layer.get_state_shape()[0]
+    slot_width = shape[_slot_axis(shape)]
+    num_spec = layer.num_spec_tokens
+
+    # A small channel count: the convolution is depthwise, so the value path
+    # does not depend on the real 10240. Only the geometry is borrowed.
+    conv_state = torch.zeros(2, slot_width, CHANNELS)
+    harness = Harness(conv_state, num_spec)
+    harness.conv_state_len = layer.conv_state_len
+    harness.short_conv_dilation = layer.short_conv_dilation
+    slot = 1
+    stream = torch.full((layer.conv_state_len, CHANNELS), 3.0)
+    _seed_accepted(conv_state, slot, num_spec, stream, accepted=num_spec + 1)
+    assert slot_width == layer.conv_state_len + 1
+
+    chunk = torch.full((num_spec + 1, CHANNELS), -0.25)
+    out = _drive_spec(
+        harness,
+        conv_state,
+        chunk,
+        num_accepted=num_spec + 1,
+        slot=slot,
+        qlen=num_spec + 1,
+        num_rows=num_spec + 1,
+    )
+    expected = _reference_outputs(
+        stream, chunk, torch.zeros_like(chunk), torch.zeros_like(chunk)
+    )
+    assert torch.equal(out, expected)
+    # One token was accepted out of two drafted: the reserved tap keeps the
+    # draft row, and the layer's read window covers the whole slot.
+    window = layer._window_from_state(conv_state[slot : slot + 1], slot_width)
+    assert window.shape == (slot_width, CHANNELS)
+    assert torch.equal(window, conv_state[slot])
 
 
 def test_non_spec_decode_rows_must_be_single_token(monkeypatch):
