@@ -1,17 +1,21 @@
-# Stage 1 *golden baseline* e2e config for Qwen3.8-Flash-Next.
-# NOT a production config and NOT an RFC config: it records what the Stage 1
-# run (`.day0/Qwen4ExpForConditionalGeneration_20261025_1`) actually deployed,
-# so that a later Stage 4 accuracy run can be reproduced from this file.
+# E2E config for Qwen3.8-Flash-Next.
+#
+# Records the config the *accuracy* line was measured under, so an lm_eval run
+# reproduces `feature/baseline/precision_baseline.json` (the Stage 4 anchor,
+# sha 8c415d530). That anchor was taken with Prefix Cache and MTP both on, so
+# those two are pinned here.
+#
+# NOT the Stage 4 *performance* config. S4.1 measured MTP as a net slowdown on
+# this model (spec 627.7/652.8 vs nospec 490.5/489.3 ms/tok at 1024, cross-arm
+# 0.2%/4%, mode difference 24%) and its TPOT verdict was taken with MTP off.
+# Accuracy and performance therefore terminate on different configs; that split
+# is deliberate and tracked separately, not a drift in this file.
 #
 # Every run-affecting field is tagged with its evidence status:
 #   [measured]  the value this run really used (backed by serve/probe logs)
 #   [target]    an intended value that was NOT verified in this run
 #
 # `metrics.value` entries are pass/fail thresholds, not numbers measured here.
-#
-# Known gap: `language_model_only` is not read by `build_model_args()` in
-# tests/e2e/models/test_lm_eval_correctness.py, so setting it here has no
-# effect on an lm_eval run. The Stage 1 serve did use `--language-model-only`.
 
 # [target] Not verified. This run loaded the local bf16 checkpoint
 # `/mnt/weight/Qwen3.8-Flash-Next`; no hub id was ever resolved here, and a
@@ -31,15 +35,31 @@ serve:
   # [measured] bf16 checkpoint, no quantization config.
   dtype: bfloat16
   # [measured] Stage 1 ruling (design/kv-alloc-dryrun.md §4); 262144 is the
-  # config upper bound and does not fit the Stage 1 KV budget.
+  # config upper bound and does not fit the KV budget.
   max_model_len: 32768
   # [measured] serve log: "Desired GPU memory utilization is (0.92, ...)".
   gpu_memory_utilization: 0.92
   trust_remote_code: true
   # [measured] no expert parallelism in this run; TP=8 only.
   enable_expert_parallel: false
+  # [measured] eager throughout. Stage 3 F1 found PIECEWISE unreachable: adding
+  # `@support_torch_compile` made all 12 QSA layers emit zeros with no warning,
+  # so the graph mode was rolled back and booked as not-applicable.
   enforce_eager: true
+  # [measured] text path only; the VL path plus MTP is blocked by a fail-fast
+  # guard (change order 012 M-1: draft ring page 8*140*2=2240 does not divide
+  # the unified page 409600).
   language_model_only: true
+  # [measured] Stage 3 F2. The `prefix_match_unit` is not optional: at the
+  # default value the effective hit granularity collapses to 6400.
+  enable_prefix_caching: true
+  enable_chunked_prefill: true
+  prefix_match_unit: 100
+  # [measured] Stage 3 F3. Pinned because the accuracy anchor was taken with
+  # it on; see the header note for the S4.1 performance ruling that disagrees.
+  speculative_config:
+    method: "mtp"
+    num_speculative_tokens: 1
 
 tasks:
 - name: "ceval-valid_accountant"

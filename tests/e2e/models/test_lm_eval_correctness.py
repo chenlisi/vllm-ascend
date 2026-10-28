@@ -55,6 +55,11 @@ def build_model_args(eval_config, tp_size):
         "enforce_eager",
         "enable_thinking",
         "quantization",
+        "language_model_only",
+        "enable_prefix_caching",
+        "prefix_match_unit",
+        "enable_chunked_prefill",
+        "speculative_config",
     ]:
         val = serve_cfg.get(s, None)
         if val is not None:
