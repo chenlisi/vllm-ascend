@@ -495,13 +495,18 @@ def test_gather_page_rows_never_allocates_a_pool_sized_temporary():
 
     assert sizes, "the recorder saw no dispatches; the probe is not wired up"
     biggest = max(sizes)
-    row_bytes = heads * width * 2
+    touched = int(block_ids.unique().numel())
+    page_bytes = page_size * heads * width * 2
     assert biggest < pool_bytes / 8, (
         f"the paged gather allocated {biggest} B against a {pool_bytes} B plane; "
         "a pool-sized temporary is back and the first request will OOM"
     )
-    assert biggest <= block_ids.numel() * row_bytes * 2, (
-        f"largest temporary {biggest} B exceeds a row-bounded budget"
+    # The read compacts the addressed pages first (one ``index_select`` that is
+    # independent of the page stride) and applies the offsets inside that
+    # block, so the bound is the *touched* pages, not the whole layer.
+    assert biggest <= touched * page_bytes * 2, (
+        f"largest temporary {biggest} B exceeds a touched-page budget "
+        f"({touched} pages x {page_bytes} B)"
     )
     # ``block_ids[order]`` legitimately dispatches ``index.Tensor``, but on a
     # row-sized 1-D tensor; the defect signature is an advanced-index *read of

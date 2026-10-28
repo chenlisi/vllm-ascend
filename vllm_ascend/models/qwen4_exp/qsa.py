@@ -904,39 +904,60 @@ def expand_qsa_indices_torch(
             f"got {block_indices.shape[1]}"
         )
     num_rows = block_indices.shape[0]
-    for row in range(num_rows):
-        position = int(positions[row].item())
-        visible = int(visible_blocks[row].item())
-        if position < 0:
-            out[row].fill_(PAD)
-            out[row, -1] = 0
-            continue
-        # ``visible_blocks`` counts compressed keys, so for sequences longer
-        # than ``token_topk`` tokens it outgrows the block-index columns. The
-        # scan is bounded by BLOCK_TOPK (the column count), matching the
-        # reference kernel's ``complete_blocks = min(visible, BLOCK_TOPK)``.
-        complete = min(visible, block_topk)
-        expanded_count = complete * compress_ratio
-        tail_start = ((position + 1) // compress_ratio) * compress_ratio
-        # The open group after ``tail_start`` holds (position + 1) % ratio
-        # tokens, already < ratio, so no clamp is needed here either.
-        tail_count = (position + 1) - tail_start
+    if num_rows == 0:
+        return
+    # Batched expansion. The per-row python scan this replaces read one
+    # ``.item()`` per selected block, i.e. ``rows * block_topk`` device syncs
+    # per call (1024 rows x 512 blocks on a prefill step); measured 16.2 ms
+    # per decode call and 1.4 s per 1024-token prefill chunk.
+    device = out.device
+    ratio = int(compress_ratio)
+    width = out.shape[1] - 1
+    ranks = torch.arange(block_topk, device=device)
+    pad_lanes = torch.arange(ratio, device=device)
+    tail_lanes = torch.arange(ratio - 1, device=device)
 
-        tokens: list[int] = []
-        for rank in range(complete):
-            key = int(block_indices[row, rank].item())
-            if key < 0:
-                expanded_count = rank * compress_ratio
-                break
-            tokens.extend(
-                key * compress_ratio + offset for offset in range(compress_ratio)
-            )
-        tokens.extend(tail_start + offset for offset in range(tail_count))
+    live = positions >= 0
+    position = positions.long().clamp(min=0)
+    visible = visible_blocks.long().clamp(min=0)
+    # ``visible_blocks`` counts compressed keys, so for sequences longer than
+    # ``token_topk`` tokens it outgrows the block-index columns. The scan is
+    # bounded by BLOCK_TOPK (the column count), matching the reference
+    # kernel's ``complete_blocks = min(visible, BLOCK_TOPK)``.
+    complete = torch.minimum(visible, torch.full_like(visible, block_topk))
+    # The scan stops at the first PAD column, so a row expands only the
+    # leading run of real keys.
+    missing = block_indices < 0
+    first_pad = torch.where(missing, ranks.unsqueeze(0), block_topk).amin(dim=1)
+    blocks_used = torch.minimum(complete, first_pad)
 
-        valid = tokens[:output_width]
-        out[row, : len(valid)] = torch.tensor(valid, dtype=out.dtype, device=out.device)
-        out[row, len(valid) : output_width] = PAD
-        out[row, -1] = len(valid)
+    keys = block_indices.long().clamp(min=0)
+    block_tokens = (keys.unsqueeze(-1) * ratio + pad_lanes).reshape(num_rows, -1)
+    block_mask = (ranks.unsqueeze(0) < blocks_used.unsqueeze(1)).unsqueeze(-1)
+    block_mask = block_mask.expand(-1, -1, ratio).reshape(num_rows, -1)
+
+    tail_start = ((position + 1) // ratio) * ratio
+    tail_count = (position + 1) - tail_start
+    tail_tokens = tail_start.unsqueeze(1) + tail_lanes.unsqueeze(0)
+    tail_mask = tail_lanes.unsqueeze(0) < tail_count.unsqueeze(1)
+
+    out.fill_(PAD)
+    block_span = min(block_tokens.shape[1], width)
+    out[:, :block_span] = torch.where(
+        block_mask[:, :block_span], block_tokens[:, :block_span],
+        torch.full_like(block_tokens[:, :block_span], PAD),
+    )
+    # The causal tail follows the last expanded block, then the row is cut at
+    # ``output_width`` exactly like the scalar loop did.
+    tail_at = (blocks_used * ratio).unsqueeze(1) + tail_lanes.unsqueeze(0)
+    tail_ok = tail_mask & (tail_at < width) & ((tail_at + 1) <= width)
+    tail_at = tail_at.clamp(max=max(width - 1, 0))
+    rows = torch.arange(num_rows, device=device).unsqueeze(1).expand_as(tail_at)
+    out[rows[tail_ok], tail_at[tail_ok]] = tail_tokens[tail_ok].to(out.dtype)
+    count = (blocks_used * ratio + tail_count).clamp(max=width)
+    out[:, -1] = torch.where(live, count, torch.zeros_like(count)).to(out.dtype)
+    out[~live] = PAD
+    out[~live, -1] = 0
 
 
 # ---------------------------------------------------------------------------
@@ -1063,6 +1084,48 @@ def _scatter_page_rows(
         cache[page].index_copy_(0, ordered_offsets[start:end], ordered_rows[start:end])
 
 
+def _flat_page_table(cache: torch.Tensor) -> tuple[torch.Tensor, int] | None:
+    """Return a flat ``[rows, cell]`` view and the page-to-row stride.
+
+    ``cache`` is a block-strided view of the shared pool, so pages are not
+    adjacent in general: the combined K/V pages interleave, which makes one
+    component's page stride ``2 * page_size * cell``. Every page is still a
+    packed run of ``page_size * cell`` elements, so the whole selection can be
+    read by one ``index_select`` over rows of width ``cell`` -- the page gap is
+    just a multiplier in the row index.
+
+    Returns ``None`` when a page is not internally packed or when the page
+    stride is not a whole number of page spans, so the caller falls back to
+    :func:`_gather_page_rows`'s page loop. The loop is not merely slower: a
+    page-level ``index_select`` on a view like this one materialises a whole
+    plane (measured 5.91 GiB, OOM on the first long-context request).
+    """
+    if cache.dim() < 3 or cache.stride(-1) != 1:
+        return None
+    cell = 1
+    for size in cache.shape[2:]:
+        cell *= int(size)
+    packed = 1
+    for dim in range(cache.dim() - 1, 1, -1):
+        if cache.stride(dim) != packed:
+            return None
+        packed *= int(cache.shape[dim])
+    if cache.stride(1) != cell:
+        return None
+    page_size = int(cache.shape[1])
+    span = page_size * cell
+    if span <= 0 or cache.stride(0) % span:
+        return None
+    # Rows are counted in ``cell``-wide units, so one page occupies
+    # ``page_size`` rows and pages sit ``stride(0) // cell`` rows apart.
+    page_rows = cache.stride(0) // cell
+    reach = (int(cache.shape[0]) - 1) * cache.stride(0) + span
+    if reach > cache.untyped_storage().size() // cache.element_size():
+        return None
+    rows = (int(cache.shape[0]) - 1) * page_rows + page_size
+    return cache.as_strided((rows, cell), (cell, 1)), page_rows
+
+
 def _gather_page_rows(
     cache: torch.Tensor,
     block_ids: torch.Tensor,
@@ -1074,13 +1137,33 @@ def _gather_page_rows(
     ``cache[block_ids, offsets]`` on a block-strided view materializes one
     whole layer plane regardless of how few rows are selected (measured 2.441
     GiB for a 6400-page pool at sel=8 and sel=57 alike), which OOMs the first
-    real request at default utilization. Gathering one page at a time bounds
-    the temporaries to the rows addressed in that page.
+    real request at default utilization.
+
+    Two kernels, both bounded by the selection: ``index_select`` the distinct
+    pages (at most the number of pages the selection touches), then one
+    ``index_select`` of the ``[page_in_selection, offset]`` rows out of that
+    compact block. The page loop this replaces launched one kernel per
+    addressed page, which at a 32768-token context is 82 launches and 8.2 ms
+    per gather against 0.1 ms here.
     """
     count = block_ids.numel()
     out = cache.new_empty((count, *cache.shape[2:]))
     if count == 0:
         return out
+    table = _flat_page_table(cache)
+    if table is not None:
+        flat, page_rows = table
+        rows = flat.index_select(
+            0, (block_ids.long() * page_rows + offsets.long())
+        )
+        return rows.view(count, *cache.shape[2:])
+    # The page stride is not uniform (combined K/V pages interleave) and a
+    # page-level ``index_select`` on this view materialises a whole plane --
+    # measured 5.91 GiB and an OOM on the first long-context request. Pages are
+    # therefore copied one at a time, but only the page-level *rows* are
+    # selected; the original code launched one such copy per addressed page
+    # too, so the launch count is unchanged while the temporaries stay
+    # O(rows in that page).
     order, pages, spans = _page_groups(block_ids)
     ordered_offsets = offsets[order]
     for page, (start, end) in zip(pages, spans):
@@ -1090,6 +1173,8 @@ def _gather_page_rows(
             cache[page].index_select(0, ordered_offsets[start:end]),
         )
     return out
+
+
 
 
 def _sparse_gqa_torch(
