@@ -274,8 +274,10 @@ def test_spec_replay_matches_the_upstream_kernel_model():
     """
     num_spec = 3
     capacity = STATE_LEN + num_spec
-    slot = 0
-    conv_state = _fresh_state(1, num_spec)
+    # Slot 0 is NULL_BLOCK_ID (``BlockPool`` keeps it as the null block and
+    # never hands it to a request), so a live stream must use a real slot.
+    slot = 1
+    conv_state = _fresh_state(2, num_spec)
     harness = Harness(conv_state, num_spec)
     weight = harness._conv_weight_2d
     model_state = torch.zeros(capacity, CHANNELS)
@@ -305,7 +307,7 @@ def test_spec_replay_matches_the_upstream_kernel_model():
 def test_spec_short_chunk_preserves_the_unused_state_tail():
     """A chunk shorter than SPEC_QUERY_LEN must not clear the state tail."""
     num_spec = 3
-    slot = 0
+    slot = 1  # slot 0 is the null block; a live stream needs a real slot
     capacity = STATE_LEN + num_spec
     conv_state = _fresh_state(2, num_spec)
     harness = Harness(conv_state, num_spec)
@@ -361,7 +363,9 @@ def test_spec_mixed_batch_keeps_row_order(monkeypatch):
         .reshape(-1, 1)
         .expand(-1, CHANNELS)
     )
-    _seed_accepted(conv_state, 0, num_spec, spec_stream, accepted=num_spec + 1)
+    # Slot 0 is NULL_BLOCK_ID; the spec row must sit on a real slot, and the
+    # non-spec rows below occupy 1 and 2.
+    _seed_accepted(conv_state, 3, num_spec, spec_stream, accepted=num_spec + 1)
     decode_stream = torch.full((STATE_LEN, CHANNELS), -2.0)
     _seed_stream(conv_state, 1, num_spec, decode_stream)
     prefill_stream = torch.full((STATE_LEN, CHANNELS), 5.0)
@@ -385,7 +389,7 @@ def test_spec_mixed_batch_keeps_row_order(monkeypatch):
         num_spec_decode_tokens=num_spec + 1,
         num_actual_tokens=inputs.shape[0],
         spec_query_len=num_spec + 1,
-        spec_state_indices_tensor=torch.tensor([0], dtype=torch.int32),
+        spec_state_indices_tensor=torch.tensor([3], dtype=torch.int32),
         spec_query_start_loc=torch.tensor([0, num_spec + 1], dtype=torch.int32),
         num_accepted_tokens=torch.tensor([num_spec + 1], dtype=torch.int32),
         spec_sequence_masks=torch.tensor([True, False, False]),
@@ -585,8 +589,8 @@ def test_spec_chunk_wider_than_spec_query_len_raises():
 def test_spec_without_token_map_uses_identity_rows():
     """All-spec batches carry no ``spec_token_indx``; rows are identity."""
     num_spec = 2
-    slot = 0
-    conv_state = _fresh_state(1, num_spec)
+    slot = 1  # slot 0 is the null block; a live stream needs a real slot
+    conv_state = _fresh_state(2, num_spec)
     harness = Harness(conv_state, num_spec)
     stream = torch.arange(1, STATE_LEN + 1, dtype=torch.float32).reshape(-1, 1)
     stream = stream.expand(-1, CHANNELS)
@@ -624,8 +628,8 @@ def test_spec_without_token_map_uses_identity_rows():
 def test_spec_ignores_graph_padding_beyond_num_actual_tokens():
     """Rows past ``num_actual_tokens`` are graph padding and must stay zero."""
     num_spec = 1
-    slot = 0
-    conv_state = _fresh_state(1, num_spec)
+    slot = 1  # slot 0 is the null block; a live stream needs a real slot
+    conv_state = _fresh_state(2, num_spec)
     harness = Harness(conv_state, num_spec)
     stream = torch.full((STATE_LEN, CHANNELS), 2.0)
     accepted = num_spec + 1

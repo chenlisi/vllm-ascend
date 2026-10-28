@@ -33,12 +33,15 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from vllm.logger import init_logger
 from vllm.model_executor.layers.linear import (
     MergedColumnParallelLinear,
     ReplicatedLinear,
 )
 
 from vllm_ascend.utils import vllm_version_is
+
+logger = init_logger(__name__)
 
 __all__ = [
     "AscendGatedResidual",
@@ -278,6 +281,21 @@ class AscendGatedResidual(nn.Module):
             # upstream fused ``hc_combine_norm`` takes the same branch when
             # ``injection_logits is None``. Raising here instead broke every
             # drafter step.
+            #
+            # That branch is legitimate, so the old unconditional
+            # ``raise ValueError`` cannot come back. But it used to double as
+            # the only alarm for "the previous layer's injection did not get
+            # through" -- dropping it entirely would turn that wiring bug
+            # into a silent output shift. Leave one trace per process
+            # instead: a correct run emits it at most once (the drafter's
+            # first step), so a second sighting still means the caller is
+            # somewhere unexpected.
+            logger.warning_once(
+                "hyper-connection combine ran without an injection "
+                "(unit-weight branch). Expected for the MTP drafter's first "
+                "step only; if this mixer is not part of a drafter, the "
+                "previous layer's injection was lost."
+            )
             return (residual + block_output.unsqueeze(-2)).flatten(-2).to(
                 hyper_input.dtype
             )

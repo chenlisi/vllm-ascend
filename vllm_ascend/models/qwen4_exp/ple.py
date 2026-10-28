@@ -50,6 +50,7 @@ from vllm.models.qwen4_exp.nvidia.ple_layer import (
     Qwen4ExpPLELayer,
 )
 from vllm.v1.attention.backends.registry import MambaAttentionBackendEnum
+from vllm.v1.attention.backends.utils import NULL_BLOCK_ID
 from vllm.v1.attention.backends.short_conv_attn import (
     PleShortConvAttentionBackend,
     PleShortConvAttentionMetadata,
@@ -351,6 +352,20 @@ class AscendQwen4ExpPLELayer(Qwen4ExpPLELayer):
             # or fully-rejected chunk still reads the newest live state.
             slot_off = min(max(accepted - 1, 0), spec_query_len - 1)
             slot = int(state_indices[req].item())
+            if slot == NULL_BLOCK_ID:
+                # No state slot for this row: skip rather than read/write slot
+                # 0. Upstream's ``_ple_conv_kernel`` /
+                # ``_ple_conv_writeback_kernel`` both guard on
+                # ``sid != NULL_STATE_ID`` and the writeback returns early, so
+                # treating a null slot as a real one would pollute another
+                # request's convolution state silently.
+                #
+                # The builder currently keeps null slots out of
+                # ``[:num_spec_decodes]``, so this is unreachable today; it is
+                # the same protection the upstream kernel has, kept here so
+                # that widening the loop bound cannot turn into a silent
+                # cross-request write.
+                continue
 
             begin = int(rows[q_begin].item())
             end = int(rows[q_end - 1].item()) + 1

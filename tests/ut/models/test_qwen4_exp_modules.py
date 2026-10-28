@@ -33,6 +33,7 @@ from vllm_ascend.models.qwen4_exp.hyperconnection import (
 from vllm_ascend.models.qwen4_exp.ple import ple_gate_torch
 from vllm_ascend.models.qwen4_exp.qsa import (
     AscendQwen4ExpQSAAttnImpl,
+    _flat_page_table,
     _gather_page_rows,
     _scatter_page_rows,
     _sparse_gqa_torch,
@@ -941,3 +942,78 @@ def test_conv_window_rejects_short_cache(monkeypatch):
     harness = _ple_layout_harness()
     with pytest.raises(RuntimeError, match="smaller than expected"):
         harness._window_from_state(torch.zeros(1, 2, 3), 4)
+
+
+def _packed_page_cache(pages, page_size, heads, width, interleaved):
+    """A page view whose pages are packed, so ``_flat_page_table`` accepts it.
+
+    ``_block_strided_cache`` above models the *padded-head* binding, whose
+    ``stride(1) != cell`` makes every gather test take the per-page fallback --
+    the fast path added with the flat gather was therefore never executed here.
+    This helper builds the packed binding instead: ``interleaved`` splays each
+    page across a K/V pair, which is what the real pool publishes for the
+    combined cache, so the page stride is ``2 * span`` rather than ``span``.
+    """
+    rows = page_size * heads
+    span = rows * width
+    pool = torch.arange(
+        pages * span * (2 if interleaved else 1), dtype=torch.float32
+    )
+    if interleaved:
+        view = pool.view(pages, 2, page_size, heads, width)[:, 0]
+    else:
+        view = pool.view(pages, page_size, heads, width)
+    return pool, view
+
+
+@pytest.mark.parametrize("interleaved", [False, True])
+@pytest.mark.parametrize(
+    "pages,page_size,heads,width", [(8, 4, 3, 1), (17, 8, 1, 2), (5, 2, 16, 1)]
+)
+def test_gather_page_rows_flat_path_matches_the_page_loop(
+    pages, page_size, heads, width, interleaved
+):
+    """The flat gather must equal a per-page loop on the shape it accepts.
+
+    The three pre-existing gather tests all run on the padded binding and
+    therefore only ever exercise the fallback. This one pins the fast path:
+    row/page-stride derivation, the interleaved page stride, and the resulting
+    values all have to agree with the obvious ``out[i] = view[b, o]``.
+    """
+    torch.manual_seed(11)
+    pool, cache = _packed_page_cache(pages, page_size, heads, width, interleaved)
+    pool.normal_()
+
+    table = _flat_page_table(cache)
+    assert table is not None, (
+        "a packed page view must take the flat path; if this fails the fixture "
+        "no longer models the real binding"
+    )
+    _, page_rows = table
+    # A page is ``page_size`` rows of width ``cell = heads * width``; the page
+    # stride is ``page_rows * cell``, so the interleaved layout doubles it.
+    assert page_rows == page_size * (2 if interleaved else 1)
+
+    block_ids = torch.tensor([pages - 1, 0, pages - 1, pages // 2])
+    offsets = torch.tensor([page_size - 1, 0, 0, page_size // 2])
+
+    expected = torch.stack([cache[b, o] for b, o in zip(block_ids, offsets)])
+    got = _gather_page_rows(cache, block_ids, offsets)
+    assert torch.equal(got, expected), (
+        f"flat gather diverged on interleaved={interleaved} "
+        f"pages={pages} page_size={page_size} cell={heads * width}"
+    )
+
+
+def test_flat_page_table_refuses_a_non_packed_page():
+    """A page whose row axis is not packed must fall back, not guess.
+
+    ``stride(1) == cell`` is the condition that makes the row maths valid; a
+    padded head axis (the ``_block_strided_cache`` binding) breaks it.
+    """
+    pages, page_size, heads, width = 4, 3, 4, 2
+    _, padded = _block_strided_cache(pages, page_size, heads, width)
+    assert _flat_page_table(padded) is None
+
+    _, packed = _packed_page_cache(pages, page_size, heads, width, False)
+    assert _flat_page_table(packed) is not None
